@@ -1,305 +1,319 @@
+// لوحة الخصائص - Properties Panel
+// مشروع التشجير - نظام القراءات العشر
+//
+// لوحة القراءة والتفتيش: تعرض ما هو محدد الآن (كلمة أو خط)، وإحصاءات الآية،
+// وحالة المستند، وتصفية الرواة.
+//
+// تصفية الرواة هنا هي أقوى أداة تدقيق في المحرر: باختيار راو واحد
+// تظهر خطوطه وحدها، فيتحقق المدقق من قراءته كاملة في الآية دفعة واحدة.
+
 'use client';
 
-import { useMemo, useState } from 'react';
-import { getQiraahByOrder } from '@/data/qiraat-data/qiraat';
-import { getLocalAyahWords, LocalAyahWord } from '@/data/quran';
+import { useMemo } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
-import { LineType, TashjeerLine } from '@/types';
+import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
+import { getWordById, stripHarakat } from '@/data/quran';
+import { NARRATORS, READING_IMAMS } from '@/data/qiraat-data/qiraat';
+import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
+import { getCategoryColor, getImamColor } from '@/lib/tashjeer/color-system';
+import { describeScope, getFullNarratorName, resolveScope } from '@/lib/tashjeer/scope';
+import { StatusBadge } from './VariantsPanel';
+import type { VariantCategory } from '@/types';
+import type { VerificationStatus } from '@/types/tashjeer';
 
-interface PropertiesPanelProps {
-  ayahId: number;
-  surahId: number;
-}
+const STATUS_OPTIONS: Array<{ value: VerificationStatus; label: string }> = [
+  { value: 'DRAFT', label: 'مسودة' },
+  { value: 'REVIEW', label: 'قيد المراجعة' },
+  { value: 'APPROVED', label: 'معتمد' },
+  { value: 'REJECTED', label: 'مرفوض' },
+];
 
-const lineTypeLabels: Record<LineType, string> = {
-  USUL: 'أصول',
-  FARSH: 'فرش',
-  MADUD: 'مدود',
-  HAMZ: 'همز',
-  WAQF: 'وقف',
-  TAJWEED: 'تجويد',
-};
-
-export function PropertiesPanel({ ayahId, surahId }: PropertiesPanelProps) {
-  const [activeTab, setActiveTab] = useState<'word' | 'tashjeer' | 'qiraat'>('word');
+export function PropertiesPanel() {
   const {
-    currentLineType,
-    currentQiraahId,
-    currentTool,
-    selectedLineId,
+    document,
+    filter,
     selectedWordId,
+    selectedVariantId,
+    selectedBranchId,
+    toggleNarrator,
+    setFilter,
+    setDocumentStatus,
   } = useEditorStore();
 
-  const words = useMemo(() => getLocalAyahWords(ayahId, surahId), [ayahId, surahId]);
-  const wordById = useMemo(() => new Map(words.map((word) => [word.id, word])), [words]);
-  const selectedWord = selectedWordId ? wordById.get(selectedWordId) : undefined;
-  const selectedLine = useMemo(
-    () => readStoredLine(surahId, ayahId, selectedLineId),
-    [ayahId, selectedLineId, surahId]
+  const { stats, branches } = useAyahTashjeer(document, filter);
+
+  const selectedWord = useMemo(
+    () => (selectedWordId ? getWordById(selectedWordId) : undefined),
+    [selectedWordId]
   );
-  const currentQiraah = getQiraahByOrder(currentQiraahId);
+
+  const selectedVariant = document?.variants.find((variant) => variant.id === selectedVariantId);
+  const selectedBranch = branches.find((branch) => branch.id === selectedBranchId);
+
+  if (!document) return null;
 
   return (
-    <div className="properties-panel w-80 shrink-0 bg-white border-l border-gray-200 flex flex-col">
-      <div className="p-4 border-b border-gray-200">
-        <h3 className="font-bold text-gray-900">لوحة الخصائص</h3>
-        <p className="text-sm text-gray-500 mt-1">
-          سورة {surahId} - آية {ayahId}
-        </p>
-      </div>
+    <aside className="flex h-full w-[320px] shrink-0 flex-col overflow-y-auto border-e border-stone-200 bg-white">
+      {/* حالة المستند */}
+      <Section title="المستند">
+        <Row label="الموضع" value={`${document.surahNumber}:${document.ayahNumber}`} />
+        <Row label="آخر تعديل" value={formatDate(document.meta.updatedAt)} />
+        <label className="mt-2 block">
+          <span className="mb-1 block text-[11px] font-medium text-stone-600">حالة المستند</span>
+          <select
+            value={document.meta.status}
+            onChange={(event) => setDocumentStatus(event.target.value as VerificationStatus)}
+            className="input text-xs"
+          >
+            {STATUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </Section>
 
-      <div className="flex border-b border-gray-200">
-        <TabButton
-          active={activeTab === 'word'}
-          onClick={() => setActiveTab('word')}
-          label="الكلمة"
-        />
-        <TabButton
-          active={activeTab === 'tashjeer'}
-          onClick={() => setActiveTab('tashjeer')}
-          label="التشجير"
-        />
-        <TabButton
-          active={activeTab === 'qiraat'}
-          onClick={() => setActiveTab('qiraat')}
-          label="القراءات"
-        />
-      </div>
+      {/* الإحصاءات */}
+      <Section title="إحصاءات الآية">
+        <div className="grid grid-cols-2 gap-2">
+          <Stat label="الاختلافات" value={stats.variantsCount} />
+          <Stat label="الأوجه" value={stats.alternativesCount} />
+          <Stat label="الخطوط الظاهرة" value={stats.branchesCount} />
+          <Stat label="الكلمات المغطاة" value={stats.coveredWords} />
+        </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
-        {activeTab === 'word' && (
-          <WordProperties selectedWord={selectedWord} totalWords={words.length} />
-        )}
-        {activeTab === 'tashjeer' && (
-          <TashjeerProperties
-            selectedLine={selectedLine}
-            selectedLineId={selectedLineId}
-            currentLineType={currentLineType}
-            wordById={wordById}
+        <div className="mt-3 space-y-1.5">
+          {(Object.keys(CATEGORY_LABELS) as VariantCategory[]).map((category) => {
+            const count = stats.categories[category];
+            if (count === 0) return null;
+
+            return (
+              <div key={category} className="flex items-center gap-2">
+                <span
+                  className="inline-block h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: getCategoryColor(category) }}
+                />
+                <span className="flex-1 text-[11px] text-stone-700">
+                  {CATEGORY_LABELS[category]}
+                </span>
+                <span className="text-[11px] tabular-nums text-stone-500">{count}</span>
+              </div>
+            );
+          })}
+        </div>
+      </Section>
+
+      {/* الكلمة المحددة */}
+      {selectedWord && (
+        <Section title="الكلمة المحددة">
+          <p
+            className="text-xl leading-loose text-stone-900"
+            style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }}
+          >
+            {selectedWord.text}
+          </p>
+          <Row label="الترتيب" value={selectedWord.position} />
+          <Row label="بلا تشكيل" value={stripHarakat(selectedWord.text)} />
+          <Row label="المعرّف" value={selectedWord.id} />
+        </Section>
+      )}
+
+      {/* الاختلاف المحدد */}
+      {selectedVariant && (
+        <Section title="الاختلاف المحدد">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-sm font-medium text-stone-900">{selectedVariant.title}</span>
+            <StatusBadge status={selectedVariant.status} />
+          </div>
+          <Row label="الفئة" value={CATEGORY_LABELS[selectedVariant.category]} />
+          <Row
+            label="المدى"
+            value={`${selectedVariant.startPosition}–${selectedVariant.endPosition}`}
           />
-        )}
-        {activeTab === 'qiraat' && (
-          <QiraatProperties
-            currentTool={currentTool}
-            currentLineType={currentLineType}
-            qiraahLabel={currentQiraah ? `${currentQiraah.narrator} عن ${currentQiraah.name}` : '-'}
+          {selectedVariant.description && (
+            <p className="mt-2 text-[11px] leading-relaxed text-stone-600">
+              {selectedVariant.description}
+            </p>
+          )}
+          {selectedVariant.sourceRef && (
+            <p className="mt-1 text-[11px] text-stone-500">المرجع: {selectedVariant.sourceRef}</p>
+          )}
+        </Section>
+      )}
+
+      {/* الخط المحدد وأدلته */}
+      {selectedBranch && (
+        <Section title="الخط المحدد">
+          <Row label="الفئة" value={CATEGORY_LABELS[selectedBranch.category]} />
+          <Row label="المسار" value={selectedBranch.lane + 1} />
+          <Row label="الجهة" value={selectedBranch.side === 'TOP' ? 'أعلى النص' : 'أسفل النص'} />
+          <p className="mt-2 text-[11px] text-stone-600">{selectedBranch.label}</p>
+
+          <EvidenceView
+            variantId={selectedBranch.variantId}
+            alternativeId={selectedBranch.alternativeId}
           />
-        )}
-      </div>
-    </div>
-  );
-}
+        </Section>
+      )}
 
-function TabButton({
-  active,
-  onClick,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex-1 py-3 text-sm font-medium transition-colors ${
-        active
-          ? 'text-emerald-600 border-b-2 border-emerald-600 bg-emerald-50'
-          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-      }`}
-      type="button"
-    >
-      {label}
-    </button>
-  );
-}
-
-function WordProperties({
-  selectedWord,
-  totalWords,
-}: {
-  selectedWord?: LocalAyahWord;
-  totalWords: number;
-}) {
-  if (!selectedWord) {
-    return (
-      <div className="space-y-4">
-        <PropertySection title="ملخص الآية">
-          <PropertyRow label="عدد الكلمات" value={totalWords} />
-          <PropertyRow label="الكلمة المحددة" value="-" />
-        </PropertySection>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <PropertySection title="معلومات الكلمة">
-        <PropertyRow label="النص" value={selectedWord.text} />
-        <PropertyRow label="بدون تشكيل" value={stripHarakat(selectedWord.text)} />
-        <PropertyRow label="الترتيب" value={selectedWord.position} />
-      </PropertySection>
-
-      <PropertySection title="التحليل">
-        <PropertyRow label="الحروف" value={stripHarakat(selectedWord.text).length} />
-        <PropertyRow label="الحركات" value={countHarakat(selectedWord.text)} />
-      </PropertySection>
-    </div>
-  );
-}
-
-function TashjeerProperties({
-  selectedLine,
-  selectedLineId,
-  currentLineType,
-  wordById,
-}: {
-  selectedLine: TashjeerLine | null;
-  selectedLineId: number | null;
-  currentLineType: LineType;
-  wordById: Map<number, LocalAyahWord>;
-}) {
-  if (!selectedLine) {
-    return (
-      <div className="space-y-4">
-        <PropertySection title="خط التشجير">
-          <PropertyRow label="الأداة الحالية" value={lineTypeLabels[currentLineType]} />
-          <PropertyRow label="الخط المحدد" value={selectedLineId ? String(selectedLineId) : '-'} />
-        </PropertySection>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <PropertySection title="خط التشجير">
-        <PropertyRow label="النوع" value={lineTypeLabels[selectedLine.type]} />
-        <PropertyRow label="عدد العقد" value={selectedLine.nodes.length} />
-        <PropertyRow label="الموضع الرأسي" value={Math.round(selectedLine.yPosition)} />
-      </PropertySection>
-
-      <PropertySection title="العقد">
-        <div className="space-y-2">
-          {selectedLine.nodes.length === 0 ? (
-            <p className="text-sm text-gray-500">لا توجد عقد في هذا الخط.</p>
-          ) : (
-            selectedLine.nodes.map((node) => (
-              <NodeItem
-                key={String(node.id)}
-                word={wordById.get(node.wordId)?.text ?? `#${node.wordId}`}
-                qiraah={getQiraahLabel(node.qiraahId)}
-                position={getNodePositionLabel(node.position)}
-              />
-            ))
+      {/* تصفية الرواة */}
+      <Section title="تصفية الرواة">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[11px] text-stone-500">
+            {filter.narratorIds.length === 0
+              ? 'كل الرواة ظاهرون'
+              : `${filter.narratorIds.length} راويا مختارا`}
+          </span>
+          {filter.narratorIds.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setFilter({ narratorIds: [] })}
+              className="rounded border border-stone-300 px-2 py-0.5 text-[11px] text-stone-700 hover:bg-stone-100"
+            >
+              إلغاء التصفية
+            </button>
           )}
         </div>
-      </PropertySection>
-    </div>
+
+        <div className="space-y-2">
+          {READING_IMAMS.map((imam) => (
+            <div key={imam.id}>
+              <p className="mb-1 text-[11px] font-medium" style={{ color: getImamColor(imam.id) }}>
+                {imam.name}
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {NARRATORS.filter((narrator) => narrator.imamId === imam.id).map((narrator) => {
+                  const active = filter.narratorIds.includes(narrator.id);
+                  return (
+                    <button
+                      key={narrator.id}
+                      type="button"
+                      onClick={() => toggleNarrator(narrator.id)}
+                      title={getFullNarratorName(narrator.id)}
+                      className={`rounded border px-1.5 py-0.5 text-[11px] transition-colors ${
+                        active
+                          ? 'border-transparent text-white'
+                          : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+                      }`}
+                      style={{ backgroundColor: active ? getImamColor(imam.id) : undefined }}
+                    >
+                      {narrator.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+    </aside>
   );
 }
 
-function QiraatProperties({
-  currentTool,
-  currentLineType,
-  qiraahLabel,
+// ==================== عرض الأدلة ====================
+
+function EvidenceView({
+  variantId,
+  alternativeId,
 }: {
-  currentTool: string;
-  currentLineType: LineType;
-  qiraahLabel: string;
+  variantId: string;
+  alternativeId: string;
 }) {
+  const document = useEditorStore((state) => state.document);
+
+  const alternative = document?.variants
+    .find((variant) => variant.id === variantId)
+    ?.alternatives.find((item) => item.id === alternativeId);
+
+  if (!alternative) return null;
+
+  const evidences = alternative.evidences ?? [];
+
   return (
-    <div className="space-y-4">
-      <PropertySection title="الاختيار الحالي">
-        <PropertyRow label="الرواية" value={qiraahLabel} />
-        <PropertyRow label="نوع الخط" value={lineTypeLabels[currentLineType]} />
-        <PropertyRow label="الأداة" value={getToolLabel(currentTool)} />
-      </PropertySection>
+    <div className="mt-3 border-t border-stone-100 pt-2">
+      <p className="mb-1 text-[11px] font-semibold text-stone-700">النطاق</p>
+      <p className="text-[11px] text-stone-600">
+        {describeScope(alternative.scope)} ({resolveScope(alternative.scope).length} راويا)
+      </p>
+
+      <p className="mb-1 mt-2 text-[11px] font-semibold text-stone-700">الأدلة</p>
+      {evidences.length === 0 ? (
+        <p className="text-[11px] text-amber-700">
+          لا يوجد دليل مسجّل لهذا الوجه. لا يصح اعتماده قبل توثيقه.
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {evidences.map((evidence) => (
+            <li key={evidence.id} className="rounded bg-stone-50 px-2 py-1.5">
+              <p className="text-[11px] font-medium text-stone-700">
+                {sourceLabel(evidence.source)}
+                {evidence.reference ? ` — ${evidence.reference}` : ''}
+              </p>
+              {evidence.text && (
+                <p className="mt-0.5 text-[11px] leading-relaxed text-stone-600">
+                  {evidence.text}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {alternative.notes && (
+        <p className="mt-2 rounded bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+          ملاحظة: {alternative.notes}
+        </p>
+      )}
     </div>
   );
 }
 
-function PropertySection({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <h4 className="text-sm font-medium text-gray-900 mb-2">{title}</h4>
-      <div className="bg-gray-50 rounded-lg p-3">{children}</div>
-    </div>
-  );
-}
-
-function PropertyRow({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="flex justify-between gap-3 py-1">
-      <span className="text-sm text-gray-600">{label}</span>
-      <span className="text-sm font-medium text-gray-900 text-left">{value}</span>
-    </div>
-  );
-}
-
-function NodeItem({
-  word,
-  qiraah,
-  position,
-}: {
-  word: string;
-  qiraah: string;
-  position: string;
-}) {
-  return (
-    <div className="rounded border border-gray-200 bg-white p-2">
-      <div className="text-sm font-medium text-gray-900">{word}</div>
-      <div className="mt-1 flex items-center justify-between gap-2 text-xs text-gray-500">
-        <span>{qiraah}</span>
-        <span>{position}</span>
-      </div>
-    </div>
-  );
-}
-
-function readStoredLine(surahId: number, ayahId: number, selectedLineId: number | null): TashjeerLine | null {
-  if (!selectedLineId || typeof window === 'undefined') return null;
-
-  try {
-    const serialized = window.localStorage.getItem(`tashjeer-lines:${surahId}:${ayahId}`);
-    const lines = serialized ? (JSON.parse(serialized) as TashjeerLine[]) : [];
-    return lines.find((line) => String(line.id) === String(selectedLineId)) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function stripHarakat(value: string): string {
-  return value.replace(/[\u064B-\u065F\u0670]/g, '');
-}
-
-function countHarakat(value: string): number {
-  return [...value].filter((char) => /[\u064B-\u065F\u0670]/.test(char)).length;
-}
-
-function getQiraahLabel(qiraahId?: number): string {
-  const qiraah = qiraahId ? getQiraahByOrder(qiraahId) : undefined;
-  return qiraah ? qiraah.narrator : '-';
-}
-
-function getNodePositionLabel(position: string): string {
-  if (position === 'TOP') return 'أعلى';
-  if (position === 'MIDDLE') return 'وسط';
-  return 'أسفل';
-}
-
-function getToolLabel(tool: string): string {
+function sourceLabel(source: string): string {
   const labels: Record<string, string> = {
-    select: 'تحديد',
-    'line-usul': 'خط أصول',
-    'line-farsh': 'خط فرش',
-    'line-madud': 'خط مدود',
-    delete: 'حذف',
+    TAYYIBAH: 'طيبة النشر',
+    NASHR: 'النشر',
+    JANNAH: 'الجنة',
+    OTHER: 'مصدر آخر',
   };
-  return labels[tool] ?? tool;
+  return labels[source] ?? source;
+}
+
+// ==================== عناصر مشتركة ====================
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="border-b border-stone-200 px-4 py-3">
+      <h3 className="mb-2 text-xs font-bold text-stone-900">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 py-0.5">
+      <span className="text-[11px] text-stone-500">{label}</span>
+      <span className="text-[11px] font-medium text-stone-800">{value}</span>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md bg-stone-50 px-2 py-1.5">
+      <div className="text-lg font-bold tabular-nums text-stone-900">{value}</div>
+      <div className="text-[11px] text-stone-500">{label}</div>
+    </div>
+  );
+}
+
+function formatDate(value: string): string {
+  try {
+    return new Intl.DateTimeFormat('ar', { dateStyle: 'short', timeStyle: 'short' }).format(
+      new Date(value)
+    );
+  } catch {
+    return '—';
+  }
 }

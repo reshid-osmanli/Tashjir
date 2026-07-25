@@ -1,458 +1,513 @@
+// لوحة التشجير - Tashjeer Canvas
+// مشروع التشجير - نظام القراءات العشر
+//
+// اللوحة هي المكوّن المركزي في المحرر. مسؤوليتها:
+//   1. رسم نص الآية بخط المصحف في مواضعه المحسوبة.
+//   2. رسم خطوط التشجير وبطاقات الأوجه.
+//   3. استقبال تفاعل المستخدم: تعليم الكلمات، تحديد الخطوط، التكبير، السحب.
+//
+// كل الرسم بـ SVG وليس Canvas، لأسباب عملية:
+//   - النص العربي يُرسم بخط المصحف مع تشكيله دون معالجة يدوية.
+//   - كل عنصر قابل للتحديد والاختبار والتصدير إلى PNG/SVG مباشرة.
+//   - العناصر متجهية، فالتكبير لا يفقد الدقة.
+
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useMushafLayout } from '@/hooks/useMushafLayout';
-import { useTashjeerLines } from '@/hooks/useTashjeerLines';
-import { WordMarker } from './WordMarker';
-import { LineDrawer } from './LineDrawer';
-import { EvidencePopup } from './EvidencePopup';
+import { useCallback, useRef, useState, type MouseEvent as ReactMouseEvent, type WheelEvent } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
-import { LineType, NodePosition, TashjeerLine, WordPosition } from '@/types';
-
-type MushafWord = {
-  id: number;
-  text: string;
-  position: number;
-};
-
-type HoveredNode = {
-  wordText?: string;
-};
+import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
+import { getCategorySoftColor } from '@/lib/tashjeer/color-system';
+import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
+import type { RenderedBranch, WordBox } from '@/types/tashjeer';
 
 interface TashjeerCanvasProps {
-  ayahId: number;
-  surahId: number;
-  qiraahOrder: number[];
+  /** حجم خط المصحف، قابل للضبط من شريط الأدوات */
+  fontSize?: number;
+  /** وضع العرض فقط: يعطّل كل التفاعل التحريري */
   readOnly?: boolean;
-  onSave?: (data: unknown) => void;
 }
 
-export function TashjeerCanvas({
-  ayahId,
-  surahId,
-  qiraahOrder,
-  readOnly = false,
-  onSave,
-}: TashjeerCanvasProps) {
-  const canvasRef = useRef<SVGSVGElement>(null);
-  const [hoveredNode, setHoveredNode] = useState<HoveredNode | null>(null);
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanvasProps) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const panState = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const [hoveredBranchId, setHoveredBranchId] = useState<string | null>(null);
 
   const {
+    document,
+    filter,
     zoom,
     pan,
-    setZoom,
     currentTool,
-    currentLineType,
-    currentQiraahId,
+    markedPositions,
     selectedWordId,
-    selectedLineId,
-    showGrid,
-    showRulers,
+    selectedVariantId,
+    selectedBranchId,
+    setZoom,
+    setPan,
     selectWord,
-    selectLine,
-    clearSelection,
-    setUnsavedChanges,
+    selectVariant,
+    selectBranch,
+    toggleMarkedPosition,
+    toggleBranchVisibility,
   } = useEditorStore();
 
-  const { words, positions, isLoading, error: layoutError } = useMushafLayout(ayahId, surahId);
-  const {
-    lines,
-    addLine,
-    updateLine,
-    deleteLine,
-    addNode,
-    removeNode,
-    error: linesError,
-  } = useTashjeerLines(ayahId, surahId);
+  const { ayah, layout, branches, viewBox } = useAyahTashjeer(document, filter, { fontSize });
 
-  useEffect(() => {
-    clearSelection();
-  }, [ayahId, surahId, clearSelection]);
+  // ==================== التفاعل ====================
 
-  useEffect(() => {
-    onSave?.({ surahId, ayahId, lines });
-  }, [ayahId, lines, onSave, surahId]);
+  /** التكبير بعجلة الفأرة مع مفتاح Ctrl، والتمرير الرأسي بدونه. */
+  const handleWheel = useCallback(
+    (event: WheelEvent<SVGSVGElement>) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      setZoom(zoom * (event.deltaY > 0 ? 0.92 : 1.08));
+    },
+    [setZoom, zoom]
+  );
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!canvasRef.current) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    setMousePosition({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    });
+  /** بدء السحب بزر الفأرة الأوسط أو بالضغط على مساحة فارغة بأداة التحديد. */
+  const handleMouseDown = useCallback(
+    (event: ReactMouseEvent<SVGSVGElement>) => {
+      const isMiddleButton = event.button === 1;
+      const isEmptyArea = event.target === svgRef.current;
+      if (!isMiddleButton && !isEmptyArea) return;
+
+      panState.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
+    },
+    [pan]
+  );
+
+  const handleMouseMove = useCallback(
+    (event: ReactMouseEvent<SVGSVGElement>) => {
+      if (!panState.current) return;
+      setPan({
+        x: panState.current.panX + (event.clientX - panState.current.x),
+        y: panState.current.panY + (event.clientY - panState.current.y),
+      });
+    },
+    [setPan]
+  );
+
+  const endPan = useCallback(() => {
+    panState.current = null;
   }, []);
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setZoom(Math.min(Math.max(zoom * delta, 0.5), 3));
-  }, [zoom, setZoom]);
+  /** النقر على كلمة: يعلّمها أو يحددها بحسب الأداة الحالية. */
+  const handleWordClick = useCallback(
+    (box: WordBox) => {
+      if (readOnly) {
+        selectWord(box.wordId);
+        return;
+      }
 
-  const handleWordSelect = useCallback((word: MushafWord, wordPosition: WordPosition) => {
-    selectWord(word.id);
-    if (readOnly || currentTool === 'select') return;
+      if (currentTool === 'mark') {
+        toggleMarkedPosition(box.position);
+        return;
+      }
 
-    if (currentTool === 'delete') {
-      const targetLines = selectedLineId
-        ? lines.filter((line) => line.id === selectedLineId)
-        : lines;
+      selectWord(box.wordId === selectedWordId ? null : box.wordId);
 
-      targetLines.forEach((line) => {
-        const node = line.nodes.find((item) => item.wordId === word.id);
-        if (node) removeNode(line.id, node.id);
-      });
-      setUnsavedChanges(true);
-      return;
-    }
+      // تحديد الكلمة يبرز أول اختلاف يشملها، لتسهيل الوصول إليه.
+      const variant = document?.variants.find(
+        (item) => box.position >= item.startPosition && box.position <= item.endPosition
+      );
+      selectVariant(variant?.id ?? null);
+    },
+    [currentTool, document, readOnly, selectVariant, selectWord, selectedWordId, toggleMarkedPosition]
+  );
 
-    const lineType = getLineTypeForTool(currentTool) ?? currentLineType;
-    const qiraahId = currentQiraahId || qiraahOrder[0] || 1;
-    let targetLine = selectedLineId
-      ? lines.find((line) => line.id === selectedLineId && line.type === lineType)
-      : undefined;
+  /** النقر على خط: يحدده، أو يخفيه إذا كانت أداة المسح فعّالة. */
+  const handleBranchClick = useCallback(
+    (branch: RenderedBranch) => {
+      if (!readOnly && currentTool === 'erase') {
+        toggleBranchVisibility(branch.id);
+        return;
+      }
 
-    if (!targetLine) {
-      targetLine = addLine(lineType, qiraahId);
-      selectLine(Number(targetLine.id));
-    }
+      selectBranch(branch.id === selectedBranchId ? null : branch.id);
+      selectVariant(branch.variantId);
+    },
+    [currentTool, readOnly, selectBranch, selectVariant, selectedBranchId, toggleBranchVisibility]
+  );
 
-    addNode(
-      targetLine.id,
-      word.id,
-      getNodePositionForLine(lineType),
-      { x: wordPosition.centerX, y: targetLine.yPosition },
-      qiraahId
-    );
-    setUnsavedChanges(true);
-  }, [
-    addLine,
-    addNode,
-    currentLineType,
-    currentQiraahId,
-    currentTool,
-    lines,
-    qiraahOrder,
-    readOnly,
-    removeNode,
-    selectLine,
-    selectWord,
-    selectedLineId,
-    setUnsavedChanges,
-  ]);
+  // ==================== حالات فارغة ====================
 
-  const handleLineDelete = useCallback((lineId: number) => {
-    deleteLine(lineId);
-    clearSelection();
-    setUnsavedChanges(true);
-  }, [clearSelection, deleteLine, setUnsavedChanges]);
-
-  const error = layoutError ?? linesError;
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-600 border-t-transparent" />
-      </div>
-    );
+  if (!document) {
+    return <CanvasMessage text="اختر سورة وآية لبدء التشجير." />;
   }
 
-  if (error) {
-    return (
-      <div className="flex h-full items-center justify-center text-red-700">
-        {error.message}
-      </div>
-    );
+  if (!ayah || layout.boxes.length === 0) {
+    return <CanvasMessage text="تعذر تحميل نص هذه الآية." tone="error" />;
   }
 
-  if (words.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center text-gray-500">
-        لا توجد كلمات متاحة لهذه الآية.
-      </div>
-    );
-  }
+  const cursor = readOnly
+    ? 'default'
+    : currentTool === 'mark'
+      ? 'crosshair'
+      : currentTool === 'erase'
+        ? 'not-allowed'
+        : 'default';
 
   return (
-    <div className="tashjeer-canvas-container relative w-full h-full">
+    <div className="relative h-full w-full overflow-auto bg-[#fdfaf2]">
       <svg
-        ref={canvasRef}
-        className="w-full h-full"
-        onMouseMove={handleMouseMove}
+        ref={svgRef}
+        role="img"
+        aria-label={`لوحة تشجير الآية ${ayah.ayahNumber} من السورة ${ayah.surahNumber}`}
+        viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
+        className="h-full w-full min-h-[520px]"
+        style={{ cursor }}
         onWheel={handleWheel}
-        style={{
-          cursor: readOnly ? 'default' : 'crosshair',
-          background: 'linear-gradient(135deg, #fefce8 0%, #fef3c7 100%)',
-        }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={endPan}
+        onMouseLeave={endPan}
       >
         <defs>
-          <filter id="glow">
-            <feGaussianBlur stdDeviation="2" result="coloredBlur" />
-            <feMerge>
-              <feMergeNode in="coloredBlur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
+          <filter id="branch-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="0" stdDeviation="3" floodOpacity="0.45" />
           </filter>
-          <filter id="shadow">
-            <feDropShadow dx="0" dy="2" stdDeviation="2" floodOpacity="0.2" />
-          </filter>
+          <pattern id="canvas-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#d6d3d1" strokeWidth="0.5" />
+          </pattern>
         </defs>
 
-        <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-          <MushafBackground />
-          {showGrid && <GridOverlay />}
-          {showRulers && <RulersOverlay />}
-          <UsulArea />
-          <MushafTextGroup words={words} positions={positions} />
-          <TashjeerLinesGroup
-            lines={lines}
-            positions={positions}
-            activeLineId={selectedLineId}
-            onLineUpdate={updateLine}
-            onLineDelete={handleLineDelete}
-            onLineSelect={(lineId) => selectLine(lineId)}
-          />
-          <WordsMarkersGroup
-            words={words}
-            positions={positions}
-            selectedWordId={selectedWordId}
-            onHover={setHoveredNode}
-            onWordSelect={handleWordSelect}
-          />
+        <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
+          {filter.showGrid && (
+            <rect
+              x={viewBox.x}
+              y={viewBox.y}
+              width={viewBox.width}
+              height={viewBox.height}
+              fill="url(#canvas-grid)"
+            />
+          )}
+
+          {filter.showRulers && <Rulers viewBox={viewBox} />}
+
+          {/* شريط الأساس: يوضح أن النص المرسوم هو رواية حفص */}
+          <BaselineBands layout={layout} viewBox={viewBox} />
+
+          {/* الخطوط تُرسم قبل النص حتى لا تغطي الحروف */}
+          <g>
+            {branches.map((branch) => (
+              <BranchShape
+                key={branch.id}
+                branch={branch}
+                isSelected={branch.id === selectedBranchId || branch.variantId === selectedVariantId}
+                isHovered={branch.id === hoveredBranchId}
+                showLabel={filter.showLabels}
+                onClick={() => handleBranchClick(branch)}
+                onHoverStart={() => setHoveredBranchId(branch.id)}
+                onHoverEnd={() => setHoveredBranchId(null)}
+              />
+            ))}
+          </g>
+
+          {/* نص الآية */}
+          <g>
+            {layout.boxes.map((box) => (
+              <WordShape
+                key={box.wordId}
+                box={box}
+                fontSize={fontSize}
+                isMarked={markedPositions.includes(box.position)}
+                isSelected={box.wordId === selectedWordId}
+                isCovered={isCovered(box.position, document.variants)}
+                showAnchors={filter.showAnchors}
+                onClick={() => handleWordClick(box)}
+              />
+            ))}
+          </g>
         </g>
       </svg>
 
-      {!readOnly && (
-        <div
-          className="absolute pointer-events-none w-8 h-8 border-2 border-emerald-500 rounded-full opacity-40"
-          style={{
-            left: mousePosition.x - 16,
-            top: mousePosition.y - 16,
-          }}
-        />
-      )}
-
-      {hoveredNode && (
-        <EvidencePopup
-          node={hoveredNode}
-          position={mousePosition}
-          onClose={() => setHoveredNode(null)}
-        />
-      )}
-
-      <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur rounded-lg px-3 py-2 shadow-lg">
-        <span className="text-sm text-gray-600">
-          التكبير: {Math.round(zoom * 100)}%
-        </span>
-      </div>
+      <CanvasLegend />
     </div>
   );
 }
 
-function MushafBackground() {
+// ==================== الكلمة ====================
+
+function WordShape({
+  box,
+  fontSize,
+  isMarked,
+  isSelected,
+  isCovered,
+  showAnchors,
+  onClick,
+}: {
+  box: WordBox;
+  fontSize: number;
+  isMarked: boolean;
+  isSelected: boolean;
+  isCovered: boolean;
+  showAnchors: boolean;
+  onClick: () => void;
+}) {
+  const highlight = isMarked
+    ? '#fde68a'
+    : isSelected
+      ? '#bbf7d0'
+      : isCovered
+        ? '#f1f5f9'
+        : 'transparent';
+
   return (
-    <g>
+    <g onClick={onClick} style={{ cursor: 'pointer' }} data-word-id={box.wordId}>
       <rect
-        x="50"
-        y="30"
-        width="694"
-        height="900"
-        fill="#fefce8"
-        stroke="#d97706"
-        strokeWidth="2"
-        rx="8"
+        x={box.x - 4}
+        y={box.topY - 4}
+        width={box.width + 8}
+        height={box.height + 8}
+        rx={6}
+        fill={highlight}
+        stroke={isMarked || isSelected ? '#0f766e' : 'transparent'}
+        strokeWidth={1.2}
       />
-      {[...Array(15)].map((_, i) => (
-        <line
-          key={i}
-          x1="50"
-          y1={80 + i * 55}
-          x2="744"
-          y2={80 + i * 55}
-          stroke="#e5e7eb"
-          strokeWidth="0.5"
-          strokeDasharray="4,4"
+
+      <text
+        x={box.x + box.width}
+        y={box.baselineY}
+        textAnchor="end"
+        fontSize={fontSize}
+        fontFamily="'Amiri Quran', 'Amiri', serif"
+        fill="#1c1917"
+        style={{ direction: 'rtl', userSelect: 'none' }}
+      >
+        {box.text}
+      </text>
+
+      {showAnchors && (
+        <>
+          <circle cx={box.centerX} cy={box.topY - 3} r={2} fill="#94a3b8" opacity={0.55} />
+          <circle cx={box.centerX} cy={box.bottomY + 3} r={2} fill="#94a3b8" opacity={0.55} />
+        </>
+      )}
+
+      <title>{`الكلمة ${box.position}: ${box.text}`}</title>
+    </g>
+  );
+}
+
+// ==================== الخط ====================
+
+function BranchShape({
+  branch,
+  isSelected,
+  isHovered,
+  showLabel,
+  onClick,
+  onHoverStart,
+  onHoverEnd,
+}: {
+  branch: RenderedBranch;
+  isSelected: boolean;
+  isHovered: boolean;
+  showLabel: boolean;
+  onClick: () => void;
+  onHoverStart: () => void;
+  onHoverEnd: () => void;
+}) {
+  const strokeWidth = isSelected ? 3 : isHovered ? 2.4 : 1.8;
+  const opacity = isSelected || isHovered ? 1 : 0.85;
+
+  return (
+    <g
+      onClick={onClick}
+      onMouseEnter={onHoverStart}
+      onMouseLeave={onHoverEnd}
+      style={{ cursor: 'pointer' }}
+      data-branch-id={branch.id}
+    >
+      {/* مسار شفاف عريض: يوسّع مساحة النقر دون تغيير الشكل */}
+      <path d={branch.path} fill="none" stroke="transparent" strokeWidth={14} />
+
+      <path
+        d={branch.path}
+        fill="none"
+        stroke={branch.color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity={opacity}
+        filter={isSelected ? 'url(#branch-glow)' : undefined}
+      />
+
+      {branch.points.map((point) => (
+        <circle
+          key={point.wordId}
+          cx={point.x}
+          cy={point.y}
+          r={isSelected ? 4 : 3}
+          fill={branch.color}
+          stroke="#ffffff"
+          strokeWidth={1.2}
         />
       ))}
+
+      {showLabel && (
+        <BranchLabel branch={branch} isSelected={isSelected || isHovered} />
+      )}
+
+      <title>{`${CATEGORY_LABELS[branch.category]}: ${branch.label}`}</title>
     </g>
   );
 }
 
-function GridOverlay() {
-  return (
-    <g opacity="0.25">
-      {[...Array(18)].map((_, i) => (
-        <line key={`v-${i}`} x1={70 + i * 36} y1="30" x2={70 + i * 36} y2="930" stroke="#94a3b8" strokeWidth="0.5" />
-      ))}
-      {[...Array(22)].map((_, i) => (
-        <line key={`h-${i}`} x1="50" y1={50 + i * 40} x2="744" y2={50 + i * 40} stroke="#94a3b8" strokeWidth="0.5" />
-      ))}
-    </g>
-  );
-}
+function BranchLabel({ branch, isSelected }: { branch: RenderedBranch; isSelected: boolean }) {
+  // عرض تقريبي: الحرف العربي في هذا المقاس يشغل نحو 8.2 وحدة.
+  const width = Math.max(branch.label.length * 8.2 + 20, 64);
+  const height = 22;
+  const x = branch.labelX - width;
+  const y = branch.laneY - height / 2;
 
-function RulersOverlay() {
-  const xMarks = [...Array(8)].map((_, index) => 100 + index * 80);
-  const yMarks = [...Array(10)].map((_, index) => 120 + index * 80);
-
-  return (
-    <g opacity="0.7">
-      <rect x="50" y="30" width="694" height="22" fill="#ffffff" stroke="#cbd5e1" strokeWidth="0.5" />
-      <rect x="722" y="30" width="22" height="900" fill="#ffffff" stroke="#cbd5e1" strokeWidth="0.5" />
-
-      {xMarks.map((x) => (
-        <g key={`rx-${x}`}>
-          <line x1={x} y1="30" x2={x} y2="52" stroke="#64748b" strokeWidth="0.5" />
-          <text x={x} y="47" textAnchor="middle" fontSize="8" fill="#64748b">
-            {x}
-          </text>
-        </g>
-      ))}
-
-      {yMarks.map((y) => (
-        <g key={`ry-${y}`}>
-          <line x1="722" y1={y} x2="744" y2={y} stroke="#64748b" strokeWidth="0.5" />
-          <text x="733" y={y - 3} textAnchor="middle" fontSize="8" fill="#64748b">
-            {y}
-          </text>
-        </g>
-      ))}
-    </g>
-  );
-}
-
-function UsulArea() {
   return (
     <g>
+      <line
+        x1={branch.labelX}
+        y1={branch.laneY}
+        x2={branch.labelX - 6}
+        y2={branch.laneY}
+        stroke={branch.color}
+        strokeWidth={1.6}
+      />
       <rect
-        x="50"
-        y="30"
-        width="694"
-        height="70"
-        fill="#f0fdf4"
-        stroke="#22c55e"
-        strokeWidth="1"
-        strokeDasharray="4,4"
-        rx="4"
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        rx={6}
+        fill={getCategorySoftColor(branch.category)}
+        stroke={branch.color}
+        strokeWidth={isSelected ? 1.6 : 1}
       />
       <text
-        x="397"
-        y="58"
-        textAnchor="middle"
-        fill="#16a34a"
-        fontSize="14"
-        fontWeight="bold"
+        x={x + width - 10}
+        y={y + height / 2 + 4.5}
+        textAnchor="end"
+        fontSize={12}
+        fontFamily="system-ui, sans-serif"
+        fill="#1f2937"
+        style={{ direction: 'rtl', userSelect: 'none' }}
       >
-        منطقة الأصول
+        {branch.label}
       </text>
     </g>
   );
 }
 
-function MushafTextGroup({
-  words,
-  positions,
+// ==================== عناصر مساعدة ====================
+
+/** خلفيتان خفيفتان تفصلان منطقة الأصول (فوق) عن منطقة الفرش (تحت). */
+function BaselineBands({
+  layout,
+  viewBox,
 }: {
-  words: MushafWord[];
-  positions: Map<number, WordPosition>;
+  layout: { boxes: WordBox[] };
+  viewBox: { x: number; y: number; width: number; height: number };
 }) {
+  if (layout.boxes.length === 0) return null;
+
+  const top = Math.min(...layout.boxes.map((box) => box.topY));
+  const bottom = Math.max(...layout.boxes.map((box) => box.bottomY));
+
   return (
     <g>
-      {words.map((word) => {
-        const pos = positions.get(word.id);
-        if (!pos) return null;
-        return (
-          <text
-            key={word.id}
-            x={pos.x}
-            y={pos.y}
-            fontSize="24"
-            fontFamily="UthmanicHafs, Amiri, serif"
-            fill="#1e293b"
-            textAnchor="start"
-          >
-            {word.text}
-          </text>
-        );
-      })}
+      <rect
+        x={viewBox.x}
+        y={top - 10}
+        width={viewBox.width}
+        height={bottom - top + 20}
+        fill="#fffdf7"
+        stroke="#e7e5e4"
+        strokeWidth={1}
+        rx={8}
+      />
+      <text
+        x={viewBox.x + 12}
+        y={top - 18}
+        fontSize={11}
+        fill="#0f766e"
+        fontFamily="system-ui, sans-serif"
+      >
+        منطقة الأصول والمدود
+      </text>
+      <text
+        x={viewBox.x + 12}
+        y={bottom + 26}
+        fontSize={11}
+        fill="#1d4ed8"
+        fontFamily="system-ui, sans-serif"
+      >
+        منطقة الفرش والهمز والوقف
+      </text>
     </g>
   );
 }
 
-function TashjeerLinesGroup({
-  lines,
-  positions,
-  activeLineId,
-  onLineUpdate,
-  onLineDelete,
-  onLineSelect,
-}: {
-  lines: TashjeerLine[];
-  positions: Map<number, WordPosition>;
-  activeLineId: number | null;
-  onLineUpdate: (line: TashjeerLine) => void;
-  onLineDelete: (lineId: number) => void;
-  onLineSelect: (lineId: number) => void;
-}) {
+function Rulers({ viewBox }: { viewBox: { x: number; y: number; width: number; height: number } }) {
+  const step = 100;
+  const marks: number[] = [];
+  for (let x = Math.ceil(viewBox.x / step) * step; x < viewBox.x + viewBox.width; x += step) {
+    marks.push(x);
+  }
+
   return (
-    <g>
-      {lines.map((line) => (
-        <LineDrawer
-          key={String(line.id)}
-          line={line}
-          positions={positions}
-          isActive={line.id === activeLineId}
-          onUpdate={onLineUpdate}
-          onDelete={() => onLineDelete(Number(line.id))}
-          onSelect={() => onLineSelect(Number(line.id))}
-        />
+    <g opacity={0.6}>
+      {marks.map((x) => (
+        <g key={x}>
+          <line
+            x1={x}
+            y1={viewBox.y}
+            x2={x}
+            y2={viewBox.y + viewBox.height}
+            stroke="#cbd5e1"
+            strokeWidth={0.5}
+            strokeDasharray="4 6"
+          />
+          <text x={x + 3} y={viewBox.y + 12} fontSize={9} fill="#94a3b8">
+            {x}
+          </text>
+        </g>
       ))}
     </g>
   );
 }
 
-function WordsMarkersGroup({
-  words,
-  positions,
-  selectedWordId,
-  onHover,
-  onWordSelect,
-}: {
-  words: MushafWord[];
-  positions: Map<number, WordPosition>;
-  selectedWordId: number | null;
-  onHover: (node: HoveredNode) => void;
-  onWordSelect: (word: MushafWord, position: WordPosition) => void;
-}) {
+function CanvasLegend() {
   return (
-    <g>
-      {words.map((word) => {
-        const pos = positions.get(word.id);
-        if (!pos) return null;
-        return (
-          <WordMarker
-            key={word.id}
-            word={word}
-            position={pos}
-            isSelected={selectedWordId === word.id}
-            onHover={onHover}
-            onSelect={() => onWordSelect(word, pos)}
-          />
-        );
-      })}
-    </g>
+    <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg border border-stone-200 bg-white/90 px-3 py-2 text-xs text-stone-600 shadow-sm backdrop-blur">
+      <div className="flex flex-wrap items-center gap-3">
+        {(Object.keys(CATEGORY_LABELS) as Array<keyof typeof CATEGORY_LABELS>).map((category) => (
+          <span key={category} className="flex items-center gap-1.5">
+            <span
+              className="inline-block h-2.5 w-2.5 rounded-full"
+              style={{ backgroundColor: getCategorySoftColor(category) }}
+            />
+            {CATEGORY_LABELS[category]}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
-function getLineTypeForTool(tool: string): LineType | null {
-  if (tool === 'line-usul') return 'USUL';
-  if (tool === 'line-farsh') return 'FARSH';
-  if (tool === 'line-madud') return 'MADUD';
-  return null;
+function CanvasMessage({ text, tone = 'muted' }: { text: string; tone?: 'muted' | 'error' }) {
+  return (
+    <div className="flex h-full min-h-[400px] items-center justify-center bg-[#fdfaf2]">
+      <p className={tone === 'error' ? 'text-red-700' : 'text-stone-500'}>{text}</p>
+    </div>
+  );
 }
 
-function getNodePositionForLine(type: LineType): NodePosition {
-  if (type === 'USUL') return 'TOP';
-  if (type === 'MADUD') return 'MIDDLE';
-  return 'BOTTOM';
+/** هل هذه الكلمة مشمولة بأي اختلاف؟ يُستخدم لتظليل خفيف يرشد المحرر. */
+function isCovered(
+  position: number,
+  variants: Array<{ startPosition: number; endPosition: number }>
+): boolean {
+  return variants.some(
+    (variant) => position >= variant.startPosition && position <= variant.endPosition
+  );
 }
