@@ -1,0 +1,511 @@
+// Prisma Schema - مخطط قاعدة البيانات
+// مشروع التشجير - نظام القراءات العشر
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== المصحف ====================
+
+model Surah {
+  id             Int            @id
+  name           String
+  nameArabic     String
+  ayahsCount     Int
+  revelationType RevelationType
+  pageStart      Int
+  pageEnd        Int
+  ayahs          Ayah[]
+
+  @@map("surahs")
+}
+
+model Ayah {
+  id            Int             @id
+  surahId       Int
+  surah         Surah           @relation(fields: [surahId], references: [id])
+  number        Int
+  page          Int
+  juz           Int
+  hizb          Int
+  rub           Int
+  text          String
+  plainText     String
+  wordsCount    Int
+  words         Word[]
+  variantRules  VariantRule[]
+  tashjeerLines TashjeerLine[]
+
+  @@unique([surahId, number])
+  @@index([page])
+  @@index([juz])
+  @@map("ayahs")
+}
+
+model Word {
+  id              Int              @id
+  ayahId          Int
+  ayah            Ayah             @relation(fields: [ayahId], references: [id])
+  position        Int
+  text            String
+  plainText       String
+  unicode         String
+  pageX           Float?
+  pageY           Float?
+  width           Float?
+  height          Float?
+  variantRules    VariantRule[]
+  variantReadings VariantReading[]
+  tashjeerNodes   TashjeerNode[]
+
+  @@unique([ayahId, position])
+  @@index([plainText])
+  @@map("words")
+}
+
+// ==================== طبقات القراءة والنقل ====================
+
+model ReadingImam {
+  id         String                   @id @default(cuid())
+  name       String
+  slug       String                   @unique
+  order      Int
+  region     String?
+  narrators  Narrator[]
+  groupItems ApplicabilityGroupItem[]
+  createdAt  DateTime                 @default(now())
+  updatedAt  DateTime                 @updatedAt
+
+  @@index([order])
+  @@map("reading_imams")
+}
+
+model Narrator {
+  id                    String                   @id @default(cuid())
+  imamId                String
+  imam                  ReadingImam              @relation(fields: [imamId], references: [id])
+  name                  String
+  slug                  String
+  order                 Int
+  legacyOrderInTayyibah Int?
+  paths                 TransmissionPath[]
+  groupItems            ApplicabilityGroupItem[]
+  ijazat                Ijazah[]
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+
+  @@unique([imamId, slug])
+  @@index([imamId, order])
+  @@index([legacyOrderInTayyibah])
+  @@map("narrators")
+}
+
+model TransmissionNode {
+  id        String             @id @default(cuid())
+  code      String             @unique
+  parentId  String?
+  parent    TransmissionNode?  @relation("TransmissionTree", fields: [parentId], references: [id])
+  children  TransmissionNode[] @relation("TransmissionTree")
+  name      String
+  slug      String
+  kind      TransmissionNodeKind
+  sourceRef String?
+  notes     String?
+  pathNodes TransmissionPathNode[]
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@unique([parentId, slug])
+  @@index([parentId])
+  @@index([kind])
+  @@index([name])
+  @@map("transmission_nodes")
+}
+
+model TransmissionPath {
+  id          String                   @id @default(cuid())
+  narratorId  String
+  narrator    Narrator                 @relation(fields: [narratorId], references: [id])
+  code        String                   @unique
+  shortName   String
+  fullName    String
+  order       Int
+  depth       Int                      @default(0)
+  isCanonical Boolean                  @default(true)
+  sourceRef   String?
+  notes       String?
+  nodes       TransmissionPathNode[]
+  groupItems  ApplicabilityGroupItem[]
+  ijazahPaths IjazahPath[]
+  tashjeerNodes TashjeerNode[]
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  @@index([narratorId, order])
+  @@index([shortName])
+  @@map("transmission_paths")
+}
+
+model TransmissionPathNode {
+  pathId String
+  nodeId String
+  path   TransmissionPath @relation(fields: [pathId], references: [id])
+  node   TransmissionNode @relation(fields: [nodeId], references: [id])
+  depth  Int
+  label  String?
+
+  @@id([pathId, nodeId])
+  @@unique([pathId, depth])
+  @@index([nodeId])
+  @@index([pathId, depth])
+  @@map("transmission_path_nodes")
+}
+
+// ==================== نطاقات التطبيق والأحكام ====================
+
+model ApplicabilityGroup {
+  id           String                   @id @default(cuid())
+  code         String                   @unique
+  name         String
+  scope        ApplicabilityScope
+  description  String?
+  items        ApplicabilityGroupItem[]
+  rules        VariantRule[]
+  tashjeerNodes TashjeerNode[]
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  @@index([scope])
+  @@map("applicability_groups")
+}
+
+model ApplicabilityGroupItem {
+  id         String             @id @default(cuid())
+  groupId    String
+  group      ApplicabilityGroup @relation(fields: [groupId], references: [id])
+  pathId     String?
+  path       TransmissionPath?  @relation(fields: [pathId], references: [id])
+  narratorId String?
+  narrator   Narrator?          @relation(fields: [narratorId], references: [id])
+  imamId     String?
+  imam       ReadingImam?       @relation(fields: [imamId], references: [id])
+  include    Boolean            @default(true)
+  notes      String?
+
+  @@index([groupId])
+  @@index([pathId])
+  @@index([narratorId])
+  @@index([imamId])
+  @@map("applicability_group_items")
+}
+
+model VariantRule {
+  id          String             @id @default(cuid())
+  ayahId      Int?
+  ayah        Ayah?              @relation(fields: [ayahId], references: [id])
+  wordId      Int?
+  word        Word?              @relation(fields: [wordId], references: [id])
+  groupId     String
+  group       ApplicabilityGroup @relation(fields: [groupId], references: [id])
+  category    VariantCategory
+  title       String
+  description String?
+  isGlobal    Boolean            @default(false)
+  startWordId Int?
+  endWordId   Int?
+  sortOrder   Int                @default(0)
+  status      RuleStatus         @default(DRAFT)
+  readings    VariantReading[]
+  evidences   Evidence[]
+  lines       TashjeerLine[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([ayahId])
+  @@index([wordId])
+  @@index([groupId])
+  @@index([category])
+  @@index([status])
+  @@map("variant_rules")
+}
+
+model VariantReading {
+  id         String      @id @default(cuid())
+  ruleId     String
+  rule       VariantRule @relation(fields: [ruleId], references: [id])
+  wordId     Int?
+  word       Word?       @relation(fields: [wordId], references: [id])
+  fromWordId Int?
+  toWordId   Int?
+  text       String
+  normalized String
+  notes      String?
+  evidences  Evidence[]
+
+  @@index([ruleId])
+  @@index([wordId])
+  @@index([normalized])
+  @@map("variant_readings")
+}
+
+// ==================== التشجير ====================
+
+model TashjeerLine {
+  id          String         @id @default(cuid())
+  ayahId      Int
+  ayah        Ayah           @relation(fields: [ayahId], references: [id])
+  ruleId      String?
+  rule        VariantRule?   @relation(fields: [ruleId], references: [id])
+  type        LineType
+  yPosition   Float
+  style       Json
+  isActive    Boolean        @default(true)
+  createdBy   String?
+  verifiedBy  String?
+  nodes       TashjeerNode[]
+  reviews     Review[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([ayahId])
+  @@index([ruleId])
+  @@index([type])
+  @@map("tashjeer_lines")
+}
+
+model TashjeerNode {
+  id          String              @id @default(cuid())
+  lineId      String
+  line        TashjeerLine        @relation(fields: [lineId], references: [id])
+  wordId      Int
+  word        Word                @relation(fields: [wordId], references: [id])
+  pathId      String?
+  path        TransmissionPath?   @relation(fields: [pathId], references: [id])
+  groupId     String?
+  group       ApplicabilityGroup? @relation(fields: [groupId], references: [id])
+  position    NodePosition
+  x           Float
+  y           Float
+  label       String?
+
+  @@index([lineId])
+  @@index([wordId])
+  @@index([pathId])
+  @@index([groupId])
+  @@map("tashjeer_nodes")
+}
+
+// ==================== الأدلة ====================
+
+model Evidence {
+  id               String          @id @default(cuid())
+  ruleId           String?
+  rule             VariantRule?    @relation(fields: [ruleId], references: [id])
+  variantReadingId String?
+  variantReading   VariantReading? @relation(fields: [variantReadingId], references: [id])
+  source           SourceType
+  text             String
+  reference        String?
+  manzumaLine      String?
+  manzumaRef       String?
+  kitabPage        String?
+  kitabRef         String?
+  linkType         LinkType
+  linkUrl          String?
+  createdAt        DateTime        @default(now())
+
+  @@index([ruleId])
+  @@index([variantReadingId])
+  @@index([source])
+  @@map("evidence")
+}
+
+// ==================== المراجعة ====================
+
+model Scholar {
+  id              String        @id @default(cuid())
+  name            String
+  email           String        @unique
+  passwordHash    String
+  role            ScholarRole
+  specializations String[]
+  isActive        Boolean       @default(true)
+  reviews         Review[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("scholars")
+}
+
+model Review {
+  id        String        @id @default(cuid())
+  scholarId String
+  scholar   Scholar       @relation(fields: [scholarId], references: [id])
+  lineId    String
+  line      TashjeerLine  @relation(fields: [lineId], references: [id])
+  status    ReviewStatus
+  comment   String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([scholarId])
+  @@index([lineId])
+  @@index([status])
+  @@map("reviews")
+}
+
+// ==================== القراء والإجازات ====================
+
+model Reader {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  isActive     Boolean  @default(true)
+  ijazat       Ijazah[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("readers")
+}
+
+model Ijazah {
+  id             String       @id @default(cuid())
+  readerId       String
+  reader         Reader       @relation(fields: [readerId], references: [id])
+  narratorId     String?
+  narrator       Narrator?    @relation(fields: [narratorId], references: [id])
+  qiraahName     String
+  narratorName   String
+  granter        String
+  grantedAt      DateTime
+  certificateUrl String?
+  paths          IjazahPath[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([readerId])
+  @@index([narratorId])
+  @@map("ijazat")
+}
+
+model IjazahPath {
+  id       String           @id @default(cuid())
+  ijazahId String
+  ijazah   Ijazah           @relation(fields: [ijazahId], references: [id])
+  pathId   String
+  path     TransmissionPath @relation(fields: [pathId], references: [id])
+
+  @@unique([ijazahId, pathId])
+  @@index([pathId])
+  @@map("ijazah_paths")
+}
+
+// ==================== الإحصائيات والإعدادات ====================
+
+model Statistics {
+  id              Int      @id
+  totalAyahs      Int      @default(0)
+  totalWords      Int      @default(0)
+  totalTashjeer   Int      @default(0)
+  totalReviews    Int      @default(0)
+  totalPaths      Int      @default(0)
+  lastUpdated     DateTime @updatedAt
+
+  @@map("statistics")
+}
+
+model Settings {
+  id          Int     @id @default(autoincrement())
+  key         String  @unique
+  value       String
+  description String?
+
+  @@map("settings")
+}
+
+// ==================== التعدادات ====================
+
+enum RevelationType {
+  MECCAN
+  MEDINAN
+}
+
+enum TransmissionNodeKind {
+  IMAM
+  NARRATOR
+  TARIQ
+  SUB_TARIQ
+  WAJH
+  BOOK
+}
+
+enum ApplicabilityScope {
+  ALL
+  IMAM
+  NARRATOR
+  PATH_GROUP
+  SINGLE_PATH
+  CUSTOM
+}
+
+enum VariantCategory {
+  USUL
+  FARSH
+  MADUD
+  HAMZ
+  WAQF
+  TAJWEED
+}
+
+enum RuleStatus {
+  DRAFT
+  REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum LineType {
+  USUL
+  FARSH
+  MADUD
+  HAMZ
+  WAQF
+  TAJWEED
+}
+
+enum NodePosition {
+  TOP
+  MIDDLE
+  BOTTOM
+}
+
+enum SourceType {
+  NASHR
+  TAYYIBAH
+  JANNAH
+  OTHER
+}
+
+enum LinkType {
+  MANZUMA
+  KITAB
+  KHARIJI
+}
+
+enum ScholarRole {
+  REVIEWER
+  VERIFIER
+  SUPERVISOR
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}

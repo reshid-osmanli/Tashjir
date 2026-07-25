@@ -1,0 +1,309 @@
+/* الأنماط العالمية - Global Styles */
+/* مشروع التشجير - نظام القراءات العشر */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==================== الخطوط ==================== */
+@font-face {
+  font-family: 'UthmanicHafs';
+  src: url('/fonts/UthmanicHafs.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Amiri';
+  src: url('/fonts/Amiri.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ==================== الأنماط الأساسية ==================== */
+:root {
+  --color-primary: #059669;
+  --color-primary-light: #34d399;
+  --color-primary-dark: #047857;
+  --color-secondary: #f59e0b;
+  --color-secondary-light: #fbbf24;
+  --color-secondary-dark: #d97706;
+  --color-background: #fefce8;
+  --color-surface: #ffffff;
+  --color-text: #1e293b;
+  --color-text-secondary: #64748b;
+  --color-border: #e2e8f0;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+}
+
+/* ==================== خط المصحف ==================== */
+.font-mushaf {
+  font-family: 'UthmanicHafs', 'Amiri', serif;
+  font-feature-settings: 'liga' 1, 'calt' 1;
+}
+
+.font-amiri {
+  font-family: 'Amiri', serif;
+}
+
+/* ==================== أنماط المصحف ==================== */
+.mushaf-page {
+  background: linear-gradient(135deg, #fefce8 0%, #fef3c7 100%);
+  border: 2px solid #d97706;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.mushaf-text {
+  font-family: 'UthmanicHafs', 'Amiri', serif;
+  font-size: 24px;
+  line-height: 2.5;
+  text-align: justify;
+  direction: rtl;
+}
+
+.mushaf-word {
+  display: inline-block;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0 2px;
+  border-radius: 4px;
+}
+
+.mushaf-word:hover {
+  background-color: rgba(5, 150, 105, 0.1);
+}
+
+.mushaf-word.selected {
+  background-color: rgba(5, 150, 105, 0.2);
+  box-shadow: 0 0 0 2px var(--color-primary);
+}
+
+.mushaf-word.different {
+  background-color: rgba(245, 158, 11, 0.2);
+}
+
+.mushaf-word.highlighted {
+  background-color: rgba(59, 130, 246, 0.2);
+}
+
+/* ==================== أنماط التشجير ==================== */
+.tashjeer-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.tashjeer-line {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: all 0.2s ease;
+}
+
+.tashjeer-line:hover {
+  stroke-width: 3;
+  filter: brightness(1.1);
+}
+
+.tashjeer-line.selected {
+  stroke-width: 3;
+  filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.5));
+}
+
+.tashjeer-node {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tashjeer-node:hover {
+  r: 6;
+  filter: brightness(1.2);
+}
+
+/* ==================== ألوان خطوط التشجير ==================== */
+.line-usul {
+  stroke: #22c55e;
+}
+
+.line-farsh {
+  stroke: #3b82f6;
+}
+
+.line-madud {
+  stroke: #f97316;
+}
+
+/* ==================== النوافذ المنبثقة ==================== */
+.evidence-popup {
+  position: absolute;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--color-border);
+  padding: 16px;
+  max-width: 320px;
+  z-index: 50;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ==================== شريط الأدوات ==================== */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: white;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.toolbar-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toolbar-button:hover {
+  background: var(--color-background);
+  border-color: var(--color-primary);
+}
+
+.toolbar-button.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+/* ==================== لوحة الخصائص ==================== */
+.properties-panel {
+  position: relative;
+  flex-shrink: 0;
+  width: 320px;
+  height: 100%;
+  background: white;
+  border-left: 1px solid var(--color-border);
+  box-shadow: -4px 0 12px rgba(0, 0, 0, 0.05);
+  overflow-y: auto;
+  z-index: 10;
+}
+
+/* ==================== أنماط المراجعة ==================== */
+.review-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.review-badge.pending {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.review-badge.approved {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.review-badge.rejected {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* ==================== أنماط الرموز ==================== */
+.ayah-number {
+  font-family: 'Amiri', serif;
+  font-size: 18px;
+  color: var(--color-primary);
+}
+
+.juz-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+/* ==================== التمرير ==================== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-secondary);
+}
+
+/* ==================== التحديد ==================== */
+::selection {
+  background: rgba(5, 150, 105, 0.2);
+}
+
+/* ==================== الاستجابة ==================== */
+@media (max-width: 768px) {
+  .mushaf-text {
+    font-size: 20px;
+  }
+
+  .properties-panel {
+    width: 100%;
+    height: auto;
+    max-height: 50vh;
+    border-left: 0;
+    border-top: 1px solid var(--color-border);
+  }
+}
+
+/* ==================== الطباعة ==================== */
+@media print {
+  .toolbar,
+  .properties-panel {
+    display: none !important;
+  }
+
+  .mushaf-page {
+    box-shadow: none;
+    border: none;
+  }
+}
