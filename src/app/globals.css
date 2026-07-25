@@ -1,25 +1,32 @@
 /* الأنماط العالمية - Global Styles */
 /* مشروع التشجير - نظام القراءات العشر */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/*
+ * Tailwind CSS 4: استيراد واحد بدل توجيهات @tailwind الثلاث القديمة.
+ * المعالجة تتم عبر @tailwindcss/postcss المعرّف في postcss.config.mjs.
+ */
+@import 'tailwindcss';
 
-/* ==================== الخطوط ==================== */
-@font-face {
-  font-family: 'UthmanicHafs';
-  src: url('/fonts/UthmanicHafs.otf') format('opentype');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
+/*
+ * خطوط المصحف تأتي من حزمتي @fontsource/amiri-quran و @fontsource/amiri،
+ * فلا حاجة لملفات خطوط داخل public ولا لتعريفات @font-face يدوية.
+ * أميري القرآني هو الخط الأساسي لعرض النص العثماني بتشكيله الكامل.
+ */
+@import '@fontsource/amiri-quran/arabic-400.css';
+@import '@fontsource/amiri/arabic-400.css';
+@import '@fontsource/amiri/arabic-700.css';
 
-@font-face {
-  font-family: 'Amiri';
-  src: url('/fonts/Amiri.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
+/* ==================== إعدادات السمة ==================== */
+@theme {
+  --font-mushaf: 'Amiri Quran', 'Amiri', serif;
+  --font-amiri: 'Amiri', serif;
+
+  --color-tashjeer-usul: #16a34a;
+  --color-tashjeer-farsh: #2563eb;
+  --color-tashjeer-madud: #ea580c;
+  --color-tashjeer-hamz: #dc2626;
+  --color-tashjeer-waqf: #7c3aed;
+  --color-tashjeer-tajweed: #0891b2;
 }
 
 /* ==================== الأنماط الأساسية ==================== */
@@ -43,7 +50,7 @@
 
 /* ==================== خط المصحف ==================== */
 .font-mushaf {
-  font-family: 'UthmanicHafs', 'Amiri', serif;
+  font-family: 'Amiri Quran', 'Amiri', serif;
   font-feature-settings: 'liga' 1, 'calt' 1;
 }
 
@@ -60,7 +67,7 @@
 }
 
 .mushaf-text {
-  font-family: 'UthmanicHafs', 'Amiri', serif;
+  font-family: 'Amiri Quran', 'Amiri', serif;
   font-size: 24px;
   line-height: 2.5;
   text-align: justify;
@@ -306,4 +313,40 @@
     box-shadow: none;
     border: none;
   }
+}
+
+/* ==================== عناصر النماذج ==================== */
+/*
+ * صنف موحّد لكل حقول الإدخال في المحرر واللوحات.
+ * وجوده في مكان واحد يضمن اتساق الشكل ويمنع تكرار عشرات الأصناف في JSX.
+ */
+.input {
+  display: block;
+  width: 100%;
+  border-radius: 0.375rem;
+  border: 1px solid #d6d3d1;
+  background-color: #ffffff;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.8125rem;
+  color: #1c1917;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #059669;
+  box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.18);
+}
+
+.input::placeholder {
+  color: #a8a29e;
+}
+
+/* ==================== لوحة التشجير ==================== */
+/*
+ * منع تحديد النص داخل اللوحة: النقر على الكلمة إجراء تحريري،
+ * وليس محاولة نسخ نص، فتحديد النص يعطل الشعور بأنها أداة رسم.
+ */
+svg text {
+  user-select: none;
 }

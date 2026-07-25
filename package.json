@@ -13,10 +13,15 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
-    "test": "vitest",
-    "test:e2e": "playwright test"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "data:quran": "node scripts/build-quran-data.mjs"
   },
   "dependencies": {
+    "@fontsource/amiri": "^5.3.0",
+    "@fontsource/amiri-quran": "^5.3.0",
     "@prisma/client": "^6.0.0",
     "@tanstack/react-query": "^5.0.0",
     "clsx": "^2.0.0",
@@ -29,6 +34,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.0.0",
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^20.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
@@ -37,6 +43,7 @@
     "eslint-config-next": "^15.0.0",
     "postcss": "^8.0.0",
     "prisma": "^6.0.0",
+    "quran-json": "^3.1.2",
     "tailwindcss": "^4.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.0.0",

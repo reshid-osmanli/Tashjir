@@ -1,30 +1,114 @@
-import type { LineType, ReviewStatus, TashjeerLine } from '@/types';
+// بيانات التطبيق المحلية - Local App Data
+// مشروع التشجير - نظام القراءات العشر
+//
+// هذا الملف يخدم الصفحات المساندة (المراجعة، القراء، الإحصاءات، الإعدادات).
+// أما مستندات التشجير نفسها فمخزنها الوحيد هو @/lib/storage/document-store،
+// وهذا الملف يقرأ منه ولا يكتب فيه، حتى لا يوجد مصدران للحقيقة.
 
-const TASHJEER_LINES_PREFIX = 'tashjeer-lines:';
-const REVIEW_STORAGE_KEY = 'tashjeer-review-statuses';
-const READERS_STORAGE_KEY = 'tashjeer-readers';
-const SETTINGS_STORAGE_KEY = 'tashjeer-settings';
+import type { VariantCategory } from '@/types';
+import type { VerificationStatus } from '@/types/tashjeer';
+import { listDocuments, loadDocument } from '@/lib/storage/document-store';
+import { getSurahOrFirst } from '@/data/quran';
 
+const REVIEW_STORAGE_KEY = 'tashjeer:reviews:v2';
+const READERS_STORAGE_KEY = 'tashjeer:readers:v2';
+const SETTINGS_STORAGE_KEY = 'tashjeer:settings:v2';
+
+// ==================== المراجعة ====================
+
+/** قرار مراجعة على وجه واحد من أوجه اختلاف. */
 export type LocalReviewDecision = {
-  status: ReviewStatus;
+  status: VerificationStatus;
   comment: string;
   reviewer: string;
   updatedAt: string;
 };
 
-export type TashjeerLineSummary = {
+/** عنصر قابل للمراجعة: وجه واحد داخل اختلاف داخل آية. */
+export type ReviewableItem = {
+  /** مفتاح فريد: ayahKey:variantId:alternativeId */
   key: string;
-  storageKey: string;
-  surahId: number;
-  ayahId: number;
-  lineId: string;
-  type: LineType;
-  qiraahId?: number;
-  nodesCount: number;
-  color?: string;
+  ayahKey: number;
+  surahNumber: number;
+  surahName: string;
+  ayahNumber: number;
+  variantId: string;
+  variantTitle: string;
+  category: VariantCategory;
+  alternativeId: string;
+  alternativeLabel: string;
+  alternativeText: string;
+  /** عدد الرواة الذين يقرأون بهذا الوجه */
+  narratorsCount: number;
+  /** عدد الأدلة المسجّلة */
+  evidencesCount: number;
+  /** حالة الاختلاف كما سجّلها المحرر */
+  authorStatus: VerificationStatus;
   updatedAt: string;
   review: LocalReviewDecision;
 };
+
+/**
+ * يبني قائمة العناصر القابلة للمراجعة من كل المستندات المحفوظة.
+ * كل وجه غير أساسي هو وحدة مراجعة مستقلة، لأن الاعتماد يقع على الوجه لا الاختلاف.
+ */
+export function readReviewableItems(): ReviewableItem[] {
+  const reviews = readReviewStatuses();
+  const items: ReviewableItem[] = [];
+
+  for (const entry of listDocuments()) {
+    const document = loadDocument(entry.ayahKey);
+    if (!document) continue;
+
+    const surahName = getSurahOrFirst(document.surahNumber).name;
+
+    for (const variant of document.variants) {
+      for (const alternative of variant.alternatives) {
+        if (alternative.isBase) continue;
+
+        const key = `${document.ayahKey}:${variant.id}:${alternative.id}`;
+
+        items.push({
+          key,
+          ayahKey: document.ayahKey,
+          surahNumber: document.surahNumber,
+          surahName,
+          ayahNumber: document.ayahNumber,
+          variantId: variant.id,
+          variantTitle: variant.title,
+          category: variant.category,
+          alternativeId: alternative.id,
+          alternativeLabel: alternative.label,
+          alternativeText: alternative.text,
+          narratorsCount: countScopeNarrators(alternative.scope),
+          evidencesCount: alternative.evidences?.length ?? 0,
+          authorStatus: variant.status,
+          updatedAt: document.meta.updatedAt,
+          review: reviews[key] ?? createPendingReview(),
+        });
+      }
+    }
+  }
+
+  return items.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+/** يقرأ كل قرارات المراجعة المخزّنة. */
+export function readReviewStatuses(): Record<string, LocalReviewDecision> {
+  return readJson<Record<string, LocalReviewDecision>>(REVIEW_STORAGE_KEY, {});
+}
+
+/** يحفظ قرار مراجعة على عنصر. */
+export function saveReviewDecision(
+  key: string,
+  decision: Omit<LocalReviewDecision, 'updatedAt'>
+): void {
+  const reviews = readReviewStatuses();
+  reviews[key] = { ...decision, updatedAt: new Date().toISOString() };
+  writeJson(REVIEW_STORAGE_KEY, reviews);
+}
+
+// ==================== القراء والإجازات ====================
 
 export type LocalIjazah = {
   id: string;
@@ -44,138 +128,104 @@ export type LocalReader = {
   ijazat: LocalIjazah[];
 };
 
+/** يقرأ قائمة القراء المسجّلين محليا. */
+export function readStoredReaders(): LocalReader[] {
+  return readJson<LocalReader[]>(READERS_STORAGE_KEY, []);
+}
+
+/** يحفظ قائمة القراء. */
+export function saveStoredReaders(readers: LocalReader[]): void {
+  writeJson(READERS_STORAGE_KEY, readers);
+}
+
+// ==================== الإعدادات ====================
+
 export type LocalAppSettings = {
   appName: string;
+  /** حجم خط المصحف الافتراضي في المحرر */
   fontSize: number;
+  /** التكبير الافتراضي */
   defaultZoom: number;
-  autoSave: boolean;
-  autoSaveInterval: number;
+  /** إظهار الشبكة عند فتح المحرر */
   showGrid: boolean;
+  /** إظهار المساطر عند فتح المحرر */
   showRulers: boolean;
+  /** إظهار بطاقات الأوجه */
+  showLabels: boolean;
+  /** اسم المحرر، يُسجَّل في بيانات المستند */
+  authorName: string;
 };
 
 export const DEFAULT_APP_SETTINGS: LocalAppSettings = {
   appName: 'مشروع التشجير',
-  fontSize: 24,
+  fontSize: 34,
   defaultZoom: 1,
-  autoSave: true,
-  autoSaveInterval: 30,
   showGrid: false,
   showRulers: false,
+  showLabels: true,
+  authorName: 'محرر محلي',
 };
 
-export function readAllTashjeerLineSummaries(): TashjeerLineSummary[] {
-  if (!isBrowser()) return [];
-
-  const reviews = readReviewStatuses();
-  const summaries: TashjeerLineSummary[] = [];
-
-  for (let index = 0; index < window.localStorage.length; index++) {
-    const storageKey = window.localStorage.key(index);
-    if (!storageKey?.startsWith(TASHJEER_LINES_PREFIX)) continue;
-
-    const [, surahIdValue, ayahIdValue] = storageKey.split(':');
-    const surahId = Number(surahIdValue);
-    const ayahId = Number(ayahIdValue);
-    const lines = readJsonStorage<TashjeerLine[]>(storageKey, []);
-
-    lines.forEach((line) => {
-      const key = createReviewKey(surahId, ayahId, line.id);
-      summaries.push({
-        key,
-        storageKey,
-        surahId,
-        ayahId,
-        lineId: String(line.id),
-        type: line.type,
-        qiraahId: line.nodes[0]?.qiraahId,
-        nodesCount: line.nodes.length,
-        color: line.color,
-        updatedAt: normalizeDate(line.updatedAt),
-        review: reviews[key] ?? createPendingReview(),
-      });
-    });
-  }
-
-  return summaries.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-}
-
-export function readReviewStatuses(): Record<string, LocalReviewDecision> {
-  return readJsonStorage<Record<string, LocalReviewDecision>>(REVIEW_STORAGE_KEY, {});
-}
-
-export function saveReviewDecision(key: string, decision: Omit<LocalReviewDecision, 'updatedAt'>): void {
-  const reviews = readReviewStatuses();
-  reviews[key] = {
-    ...decision,
-    updatedAt: new Date().toISOString(),
-  };
-  writeJsonStorage(REVIEW_STORAGE_KEY, reviews);
-}
-
-export function readStoredReaders(): LocalReader[] {
-  return readJsonStorage<LocalReader[]>(READERS_STORAGE_KEY, []);
-}
-
-export function saveStoredReaders(readers: LocalReader[]): void {
-  writeJsonStorage(READERS_STORAGE_KEY, readers);
-}
-
+/** يقرأ الإعدادات مدموجة مع الافتراضيات. */
 export function readStoredSettings(): LocalAppSettings {
   return {
     ...DEFAULT_APP_SETTINGS,
-    ...readJsonStorage<Partial<LocalAppSettings>>(SETTINGS_STORAGE_KEY, {}),
+    ...readJson<Partial<LocalAppSettings>>(SETTINGS_STORAGE_KEY, {}),
   };
 }
 
+/** يحفظ الإعدادات. */
 export function saveStoredSettings(settings: LocalAppSettings): void {
-  writeJsonStorage(SETTINGS_STORAGE_KEY, settings);
+  writeJson(SETTINGS_STORAGE_KEY, settings);
 }
 
+// ==================== أدوات ====================
+
+/** يولّد معرّفا محليا فريدا بما يكفي داخل متصفح واحد. */
 export function createLocalId(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function createReviewKey(surahId: number, ayahId: number, lineId: string | number): string {
-  return `${surahId}:${ayahId}:${lineId}`;
-}
-
+/** يصوغ تاريخا بصيغة عربية قصيرة. */
 export function formatLocalDate(value?: string): string {
-  if (!value) return '-';
-  return new Intl.DateTimeFormat('ar', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
+  if (!value) return '—';
+
+  try {
+    return new Intl.DateTimeFormat('ar', { dateStyle: 'medium', timeStyle: 'short' }).format(
+      new Date(value)
+    );
+  } catch {
+    return '—';
+  }
 }
 
-function readJsonStorage<T>(key: string, fallback: T): T {
+function countScopeNarrators(scope: { kind: string; narratorIds?: string[]; imamIds?: string[] }): number {
+  // استيراد كسول لتفادي دورة استيراد بين هذا الملف ومحلّل النطاقات.
+  // النطاقات صغيرة (20 راويا)، فالحساب هنا مباشر ومقبول.
+  if (scope.kind === 'ALL') return 20;
+  if (scope.kind === 'ALL_EXCEPT') return 20 - (scope.narratorIds?.length ?? 0);
+  if (scope.kind === 'IMAMS') return (scope.imamIds?.length ?? 0) * 2;
+  return scope.narratorIds?.length ?? 0;
+}
+
+function createPendingReview(): LocalReviewDecision {
+  return { status: 'DRAFT', comment: '', reviewer: '', updatedAt: '' };
+}
+
+function readJson<T>(key: string, fallback: T): T {
   if (!isBrowser()) return fallback;
 
   try {
-    const item = window.localStorage.getItem(key);
-    return item ? (JSON.parse(item) as T) : fallback;
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
     return fallback;
   }
 }
 
-function writeJsonStorage<T>(key: string, value: T): void {
+function writeJson<T>(key: string, value: T): void {
   if (!isBrowser()) return;
   window.localStorage.setItem(key, JSON.stringify(value));
-}
-
-function createPendingReview(): LocalReviewDecision {
-  return {
-    status: 'PENDING',
-    comment: '',
-    reviewer: '',
-    updatedAt: '',
-  };
-}
-
-function normalizeDate(value: Date | string): string {
-  if (value instanceof Date) return value.toISOString();
-  return value || new Date().toISOString();
 }
 
 function isBrowser(): boolean {

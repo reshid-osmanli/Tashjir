@@ -1,7 +1,12 @@
 // نظام الألوان - Color System
 // مشروع التشجير - نظام القراءات العشر
+//
+// الألوان في هذا المشروع ليست زينة، بل جزء من قراءة اللوحة:
+//   - لون الخط يدل على فئة الاختلاف (أصول، فرش، مدود...).
+//   - لون بطاقة الراوي يدل على الإمام، فرواة الإمام الواحد بدرجات لون واحد.
+// هذا يجعل القارئ يميّز مصدر الاختلاف قبل أن يقرأ نص البطاقة.
 
-import { LineType, ReviewStatus, NodePosition } from '@/types';
+import { LineType, ReviewStatus, NodePosition, VariantCategory } from '@/types';
 
 // ==================== ألوان خطوط التشجير ====================
 
@@ -244,3 +249,72 @@ export const OPACITIES = {
   HEAVY: 0.75,
   OPAQUE: 1,
 };
+
+// ==================== ألوان فئات الاختلاف ====================
+
+/**
+ * لون كل فئة اختلاف. مطابق لـ LINE_COLORS لكن بمدخل صريح
+ * من نوع VariantCategory لأن نموذج المحرر الجديد يستخدمه.
+ */
+export const CATEGORY_COLORS: Record<VariantCategory, string> = {
+  USUL: '#16a34a',    // أخضر: الأصول، أحكام عامة مطّردة
+  FARSH: '#2563eb',   // أزرق: الفرش، مواضع جزئية
+  MADUD: '#ea580c',   // برتقالي: المدود
+  HAMZ: '#dc2626',    // أحمر: الهمز
+  WAQF: '#7c3aed',    // بنفسجي: الوقف والابتداء
+  TAJWEED: '#0891b2', // سماوي: أحكام الأداء
+};
+
+/** لون خفيف لخلفيات البطاقات والشارات. */
+export const CATEGORY_SOFT_COLORS: Record<VariantCategory, string> = {
+  USUL: '#dcfce7',
+  FARSH: '#dbeafe',
+  MADUD: '#ffedd5',
+  HAMZ: '#fee2e2',
+  WAQF: '#ede9fe',
+  TAJWEED: '#cffafe',
+};
+
+/**
+ * لون فئة الاختلاف.
+ * @param category فئة الاختلاف
+ */
+export function getCategoryColor(category: VariantCategory): string {
+  return CATEGORY_COLORS[category] ?? CATEGORY_COLORS.FARSH;
+}
+
+/**
+ * لون خفيف لفئة الاختلاف، للخلفيات.
+ * @param category فئة الاختلاف
+ */
+export function getCategorySoftColor(category: VariantCategory): string {
+  return CATEGORY_SOFT_COLORS[category] ?? CATEGORY_SOFT_COLORS.FARSH;
+}
+
+// ==================== ألوان الأئمة ====================
+
+/**
+ * لون أساسي لكل إمام من القراء العشرة.
+ * رواة الإمام الواحد يشتركون في اللون مع اختلاف الدرجة،
+ * فيُعرف مصدر القراءة بالنظر قبل قراءة الاسم.
+ */
+export const IMAM_COLORS: Record<string, string> = {
+  'imam-nafi': '#2563eb',       // نافع - أزرق
+  'imam-ibn-kathir': '#16a34a', // ابن كثير - أخضر
+  'imam-abu-amr': '#ea580c',    // أبو عمرو - برتقالي
+  'imam-ibn-amir': '#9333ea',   // ابن عامر - بنفسجي
+  'imam-asim': '#0f766e',       // عاصم - أخضر مزرق
+  'imam-hamzah': '#dc2626',     // حمزة - أحمر
+  'imam-al-kisai': '#c026d3',   // الكسائي - فوشيا
+  'imam-abu-jafar': '#0284c7',  // أبو جعفر - سماوي
+  'imam-yaqub': '#65a30d',      // يعقوب - ليموني
+  'imam-khalaf': '#b45309',     // خلف العاشر - بني
+};
+
+/**
+ * لون الإمام.
+ * @param imamId معرّف الإمام، مثل imam-asim
+ */
+export function getImamColor(imamId: string): string {
+  return IMAM_COLORS[imamId] ?? '#64748b';
+}

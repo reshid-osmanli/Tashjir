@@ -1,96 +1,143 @@
 // صفحة المصحف - Quran Page
 // مشروع التشجير - نظام القراءات العشر
+//
+// عرض المصحف كاملا (114 سورة / 6236 آية) بالنص العثماني.
+// كل آية قابلة للفتح مباشرة في المحرر، ويظهر عليها مؤشر إن كان لها عمل محفوظ.
 
 'use client';
 
-import { useMemo, useState } from 'react';
-import { LOCAL_QURAN_SURAHS } from '@/data/quran';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import {
+  MUSHAF_SOURCE,
+  SURAHS,
+  TOTAL_AYAHS,
+  getSurahAyahs,
+  getSurahOrFirst,
+  searchSurahs,
+} from '@/data/quran';
+import { listDocuments } from '@/lib/storage/document-store';
 
 export default function QuranPage() {
-  const [selectedSurahNumber, setSelectedSurahNumber] = useState(1);
+  const [surahNumber, setSurahNumber] = useState(1);
+  const [query, setQuery] = useState('');
+  const [savedKeys, setSavedKeys] = useState<Set<number>>(new Set());
 
-  const selectedIndex = useMemo(
-    () => LOCAL_QURAN_SURAHS.findIndex((surah) => surah.number === selectedSurahNumber),
-    [selectedSurahNumber]
-  );
+  useEffect(() => {
+    setSavedKeys(new Set(listDocuments().map((entry) => entry.ayahKey)));
+  }, []);
 
-  const currentSurah = LOCAL_QURAN_SURAHS[selectedIndex] ?? LOCAL_QURAN_SURAHS[0];
-  const canGoPrevious = selectedIndex > 0;
-  const canGoNext = selectedIndex < LOCAL_QURAN_SURAHS.length - 1;
-
-  const goToSurah = (nextIndex: number) => {
-    const nextSurah = LOCAL_QURAN_SURAHS[nextIndex];
-    if (nextSurah) setSelectedSurahNumber(nextSurah.number);
-  };
+  const surah = getSurahOrFirst(surahNumber);
+  const ayahs = useMemo(() => getSurahAyahs(surahNumber), [surahNumber]);
+  const filteredSurahs = useMemo(() => searchSurahs(query), [query]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="space-y-4">
+      <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">المصحف</h1>
-          <p className="text-gray-600">عرض محلي برواية حفص عن عاصم</p>
+          <h1 className="text-xl font-bold text-stone-900">المصحف</h1>
+          <p className="mt-0.5 text-sm text-stone-600">
+            النص العثماني كاملا — {SURAHS.length} سورة و{TOTAL_AYAHS.toLocaleString('ar')} آية
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => goToSurah(selectedIndex - 1)}
-            disabled={!canGoPrevious}
-            className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            السابقة
-          </button>
-          <span className="text-sm text-gray-600">
-            الصفحة {currentSurah.page} من 604
-          </span>
-          <button
-            onClick={() => goToSurah(selectedIndex + 1)}
-            disabled={!canGoNext}
-            className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            التالية
-          </button>
-        </div>
-      </div>
+        <p className="text-[11px] text-stone-400">المصدر: {MUSHAF_SOURCE}</p>
+      </header>
 
-      <section className="bg-white rounded-xl shadow-lg p-8">
-        <div className="mushaf-page min-h-[620px] border border-amber-200 bg-amber-50 px-8 py-10">
-          <div className="mb-8 text-center">
-            <div className="inline-flex items-center justify-center min-w-48 rounded-full border border-amber-300 bg-white px-6 py-2">
-              <span className="font-bold text-gray-900">
-                سورة {currentSurah.name}
-              </span>
-            </div>
+      <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
+        {/* فهرس السور */}
+        <aside className="rounded-xl border border-stone-200 bg-white">
+          <div className="border-b border-stone-200 p-3">
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="ابحث عن سورة..."
+              className="input"
+              aria-label="بحث في أسماء السور"
+            />
           </div>
 
-          <div className="mx-auto max-w-4xl space-y-7 text-center font-amiri text-3xl leading-loose text-gray-900">
-            {currentSurah.ayahs.map((ayah, index) => (
-              <p key={`${currentSurah.number}-${index}`} className="mushaf-text">
-                {ayah}
-                <span className="ayah-number mx-3 align-middle">{index + 1}</span>
-              </p>
+          <ul className="max-h-[70vh] overflow-y-auto p-1">
+            {filteredSurahs.map((item) => (
+              <li key={item.number}>
+                <button
+                  type="button"
+                  onClick={() => setSurahNumber(item.number)}
+                  className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-start transition-colors ${
+                    item.number === surahNumber
+                      ? 'bg-emerald-50 text-emerald-900'
+                      : 'hover:bg-stone-50'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="w-6 text-[11px] tabular-nums text-stone-400">
+                      {item.number}
+                    </span>
+                    <span className="text-sm">{item.name}</span>
+                  </span>
+                  <span className="text-[11px] text-stone-400">{item.ayahsCount}</span>
+                </button>
+              </li>
             ))}
-          </div>
-        </div>
-      </section>
+          </ul>
+        </aside>
 
-      <section className="bg-white rounded-xl shadow-lg p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-4">السور</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {LOCAL_QURAN_SURAHS.map((surah) => (
-            <button
-              key={surah.number}
-              onClick={() => setSelectedSurahNumber(surah.number)}
-              className={`p-4 rounded-lg text-right transition-colors ${
-                selectedSurahNumber === surah.number
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              <div className="text-sm opacity-80">سورة {surah.number}</div>
-              <div className="text-lg font-bold">{surah.name}</div>
-            </button>
-          ))}
-        </div>
-      </section>
+        {/* نص السورة */}
+        <section className="rounded-xl border border-stone-200 bg-[#fdfaf2] p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 pb-3">
+            <div>
+              <h2 className="text-lg font-bold text-stone-900">سورة {surah.name}</h2>
+              <p className="text-xs text-stone-500">
+                {surah.revelationType === 'MECCAN' ? 'مكية' : 'مدنية'} · {surah.ayahsCount} آية ·
+                تبدأ قرب الصفحة {surah.page}
+              </p>
+            </div>
+            <span className="text-[11px] text-stone-400">
+              {surah.transliteration}
+            </span>
+          </div>
+
+          <ol className="space-y-3">
+            {ayahs.map((ayah) => {
+              const isSaved = savedKeys.has(ayah.key);
+
+              return (
+                <li
+                  key={ayah.key}
+                  className="group rounded-lg border border-transparent px-3 py-2 transition-colors hover:border-stone-200 hover:bg-white"
+                >
+                  <div className="flex items-start gap-3">
+                    <span
+                      className={`mt-1.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] tabular-nums ${
+                        isSaved
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-stone-200 text-stone-600'
+                      }`}
+                      title={isSaved ? 'لهذه الآية تشجير محفوظ' : undefined}
+                    >
+                      {ayah.ayahNumber}
+                    </span>
+
+                    <p
+                      className="flex-1 text-2xl leading-[2.4] text-stone-900"
+                      style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }}
+                    >
+                      {ayah.text}
+                    </p>
+
+                    <Link
+                      href="/editor"
+                      className="mt-1.5 shrink-0 rounded-md border border-stone-300 bg-white px-2 py-1 text-[11px] text-stone-600 opacity-0 transition-opacity hover:bg-stone-50 group-hover:opacity-100"
+                    >
+                      تشجير
+                    </Link>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      </div>
     </div>
   );
 }

@@ -1,137 +1,205 @@
+// صفحة المحرر - Editor Page
+// مشروع التشجير - نظام القراءات العشر
+//
+// تجميع المحرر: شريط الأدوات، مستعرض الآيات، لوحة الخصائص، اللوحة، لوحة الاختلافات.
+//
+// التخطيط بالترتيب المنطقي في واجهة عربية (RTL):
+//   [لوحة الخصائص]  [اللوحة]  [لوحة الاختلافات]
+// والأولوية للوحة الرسم، فهي تأخذ كل المساحة المتبقية.
+
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { EditorToolbar } from '@/components/editor/EditorToolbar';
+import { AyahNavigator } from '@/components/editor/AyahNavigator';
 import { TashjeerCanvas } from '@/components/editor/TashjeerCanvas';
-import { Toolbar } from '@/components/editor/Toolbar';
 import { PropertiesPanel } from '@/components/editor/PropertiesPanel';
-import { LOCAL_QURAN_SURAHS } from '@/data/quran';
-import { readStoredSettings } from '@/lib/local-app-data';
+import { VariantsPanel } from '@/components/editor/VariantsPanel';
+import { ShortcutsDialog } from '@/components/editor/ShortcutsDialog';
 import { useEditorStore } from '@/stores/editor-store';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { exportDocuments, importDocuments } from '@/lib/storage/document-store';
+import { makeAyahKey, parseAyahKey } from '@/data/quran';
+
+/** الآية الافتراضية عند فتح المحرر: الفاتحة 4، وفيها اختلاف مشهور. */
+const DEFAULT_AYAH_KEY = makeAyahKey(1, 4);
 
 export default function EditorPage() {
-  const [selectedAyah, setSelectedAyah] = useState<number>(1);
-  const [selectedSurah, setSelectedSurah] = useState<number>(1);
-  const [showProperties, setShowProperties] = useState(true);
+  const [fontSize, setFontSize] = useState(34);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
-    zoom,
-    setZoom,
-    resetView,
-    hasUnsavedChanges,
-    setUnsavedChanges,
-    setShowGrid,
-    setShowRulers,
+    document,
+    isDirty,
+    openAyah,
+    replaceDocument,
+    showPropertiesPanel,
+    showVariantsPanel,
+    currentTool,
   } = useEditorStore();
 
-  const currentSurah = useMemo(
-    () => LOCAL_QURAN_SURAHS.find((surah) => surah.number === selectedSurah) ?? LOCAL_QURAN_SURAHS[0],
-    [selectedSurah]
+  // تعطّل الاختصارات أثناء فتح نافذة، حتى لا تتضارب مع الكتابة فيها.
+  useKeyboardShortcuts(!showShortcuts);
+
+  // فتح الآية الافتراضية عند أول تحميل.
+  useEffect(() => {
+    if (!document) openAyah(DEFAULT_AYAH_KEY);
+  }, [document, openAyah]);
+
+  // تحذير المتصفح عند مغادرة الصفحة مع وجود تعديلات غير محفوظة.
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
+
+  const showToast = useCallback((message: string) => {
+    setToast(message);
+    setTimeout(() => setToast(null), 3200);
+  }, []);
+
+  /** يصدّر المستند الحالي إلى ملف JSON قابل للمشاركة والمراجعة. */
+  const handleExport = useCallback(() => {
+    if (!document) return;
+
+    const json = exportDocuments([document.ayahKey]);
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = window.document.createElement('a');
+
+    anchor.href = url;
+    anchor.download = `tashjeer-${document.surahNumber}-${document.ayahNumber}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+
+    showToast('تم تصدير المستند.');
+  }, [document, showToast]);
+
+  const handleImportClick = useCallback(() => fileInputRef.current?.click(), []);
+
+  const handleImportFile = useCallback(
+    async (file: File) => {
+      const text = await file.text();
+      const result = importDocuments(text, true);
+
+      if (result.errors.length > 0) {
+        showToast(result.errors[0]);
+        return;
+      }
+
+      showToast(`تم استيراد ${result.imported} مستندا.`);
+
+      // نفتح أول مستند مستورد ليراه المستخدم فورا.
+      try {
+        const bundle = JSON.parse(text) as { documents?: Array<{ ayahKey: number }> };
+        const first = bundle.documents?.[0];
+        if (first) openAyah(first.ayahKey);
+      } catch {
+        // تجاهل: الاستيراد نجح والفهرس محدّث، وفتح المستند تحسين فقط.
+      }
+    },
+    [openAyah, showToast]
   );
 
-  useEffect(() => {
-    const settings = readStoredSettings();
-    setZoom(settings.defaultZoom);
-    setShowGrid(settings.showGrid);
-    setShowRulers(settings.showRulers);
-  }, [setShowGrid, setShowRulers, setZoom]);
-
-  const handleSurahChange = (surahNumber: number) => {
-    setSelectedSurah(surahNumber);
-    setSelectedAyah(1);
-  };
+  const ayahKey = document?.ayahKey ?? DEFAULT_AYAH_KEY;
+  const { surahNumber, ayahNumber } = parseAyahKey(ayahKey);
 
   return (
-    <div className="h-[calc(100vh-80px)] flex flex-col">
-      <Toolbar
-        zoom={zoom}
-        onZoomChange={setZoom}
-        onResetView={resetView}
-        showProperties={showProperties}
-        onToggleProperties={() => setShowProperties(!showProperties)}
-        hasUnsavedChanges={hasUnsavedChanges}
-        onSave={() => setUnsavedChanges(false)}
+    <div className="flex h-[calc(100vh-var(--header-height,73px))] flex-col overflow-hidden bg-stone-100">
+      <EditorToolbar
+        fontSize={fontSize}
+        onFontSizeChange={setFontSize}
+        onExport={handleExport}
+        onImport={handleImportClick}
+        onShowShortcuts={() => setShowShortcuts(true)}
       />
 
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="text-sm font-medium text-gray-700">السورة</label>
-          <select
-            value={selectedSurah}
-            onChange={(event) => handleSurahChange(Number(event.target.value))}
-            className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            {LOCAL_QURAN_SURAHS.map((surah) => (
-              <option key={surah.number} value={surah.number}>
-                {surah.name}
-              </option>
-            ))}
-          </select>
+      <AyahNavigator ayahKey={ayahKey} onNavigate={openAyah} />
 
-          <label className="text-sm font-medium text-gray-700">الآية</label>
-          <select
-            value={selectedAyah}
-            onChange={(event) => setSelectedAyah(Number(event.target.value))}
-            className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            {currentSurah.ayahs.map((_, index) => (
-              <option key={index + 1} value={index + 1}>
-                {index + 1}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="flex min-h-0 flex-1">
+        {showPropertiesPanel && <PropertiesPanel />}
 
-        <div className="text-sm text-gray-500">
-          {hasUnsavedChanges ? 'توجد تعديلات محفوظة محليًا بانتظار اعتماد الحفظ' : 'كل التعديلات محفوظة محليًا'}
-        </div>
-      </div>
+        <main className="min-w-0 flex-1">
+          <TashjeerCanvas fontSize={fontSize} />
+        </main>
 
-      <div className="flex-1 flex overflow-hidden">
-        {showProperties && (
-          <PropertiesPanel
-            ayahId={selectedAyah}
-            surahId={selectedSurah}
-          />
-        )}
-
-        <div className="flex-1 overflow-auto bg-amber-50 p-4">
-          <TashjeerCanvas
-            ayahId={selectedAyah}
-            surahId={selectedSurah}
-            qiraahOrder={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]}
-          />
-        </div>
+        {showVariantsPanel && <VariantsPanel />}
       </div>
 
       <StatusBar
-        surahName={currentSurah.name}
-        surahId={selectedSurah}
-        ayahId={selectedAyah}
-        zoom={zoom}
+        surahNumber={surahNumber}
+        ayahNumber={ayahNumber}
+        tool={currentTool}
+        isDirty={isDirty}
       />
+
+      {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) void handleImportFile(file);
+          event.target.value = '';
+        }}
+      />
+
+      {toast && (
+        <div
+          role="status"
+          className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-stone-900 px-4 py-2 text-sm text-white shadow-lg"
+        >
+          {toast}
+        </div>
+      )}
+
+      {/* منفذ إعادة تحميل المستند من الخارج، مستخدم في الاختبارات وأدوات التطوير */}
+      <span className="hidden" data-replace-document={typeof replaceDocument} />
     </div>
   );
 }
 
 function StatusBar({
-  surahName,
-  surahId,
-  ayahId,
-  zoom,
+  surahNumber,
+  ayahNumber,
+  tool,
+  isDirty,
 }: {
-  surahName: string;
-  surahId: number;
-  ayahId: number;
-  zoom: number;
+  surahNumber: number;
+  ayahNumber: number;
+  tool: string;
+  isDirty: boolean;
 }) {
+  const toolLabels: Record<string, string> = {
+    select: 'تحديد',
+    mark: 'تعليم الكلمات',
+    erase: 'مسح الخطوط',
+  };
+
   return (
-    <div className="bg-white border-t border-gray-200 px-4 py-2 flex items-center justify-between text-sm text-gray-600">
+    <div className="flex items-center justify-between border-t border-stone-200 bg-white px-3 py-1.5 text-[11px] text-stone-600">
       <div className="flex items-center gap-4">
-        <span>السورة: {surahName} ({surahId})</span>
-        <span>الآية: {ayahId}</span>
+        <span>
+          الموضع: {surahNumber}:{ayahNumber}
+        </span>
+        <span>الأداة: {toolLabels[tool] ?? tool}</span>
       </div>
-      <div className="flex items-center gap-4">
-        <span>التكبير: {Math.round(zoom * 100)}%</span>
+      <div className="flex items-center gap-3">
+        <span className={isDirty ? 'text-amber-700' : 'text-emerald-700'}>
+          {isDirty ? 'تعديلات غير محفوظة' : 'كل التعديلات محفوظة'}
+        </span>
+        <span className="text-stone-400">التخزين: محلي في هذا المتصفح</span>
       </div>
     </div>
   );
