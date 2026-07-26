@@ -68,6 +68,7 @@ const ZERO_WIDTH_PATTERN = /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u0640
 const ABOVE_MARK_PATTERN = /[\u064B\u064C\u064E\u064F\u0651\u0652\u0653\u0654\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EB\u06EC]/;
 
 /** علامات تُرسم تحت الحرف وتخفض أسفل صندوق الكلمة. */
+// eslint-disable-next-line no-misleading-character-class
 const BELOW_MARK_PATTERN = /[\u064D\u0650\u0655\u0656\u06E5\u06E6\u06ED]/;
 
 /**

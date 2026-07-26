@@ -261,7 +261,7 @@ export function calculateQiraahOrderInTashjeer(
  */
 export function calculateLineSpacing(
   lineType: LineType,
-  readerOrder: number
+  _readerOrder: number
 ): number {
   const baseSpacing = LAYOUT_CONSTANTS.TASHJEER_LINE_HEIGHT + LAYOUT_CONSTANTS.TASHJEER_LINE_GAP;
 

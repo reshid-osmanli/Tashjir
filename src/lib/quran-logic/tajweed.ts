@@ -225,8 +225,8 @@ export function detectWaqfType(
 ): WaqfType | null {
   if (ayahEnd) return 'TAAM';
 
-  const lastLetter = getLastLetter(word);
-  const firstLetter = getFirstLetter(nextWord);
+  const _lastLetter = getLastLetter(word);
+  const _firstLetter = getFirstLetter(nextWord);
 
   // وقف تام: عند نهاية الآية أو عند اكتمال المعنى
   if (ayahEnd) return 'TAAM';
@@ -297,7 +297,7 @@ function isSameWord(word: string, pos1: number, pos2: number): boolean {
 /**
  * التحقق من اكتمال المعنى
  */
-function isCompleteMeaning(word: string): boolean {
+function isCompleteMeaning(_word: string): boolean {
   // منطق التحقق من اكتمال المعنى
   // يمكن تطويره لاحقاً
   return false;
@@ -306,7 +306,7 @@ function isCompleteMeaning(word: string): boolean {
 /**
  * التحقق من كفاية المعنى
  */
-function isKafiMeaning(word: string): boolean {
+function isKafiMeaning(_word: string): boolean {
   // منطق التحقق من كفاية المعنى
   // يمكن تطويره لاحقاً
   return false;
