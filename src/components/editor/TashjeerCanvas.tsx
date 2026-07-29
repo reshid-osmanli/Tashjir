@@ -1,24 +1,27 @@
-// لوحة التشجير - Tashjeer Canvas
+// لوحة التشجير الكلاسيكي - Classic Tashjeer Canvas
 // مشروع التشجير - نظام القراءات العشر
 //
-// اللوحة هي المكوّن المركزي في المحرر. مسؤوليتها:
-//   1. رسم نص الآية بخط المصحف في مواضعه المحسوبة.
-//   2. رسم خطوط التشجير وبطاقات الأوجه.
-//   3. استقبال تفاعل المستخدم: تعليم الكلمات، تحديد الخطوط، التكبير، السحب.
+// اللوحة هي المكوّن المركزي في المحرر. تعرض التشجير الكلاسيكي:
+//   - نص الآية (رواية حفص = «الجمهور») في الأعلى كخط أساس.
+//   - تحت كل كلمة مختلفة خطٌّ أفقيٌّ لكل وجه، يبدأ بالترتيب (قالون أولاً)،
+//     وفوق الخط رمز القارئ ورموز مَن اتفق معه، وتحته نص الاختلاف ملوّناً بنوعه.
 //
-// كل الرسم بـ SVG وليس Canvas، لأسباب عملية:
-//   - النص العربي يُرسم بخط المصحف مع تشكيله دون معالجة يدوية.
-//   - كل عنصر قابل للتحديد والاختبار والتصدير إلى PNG/SVG مباشرة.
-//   - العناصر متجهية، فالتكبير لا يفقد الدقة.
+// كل الرسم بـ SVG: النص العربي يُرسم بخط المصحف، وكل عنصر قابل للتحديد
+// والتصدير. العناصر متجهية فالتكبير لا يفقد الدقة.
 
 'use client';
 
 import { useCallback, useRef, useState, type MouseEvent as ReactMouseEvent, type WheelEvent } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
-import { getCategorySoftColor } from '@/lib/tashjeer/color-system';
-import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
-import type { RenderedBranch, WordBox } from '@/types/tashjeer';
+import {
+  CATEGORY_LABELS,
+} from '@/lib/tashjeer/branch-engine';
+import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-system';
+import { NARRATORS_BY_TAYYIBAH } from '@/lib/tashjeer/symbols';
+import type { ClassicLine } from '@/lib/tashjeer/classic-tashjeer';
+import type { VariantCategory } from '@/types';
+import type { WordBox } from '@/types/tashjeer';
 
 interface TashjeerCanvasProps {
   /** حجم خط المصحف، قابل للضبط من شريط الأدوات */
@@ -30,7 +33,8 @@ interface TashjeerCanvasProps {
 export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const panState = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
-  const [hoveredBranchId, setHoveredBranchId] = useState<string | null>(null);
+  const [hoveredLineId, setHoveredLineId] = useState<string | null>(null);
+  const [showSymbols, setShowSymbols] = useState(false);
 
   const {
     document,
@@ -41,21 +45,17 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     markedPositions,
     selectedWordId,
     selectedVariantId,
-    selectedBranchId,
     setZoom,
     setPan,
     selectWord,
     selectVariant,
-    selectBranch,
     toggleMarkedPosition,
-    toggleBranchVisibility,
   } = useEditorStore();
 
-  const { ayah, layout, branches, viewBox } = useAyahTashjeer(document, filter, { fontSize });
+  const { ayah, layout, classic, viewBox } = useAyahTashjeer(document, filter, { fontSize });
 
   // ==================== التفاعل ====================
 
-  /** التكبير بعجلة الفأرة مع مفتاح Ctrl، والتمرير الرأسي بدونه. */
   const handleWheel = useCallback(
     (event: WheelEvent<SVGSVGElement>) => {
       if (!event.ctrlKey && !event.metaKey) return;
@@ -65,7 +65,6 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     [setZoom, zoom]
   );
 
-  /** بدء السحب بزر الفأرة الأوسط أو بالضغط على مساحة فارغة بأداة التحديد. */
   const handleMouseDown = useCallback(
     (event: ReactMouseEvent<SVGSVGElement>) => {
       const isMiddleButton = event.button === 1;
@@ -92,7 +91,6 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     panState.current = null;
   }, []);
 
-  /** النقر على كلمة: يعلّمها أو يحددها بحسب الأداة الحالية. */
   const handleWordClick = useCallback(
     (box: WordBox) => {
       if (readOnly) {
@@ -107,7 +105,6 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
 
       selectWord(box.wordId === selectedWordId ? null : box.wordId);
 
-      // تحديد الكلمة يبرز أول اختلاف يشملها، لتسهيل الوصول إليه.
       const variant = document?.variants.find(
         (item) => box.position >= item.startPosition && box.position <= item.endPosition
       );
@@ -116,18 +113,12 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     [currentTool, document, readOnly, selectVariant, selectWord, selectedWordId, toggleMarkedPosition]
   );
 
-  /** النقر على خط: يحدده، أو يخفيه إذا كانت أداة المسح فعّالة. */
-  const handleBranchClick = useCallback(
-    (branch: RenderedBranch) => {
-      if (!readOnly && currentTool === 'erase') {
-        toggleBranchVisibility(branch.id);
-        return;
-      }
-
-      selectBranch(branch.id === selectedBranchId ? null : branch.id);
-      selectVariant(branch.variantId);
+  const handleLineClick = useCallback(
+    (line: ClassicLine) => {
+      if (readOnly) return;
+      selectVariant(line.variantId === selectedVariantId ? null : line.variantId);
     },
-    [currentTool, readOnly, selectBranch, selectVariant, selectedBranchId, toggleBranchVisibility]
+    [readOnly, selectVariant, selectedVariantId]
   );
 
   // ==================== حالات فارغة ====================
@@ -144,16 +135,14 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     ? 'default'
     : currentTool === 'mark'
       ? 'crosshair'
-      : currentTool === 'erase'
-        ? 'not-allowed'
-        : 'default';
+      : 'default';
 
   return (
     <div className="relative h-full w-full overflow-auto bg-[#fdfaf2]">
       <svg
         ref={svgRef}
         role="img"
-        aria-label={`لوحة تشجير الآية ${ayah.ayahNumber} من السورة ${ayah.surahNumber}`}
+        aria-label={`تشجير الآية ${ayah.ayahNumber} من السورة ${ayah.surahNumber}`}
         viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
         preserveAspectRatio="xMidYMin meet"
         className="h-full min-h-[520px] min-w-[920px] w-full"
@@ -187,26 +176,29 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
 
           {filter.showRulers && <Rulers viewBox={viewBox} />}
 
-          {/* شريط الأساس: يوضح أن النص المرسوم هو رواية حفص */}
-          <BaselineBands layout={layout} viewBox={viewBox} />
+          {/* الخط الأساس: نص المصحف = «الجمهور» */}
+          <BaselineBand layout={layout} viewBox={viewBox} />
 
-          {/* الخطوط تُرسم قبل النص حتى لا تغطي الحروف */}
+          {/* خطوط التشجير الكلاسيكية */}
           <g>
-            {branches.map((branch) => (
-              <BranchShape
-                key={branch.id}
-                branch={branch}
-                isSelected={branch.id === selectedBranchId || branch.variantId === selectedVariantId}
-                isHovered={branch.id === hoveredBranchId}
-                showLabel={filter.showLabels}
-                onClick={() => handleBranchClick(branch)}
-                onHoverStart={() => setHoveredBranchId(branch.id)}
-                onHoverEnd={() => setHoveredBranchId(null)}
+            {classic.lines.map((line) => (
+              <ClassicLineShape
+                key={line.id}
+                line={line}
+                fontSize={fontSize}
+                showLabels={filter.showLabels}
+                isSelected={line.variantId === selectedVariantId}
+                isHovered={line.id === hoveredLineId}
+                onClick={() => handleLineClick(line)}
+                onHoverStart={() => setHoveredLineId(line.id)}
+                onHoverEnd={() => setHoveredLineId(null)}
               />
             ))}
+
+            {!classic.hasDifferences && <MajorityLine classic={classic} />}
           </g>
 
-          {/* نص الآية */}
+          {/* نص الآية فوق الخطوط ليظل واضحا وقابلا للنقر */}
           <g>
             {layout.boxes.map((box) => (
               <WordShape
@@ -225,6 +217,17 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
       </svg>
 
       <CanvasLegend />
+
+      <button
+        type="button"
+        onClick={() => setShowSymbols((value) => !value)}
+        className="absolute bottom-3 right-3 z-10 rounded-lg border border-stone-200 bg-white/90 px-3 py-2 text-xs font-medium text-stone-700 shadow-sm backdrop-blur hover:bg-white"
+        aria-expanded={showSymbols}
+      >
+        دليل الرموز
+      </button>
+
+      {showSymbols && <SymbolsLegend onClose={() => setShowSymbols(false)} />}
     </div>
   );
 }
@@ -293,27 +296,40 @@ function WordShape({
   );
 }
 
-// ==================== الخط ====================
+// ==================== خط التشجير الكلاسيكي ====================
 
-function BranchShape({
-  branch,
+function ClassicLineShape({
+  line,
+  fontSize,
+  showLabels,
   isSelected,
   isHovered,
-  showLabel,
   onClick,
   onHoverStart,
   onHoverEnd,
 }: {
-  branch: RenderedBranch;
+  line: ClassicLine;
+  fontSize: number;
+  showLabels: boolean;
   isSelected: boolean;
   isHovered: boolean;
-  showLabel: boolean;
   onClick: () => void;
   onHoverStart: () => void;
   onHoverEnd: () => void;
 }) {
+  const color = getCategoryColor(line.category);
+  const soft = getCategorySoftColor(line.category);
   const strokeWidth = isSelected ? 3 : isHovered ? 2.4 : 1.8;
-  const opacity = isSelected || isHovered ? 1 : 0.85;
+  const opacity = isSelected || isHovered ? 1 : 0.9;
+
+  if (line.marks.length === 0) return null;
+
+  const xs = line.marks.map((mark) => mark.x);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const pad = 16;
+  const lineStart = minX - pad;
+  const lineEnd = maxX + pad;
 
   return (
     <g
@@ -321,89 +337,161 @@ function BranchShape({
       onMouseEnter={onHoverStart}
       onMouseLeave={onHoverEnd}
       style={{ cursor: 'pointer' }}
-      data-branch-id={branch.id}
+      data-line-id={line.id}
     >
-      {/* مسار شفاف عريض: يوسّع مساحة النقر دون تغيير الشكل */}
-      <path d={branch.path} fill="none" stroke="transparent" strokeWidth={14} />
+      {/* الممر الشفاف العريض لتسهيل النقر على الخط */}
+      <rect
+        x={lineStart}
+        y={line.rowY - 9}
+        width={lineEnd - lineStart}
+        height={18}
+        fill="transparent"
+      />
 
-      <path
-        d={branch.path}
-        fill="none"
-        stroke={branch.color}
+      {/* الوصلات الرأسية من كل كلمة مختلفة إلى الخط */}
+      {line.marks.map((mark) => (
+        <line
+          key={`c-${mark.wordId}`}
+          x1={mark.x}
+          y1={mark.bottomY}
+          x2={mark.x}
+          y2={line.rowY}
+          stroke={color}
+          strokeWidth={1.1}
+          opacity={0.55}
+        />
+      ))}
+
+      {/* الخط الأفقي للوجه */}
+      <line
+        x1={lineStart}
+        y1={line.rowY}
+        x2={lineEnd}
+        y2={line.rowY}
+        stroke={color}
         strokeWidth={strokeWidth}
         strokeLinecap="round"
-        strokeLinejoin="round"
         opacity={opacity}
         filter={isSelected ? 'url(#branch-glow)' : undefined}
       />
 
-      {branch.points.map((point) => (
+      {/* العقد على الكلمات المختلفة */}
+      {line.marks.map((mark) => (
         <circle
-          key={point.wordId}
-          cx={point.x}
-          cy={point.y}
-          r={isSelected ? 4 : 3}
-          fill={branch.color}
+          key={`d-${mark.wordId}`}
+          cx={mark.x}
+          cy={line.rowY}
+          r={isSelected ? 4 : 3.2}
+          fill={color}
           stroke="#ffffff"
           strokeWidth={1.2}
         />
       ))}
 
-      {showLabel && (
-        <BranchLabel branch={branch} isSelected={isSelected || isHovered} />
+      {/* نص الاختلاف تحت الكلمة، ملوّناً بنوعه.
+          للاختلاف متعدد الكلمات نعرضه مرة واحدة فوق المدى لتفادي التداخل. */}
+      {showLabels &&
+        (line.marks.length > 1 ? (
+          <text
+            key="reading-span"
+            x={(minX + maxX) / 2}
+            y={line.rowY - 8}
+            textAnchor="middle"
+            fontSize={Math.round(fontSize * 0.5)}
+            fontFamily="'Amiri Quran', 'Amiri', serif"
+            fill={color}
+            style={{ direction: 'rtl', userSelect: 'none', fontWeight: 600 }}
+          >
+            {line.readingText}
+          </text>
+        ) : (
+          <text
+            key="reading-single"
+            x={line.marks[0].x}
+            y={line.rowY - 8}
+            textAnchor="middle"
+            fontSize={Math.round(fontSize * 0.5)}
+            fontFamily="'Amiri Quran', 'Amiri', serif"
+            fill={color}
+            style={{ direction: 'rtl', userSelect: 'none', fontWeight: 600 }}
+          >
+            {line.readingText}
+          </text>
+        ))}
+
+      {/* بطاقة رأس الخط: رموز القراء واسم الرئيس ونوع الاختلاف */}
+      {showLabels && (
+        <LineLabel line={line} color={color} soft={soft} x={maxX + 20} y={line.rowY} />
       )}
 
-      <title>{`${CATEGORY_LABELS[branch.category]}: ${branch.label}`}</title>
+      <title>{lineTitle(line)}</title>
     </g>
   );
 }
 
-function BranchLabel({ branch, isSelected }: { branch: RenderedBranch; isSelected: boolean }) {
-  // عرض تقريبي: الحرف العربي في هذا المقاس يشغل نحو 8.2 وحدة.
-  const width = Math.max(branch.label.length * 8.2 + 20, 64);
-  const height = 22;
-  const x = branch.labelX - width;
-  const y = branch.laneY - height / 2;
+function LineLabel({
+  line,
+  color,
+  soft,
+  x,
+  y,
+}: {
+  line: ClassicLine;
+  color: string;
+  soft: string;
+  x: number;
+  y: number;
+}) {
+  const badgeWidth = Math.max(line.label.length * 13 + 18, 34);
+  const text = `${line.primaryNarratorName} · ${line.categoryLabel}`;
 
   return (
     <g>
-      <line
-        x1={branch.labelX}
-        y1={branch.laneY}
-        x2={branch.labelX - 6}
-        y2={branch.laneY}
-        stroke={branch.color}
-        strokeWidth={1.6}
-      />
       <rect
         x={x}
-        y={y}
-        width={width}
-        height={height}
-        rx={6}
-        fill={getCategorySoftColor(branch.category)}
-        stroke={branch.color}
-        strokeWidth={isSelected ? 1.6 : 1}
+        y={y - 13}
+        width={badgeWidth}
+        height={26}
+        rx={8}
+        fill={soft}
+        stroke={color}
+        strokeWidth={1.2}
       />
       <text
-        x={x + width - 10}
-        y={y + height / 2 + 4.5}
-        textAnchor="end"
-        fontSize={12}
+        x={x + badgeWidth / 2}
+        y={y + 5}
+        textAnchor="middle"
+        fontSize={14}
+        fontFamily="'Amiri Quran', 'Amiri', serif"
+        fill={color}
+        style={{ direction: 'rtl', userSelect: 'none', fontWeight: 700 }}
+      >
+        {line.label}
+      </text>
+      <text
+        x={x + badgeWidth + 8}
+        y={y + 5}
+        textAnchor="start"
+        fontSize={12.5}
         fontFamily="system-ui, sans-serif"
-        fill="#1f2937"
+        fill="#475569"
         style={{ direction: 'rtl', userSelect: 'none' }}
       >
-        {branch.label}
+        {text}
       </text>
     </g>
   );
 }
 
+function lineTitle(line: ClassicLine): string {
+  const readers = line.readerNames.join('، ');
+  return `القارئ: ${line.primaryNarratorName} — النوع: ${line.categoryLabel}\nالقراء المتفقون: ${readers}\nالوجه: ${line.readingText}${line.readingLabel ? ` (${line.readingLabel})` : ''}`;
+}
+
 // ==================== عناصر مساعدة ====================
 
-/** خلفيتان خفيفتان تفصلان منطقة الأصول (فوق) عن منطقة الفرش (تحت). */
-function BaselineBands({
+/** شريط «الجمهور» تحت نص الآية: يوضّح أن النص المطبوع هو رواية حفص. */
+function BaselineBand({
   layout,
   viewBox,
 }: {
@@ -414,36 +502,78 @@ function BaselineBands({
 
   const top = Math.min(...layout.boxes.map((box) => box.topY));
   const bottom = Math.max(...layout.boxes.map((box) => box.bottomY));
+  const rightX = Math.max(...layout.boxes.map((box) => box.x + box.width));
+  const leftX = Math.min(...layout.boxes.map((box) => box.x));
+  const bandY = bottom + 10;
 
   return (
     <g pointerEvents="none">
       <rect
-        x={viewBox.x}
-        y={top - 10}
-        width={viewBox.width}
-        height={bottom - top + 20}
+        x={leftX - 10}
+        y={top - 8}
+        width={rightX - leftX + 20}
+        height={bottom - top + 16}
+        rx={10}
         fill="#fffdf7"
         stroke="#e7e5e4"
         strokeWidth={1}
-        rx={8}
+      />
+      <line
+        x1={leftX - 10}
+        y1={bandY}
+        x2={rightX + 10}
+        y2={bandY}
+        stroke="#94a3b8"
+        strokeWidth={1.4}
+        strokeDasharray="2 5"
+        opacity={0.8}
       />
       <text
+        x={rightX + 22}
+        y={bandY + 5}
+        fontSize={13}
+        fill="#0f766e"
+        fontFamily="system-ui, sans-serif"
+        style={{ direction: 'rtl', userSelect: 'none', fontWeight: 700 }}
+      >
+        الجمهور · حفص
+      </text>
+      <text
         x={viewBox.x + 12}
-        y={top - 18}
+        y={top - 16}
         fontSize={11}
         fill="#0f766e"
         fontFamily="system-ui, sans-serif"
       >
-        منطقة الأصول والمدود
+        نص المصحف (الأساس)
       </text>
+    </g>
+  );
+}
+
+/** خط «الجمهور» عندما لا توجد أي اختلافات في الآية. */
+function MajorityLine({ classic }: { classic: { textBottom: number; firstRowY: number } }) {
+  const y = classic.firstRowY;
+  return (
+    <g pointerEvents="none">
+      <line
+        x1={-200}
+        y1={y}
+        x2={1000}
+        y2={y}
+        stroke="#94a3b8"
+        strokeWidth={1.4}
+        strokeDasharray="2 5"
+      />
       <text
-        x={viewBox.x + 12}
-        y={bottom + 26}
-        fontSize={11}
-        fill="#1d4ed8"
+        x={20}
+        y={y + 5}
+        fontSize={14}
+        fill="#0f766e"
         fontFamily="system-ui, sans-serif"
+        style={{ direction: 'rtl', userSelect: 'none', fontWeight: 700 }}
       >
-        منطقة الفرش والهمز والوقف
+        الجمهور
       </text>
     </g>
   );
@@ -479,14 +609,15 @@ function Rulers({ viewBox }: { viewBox: { x: number; y: number; width: number; h
 }
 
 function CanvasLegend() {
+  const categories = Object.keys(CATEGORY_LABELS) as Array<VariantCategory>;
   return (
     <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg border border-stone-200 bg-white/90 px-3 py-2 text-xs text-stone-600 shadow-sm backdrop-blur">
       <div className="flex flex-wrap items-center gap-3">
-        {(Object.keys(CATEGORY_LABELS) as Array<keyof typeof CATEGORY_LABELS>).map((category) => (
+        {categories.map((category) => (
           <span key={category} className="flex items-center gap-1.5">
             <span
               className="inline-block h-2.5 w-2.5 rounded-full"
-              style={{ backgroundColor: getCategorySoftColor(category) }}
+              style={{ backgroundColor: getCategorySoftColor(category), border: `1px solid ${getCategoryColor(category)}` }}
             />
             {CATEGORY_LABELS[category]}
           </span>
@@ -500,6 +631,41 @@ function CanvasMessage({ text, tone = 'muted' }: { text: string; tone?: 'muted' 
   return (
     <div className="flex h-full min-h-[400px] items-center justify-center bg-[#fdfaf2]">
       <p className={tone === 'error' ? 'text-red-700' : 'text-stone-500'}>{text}</p>
+    </div>
+  );
+}
+
+/** دليل رموز القراء: يربط كل رمز باسم راويه. */
+function SymbolsLegend({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="absolute bottom-14 right-3 z-10 w-60 rounded-xl border border-stone-200 bg-white/95 p-3 shadow-lg backdrop-blur">
+      <div className="mb-2 flex items-center justify-between">
+        <h4 className="text-xs font-bold text-stone-800">رموز القراء</h4>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded px-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+          aria-label="إغلاق"
+        >
+          ×
+        </button>
+      </div>
+      <ul className="grid grid-cols-2 gap-x-3 gap-y-1">
+        {NARRATORS_BY_TAYYIBAH.map((narrator) => (
+          <li key={narrator.id} className="flex items-center gap-1.5 text-[11px] text-stone-700">
+            <span
+              className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-emerald-600 text-[10px] font-bold text-white"
+              style={{ fontFamily: "'Amiri Quran', serif" }}
+            >
+              {narrator.symbol || '—'}
+            </span>
+            <span className="truncate">{narrator.name}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 border-t border-stone-100 pt-2 text-[10px] leading-relaxed text-stone-500">
+        رمز «—» للأصل (حفص عن عاصم = نص المصحف). تتكرر الرموز لقراء كل إمام على حدة.
+      </p>
     </div>
   );
 }
