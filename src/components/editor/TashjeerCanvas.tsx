@@ -155,7 +155,8 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
         role="img"
         aria-label={`لوحة تشجير الآية ${ayah.ayahNumber} من السورة ${ayah.surahNumber}`}
         viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
-        className="h-full w-full min-h-[520px]"
+        preserveAspectRatio="xMidYMin meet"
+        className="h-full min-h-[520px] min-w-[920px] w-full"
         style={{ cursor }}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
@@ -180,6 +181,7 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
               width={viewBox.width}
               height={viewBox.height}
               fill="url(#canvas-grid)"
+              pointerEvents="none"
             />
           )}
 
@@ -414,7 +416,7 @@ function BaselineBands({
   const bottom = Math.max(...layout.boxes.map((box) => box.bottomY));
 
   return (
-    <g>
+    <g pointerEvents="none">
       <rect
         x={viewBox.x}
         y={top - 10}
@@ -455,7 +457,7 @@ function Rulers({ viewBox }: { viewBox: { x: number; y: number; width: number; h
   }
 
   return (
-    <g opacity={0.6}>
+    <g opacity={0.6} pointerEvents="none">
       {marks.map((x) => (
         <g key={x}>
           <line

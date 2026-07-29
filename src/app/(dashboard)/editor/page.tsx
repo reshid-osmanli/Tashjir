@@ -113,7 +113,7 @@ export default function EditorPage() {
   const { surahNumber, ayahNumber } = parseAyahKey(ayahKey);
 
   return (
-    <div className="flex h-[calc(100vh-var(--header-height,73px))] flex-col overflow-hidden bg-stone-100">
+    <div className="-m-4 flex h-[calc(100dvh-73px)] flex-col overflow-hidden bg-stone-100 md:-m-6">
       <EditorToolbar
         fontSize={fontSize}
         onFontSizeChange={setFontSize}

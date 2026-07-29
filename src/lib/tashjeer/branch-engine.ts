@@ -183,8 +183,20 @@ export function assignLanes(branches: TashjeerBranch[]): TashjeerBranch[] {
 
     /** لكل مسار: قائمة المدى [start, end] المشغولة فيه. */
     const lanes: Array<Array<{ start: number; end: number }>> = [];
+    const manualBranches = sideBranches.filter((branch) => branch.isManual);
+
+    // المسار الذي اختاره المحرر يَجب أن يبقى كما هو بعد أي حفظ أو تعديل
+    // للاختلافات. سابقا كانت assignLanes تعيد ترقيم الخط اليدوي، فتبدو عملية
+    // التحريك ناجحة مؤقتا ثم تختفي عند الحفظ/إعادة التوليد.
+    for (const branch of manualBranches) {
+      while (lanes.length <= branch.lane) lanes.push([]);
+      lanes[branch.lane].push(branchSpan(branch));
+      result.push(branch);
+    }
 
     for (const branch of sideBranches) {
+      if (branch.isManual) continue;
+
       const span = branchSpan(branch);
       let laneIndex = lanes.findIndex((intervals) =>
         intervals.every((interval) => !overlaps(interval, span))
