@@ -120,6 +120,7 @@ describe('توليد الخطوط', () => {
     const branches = generateBranches([variant], layout, [manual]);
     expect(branches).toHaveLength(1);
     expect(branches[0].label).toBe('يدوي');
+    expect(branches[0].lane).toBe(4);
   });
 
   it('يحفظ حالة الإخفاء بعد إعادة التوليد', () => {

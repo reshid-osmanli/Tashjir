@@ -192,7 +192,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const current = get().document;
     if (!current) return;
 
-    set({ document: saveDocument(current), isDirty: false });
+    // لا نعتمد على الخطوط المخزنة من جلسة سابقة أو من ملف مستورد؛ فهي ناتج
+    // مشتق من الاختلافات وقد تكون قديمة. إعادة بنائها هنا تجعل ما يُحفظ هو
+    // بالضبط ما سيظهر عند فتح الآية مرة أخرى.
+    const normalized = withRegeneratedBranches(current);
+    set({ document: saveDocument(normalized), isDirty: false });
   },
 
   setDocumentStatus: (status) => {
