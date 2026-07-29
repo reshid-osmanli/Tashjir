@@ -14,17 +14,18 @@ import { useMemo } from 'react';
 import { getAyahByKey, getAyahWordsByKey, type MushafAyah, type MushafWord } from '@/data/quran';
 import {
   DEFAULT_LAYOUT_OPTIONS,
-  computeCanvasHeight,
-  computeCanvasTop,
   layoutAyah,
 } from '@/lib/tashjeer/layout-engine';
 import {
   computeStats,
   filterBranches,
-  maxLane,
   renderBranches,
   type AyahTashjeerStats,
 } from '@/lib/tashjeer/branch-engine';
+import {
+  generateClassicTashjeer,
+  type ClassicTashjeer,
+} from '@/lib/tashjeer/classic-tashjeer';
 import type {
   AyahLayout,
   LayoutOptions,
@@ -41,8 +42,10 @@ export interface AyahTashjeerResult {
   words: MushafWord[];
   /** تخطيط الكلمات */
   layout: AyahLayout;
-  /** الخطوط بعد التصفية والحساب الهندسي */
+  /** الخطوط بعد التصفية والحساب الهندسي (للتوافق مع اللوحات) */
   branches: RenderedBranch[];
+  /** التشجير الكلاسيكي: خط لكل وجه مختلف تحت الآية */
+  classic: ClassicTashjeer;
   /** إحصاءات الآية */
   stats: AyahTashjeerStats;
   /** إعدادات التخطيط المستخدمة */
@@ -91,27 +94,38 @@ export function useAyahTashjeer(
     [visibleBranches, layout, layoutOptions]
   );
 
+  // التشجير الكلاسيكي: الخطوط المترتّبة تحت الآية.
+  const classic = useMemo(
+    () =>
+      generateClassicTashjeer(
+        document?.variants ?? [],
+        layout,
+        filter,
+        layoutOptions
+      ),
+    [document, layout, filter, layoutOptions]
+  );
+
   const stats = useMemo(
     () => computeStats(document?.variants ?? [], visibleBranches),
     [document, visibleBranches]
   );
 
   const viewBox = useMemo(() => {
-    const topLanes = maxLane(visibleBranches, 'TOP');
-    const bottomLanes = maxLane(visibleBranches, 'BOTTOM');
+    // هامش أيسر للبطاقات الجانبية، وهامش أيمن لرموز القراء على رأس كل خط.
+    const leftMargin = 70;
+    const rightMargin = 380;
 
-    // مساحة إضافية لبطاقات الأوجه التي تخرج يسار النص.
-    const labelMargin = 220;
-    const top = Math.max(0, computeCanvasTop(layout, topLanes, layoutOptions) - 24);
-    const bottom = computeCanvasHeight(layout, topLanes, bottomLanes, layoutOptions);
+    const top = 0;
+    const bottom = classic.totalHeight;
 
     return {
-      x: -labelMargin,
+      x: -leftMargin,
       y: top,
-      width: layoutOptions.canvasWidth + labelMargin,
-      height: Math.max(bottom - top, 320),
+      width: layoutOptions.canvasWidth + leftMargin + rightMargin,
+      height: Math.max(bottom - top, 360),
     };
-  }, [layout, layoutOptions, visibleBranches]);
+  }, [classic, layoutOptions]);
 
-  return { ayah, words, layout, branches, stats, options: layoutOptions, viewBox };
+  return { ayah, words, layout, branches, classic, stats, options: layoutOptions, viewBox };
 }

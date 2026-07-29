@@ -15,6 +15,7 @@ import { NARRATORS, READING_IMAMS } from '@/data/qiraat-data/qiraat';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getImamColor } from '@/lib/tashjeer/color-system';
 import { describeScope, normalizeScope, resolveScope } from '@/lib/tashjeer/scope';
+import { getNarratorSymbol } from '@/lib/tashjeer/symbols';
 import type { VariantCategory } from '@/types';
 import type {
   EvidenceSource,
@@ -363,10 +364,11 @@ function ScopePicker({
       </div>
 
       <div className="grid grid-cols-2 gap-1.5 rounded-md border border-stone-200 p-2 md:grid-cols-5">
-        {READING_IMAMS.map((imam) => {
+              {READING_IMAMS.map((imam) => {
           const imamNarrators = NARRATORS.filter((narrator) => narrator.imamId === imam.id);
           const allSelected = imamNarrators.every((narrator) => selected.has(narrator.id));
           const color = getImamColor(imam.id);
+          const imamSymbols = imamNarrators.map((n) => getNarratorSymbol(n.id)).filter(Boolean).join('');
 
           return (
             <div key={imam.id} className="space-y-1">
@@ -379,23 +381,32 @@ function ScopePicker({
                 style={{ backgroundColor: allSelected ? color : '#f5f5f4' }}
               >
                 {imam.name}
+                {imamSymbols && (
+                  <span className="ms-1 opacity-80" style={{ fontFamily: "'Amiri Quran', serif" }}>
+                    {imamSymbols}
+                  </span>
+                )}
               </button>
 
               {imamNarrators.map((narrator) => {
                 const isSelected = selected.has(narrator.id);
+                const symbol = getNarratorSymbol(narrator.id);
                 return (
                   <button
                     key={narrator.id}
                     type="button"
                     onClick={() => toggleNarrator(narrator.id)}
-                    className={`w-full rounded border px-1.5 py-1 text-[11px] transition-colors ${
+                    className={`flex w-full items-center justify-between gap-1 rounded border px-1.5 py-1 text-[11px] transition-colors ${
                       isSelected
                         ? 'border-transparent text-white'
                         : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
                     }`}
                     style={{ backgroundColor: isSelected ? color : undefined }}
                   >
-                    {narrator.name}
+                    <span>{narrator.name}</span>
+                    {symbol && (
+                      <span style={{ fontFamily: "'Amiri Quran', serif" }}>{symbol}</span>
+                    )}
                   </button>
                 );
               })}

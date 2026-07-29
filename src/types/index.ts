@@ -71,6 +71,8 @@ export interface Narrator {
   name: string;
   slug: string;
   order: number;
+  /** الرمز الذي يُختصر به الراوي في التشجير الكلاسيكي (ب ج د هـ ...) */
+  symbol?: string;
   legacyOrderInTayyibah?: number;
   imam?: ReadingImam;
   paths?: TransmissionPath[];
