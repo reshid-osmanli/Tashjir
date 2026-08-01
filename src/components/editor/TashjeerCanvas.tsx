@@ -273,9 +273,9 @@ function WordShape({
       />
 
       <text
-        x={box.x + box.width}
+        x={box.centerX}
         y={box.baselineY}
-        textAnchor="end"
+        textAnchor="middle"
         fontSize={fontSize}
         fontFamily="'Amiri Quran', 'Amiri', serif"
         fill="#1c1917"

@@ -24,7 +24,7 @@ import type {
   VariantAlternative,
   ViewFilter,
 } from '@/types/tashjeer';
-import { NARRATORS } from '@/data/qiraat-data/qiraat';
+import { NARRATORS, TRANSMISSION_PATH_SEEDS } from '@/data/qiraat-data/qiraat';
 import { resolveScope } from './scope';
 import { CATEGORY_LABELS } from './branch-engine';
 import { getNarratorSymbol, narratorTayyibahOrder } from './symbols';
@@ -175,6 +175,22 @@ export function generateClassicTashjeer(
     }
 
     const primaryId = ids[0];
+    let primaryNarratorName = narratorName(primaryId);
+    let readerNames = ids.map(narratorName);
+
+    if (alt.scope.kind === 'PATHS' && alt.scope.pathIds?.length) {
+      const pathNames = alt.scope.pathIds.map((pathId) => {
+        const path = TRANSMISSION_PATH_SEEDS.find((p) => p.id === pathId);
+        if (!path) return pathId;
+        const parts = path.shortName.split(' / ');
+        return parts.length === 2 ? `${parts[1]} عن ${parts[0]}` : path.shortName;
+      });
+      if (pathNames.length > 0) {
+        primaryNarratorName = pathNames.join(' و ');
+        readerNames = pathNames;
+      }
+    }
+
     return {
       id: `${variant.id}::${alt.id}`,
       variantId: variant.id,
@@ -184,8 +200,8 @@ export function generateClassicTashjeer(
       narratorIds: ids,
       symbols,
       primarySymbol: symbols[0] ?? '',
-      primaryNarratorName: narratorName(primaryId),
-      readerNames: ids.map(narratorName),
+      primaryNarratorName,
+      readerNames,
       label: symbols.join(' '),
       readingText: alt.text,
       readingLabel: alt.label,

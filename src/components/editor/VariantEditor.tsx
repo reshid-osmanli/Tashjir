@@ -11,7 +11,7 @@
 
 import { useMemo, useState } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
-import { NARRATORS, READING_IMAMS } from '@/data/qiraat-data/qiraat';
+import { NARRATORS, READING_IMAMS, TRANSMISSION_PATH_SEEDS } from '@/data/qiraat-data/qiraat';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getImamColor } from '@/lib/tashjeer/color-system';
 import { describeScope, normalizeScope, resolveScope } from '@/lib/tashjeer/scope';
@@ -319,7 +319,16 @@ function ScopePicker({
   scope: ReadingScope;
   onChange: (scope: ReadingScope) => void;
 }) {
+  const [pickerMode, setPickerMode] = useState<'narrators' | 'paths'>(
+    scope.kind === 'PATHS' ? 'paths' : 'narrators'
+  );
+
   const selected = useMemo(() => new Set(resolveScope(scope)), [scope]);
+
+  const selectedPathIds = useMemo(() => {
+    if (scope.kind === 'PATHS') return new Set(scope.pathIds ?? []);
+    return new Set<string>();
+  }, [scope]);
 
   const toggleNarrator = (narratorId: string) => {
     const next = new Set(selected);
@@ -341,21 +350,99 @@ function ScopePicker({
     onChange(normalizeScope([...next]));
   };
 
+  const togglePath = (pathId: string) => {
+    const nextPaths = new Set(selectedPathIds);
+    if (nextPaths.has(pathId)) {
+      nextPaths.delete(pathId);
+    } else {
+      nextPaths.add(pathId);
+    }
+
+    if (nextPaths.size > 0) {
+      onChange({
+        kind: 'PATHS',
+        pathIds: [...nextPaths],
+      });
+    } else {
+      onChange({
+        kind: 'NARRATORS',
+        narratorIds: [],
+      });
+    }
+  };
+
   return (
     <div>
-      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-stone-700">من يقرأ بهذا الوجه</span>
+      {/* طريقة التحديد */}
+      <div className="mb-3 flex items-center justify-between border-b border-stone-100 pb-2">
+        <span className="text-xs font-semibold text-stone-700">طريقة التحديد</span>
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              setPickerMode('narrators');
+              if (scope.kind === 'PATHS') {
+                onChange({ kind: 'NARRATORS', narratorIds: resolveScope(scope) });
+              }
+            }}
+            className={`rounded px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+              pickerMode === 'narrators'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+            }`}
+          >
+            القراء والرواة
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPickerMode('paths');
+              if (scope.kind !== 'PATHS') {
+                const narratorIds = resolveScope(scope);
+                const pathIds = TRANSMISSION_PATH_SEEDS.filter((p) =>
+                  narratorIds.includes(p.narratorId)
+                ).map((p) => p.id);
+                onChange({ kind: 'PATHS', pathIds });
+              }
+            }}
+            className={`rounded px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+              pickerMode === 'paths'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+            }`}
+          >
+            الطرق التفصيلية
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs font-semibold text-stone-500">
+          {pickerMode === 'narrators' ? 'اختر الأئمة أو الرواة:' : 'اختر الطرق الفرعية:'}
+        </span>
         <div className="flex gap-1.5">
           <button
             type="button"
-            onClick={() => onChange({ kind: 'ALL' })}
+            onClick={() => {
+              if (pickerMode === 'paths') {
+                onChange({ kind: 'PATHS', pathIds: TRANSMISSION_PATH_SEEDS.map((p) => p.id) });
+              } else {
+                onChange({ kind: 'ALL' });
+              }
+            }}
             className="rounded border border-stone-300 px-2 py-0.5 text-[11px] text-stone-700 hover:bg-stone-100"
           >
             الجميع
           </button>
           <button
             type="button"
-            onClick={() => onChange({ kind: 'NARRATORS', narratorIds: [] })}
+            onClick={() => {
+              if (pickerMode === 'paths') {
+                onChange({ kind: 'PATHS', pathIds: [] });
+              } else {
+                onChange({ kind: 'NARRATORS', narratorIds: [] });
+              }
+            }}
             className="rounded border border-stone-300 px-2 py-0.5 text-[11px] text-stone-700 hover:bg-stone-100"
           >
             تفريغ
@@ -363,61 +450,115 @@ function ScopePicker({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-1.5 rounded-md border border-stone-200 p-2 md:grid-cols-5">
-              {READING_IMAMS.map((imam) => {
-          const imamNarrators = NARRATORS.filter((narrator) => narrator.imamId === imam.id);
-          const allSelected = imamNarrators.every((narrator) => selected.has(narrator.id));
-          const color = getImamColor(imam.id);
-          const imamSymbols = imamNarrators.map((n) => getNarratorSymbol(n.id)).filter(Boolean).join('');
+      {pickerMode === 'narrators' ? (
+        <div className="grid grid-cols-2 gap-1.5 rounded-md border border-stone-200 p-2 md:grid-cols-5">
+          {READING_IMAMS.map((imam) => {
+            const imamNarrators = NARRATORS.filter((narrator) => narrator.imamId === imam.id);
+            const allSelected = imamNarrators.every((narrator) => selected.has(narrator.id));
+            const color = getImamColor(imam.id);
+            const imamSymbols = imamNarrators.map((n) => getNarratorSymbol(n.id)).filter(Boolean).join('');
 
-          return (
-            <div key={imam.id} className="space-y-1">
-              <button
-                type="button"
-                onClick={() => toggleImam(imam.id)}
-                className={`w-full rounded px-1.5 py-1 text-[11px] font-medium transition-colors ${
-                  allSelected ? 'text-white' : 'text-stone-700 hover:bg-stone-100'
-                }`}
-                style={{ backgroundColor: allSelected ? color : '#f5f5f4' }}
-              >
-                {imam.name}
-                {imamSymbols && (
-                  <span className="ms-1 opacity-80" style={{ fontFamily: "'Amiri Quran', serif" }}>
-                    {imamSymbols}
-                  </span>
-                )}
-              </button>
+            return (
+              <div key={imam.id} className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => toggleImam(imam.id)}
+                  className={`w-full rounded px-1.5 py-1 text-[11px] font-medium transition-colors ${
+                    allSelected ? 'text-white' : 'text-stone-700 hover:bg-stone-100'
+                  }`}
+                  style={{ backgroundColor: allSelected ? color : '#f5f5f4' }}
+                >
+                  {imam.name}
+                  {imamSymbols && (
+                    <span className="ms-1 opacity-80" style={{ fontFamily: "'Amiri Quran', serif" }}>
+                      {imamSymbols}
+                    </span>
+                  )}
+                </button>
 
-              {imamNarrators.map((narrator) => {
-                const isSelected = selected.has(narrator.id);
-                const symbol = getNarratorSymbol(narrator.id);
-                return (
-                  <button
-                    key={narrator.id}
-                    type="button"
-                    onClick={() => toggleNarrator(narrator.id)}
-                    className={`flex w-full items-center justify-between gap-1 rounded border px-1.5 py-1 text-[11px] transition-colors ${
-                      isSelected
-                        ? 'border-transparent text-white'
-                        : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
-                    }`}
-                    style={{ backgroundColor: isSelected ? color : undefined }}
-                  >
-                    <span>{narrator.name}</span>
-                    {symbol && (
-                      <span style={{ fontFamily: "'Amiri Quran', serif" }}>{symbol}</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          );
-        })}
-      </div>
+                {imamNarrators.map((narrator) => {
+                  const isSelected = selected.has(narrator.id);
+                  const symbol = getNarratorSymbol(narrator.id);
+                  return (
+                    <button
+                      key={narrator.id}
+                      type="button"
+                      onClick={() => toggleNarrator(narrator.id)}
+                      className={`flex w-full items-center justify-between gap-1 rounded border px-1.5 py-1 text-[11px] transition-colors ${
+                        isSelected
+                          ? 'border-transparent text-white'
+                          : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+                      }`}
+                      style={{ backgroundColor: isSelected ? color : undefined }}
+                    >
+                      <span>{narrator.name}</span>
+                      {symbol && (
+                        <span style={{ fontFamily: "'Amiri Quran', serif" }}>{symbol}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-1.5 rounded-md border border-stone-200 p-2 md:grid-cols-5">
+          {READING_IMAMS.map((imam) => {
+            const imamNarrators = NARRATORS.filter((narrator) => narrator.imamId === imam.id);
+            const color = getImamColor(imam.id);
+
+            return (
+              <div key={imam.id} className="space-y-2 rounded bg-stone-50/50 p-1.5 border border-stone-100">
+                <div
+                  className="rounded px-1.5 py-0.5 text-[11px] font-bold text-center text-white"
+                  style={{ backgroundColor: color }}
+                >
+                  {imam.name}
+                </div>
+
+                {imamNarrators.map((narrator) => {
+                  const paths = TRANSMISSION_PATH_SEEDS.filter((p) => p.narratorId === narrator.id);
+                  return (
+                    <div key={narrator.id} className="space-y-1">
+                      <div className="text-[10px] font-bold text-stone-700 px-1 border-b border-stone-200 pb-0.5">
+                        {narrator.name}
+                      </div>
+                      <div className="space-y-0.5">
+                        {paths.map((path) => {
+                          const isPathSelected = selectedPathIds.has(path.id);
+                          const cleanPathName = path.shortName.split(' / ')[1] || path.shortName;
+                          return (
+                            <button
+                              key={path.id}
+                              type="button"
+                              onClick={() => togglePath(path.id)}
+                              className={`w-full text-start rounded px-1 py-0.5 text-[9px] font-medium transition-colors ${
+                                isPathSelected
+                                  ? 'text-white'
+                                  : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-50'
+                              }`}
+                              style={{ backgroundColor: isPathSelected ? color : undefined }}
+                              title={path.fullName}
+                            >
+                              {cleanPathName}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <p className="mt-1.5 text-[11px] text-stone-600">
         النطاق المختصر: <span className="font-medium text-stone-800">{describeScope(scope)}</span>{' '}
-        ({selected.size} من 20)
+        ({pickerMode === 'paths' ? selectedPathIds.size : selected.size} من{' '}
+        {pickerMode === 'paths' ? 40 : 20})
       </p>
     </div>
   );
