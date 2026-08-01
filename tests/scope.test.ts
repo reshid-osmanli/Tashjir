@@ -9,6 +9,7 @@ import {
   ALL_NARRATOR_IDS,
   complementScope,
   describeScope,
+  formatPathName,
   getFullNarratorName,
   getNarratorName,
   getNarratorOrder,
@@ -196,5 +197,18 @@ describe('وصف النطاقات بالعربية', () => {
     expect(getNarratorOrder('narrator-qalun')).toBe(1);
     expect(getNarratorOrder('narrator-hafs')).toBe(9);
     expect(getNarratorOrder('غير-موجود')).toBe(999);
+  });
+
+  it('يصيغ اسم الطريق بشكل سليم', () => {
+    expect(formatPathName('path-warsh-al-azraq')).toBe('الأزرق عن ورش');
+    expect(formatPathName('path-qalun-abu-nashit')).toBe('أبو نشيط عن قالون');
+  });
+
+  it('يصف النطاق المعتمد على الطرق التفصيلية', () => {
+    const scope = {
+      kind: 'PATHS' as const,
+      pathIds: ['path-warsh-al-azraq', 'path-qalun-abu-nashit'],
+    };
+    expect(describeScope(scope)).toBe('الأزرق عن ورش وأبو نشيط عن قالون');
   });
 });

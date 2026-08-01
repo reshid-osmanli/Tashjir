@@ -102,6 +102,11 @@ export function describeScope(scope: ReadingScope, options?: { short?: boolean }
     return `الجميع إلا ${joinArabic(excludedNames)}`;
   }
 
+  if (scope.kind === 'PATHS' && scope.pathIds?.length) {
+    const pathNames = scope.pathIds.map(formatPathName);
+    return joinArabic(pathNames);
+  }
+
   // هل تغطي المجموعة أئمة كاملين؟ عندها الوصف بالإمام أدق وأقصر.
   const coverage = findFullyCoveredImams(narratorIds);
   if (coverage.imamIds.length > 0 && coverage.coveredNarrators === narratorIds.length) {
@@ -115,6 +120,17 @@ export function describeScope(scope: ReadingScope, options?: { short?: boolean }
   if (!short || names.length <= 2) return joinArabic(names);
 
   return `${names[0]} و${names[1]} و${names.length - 2} آخرين`;
+}
+
+/** اسم الطريق منسوبًا لراويه، مثل: الأزرق عن ورش */
+export function formatPathName(pathId: string): string {
+  const path = pathById.get(pathId);
+  if (!path) return pathId;
+  const parts = path.shortName.split(' / ');
+  if (parts.length === 2) {
+    return `${parts[1]} عن ${parts[0]}`;
+  }
+  return path.shortName;
 }
 
 /** اسم الراوي بالعربية، مع اسم إمامه للتمييز عند تكرار الاسم (الدوري). */
