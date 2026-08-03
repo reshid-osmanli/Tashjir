@@ -1,62 +1,61 @@
 // محلّل النطاقات - Reading Scope Resolver
-// مشروع التشجير - نظام القراءات العشر
 //
-// المشكلة التي يحلها هذا الملف:
-//   الحكم القرائي الواحد قد يقرأ به راو واحد، وقد يقرأ به تسعة عشر راويا،
-//   وقد يقرأ به إمام بكل رواته. تخزين الحكم مكررا لكل راو خطأ منهجي وتقني:
-//   يضخّم البيانات، ويجعل التصحيح في موضع واحد لا ينعكس على البقية.
-//
-// الحل:
-//   نخزّن الحكم مرة واحدة، ومعه تعبير نطاق (ReadingScope). هذا الملف يحوّل
-//   التعبير إلى قائمة رواة صريحة عند الحاجة فقط (وقت العرض أو التحقق).
-//
-// أمثلة:
-//   { kind: 'ALL' }                                   → الرواة العشرون
-//   { kind: 'ALL_EXCEPT', narratorIds: ['hafs'] }     → تسعة عشر راويا
-//   { kind: 'IMAMS', imamIds: ['imam-asim'] }         → حفص وشعبة
-//   { kind: 'NARRATORS', narratorIds: [...] }         → قائمة صريحة
+// الحكم القرائي يخزّن مرة واحدة مع نطاقه، ثم يحوله هذا الملف إلى رواة صرحاء
+// وقت الرسم أو التدقيق. يقبل كل تابع كتالوجا اختياريا حتى تعمل الإضافات التي
+// يجريها المشرف (قارئ/راو/طريق) فورا في المحرر، مع بقاء البذرة الافتراضية
+// متوافقة مع الاختبارات والاستيراد القديم.
 
 import { NARRATORS, READING_IMAMS, TRANSMISSION_PATH_SEEDS } from '@/data/qiraat-data/qiraat';
+import type { Narrator, ReadingImam, TransmissionPath } from '@/types';
+import type { TransmissionCatalog } from '@/lib/transmissions/catalog';
 import type { ReadingScope } from '@/types/tashjeer';
 
-/** كل معرّفات الرواة مرتبة حسب ترتيب طيبة النشر. */
+/** كل معرّفات الرواة في البذرة مرتبة حسب ترتيب طيبة النشر. */
 export const ALL_NARRATOR_IDS: string[] = [...NARRATORS]
   .sort((a, b) => (a.legacyOrderInTayyibah ?? 0) - (b.legacyOrderInTayyibah ?? 0))
   .map((narrator) => narrator.id);
 
-const narratorById = new Map(NARRATORS.map((narrator) => [narrator.id, narrator]));
-const imamById = new Map(READING_IMAMS.map((imam) => [imam.id, imam]));
-const pathById = new Map(TRANSMISSION_PATH_SEEDS.map((path) => [path.id, path]));
+/** كل معرّفات الرواة في الكتالوج الذي يعمل عليه المحرك. */
+export function allNarratorIds(catalog?: TransmissionCatalog): string[] {
+  return [...(catalog?.narrators ?? NARRATORS)]
+    .sort(
+      (a, b) =>
+        (a.legacyOrderInTayyibah ?? 999) - (b.legacyOrderInTayyibah ?? 999) ||
+        a.order - b.order ||
+        a.name.localeCompare(b.name, 'ar')
+    )
+    .map((narrator) => narrator.id);
+}
 
-/**
- * يحوّل تعبير النطاق إلى قائمة معرّفات رواة، مرتبة حسب طيبة النشر وبلا تكرار.
- *
- * @param scope تعبير النطاق
- * @returns قائمة معرّفات الرواة المشمولين
- */
-export function resolveScope(scope: ReadingScope): string[] {
+/** يحوّل تعبير النطاق إلى قائمة رواة صريحة مرتبة وبلا تكرار. */
+export function resolveScope(scope: ReadingScope, catalog?: TransmissionCatalog): string[] {
+  const context = makeContext(catalog);
+
   switch (scope.kind) {
     case 'ALL':
-      return [...ALL_NARRATOR_IDS];
+      return [...context.narratorIds];
 
     case 'ALL_EXCEPT': {
       const excluded = new Set(scope.narratorIds ?? []);
-      return ALL_NARRATOR_IDS.filter((id) => !excluded.has(id));
+      return context.narratorIds.filter((id) => !excluded.has(id));
     }
 
     case 'NARRATORS':
-      return sortByTayyibah(unique(scope.narratorIds ?? []).filter((id) => narratorById.has(id)));
+      return sortByTayyibah(
+        unique(scope.narratorIds ?? []).filter((id) => context.narratorById.has(id)),
+        context
+      );
 
     case 'IMAMS': {
       const imamIds = new Set(scope.imamIds ?? []);
-      return ALL_NARRATOR_IDS.filter((id) => imamIds.has(narratorById.get(id)?.imamId ?? ''));
+      return context.narratorIds.filter((id) => imamIds.has(context.narratorById.get(id)?.imamId ?? ''));
     }
 
     case 'PATHS': {
       const narratorIds = (scope.pathIds ?? [])
-        .map((pathId) => pathById.get(pathId)?.narratorId)
+        .map((pathId) => context.pathById.get(pathId)?.narratorId)
         .filter((value): value is string => Boolean(value));
-      return sortByTayyibah(unique(narratorIds));
+      return sortByTayyibah(unique(narratorIds), context);
     }
 
     default:
@@ -65,133 +64,134 @@ export function resolveScope(scope: ReadingScope): string[] {
 }
 
 /** عدد الرواة الذين يشملهم النطاق. */
-export function scopeSize(scope: ReadingScope): number {
-  return resolveScope(scope).length;
+export function scopeSize(scope: ReadingScope, catalog?: TransmissionCatalog): number {
+  return resolveScope(scope, catalog).length;
 }
 
 /** هل يشمل النطاق راويا معينا؟ */
-export function scopeIncludes(scope: ReadingScope, narratorId: string): boolean {
-  return resolveScope(scope).includes(narratorId);
+export function scopeIncludes(
+  scope: ReadingScope,
+  narratorId: string,
+  catalog?: TransmissionCatalog
+): boolean {
+  return resolveScope(scope, catalog).includes(narratorId);
 }
 
 /** هل يتقاطع نطاقان؟ يُستخدم لكشف تعارض الأوجه في الاختلاف الواحد. */
-export function scopesOverlap(a: ReadingScope, b: ReadingScope): boolean {
-  const first = new Set(resolveScope(a));
-  return resolveScope(b).some((id) => first.has(id));
+export function scopesOverlap(
+  firstScope: ReadingScope,
+  secondScope: ReadingScope,
+  catalog?: TransmissionCatalog
+): boolean {
+  const first = new Set(resolveScope(firstScope, catalog));
+  return resolveScope(secondScope, catalog).some((id) => first.has(id));
 }
 
-/**
- * يبني وصفا عربيا مختصرا للنطاق، صالحا للعرض على بطاقة الوجه.
- *
- * القاعدة:
- *   - النطاق العام  → "الجميع"
- *   - الاستثناء     → "الجميع إلا فلانا"
- *   - إمام كامل     → اسم الإمام مع كلمة "بكماله"
- *   - راو أو راويان → أسماء الرواة
- *   - أكثر من ثلاثة → أول اسمين ثم "و N آخرين"
- */
-export function describeScope(scope: ReadingScope, options?: { short?: boolean }): string {
+/** يبني وصفا عربيا مختصرا للنطاق، صالحا للعرض على بطاقة الوجه. */
+export function describeScope(
+  scope: ReadingScope,
+  options?: { short?: boolean; catalog?: TransmissionCatalog }
+): string {
   const short = options?.short ?? false;
-  const narratorIds = resolveScope(scope);
+  const context = makeContext(options?.catalog);
+  const narratorIds = resolveScope(scope, options?.catalog);
 
   if (narratorIds.length === 0) return 'لا أحد';
-  if (narratorIds.length === ALL_NARRATOR_IDS.length) return 'الجميع';
+  if (narratorIds.length === context.narratorIds.length) return 'الجميع';
 
   if (scope.kind === 'ALL_EXCEPT' && scope.narratorIds?.length) {
-    const excludedNames = scope.narratorIds.map(getNarratorName);
+    const excludedNames = scope.narratorIds.map((id) => getNarratorName(id, options?.catalog));
     return `الجميع إلا ${joinArabic(excludedNames)}`;
   }
 
   if (scope.kind === 'PATHS' && scope.pathIds?.length) {
-    const pathNames = scope.pathIds.map(formatPathName);
+    const pathNames = scope.pathIds.map((id) => formatPathName(id, options?.catalog));
     return joinArabic(pathNames);
   }
 
   // هل تغطي المجموعة أئمة كاملين؟ عندها الوصف بالإمام أدق وأقصر.
-  const coverage = findFullyCoveredImams(narratorIds);
+  const coverage = findFullyCoveredImams(narratorIds, context);
   if (coverage.imamIds.length > 0 && coverage.coveredNarrators === narratorIds.length) {
-    const names = coverage.imamIds.map((imamId) => imamById.get(imamId)?.name ?? imamId);
+    const names = coverage.imamIds.map((imamId) => context.imamById.get(imamId)?.name ?? imamId);
     return names.length === 1 ? `${names[0]} بكماله` : joinArabic(names);
   }
 
-  const names = narratorIds.map(getNarratorName);
-  // في الوضع المختصر نكتفي باسمين ثم نشير إلى العدد الباقي،
-  // حتى لا تتضخم بطاقة الوجه على اللوحة.
+  const names = narratorIds.map((id) => getNarratorName(id, options?.catalog));
   if (!short || names.length <= 2) return joinArabic(names);
 
   return `${names[0]} و${names[1]} و${names.length - 2} آخرين`;
 }
 
 /** اسم الطريق منسوبًا لراويه، مثل: الأزرق عن ورش */
-export function formatPathName(pathId: string): string {
-  const path = pathById.get(pathId);
+export function formatPathName(pathId: string, catalog?: TransmissionCatalog): string {
+  const context = makeContext(catalog);
+  const path = context.pathById.get(pathId);
   if (!path) return pathId;
+
   const parts = path.shortName.split(' / ');
-  if (parts.length === 2) {
-    return `${parts[1]} عن ${parts[0]}`;
-  }
-  return path.shortName;
+  if (parts.length === 2) return `${parts[1]} عن ${parts[0]}`;
+
+  const narrator = context.narratorById.get(path.narratorId);
+  return narrator ? `${path.shortName} عن ${narrator.name}` : path.shortName;
 }
 
-/** اسم الراوي بالعربية، مع اسم إمامه للتمييز عند تكرار الاسم (الدوري). */
-export function getNarratorName(narratorId: string): string {
-  const narrator = narratorById.get(narratorId);
+/** اسم الراوي، مع اسم إمامه للتمييز عند تكرار الاسم (الدوري). */
+export function getNarratorName(narratorId: string, catalog?: TransmissionCatalog): string {
+  const context = makeContext(catalog);
+  const narrator = context.narratorById.get(narratorId);
   if (!narrator) return narratorId;
 
-  const duplicated = NARRATORS.filter((item) => item.name === narrator.name).length > 1;
+  const duplicated = context.narrators.filter((item) => item.name === narrator.name).length > 1;
   if (!duplicated) return narrator.name;
 
-  const imam = imamById.get(narrator.imamId);
+  const imam = context.imamById.get(narrator.imamId);
   return imam ? `${narrator.name} (${imam.name})` : narrator.name;
 }
 
-/** اسم الراوي مع صيغة "عن إمامه". */
-export function getFullNarratorName(narratorId: string): string {
-  const narrator = narratorById.get(narratorId);
+/** اسم الراوي مع صيغة «عن إمامه». */
+export function getFullNarratorName(narratorId: string, catalog?: TransmissionCatalog): string {
+  const context = makeContext(catalog);
+  const narrator = context.narratorById.get(narratorId);
   if (!narrator) return narratorId;
 
-  const imam = imamById.get(narrator.imamId);
+  const imam = context.imamById.get(narrator.imamId);
   return imam ? `${narrator.name} عن ${imam.name}` : narrator.name;
 }
 
 /** ترتيب الراوي في طيبة النشر (1..20)، أو 999 إن كان غير معروف. */
-export function getNarratorOrder(narratorId: string): number {
-  return narratorById.get(narratorId)?.legacyOrderInTayyibah ?? 999;
+export function getNarratorOrder(narratorId: string, catalog?: TransmissionCatalog): number {
+  return makeContext(catalog).narratorById.get(narratorId)?.legacyOrderInTayyibah ?? 999;
 }
 
-/**
- * يبني نطاقا مكمّلا: كل من لم يشمله النطاق المعطى.
- * يُستخدم لتوليد وجه الأساس تلقائيا عند إضافة وجه جديد.
- */
-export function complementScope(scope: ReadingScope): ReadingScope {
-  const included = new Set(resolveScope(scope));
-  const rest = ALL_NARRATOR_IDS.filter((id) => !included.has(id));
+/** يبني نطاقا مكملا: كل من لم يشمله النطاق المعطى. */
+export function complementScope(scope: ReadingScope, catalog?: TransmissionCatalog): ReadingScope {
+  const context = makeContext(catalog);
+  const included = new Set(resolveScope(scope, catalog));
+  const rest = context.narratorIds.filter((id) => !included.has(id));
 
-  if (rest.length === ALL_NARRATOR_IDS.length) return { kind: 'ALL' };
-  if (included.size <= rest.length) {
-    return { kind: 'ALL_EXCEPT', narratorIds: [...included] };
-  }
+  if (rest.length === context.narratorIds.length) return { kind: 'ALL' };
+  if (included.size <= rest.length) return { kind: 'ALL_EXCEPT', narratorIds: [...included] };
 
   return { kind: 'NARRATORS', narratorIds: rest };
 }
 
-/**
- * يختصر قائمة رواة إلى أبسط تعبير نطاق ممكن.
- * الهدف: تخزين "IMAMS: عاصم" بدل "NARRATORS: حفص، شعبة".
- */
-export function normalizeScope(narratorIds: string[]): ReadingScope {
-  const ids = sortByTayyibah(unique(narratorIds.filter((id) => narratorById.has(id))));
+/** يختصر قائمة رواة إلى أبسط تعبير نطاق ممكن. */
+export function normalizeScope(narratorIds: string[], catalog?: TransmissionCatalog): ReadingScope {
+  const context = makeContext(catalog);
+  const ids = sortByTayyibah(
+    unique(narratorIds.filter((id) => context.narratorById.has(id))),
+    context
+  );
 
   if (ids.length === 0) return { kind: 'NARRATORS', narratorIds: [] };
-  if (ids.length === ALL_NARRATOR_IDS.length) return { kind: 'ALL' };
+  if (ids.length === context.narratorIds.length) return { kind: 'ALL' };
 
-  const coverage = findFullyCoveredImams(ids);
+  const coverage = findFullyCoveredImams(ids, context);
   if (coverage.imamIds.length > 0 && coverage.coveredNarrators === ids.length) {
     return { kind: 'IMAMS', imamIds: coverage.imamIds };
   }
 
-  // إن كان المستثنون أقل عددا، فالتعبير بالاستثناء أوضح وأقصر.
-  const excluded = ALL_NARRATOR_IDS.filter((id) => !ids.includes(id));
+  const excluded = context.narratorIds.filter((id) => !ids.includes(id));
   if (excluded.length > 0 && excluded.length < ids.length / 2) {
     return { kind: 'ALL_EXCEPT', narratorIds: excluded };
   }
@@ -201,23 +201,50 @@ export function normalizeScope(narratorIds: string[]): ReadingScope {
 
 // ==================== دوال داخلية ====================
 
-/**
- * يجد الأئمة الذين شُمل كل رواتهم في القائمة.
- *
- * @returns معرّفات هؤلاء الأئمة، وعدد الرواة الذين غطّوهم.
- *          مقارنة `coveredNarrators` بطول القائمة تكشف هل المجموعة
- *          كلها أئمة كاملون أم فيها رواة متفرقون.
- */
-function findFullyCoveredImams(narratorIds: string[]): {
-  imamIds: string[];
-  coveredNarrators: number;
-} {
+interface ScopeContext {
+  narrators: Narrator[];
+  imams: ReadingImam[];
+  paths: TransmissionPath[];
+  narratorIds: string[];
+  narratorById: Map<string, Narrator>;
+  imamById: Map<string, ReadingImam>;
+  pathById: Map<string, TransmissionPath>;
+}
+
+function makeContext(catalog?: TransmissionCatalog): ScopeContext {
+  const narrators = catalog?.narrators ?? NARRATORS;
+  const imams = catalog?.imams ?? READING_IMAMS;
+  const paths = catalog?.paths ?? TRANSMISSION_PATH_SEEDS;
+  const narratorIds = [...narrators]
+    .sort(
+      (a, b) =>
+        (a.legacyOrderInTayyibah ?? 999) - (b.legacyOrderInTayyibah ?? 999) ||
+        a.order - b.order ||
+        a.name.localeCompare(b.name, 'ar')
+    )
+    .map((narrator) => narrator.id);
+
+  return {
+    narrators,
+    imams,
+    paths,
+    narratorIds,
+    narratorById: new Map(narrators.map((narrator) => [narrator.id, narrator])),
+    imamById: new Map(imams.map((imam) => [imam.id, imam])),
+    pathById: new Map(paths.map((path) => [path.id, path])),
+  };
+}
+
+function findFullyCoveredImams(
+  narratorIds: string[],
+  context: ScopeContext
+): { imamIds: string[]; coveredNarrators: number } {
   const set = new Set(narratorIds);
   const imamIds: string[] = [];
   let coveredNarrators = 0;
 
-  for (const imam of READING_IMAMS) {
-    const imamNarrators = NARRATORS.filter((narrator) => narrator.imamId === imam.id);
+  for (const imam of context.imams) {
+    const imamNarrators = context.narrators.filter((narrator) => narrator.imamId === imam.id);
     if (imamNarrators.length > 0 && imamNarrators.every((narrator) => set.has(narrator.id))) {
       imamIds.push(imam.id);
       coveredNarrators += imamNarrators.length;
@@ -227,8 +254,12 @@ function findFullyCoveredImams(narratorIds: string[]): {
   return { imamIds, coveredNarrators };
 }
 
-function sortByTayyibah(ids: string[]): string[] {
-  return [...ids].sort((a, b) => getNarratorOrder(a) - getNarratorOrder(b));
+function sortByTayyibah(ids: string[], context: ScopeContext): string[] {
+  return [...ids].sort(
+    (first, second) =>
+      (context.narratorById.get(first)?.legacyOrderInTayyibah ?? 999) -
+      (context.narratorById.get(second)?.legacyOrderInTayyibah ?? 999)
+  );
 }
 
 function unique(values: string[]): string[] {

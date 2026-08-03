@@ -9,9 +9,9 @@
 //      لذلك أي وجه مطابق لحفص لا يُرسم له خط (وجه الأساس isBase).
 //
 //   2. ترتيب الخطوط: القاعدة المعتمدة في المشروع أن الاختلاف يُقرأ
-//      "من آخر الآية إلى أولها". فالخط الذي تبدأ عقدته الأولى في موضع
-//      متأخر من الآية يُرسم في مسار أقرب إلى النص، والذي يبدأ مبكرا
-//      يُدفع إلى مسار أبعد. هذا يمنع تقاطع الخطوط بصريا.
+//      "من آخر الآية إلى أولها". فالخط الذي تقع آخر عقدة له في موضع
+//      متأخر من الآية يُرسم في مسار أقرب إلى النص، والذي ينتهي مبكرا
+//      يُدفع إلى مسار أبعد. هذا يمنع قلب مدى الاختلافات المتعددة الكلمات.
 //
 //   3. توزيع المناطق:
 //      - الأصول (USUL) والمدود (MADUD) فوق النص، لأنها أحكام عامة سارية.
@@ -37,6 +37,9 @@ import type { VariantCategory } from '@/types';
 import { getLaneY } from './layout-engine';
 import { describeScope, resolveScope } from './scope';
 import { getCategoryColor } from './color-system';
+import type { TransmissionCatalog } from '@/lib/transmissions/catalog';
+import type { TraversalOrder } from './engine-settings';
+import { buildReadingPlan, compareReadingPositions, variantTraversalAnchor } from './reading-plan';
 
 // ==================== توزيع الفئات على الجهات ====================
 
@@ -75,6 +78,18 @@ const CATEGORY_PRIORITY: Record<VariantCategory, number> = {
 
 // ==================== توليد الخطوط ====================
 
+/** خيارات تشغيل المحرك؛ كلها اختيارية حتى تبقى ملفات التصدير القديمة صالحة. */
+export interface BranchGenerationOptions {
+  /** كتالوج القراء والرواة والطرق الذي اختاره المشرف. */
+  catalog?: TransmissionCatalog;
+  /** الاتجاه المعتمد في ترتيب التشجير. الافتراضي الصحيح: آخر الآية أولا. */
+  traversal?: TraversalOrder;
+  /** علامات الوقف والابتداء التي تقسم خطة المرور داخل الآية. */
+  boundaries?: import('@/types/tashjeer').RecitationBoundary[];
+  /** عدد كلمات الآية؛ يفيد مع الوقف عند موضع لا توجد عليه شعبة. */
+  wordsCount?: number;
+}
+
 /**
  * يولّد خطوط التشجير من قائمة الاختلافات.
  *
@@ -88,9 +103,32 @@ const CATEGORY_PRIORITY: Record<VariantCategory, number> = {
 export function generateBranches(
   variants: Variant[],
   layout: AyahLayout,
-  existing: TashjeerBranch[] = []
+  existing: TashjeerBranch[] = [],
+  options: BranchGenerationOptions = {}
 ): TashjeerBranch[] {
-  const manualBranches = existing.filter((branch) => branch.isManual);
+  const variantById = new Map(variants.map((variant) => [variant.id, variant]));
+  // لا نحتفظ من السطر اليدوي إلا بموضعه (lane/rowOffset) وحالة الإخفاء؛ أما
+  // الفئة والعقد واللون والبطاقة فتعاد اشتقاقا من الوجه الحالي. بذلك لا يبقى
+  // سطر يدوي تحت النص بعد تحويل الاختلاف إلى أصل مثلا.
+  const manualBranches = existing
+    .filter((branch) => branch.isManual)
+    .flatMap((branch) => {
+      const variant = variantById.get(branch.variantId);
+      const alternative = variant?.alternatives.find((item) => item.id === branch.alternativeId);
+      if (!variant || !alternative || alternative.isBase) return [];
+      const nodes = buildNodes(variant, layout);
+      if (nodes.length === 0) return [];
+      return [{
+        ...branch,
+        category: variant.category,
+        nodes,
+        side: CATEGORY_SIDE[variant.category],
+        // لا نفقد تسمية حررها المستخدم يدويا، أما البطاقة المولدة الفارغة
+        // فتأخذ الوصف الحالي للوجه ونطاقه.
+        label: branch.label || buildLabel(alternative, options.catalog),
+        color: getCategoryColor(variant.category),
+      }];
+    });
   const manualKeys = new Set(manualBranches.map((branch) => branchKey(branch)));
   const hiddenKeys = new Set(
     existing.filter((branch) => branch.isHidden).map((branch) => branchKey(branch))
@@ -103,7 +141,7 @@ export function generateBranches(
       // وجه الأساس هو نص المصحف المطبوع، فلا يُرسم له خط.
       if (alternative.isBase) continue;
       // إن كان الوجه لا يقرأ به أحد فهو بيانات ناقصة، نتجاهله في الرسم.
-      if (resolveScope(alternative.scope).length === 0) continue;
+      if (resolveScope(alternative.scope, options.catalog).length === 0) continue;
 
       const key = `${variant.id}::${alternative.id}`;
       if (manualKeys.has(key)) continue;
@@ -119,14 +157,14 @@ export function generateBranches(
         nodes,
         lane: 0, // يُحسب لاحقا في assignLanes
         side: CATEGORY_SIDE[variant.category],
-        label: buildLabel(alternative),
+        label: buildLabel(alternative, options.catalog),
         color: getCategoryColor(variant.category),
         isHidden: hiddenKeys.has(key),
       });
     }
   }
 
-  return assignLanes([...manualBranches, ...generated]);
+  return assignLanes([...manualBranches, ...generated], options);
 }
 
 /** يبني عقد الخط من مدى كلمات الاختلاف. */
@@ -150,8 +188,8 @@ function buildNodes(variant: Variant, layout: AyahLayout): LineNode[] {
 }
 
 /** نص بطاقة الوجه: الوصف ثم النطاق. */
-function buildLabel(alternative: VariantAlternative): string {
-  const scopeText = describeScope(alternative.scope, { short: true });
+function buildLabel(alternative: VariantAlternative, catalog?: TransmissionCatalog): string {
+  const scopeText = describeScope(alternative.scope, { short: true, catalog });
   return alternative.label ? `${alternative.label} — ${scopeText}` : scopeText;
 }
 
@@ -166,20 +204,23 @@ function branchKey(branch: TashjeerBranch): string {
  *
  * الخوارزمية:
  *   1. تُقسم الخطوط حسب الجهة (فوق/تحت).
- *   2. تُرتب داخل كل جهة: الأولوية أولا، ثم "من آخر الآية إلى أولها"
- *      أي الأكبر موضعا أولا، حتى يكون الأقرب لنهاية الآية أقرب للنص.
+ *   2. تُرتب داخل كل جهة: «من آخر الآية إلى أولها» أولا، ثم أولوية الفئة
+ *      عند تساوي موضع الارتكاز، حتى يكون الأقرب لنهاية الآية أقرب للنص.
  *   3. يُوضع كل خط في أول مسار خال يتسع لمداه الأفقي، مع هامش أمان
  *      يمنع التصاق البطاقات.
  *
  * @returns نفس الخطوط بعد ضبط الحقل lane
  */
-export function assignLanes(branches: TashjeerBranch[]): TashjeerBranch[] {
+export function assignLanes(
+  branches: TashjeerBranch[],
+  options: BranchGenerationOptions = {}
+): TashjeerBranch[] {
   const result: TashjeerBranch[] = [];
 
   for (const side of ['TOP', 'BOTTOM'] as const) {
     const sideBranches = branches
       .filter((branch) => branch.side === side)
-      .sort(compareBranchesForLanes);
+      .sort((first, second) => compareBranchesForLanes(first, second, options));
 
     /** لكل مسار: قائمة المدى [start, end] المشغولة فيه. */
     const lanes: Array<Array<{ start: number; end: number }>> = [];
@@ -221,26 +262,65 @@ export function assignLanes(branches: TashjeerBranch[]): TashjeerBranch[] {
  * القاعدة المنهجية: "من آخر الآية إلى أولها" — الخط الذي يبدأ متأخرا
  * يأخذ مسارا أقرب إلى النص، لأنه يُقرأ أولا في ترتيب التشجير.
  */
-function compareBranchesForLanes(a: TashjeerBranch, b: TashjeerBranch): number {
-  const priorityDiff = CATEGORY_PRIORITY[a.category] - CATEGORY_PRIORITY[b.category];
+function compareBranchesForLanes(
+  first: TashjeerBranch,
+  second: TashjeerBranch,
+  options: BranchGenerationOptions
+): number {
+  const traversal = options.traversal ?? 'END_TO_START';
+  const firstSpan = branchPositionSpan(first);
+  const secondSpan = branchPositionSpan(second);
+
+  // نقطة الارتكاز هي آخر كلمة في مدى الاختلاف في الاتجاه المعتمد، لا أول
+  // عقدة فيه. هذا هو التصحيح الذي يجعل «العالمين» قبل «رب» ثم «لله» ثم
+  // «الحمد» حتى إذا امتد اختلاف سابق على أكثر من كلمة.
+  const firstAnchor = variantTraversalAnchor(firstSpan.start, firstSpan.end, traversal);
+  const secondAnchor = variantTraversalAnchor(secondSpan.start, secondSpan.end, traversal);
+
+  let readingDiff: number;
+  if (options.boundaries?.length) {
+    const wordsCount = Math.max(
+      options.wordsCount ?? 0,
+      firstSpan.end,
+      secondSpan.end,
+      ...options.boundaries.map((boundary) => boundary.position)
+    );
+    const plan = buildReadingPlan(wordsCount, options.boundaries, traversal);
+    readingDiff = compareReadingPositions(firstAnchor, secondAnchor, plan);
+  } else {
+    readingDiff = traversal === 'END_TO_START'
+      ? secondAnchor - firstAnchor
+      : firstAnchor - secondAnchor;
+  }
+  if (readingDiff !== 0) return readingDiff;
+
+  const priorityDiff = CATEGORY_PRIORITY[first.category] - CATEGORY_PRIORITY[second.category];
   if (priorityDiff !== 0) return priorityDiff;
 
-  const aStart = branchSpan(a).start;
-  const bStart = branchSpan(b).start;
-  if (aStart !== bStart) return bStart - aStart;
+  // عند تساوي موضع النهاية، يقدم المدى الأقرب إلى موضع البداية في اتجاه
+  // القراءة، ثم نلجأ إلى المعرف حتى تكون النتيجة حتمية.
+  const spanDiff = traversal === 'END_TO_START'
+    ? secondSpan.start - firstSpan.start
+    : firstSpan.end - secondSpan.end;
+  if (spanDiff !== 0) return spanDiff;
 
-  return branchSpan(a).end - branchSpan(b).end;
+  return first.id.localeCompare(second.id, 'ar');
 }
 
 /** مدى الخط بدلالة مواضع الكلمات، مع هامش لاستيعاب البطاقة. */
-function branchSpan(branch: TashjeerBranch): { start: number; end: number } {
+function branchPositionSpan(branch: TashjeerBranch): { start: number; end: number } {
   const positions = branch.nodes.map((node) => node.position);
   if (positions.length === 0) return { start: 0, end: 0 };
+  return { start: Math.min(...positions), end: Math.max(...positions) };
+}
 
+/** مدى الخط للتزاحم البصري، مع هامش يسار للبطاقة. */
+function branchSpan(branch: TashjeerBranch): { start: number; end: number } {
+  const positions = branchPositionSpan(branch);
   return {
     // هامش قدره 2 من جهة اليسار لأن البطاقة تُرسم بعد نهاية الخط.
-    start: Math.min(...positions) - 2,
-    end: Math.max(...positions),
+    start: positions.start - 2,
+    end: positions.end,
   };
 }
 
@@ -294,7 +374,7 @@ function renderBranch(
 
   if (points.length === 0) return null;
 
-  const laneY = getLaneY(branch.lane, branch.side, layout, options);
+  const laneY = getLaneY(branch.lane, branch.side, layout, options) + (branch.rowOffset ?? 0);
   const path = buildPath(points, laneY, branch.side);
 
   // البطاقة توضع عند الطرف الأيسر من المسار (نهاية الخط بصريا).
@@ -368,7 +448,8 @@ function round(value: number): number {
 export function filterBranches(
   branches: TashjeerBranch[],
   variants: Variant[],
-  filter: ViewFilter
+  filter: ViewFilter,
+  catalog?: TransmissionCatalog
 ): TashjeerBranch[] {
   const variantById = new Map(variants.map((variant) => [variant.id, variant]));
 
@@ -380,7 +461,7 @@ export function filterBranches(
     const alternative = variant?.alternatives.find((item) => item.id === branch.alternativeId);
     if (!alternative) return false;
 
-    const scopeNarrators = new Set(resolveScope(alternative.scope));
+    const scopeNarrators = new Set(resolveScope(alternative.scope, catalog));
     return filter.narratorIds.some((narratorId) => scopeNarrators.has(narratorId));
   });
 }

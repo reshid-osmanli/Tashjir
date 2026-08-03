@@ -184,6 +184,66 @@ export interface LayoutOptions {
   laneHeight: number;
   /** المسافة بين منطقة النص وأول مسار */
   laneGap: number;
+  /**
+   * مواضع يُفرض بعدها الانتقال إلى سطر نصي جديد.
+   * الموضع 1-based داخل الآية، وتبقى الأسطر التلقائية فعالة عند امتلاء العرض.
+   */
+  forcedLineBreakAfter?: number[];
+  /** إزاحة رأسية اختيارية لكل سطر نصي (مفتاحها رقم السطر 0-based). */
+  lineOffsets?: Record<number, number>;
+}
+
+/**
+ * ضبط تخطيط خاص بآية واحدة. حفظه في المستند يجعل موضع السطر قابلا للمراجعة
+ * والتصدير، بدلا من أن يكون أثرا عابرا في المتصفح.
+ */
+export interface DocumentLayoutSettings extends Partial<LayoutOptions> {
+  forcedLineBreakAfter: number[];
+  lineOffsets: Record<number, number>;
+}
+
+// ==================== الوقف والابتداء ====================
+
+/** نوع العلامة التي يضبطها المحرر في مسار القراءة. */
+export type RecitationBoundaryKind = 'WAQF' | 'IBTIDA' | 'WASL';
+
+/**
+ * علامة وقف أو ابتداء أو وصل داخل الآية.
+ *
+ * - WAQF: الوقف بعد الكلمة ذات `position`.
+ * - IBTIDA: الابتداء قبل الكلمة ذات `position`.
+ * - WASL: وصل بعد الكلمة؛ وعند آخر كلمة يمكن أن يصل بالآية التالية.
+ */
+export interface RecitationBoundary {
+  id: string;
+  kind: RecitationBoundaryKind;
+  /** ترتيب الكلمة داخل الآية (1-based). */
+  position: number;
+  /** من يخصه هذا الوقف أو الابتداء؛ غيابه يعني الجميع. */
+  scope?: ReadingScope;
+  /** وصف ظاهر للمراجع، مثل: وقف كافٍ أو وصل أولى. */
+  label?: string;
+  notes?: string;
+  /** لا يصح إلا عند آخر كلمة: يربط نهاية الآية بأول الآية التالية. */
+  connectsToNextAyah?: boolean;
+}
+
+/** سطر يدوي دلالي، للحالات التي يحتاج فيها المحقق إلى إضافة سطر مستقل. */
+export interface ManualTashjeerLine {
+  id: string;
+  title: string;
+  category: VariantCategory;
+  startPosition: number;
+  endPosition: number;
+  /** ترتيب السطر (0 = الأقرب إلى النص). */
+  lane: number;
+  /** إزاحة دقيقة من موضع السطر، بوحدات SVG. */
+  rowOffset?: number;
+  /** نطاق السطر إن كان خاصا ببعض الرواة. */
+  scope?: ReadingScope;
+  /** نص مختصر يُطبع على السطر. */
+  label?: string;
+  isHidden?: boolean;
 }
 
 // ==================== الخطوط والعقد ====================
@@ -215,6 +275,11 @@ export interface TashjeerBranch {
   nodes: LineNode[];
   /** رقم المسار الأفقي المخصص لهذا الخط */
   lane: number;
+  /**
+   * إزاحة دقيقة من موضع المسار. لا تُستعمل إلا عندما يضبطها المحرر يدويا؛
+   * تتيح تصحيح تزاحم بطاقة أو محاذاة شكل التشجير من دون تغيير بيانات الوجه.
+   */
+  rowOffset?: number;
   /** جهة الرسم: الأصول أعلى النص، والفرش أسفله */
   side: AnchorSide;
   /** نص البطاقة الظاهرة في نهاية الخط */
@@ -265,6 +330,12 @@ export interface TashjeerDocument {
   variants: Variant[];
   /** الخطوط المرسومة */
   branches: TashjeerBranch[];
+  /** أسطر دلالية يضيفها المحرر عند الحاجة إلى بيان مستقل. */
+  manualLines: ManualTashjeerLine[];
+  /** مواضع الوقف والابتداء والوصل الخاصة بهذه الآية. */
+  boundaries: RecitationBoundary[];
+  /** ضبط مواضع أسطر النص لهذه الآية. */
+  layout: DocumentLayoutSettings;
   meta: DocumentMeta;
 }
 

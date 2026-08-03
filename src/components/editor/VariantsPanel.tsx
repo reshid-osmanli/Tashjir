@@ -11,6 +11,7 @@
 import { useMemo, useState } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 import { getAyahWordsByKey } from '@/data/quran';
+import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-system';
 import { describeScope, resolveScope } from '@/lib/tashjeer/scope';
@@ -32,6 +33,7 @@ export function VariantsPanel() {
   } = useEditorStore();
 
   const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
+  const catalog = useTransmissionCatalog();
 
   const words = useMemo(
     () => (document ? getAyahWordsByKey(document.ayahKey) : []),
@@ -165,6 +167,7 @@ export function VariantsPanel() {
               <VariantRow
                 key={variant.id}
                 variant={variant}
+                catalog={catalog}
                 isSelected={variant.id === selectedVariantId}
                 onSelect={() => selectVariant(variant.id === selectedVariantId ? null : variant.id)}
                 onEdit={() => setEditingVariantId(variant.id)}
@@ -190,12 +193,14 @@ export function VariantsPanel() {
 
 function VariantRow({
   variant,
+  catalog,
   isSelected,
   onSelect,
   onEdit,
   onDelete,
 }: {
   variant: Variant;
+  catalog: import('@/lib/transmissions/catalog').TransmissionCatalog;
   isSelected: boolean;
   onSelect: () => void;
   onEdit: () => void;
@@ -252,7 +257,7 @@ function VariantRow({
                 </div>
                 <p className="mt-0.5 text-[11px] text-stone-600">{alternative.label}</p>
                 <p className="text-[11px] text-stone-500">
-                  {describeScope(alternative.scope)} ({resolveScope(alternative.scope).length} راويا)
+                  {describeScope(alternative.scope, { catalog })} ({resolveScope(alternative.scope, catalog).length} راويا)
                 </p>
               </li>
             ))}

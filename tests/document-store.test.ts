@@ -238,4 +238,21 @@ describe('التصدير والاستيراد', () => {
     expect(loaded?.variants).toEqual([]);
     expect(loaded?.meta.status).toBe('DRAFT');
   });
+
+  it('يرقّي المستند القديم إلى أدوات الوقف ومواضع الأسطر الجديدة', async () => {
+    const store = await loadStore();
+    const ayahKey = makeAyahKey(1, 2);
+    const json = JSON.stringify({
+      format: 'tashjeer-export',
+      schemaVersion: 2,
+      documents: [{ ayahKey, variants: [], branches: [] }],
+    });
+
+    store.importDocuments(json, true);
+    const loaded = store.loadDocument(ayahKey);
+
+    expect(loaded?.manualLines).toEqual([]);
+    expect(loaded?.boundaries).toEqual([]);
+    expect(loaded?.layout).toEqual({ forcedLineBreakAfter: [], lineOffsets: {} });
+  });
 });

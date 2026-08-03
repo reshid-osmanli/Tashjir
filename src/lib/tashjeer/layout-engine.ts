@@ -135,6 +135,10 @@ export function layoutAyah(
   let cursorX = rightStart;
   let lineIndex = 0;
 
+  const forcedBreaks = new Set(
+    (config.forcedLineBreakAfter ?? []).filter((position) => Number.isInteger(position) && position > 0)
+  );
+
   for (const word of words) {
     const width = measureWordWidth(word.text, config.fontSize);
     const { ascent, descent } = measureWordExtents(word.text, config.fontSize);
@@ -148,7 +152,8 @@ export function layoutAyah(
       cursorX = rightStart;
     }
 
-    const baselineY = config.textTop + lineIndex * config.lineHeight;
+    const baselineY =
+      config.textTop + lineIndex * config.lineHeight + (config.lineOffsets?.[lineIndex] ?? 0);
     const x = cursorX - width;
 
     boxes.push({
@@ -167,6 +172,13 @@ export function layoutAyah(
     });
 
     cursorX = x - config.wordGap;
+
+    // كسر محرّر صراحة بعد هذه الكلمة. لا نكسر بعد آخر كلمة لأن ذلك لا يصنع
+    // سطرا فارغا؛ الهدف هو التحكم في تجزئة الآيات الطويلة فقط.
+    if (forcedBreaks.has(word.position) && word.position !== words[words.length - 1]?.position) {
+      lineIndex += 1;
+      cursorX = rightStart;
+    }
   }
 
   return {

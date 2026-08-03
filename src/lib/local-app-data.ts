@@ -6,8 +6,10 @@
 // وهذا الملف يقرأ منه ولا يكتب فيه، حتى لا يوجد مصدران للحقيقة.
 
 import type { VariantCategory } from '@/types';
-import type { VerificationStatus } from '@/types/tashjeer';
+import type { ReadingScope, VerificationStatus } from '@/types/tashjeer';
 import { listDocuments, loadDocument } from '@/lib/storage/document-store';
+import { readTransmissionCatalog } from '@/lib/transmissions/catalog';
+import { resolveScope } from '@/lib/tashjeer/scope';
 import { getSurahOrFirst } from '@/data/quran';
 
 const REVIEW_STORAGE_KEY = 'tashjeer:reviews:v2';
@@ -199,13 +201,10 @@ export function formatLocalDate(value?: string): string {
   }
 }
 
-function countScopeNarrators(scope: { kind: string; narratorIds?: string[]; imamIds?: string[] }): number {
-  // استيراد كسول لتفادي دورة استيراد بين هذا الملف ومحلّل النطاقات.
-  // النطاقات صغيرة (20 راويا)، فالحساب هنا مباشر ومقبول.
-  if (scope.kind === 'ALL') return 20;
-  if (scope.kind === 'ALL_EXCEPT') return 20 - (scope.narratorIds?.length ?? 0);
-  if (scope.kind === 'IMAMS') return (scope.imamIds?.length ?? 0) * 2;
-  return scope.narratorIds?.length ?? 0;
+function countScopeNarrators(scope: ReadingScope): number {
+  // نفس الكتالوج الذي يرسم به المحرر، حتى تظهر إضافة راو جديد في المراجعة
+  // والإحصاءات ولا تبقى الأرقام محصورة في الرواة العشرين الافتراضيين.
+  return resolveScope(scope, readTransmissionCatalog()).length;
 }
 
 function createPendingReview(): LocalReviewDecision {
