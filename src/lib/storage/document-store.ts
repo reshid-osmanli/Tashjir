@@ -24,8 +24,9 @@ import { getSeedVariants } from '@/data/variants/seed-variants';
 import { parseAyahKey } from '@/data/quran';
 
 /** إصدار صيغة المستند الحالي. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
+// نحتفظ بمفاتيح v2 كي تُقرأ مستندات المستخدمين القديمة ثم تُرقّى عند الحفظ.
 const DOC_PREFIX = 'tashjeer:doc:v2:';
 const INDEX_KEY = 'tashjeer:doc-index:v2';
 
@@ -60,6 +61,9 @@ export function createDocument(ayahKey: number, author = 'محرر محلي'): T
     // نسخة عميقة من البذرة حتى لا يعدّل المستخدم البيانات المشتركة.
     variants: cloneVariants(getSeedVariants(ayahKey)),
     branches: [],
+    manualLines: [],
+    boundaries: [],
+    layout: { forcedLineBreakAfter: [], lineOffsets: {} },
     meta: {
       createdAt: now,
       updatedAt: now,
@@ -267,6 +271,17 @@ function migrateDocument(document: TashjeerDocument): TashjeerDocument {
     ayahNumber: document.ayahNumber ?? parseAyahKey(document.ayahKey).ayahNumber,
     variants: Array.isArray(document.variants) ? document.variants : [],
     branches: Array.isArray(document.branches) ? document.branches : [],
+    manualLines: Array.isArray(document.manualLines) ? document.manualLines : [],
+    boundaries: Array.isArray(document.boundaries) ? document.boundaries : [],
+    layout: {
+      forcedLineBreakAfter: Array.isArray(document.layout?.forcedLineBreakAfter)
+        ? document.layout.forcedLineBreakAfter.filter((position) => Number.isInteger(position) && position > 0)
+        : [],
+      lineOffsets:
+        document.layout?.lineOffsets && typeof document.layout.lineOffsets === 'object'
+          ? document.layout.lineOffsets
+          : {},
+    },
     meta,
   };
 }

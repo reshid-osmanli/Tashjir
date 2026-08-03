@@ -11,7 +11,7 @@
 
 import { useMemo, useState } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
-import { NARRATORS, READING_IMAMS, TRANSMISSION_PATH_SEEDS } from '@/data/qiraat-data/qiraat';
+import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getImamColor } from '@/lib/tashjeer/color-system';
 import { describeScope, normalizeScope, resolveScope } from '@/lib/tashjeer/scope';
@@ -46,6 +46,7 @@ const SOURCE_OPTIONS: Array<{ value: EvidenceSource; label: string }> = [
 
 export function VariantEditor({ variant, onClose }: VariantEditorProps) {
   const { updateVariant, addAlternative, updateAlternative, deleteAlternative } = useEditorStore();
+  const catalog = useTransmissionCatalog();
   const [activeAlternativeId, setActiveAlternativeId] = useState<string | null>(
     variant.alternatives.find((alternative) => !alternative.isBase)?.id ?? null
   );
@@ -118,6 +119,36 @@ export function VariantEditor({ variant, onClose }: VariantEditorProps) {
               </select>
             </Field>
 
+            <Field label="من الكلمة">
+              <input
+                type="number"
+                min={1}
+                value={variant.startPosition}
+                onChange={(event) => {
+                  const startPosition = Math.max(1, Number(event.target.value));
+                  updateVariant(variant.id, {
+                    startPosition,
+                    endPosition: Math.max(startPosition, variant.endPosition),
+                  });
+                }}
+                className="input"
+              />
+            </Field>
+
+            <Field label="إلى الكلمة">
+              <input
+                type="number"
+                min={variant.startPosition}
+                value={variant.endPosition}
+                onChange={(event) =>
+                  updateVariant(variant.id, {
+                    endPosition: Math.max(variant.startPosition, Number(event.target.value)),
+                  })
+                }
+                className="input"
+              />
+            </Field>
+
             <Field label="الحالة">
               <select
                 value={variant.status}
@@ -171,7 +202,7 @@ export function VariantEditor({ variant, onClose }: VariantEditorProps) {
             <div className="grid gap-4 md:grid-cols-[220px_1fr]">
               <ul className="space-y-1.5">
                 {variant.alternatives.map((alternative) => {
-                  const count = resolveScope(alternative.scope).length;
+                  const count = resolveScope(alternative.scope, catalog).length;
                   const active = alternative.id === activeAlternativeId;
 
                   return (
@@ -319,11 +350,12 @@ function ScopePicker({
   scope: ReadingScope;
   onChange: (scope: ReadingScope) => void;
 }) {
+  const catalog = useTransmissionCatalog();
   const [pickerMode, setPickerMode] = useState<'narrators' | 'paths'>(
     scope.kind === 'PATHS' ? 'paths' : 'narrators'
   );
 
-  const selected = useMemo(() => new Set(resolveScope(scope)), [scope]);
+  const selected = useMemo(() => new Set(resolveScope(scope, catalog)), [scope, catalog]);
 
   const selectedPathIds = useMemo(() => {
     if (scope.kind === 'PATHS') return new Set(scope.pathIds ?? []);
@@ -334,11 +366,11 @@ function ScopePicker({
     const next = new Set(selected);
     if (next.has(narratorId)) next.delete(narratorId);
     else next.add(narratorId);
-    onChange(normalizeScope([...next]));
+    onChange(normalizeScope([...next], catalog));
   };
 
   const toggleImam = (imamId: string) => {
-    const imamNarrators = NARRATORS.filter((narrator) => narrator.imamId === imamId);
+    const imamNarrators = catalog.narrators.filter((narrator) => narrator.imamId === imamId);
     const allSelected = imamNarrators.every((narrator) => selected.has(narrator.id));
 
     const next = new Set(selected);
@@ -347,7 +379,7 @@ function ScopePicker({
       else next.add(narrator.id);
     }
 
-    onChange(normalizeScope([...next]));
+    onChange(normalizeScope([...next], catalog));
   };
 
   const togglePath = (pathId: string) => {
@@ -382,7 +414,7 @@ function ScopePicker({
             onClick={() => {
               setPickerMode('narrators');
               if (scope.kind === 'PATHS') {
-                onChange({ kind: 'NARRATORS', narratorIds: resolveScope(scope) });
+                onChange({ kind: 'NARRATORS', narratorIds: resolveScope(scope, catalog) });
               }
             }}
             className={`rounded px-2.5 py-1 text-[11px] font-semibold transition-colors ${
@@ -398,8 +430,8 @@ function ScopePicker({
             onClick={() => {
               setPickerMode('paths');
               if (scope.kind !== 'PATHS') {
-                const narratorIds = resolveScope(scope);
-                const pathIds = TRANSMISSION_PATH_SEEDS.filter((p) =>
+                const narratorIds = resolveScope(scope, catalog);
+                const pathIds = catalog.paths.filter((p) =>
                   narratorIds.includes(p.narratorId)
                 ).map((p) => p.id);
                 onChange({ kind: 'PATHS', pathIds });
@@ -425,7 +457,7 @@ function ScopePicker({
             type="button"
             onClick={() => {
               if (pickerMode === 'paths') {
-                onChange({ kind: 'PATHS', pathIds: TRANSMISSION_PATH_SEEDS.map((p) => p.id) });
+                onChange({ kind: 'PATHS', pathIds: catalog.paths.map((p) => p.id) });
               } else {
                 onChange({ kind: 'ALL' });
               }
@@ -452,11 +484,11 @@ function ScopePicker({
 
       {pickerMode === 'narrators' ? (
         <div className="grid grid-cols-2 gap-1.5 rounded-md border border-stone-200 p-2 md:grid-cols-5">
-          {READING_IMAMS.map((imam) => {
-            const imamNarrators = NARRATORS.filter((narrator) => narrator.imamId === imam.id);
+          {catalog.imams.map((imam) => {
+            const imamNarrators = catalog.narrators.filter((narrator) => narrator.imamId === imam.id);
             const allSelected = imamNarrators.every((narrator) => selected.has(narrator.id));
             const color = getImamColor(imam.id);
-            const imamSymbols = imamNarrators.map((n) => getNarratorSymbol(n.id)).filter(Boolean).join('');
+            const imamSymbols = imamNarrators.map((n) => getNarratorSymbol(n.id, catalog)).filter(Boolean).join('');
 
             return (
               <div key={imam.id} className="space-y-1">
@@ -478,7 +510,7 @@ function ScopePicker({
 
                 {imamNarrators.map((narrator) => {
                   const isSelected = selected.has(narrator.id);
-                  const symbol = getNarratorSymbol(narrator.id);
+                  const symbol = getNarratorSymbol(narrator.id, catalog);
                   return (
                     <button
                       key={narrator.id}
@@ -504,8 +536,8 @@ function ScopePicker({
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-1.5 rounded-md border border-stone-200 p-2 md:grid-cols-5">
-          {READING_IMAMS.map((imam) => {
-            const imamNarrators = NARRATORS.filter((narrator) => narrator.imamId === imam.id);
+          {catalog.imams.map((imam) => {
+            const imamNarrators = catalog.narrators.filter((narrator) => narrator.imamId === imam.id);
             const color = getImamColor(imam.id);
 
             return (
@@ -518,7 +550,7 @@ function ScopePicker({
                 </div>
 
                 {imamNarrators.map((narrator) => {
-                  const paths = TRANSMISSION_PATH_SEEDS.filter((p) => p.narratorId === narrator.id);
+                  const paths = catalog.paths.filter((p) => p.narratorId === narrator.id);
                   return (
                     <div key={narrator.id} className="space-y-1">
                       <div className="text-[10px] font-bold text-stone-700 px-1 border-b border-stone-200 pb-0.5">
@@ -556,9 +588,9 @@ function ScopePicker({
       )}
 
       <p className="mt-1.5 text-[11px] text-stone-600">
-        النطاق المختصر: <span className="font-medium text-stone-800">{describeScope(scope)}</span>{' '}
+        النطاق المختصر: <span className="font-medium text-stone-800">{describeScope(scope, { catalog })}</span>{' '}
         ({pickerMode === 'paths' ? selectedPathIds.size : selected.size} من{' '}
-        {pickerMode === 'paths' ? 40 : 20})
+        {pickerMode === 'paths' ? catalog.paths.length : catalog.narrators.length})
       </p>
     </div>
   );

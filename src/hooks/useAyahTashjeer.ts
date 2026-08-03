@@ -25,7 +25,10 @@ import {
 import {
   generateClassicTashjeer,
   type ClassicTashjeer,
+  type ClassicTashjeerOptions,
 } from '@/lib/tashjeer/classic-tashjeer';
+import type { TransmissionCatalog } from '@/lib/transmissions/catalog';
+import type { TashjeerEngineSettings } from '@/lib/tashjeer/engine-settings';
 import type {
   AyahLayout,
   LayoutOptions,
@@ -35,6 +38,13 @@ import type {
 } from '@/types/tashjeer';
 
 /** ناتج الخطاف. */
+export interface AyahTashjeerRuntime {
+  /** كتالوج القراء والرواة والطرق بعد تعديلات لوحة التحكم. */
+  catalog?: TransmissionCatalog;
+  /** إعدادات ترتيب وعرض المحرك. */
+  engine?: TashjeerEngineSettings;
+}
+
 export interface AyahTashjeerResult {
   /** بيانات الآية، أو undefined إن كان المعرّف غير صالح */
   ayah?: MushafAyah;
@@ -64,14 +74,17 @@ export interface AyahTashjeerResult {
 export function useAyahTashjeer(
   document: TashjeerDocument | null,
   filter: ViewFilter,
-  options: Partial<LayoutOptions> = {}
+  options: Partial<LayoutOptions> = {},
+  runtime: AyahTashjeerRuntime = {}
 ): AyahTashjeerResult {
   const ayahKey = document?.ayahKey ?? 0;
 
   // مفتاح استقرار: يمنع إعادة الحساب عند تغير مرجع الكائن دون تغير القيم.
-  const optionsKey = JSON.stringify(options);
+  // إعداد الآية المحفوظ يسبق افتراضيات المحرك، بينما تعديل الواجهة الآني
+  // (مثل حجم الخط في الشريط) له الأولوية الأخيرة.
+  const optionsKey = JSON.stringify({ options, documentLayout: document?.layout ?? {} });
   const layoutOptions = useMemo<LayoutOptions>(
-    () => ({ ...DEFAULT_LAYOUT_OPTIONS, ...options }),
+    () => ({ ...DEFAULT_LAYOUT_OPTIONS, ...(document?.layout ?? {}), ...options }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [optionsKey]
   );
@@ -84,10 +97,16 @@ export function useAyahTashjeer(
     [ayahKey, words, layoutOptions]
   );
 
+  const runtimeKey = JSON.stringify({
+    catalogUpdatedAt: runtime.catalog?.updatedAt,
+    engine: runtime.engine,
+  });
+
   const visibleBranches = useMemo(() => {
     if (!document) return [];
-    return filterBranches(document.branches, document.variants, filter);
-  }, [document, filter]);
+    return filterBranches(document.branches, document.variants, filter, runtime.catalog);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [document, filter, runtimeKey]);
 
   const branches = useMemo(
     () => renderBranches(visibleBranches, layout, layoutOptions),
@@ -95,16 +114,23 @@ export function useAyahTashjeer(
   );
 
   // التشجير الكلاسيكي: الخطوط المترتّبة تحت الآية.
-  const classic = useMemo(
-    () =>
-      generateClassicTashjeer(
-        document?.variants ?? [],
-        layout,
-        filter,
-        layoutOptions
-      ),
-    [document, layout, filter, layoutOptions]
-  );
+  const classic = useMemo(() => {
+    const classicRuntime: ClassicTashjeerOptions = {
+      catalog: runtime.catalog,
+      engine: runtime.engine,
+      boundaries: document?.boundaries ?? [],
+      branchOverrides: document?.branches ?? [],
+      manualLines: document?.manualLines ?? [],
+    };
+    return generateClassicTashjeer(
+      document?.variants ?? [],
+      layout,
+      filter,
+      layoutOptions,
+      classicRuntime
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [document, layout, filter, layoutOptions, runtimeKey]);
 
   const stats = useMemo(
     () => computeStats(document?.variants ?? [], visibleBranches),
@@ -116,7 +142,9 @@ export function useAyahTashjeer(
     const leftMargin = 70;
     const rightMargin = 380;
 
-    const top = 0;
+    // نستوعب الأصول والمدود فوق النص أيضا؛ كان تثبيت البداية عند صفر يخفي
+    // الأسطر العليا في الآيات المزدحمة.
+    const top = Math.min(0, classic.topY - layoutOptions.laneHeight - 36);
     const bottom = classic.totalHeight;
 
     return {

@@ -57,12 +57,16 @@ describe('generateClassicTashjeer', () => {
     expect(nearest!.endPosition).toBe(Math.max(...lines.map((l) => l.endPosition)));
   });
 
-  it('يحسب إحداثيات الخطوط تصاعديا حسب المسار', () => {
+  it('يحسب مواضع الأسطر بحسب جهتها: الفرش تحت النص والأصول والمدود فوقه', () => {
     const { lines, firstRowY, rowHeight } = build(makeAyahKey(2, 9));
     expect(lines.length).toBeGreaterThan(1);
 
     lines.forEach((line) => {
-      expect(line.rowY).toBeCloseTo(firstRowY + line.lane * rowHeight, 5);
+      if (line.side === 'BOTTOM') {
+        expect(line.rowY).toBeCloseTo(firstRowY + line.lane * rowHeight, 5);
+      } else {
+        expect(line.rowY).toBeLessThan(Math.min(...line.marks.map((mark) => mark.topY)));
+      }
     });
   });
 

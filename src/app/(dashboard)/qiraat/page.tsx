@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   NARRATORS,
   QIRAAT_ORDER_TAYYIBAH,
@@ -39,7 +40,14 @@ export default function QiraatPage() {
           <h1 className="text-2xl font-bold text-gray-900">القراءات العشر</h1>
           <p className="text-gray-600">ترتيب القراء والرواة والطرق حسب طيبة النشر.</p>
         </div>
-        <div className="w-full md:w-80">
+        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
+          <Link
+            href="/admin"
+            className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
+          >
+            إدارة القراء والرواة والطرق
+          </Link>
+          <div className="w-full md:w-80">
           <input
             type="search"
             value={query}
@@ -47,6 +55,7 @@ export default function QiraatPage() {
             placeholder="بحث في القارئ أو الراوي أو الطريق"
             className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
+          </div>
         </div>
       </div>
 

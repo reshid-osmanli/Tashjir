@@ -13,11 +13,13 @@ import { useMemo } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
 import { getWordById, stripHarakat } from '@/data/quran';
-import { NARRATORS, READING_IMAMS } from '@/data/qiraat-data/qiraat';
+import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
+import { useEngineSettings } from '@/hooks/useEngineSettings';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getImamColor } from '@/lib/tashjeer/color-system';
 import { describeScope, getFullNarratorName, resolveScope } from '@/lib/tashjeer/scope';
 import { StatusBadge } from './VariantsPanel';
+import { ManualLinesControls, RecitationControls, TextLayoutControls } from './RecitationControls';
 import type { VariantCategory } from '@/types';
 import type { VerificationStatus } from '@/types/tashjeer';
 
@@ -38,9 +40,15 @@ export function PropertiesPanel() {
     toggleNarrator,
     setFilter,
     setDocumentStatus,
+    moveBranchLane,
+    setBranchLane,
+    setBranchRowOffset,
+    resetBranchPosition,
   } = useEditorStore();
 
-  const { stats, branches } = useAyahTashjeer(document, filter);
+  const catalog = useTransmissionCatalog();
+  const engine = useEngineSettings();
+  const { stats } = useAyahTashjeer(document, filter, {}, { catalog, engine });
 
   const selectedWord = useMemo(
     () => (selectedWordId ? getWordById(selectedWordId) : undefined),
@@ -48,7 +56,7 @@ export function PropertiesPanel() {
   );
 
   const selectedVariant = document?.variants.find((variant) => variant.id === selectedVariantId);
-  const selectedBranch = branches.find((branch) => branch.id === selectedBranchId);
+  const selectedBranch = document?.branches.find((branch) => branch.id === selectedBranchId);
 
   if (!document) return null;
 
@@ -150,9 +158,20 @@ export function PropertiesPanel() {
           <Row label="الجهة" value={selectedBranch.side === 'TOP' ? 'أعلى النص' : 'أسفل النص'} />
           <p className="mt-2 text-[11px] text-stone-600">{selectedBranch.label}</p>
 
+          <LinePlacementControls
+            lane={selectedBranch.lane}
+            rowOffset={selectedBranch.rowOffset ?? 0}
+            isManual={selectedBranch.isManual ?? false}
+            onMove={(delta) => moveBranchLane(selectedBranch.id, delta)}
+            onLaneChange={(lane) => setBranchLane(selectedBranch.id, lane)}
+            onOffsetChange={(offset) => setBranchRowOffset(selectedBranch.id, offset)}
+            onReset={() => resetBranchPosition(selectedBranch.id)}
+          />
+
           <EvidenceView
             variantId={selectedBranch.variantId}
             alternativeId={selectedBranch.alternativeId}
+            catalog={catalog}
           />
         </Section>
       )}
@@ -177,20 +196,20 @@ export function PropertiesPanel() {
         </div>
 
         <div className="space-y-2">
-          {READING_IMAMS.map((imam) => (
+          {catalog.imams.map((imam) => (
             <div key={imam.id}>
               <p className="mb-1 text-[11px] font-medium" style={{ color: getImamColor(imam.id) }}>
                 {imam.name}
               </p>
               <div className="flex flex-wrap gap-1">
-                {NARRATORS.filter((narrator) => narrator.imamId === imam.id).map((narrator) => {
+                {catalog.narrators.filter((narrator) => narrator.imamId === imam.id).map((narrator) => {
                   const active = filter.narratorIds.includes(narrator.id);
                   return (
                     <button
                       key={narrator.id}
                       type="button"
                       onClick={() => toggleNarrator(narrator.id)}
-                      title={getFullNarratorName(narrator.id)}
+                      title={getFullNarratorName(narrator.id, catalog)}
                       className={`rounded border px-1.5 py-0.5 text-[11px] transition-colors ${
                         active
                           ? 'border-transparent text-white'
@@ -207,6 +226,10 @@ export function PropertiesPanel() {
           ))}
         </div>
       </Section>
+
+      <TextLayoutControls />
+      <RecitationControls />
+      <ManualLinesControls />
     </aside>
   );
 }
@@ -216,9 +239,11 @@ export function PropertiesPanel() {
 function EvidenceView({
   variantId,
   alternativeId,
+  catalog,
 }: {
   variantId: string;
   alternativeId: string;
+  catalog: import('@/lib/transmissions/catalog').TransmissionCatalog;
 }) {
   const document = useEditorStore((state) => state.document);
 
@@ -234,7 +259,7 @@ function EvidenceView({
     <div className="mt-3 border-t border-stone-100 pt-2">
       <p className="mb-1 text-[11px] font-semibold text-stone-700">النطاق</p>
       <p className="text-[11px] text-stone-600">
-        {describeScope(alternative.scope)} ({resolveScope(alternative.scope).length} راويا)
+        {describeScope(alternative.scope, { catalog })} ({resolveScope(alternative.scope, catalog).length} راويا)
       </p>
 
       <p className="mb-1 mt-2 text-[11px] font-semibold text-stone-700">الأدلة</p>
@@ -277,6 +302,69 @@ function sourceLabel(source: string): string {
     OTHER: 'مصدر آخر',
   };
   return labels[source] ?? source;
+}
+
+// ==================== موضع السطر ====================
+
+function LinePlacementControls({
+  lane,
+  rowOffset,
+  isManual,
+  onMove,
+  onLaneChange,
+  onOffsetChange,
+  onReset,
+}: {
+  lane: number;
+  rowOffset: number;
+  isManual: boolean;
+  onMove: (delta: number) => void;
+  onLaneChange: (lane: number) => void;
+  onOffsetChange: (offset: number) => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50/40 p-2">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-semibold text-emerald-900">موضع السطر</p>
+        {isManual && (
+          <button type="button" onClick={onReset} className="text-[10px] text-emerald-800 hover:underline">
+            عودة للتلقائي
+          </button>
+        )}
+      </div>
+      <div className="mt-1.5 flex items-center gap-1.5">
+        <button type="button" onClick={() => onMove(-1)} className="rounded border border-emerald-300 bg-white px-2 py-0.5 text-xs text-emerald-800">
+          ↑
+        </button>
+        <label className="flex flex-1 items-center gap-1 text-[10px] text-stone-600">
+          المسار
+          <input
+            type="number"
+            min={0}
+            value={lane}
+            onChange={(event) => onLaneChange(Number(event.target.value))}
+            className="h-6 w-12 rounded border border-stone-300 bg-white px-1 text-center text-[11px]"
+          />
+        </label>
+        <button type="button" onClick={() => onMove(1)} className="rounded border border-emerald-300 bg-white px-2 py-0.5 text-xs text-emerald-800">
+          ↓
+        </button>
+      </div>
+      <label className="mt-2 block text-[10px] text-stone-600">
+        الإزاحة الدقيقة: {rowOffset}
+        <input
+          type="range"
+          min={-80}
+          max={80}
+          step={2}
+          value={rowOffset}
+          onChange={(event) => onOffsetChange(Number(event.target.value))}
+          className="mt-1 w-full accent-emerald-600"
+        />
+      </label>
+    </div>
+  );
 }
 
 // ==================== عناصر مشتركة ====================

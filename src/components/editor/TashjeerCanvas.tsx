@@ -2,7 +2,7 @@
 // مشروع التشجير - نظام القراءات العشر
 //
 // اللوحة هي المكوّن المركزي في المحرر. تعرض التشجير الكلاسيكي:
-//   - نص الآية (رواية حفص = «الجمهور») في الأعلى كخط أساس.
+//   - نص الآية (راوي الأساس المختار في إعدادات المحرك) في الأعلى كخط أساس.
 //   - تحت كل كلمة مختلفة خطٌّ أفقيٌّ لكل وجه، يبدأ بالترتيب (قالون أولاً)،
 //     وفوق الخط رمز القارئ ورموز مَن اتفق معه، وتحته نص الاختلاف ملوّناً بنوعه.
 //
@@ -11,17 +11,20 @@
 
 'use client';
 
-import { useCallback, useRef, useState, type MouseEvent as ReactMouseEvent, type WheelEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type WheelEvent } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
 import {
   CATEGORY_LABELS,
 } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-system';
-import { NARRATORS_BY_TAYYIBAH } from '@/lib/tashjeer/symbols';
+import { getNarratorsByTayyibah } from '@/lib/tashjeer/symbols';
+import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
+import { useEngineSettings } from '@/hooks/useEngineSettings';
 import type { ClassicLine } from '@/lib/tashjeer/classic-tashjeer';
 import type { VariantCategory } from '@/types';
-import type { WordBox } from '@/types/tashjeer';
+import type { RecitationBoundary, WordBox } from '@/types/tashjeer';
+import type { TransmissionCatalog } from '@/lib/transmissions/catalog';
 
 interface TashjeerCanvasProps {
   /** حجم خط المصحف، قابل للضبط من شريط الأدوات */
@@ -49,10 +52,26 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     setPan,
     selectWord,
     selectVariant,
+    selectBranch,
+    refreshDerivedBranches,
     toggleMarkedPosition,
   } = useEditorStore();
 
-  const { ayah, layout, classic, viewBox } = useAyahTashjeer(document, filter, { fontSize });
+  const catalog = useTransmissionCatalog();
+  const engine = useEngineSettings();
+
+  // عند تعديل قارئ أو رمز أو طريق من لوحة التحكم، حدّث الخطوط المشتقة مع
+  // إبقاء مواضع الأسطر اليدوية كما هي. لا يحتاج المحرر إلى إعادة فتح الآية.
+  useEffect(() => {
+    refreshDerivedBranches();
+  }, [catalog.updatedAt, engine.rowSpacing, engine.textToTreeGap, engine.tieBreakOrder, engine.symbolDisplay, refreshDerivedBranches]);
+
+  const { ayah, layout, classic, viewBox } = useAyahTashjeer(
+    document,
+    filter,
+    { fontSize },
+    { catalog, engine }
+  );
 
   // ==================== التفاعل ====================
 
@@ -116,9 +135,16 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
   const handleLineClick = useCallback(
     (line: ClassicLine) => {
       if (readOnly) return;
-      selectVariant(line.variantId === selectedVariantId ? null : line.variantId);
+      if (line.source === 'MANUAL') {
+        selectVariant(null);
+        selectBranch(null);
+        return;
+      }
+      const nextVariantId = line.variantId === selectedVariantId ? null : line.variantId;
+      selectVariant(nextVariantId);
+      selectBranch(nextVariantId ? line.id : null);
     },
-    [readOnly, selectVariant, selectedVariantId]
+    [readOnly, selectBranch, selectVariant, selectedVariantId]
   );
 
   // ==================== حالات فارغة ====================
@@ -177,7 +203,13 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
           {filter.showRulers && <Rulers viewBox={viewBox} />}
 
           {/* الخط الأساس: نص المصحف = «الجمهور» */}
-          <BaselineBand layout={layout} viewBox={viewBox} />
+          <BaselineBand
+            layout={layout}
+            viewBox={viewBox}
+            baseNarratorName={catalog.narrators.find((narrator) => narrator.id === 'narrator-hafs')?.name ?? 'حفص'}
+          />
+
+          <BoundaryMarkers boundaries={document.boundaries} layout={layout} />
 
           {/* خطوط التشجير الكلاسيكية */}
           <g>
@@ -195,7 +227,12 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
               />
             ))}
 
-            {!classic.hasDifferences && <MajorityLine classic={classic} />}
+            {!classic.hasDifferences && (
+              <MajorityLine
+                classic={classic}
+                baseNarratorName={catalog.narrators.find((narrator) => narrator.id === 'narrator-hafs')?.name ?? 'حفص'}
+              />
+            )}
           </g>
 
           {/* نص الآية فوق الخطوط ليظل واضحا وقابلا للنقر */}
@@ -227,7 +264,7 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
         دليل الرموز
       </button>
 
-      {showSymbols && <SymbolsLegend onClose={() => setShowSymbols(false)} />}
+      {showSymbols && <SymbolsLegend catalog={catalog} onClose={() => setShowSymbols(false)} />}
     </div>
   );
 }
@@ -348,12 +385,13 @@ function ClassicLineShape({
         fill="transparent"
       />
 
-      {/* الوصلات الرأسية من كل كلمة مختلفة إلى الخط */}
+      {/* الوصلات الرأسية من كل كلمة مختلفة إلى الخط. الأصول والمدود ترتبط
+          من أعلى الكلمة، وما عداها من أسفلها. */}
       {line.marks.map((mark) => (
         <line
           key={`c-${mark.wordId}`}
           x1={mark.x}
-          y1={mark.bottomY}
+          y1={line.side === 'TOP' ? mark.topY : mark.bottomY}
           x2={mark.x}
           y2={line.rowY}
           stroke={color}
@@ -443,7 +481,10 @@ function LineLabel({
   y: number;
 }) {
   const badgeWidth = Math.max(line.label.length * 13 + 18, 34);
-  const text = `${line.primaryNarratorName} · ${line.categoryLabel}`;
+  const text =
+    line.symbolDisplay === 'BOTH'
+      ? `${line.primaryNarratorName} · ${line.categoryLabel}`
+      : line.categoryLabel;
 
   return (
     <g>
@@ -490,13 +531,15 @@ function lineTitle(line: ClassicLine): string {
 
 // ==================== عناصر مساعدة ====================
 
-/** شريط «الجمهور» تحت نص الآية: يوضّح أن النص المطبوع هو رواية حفص. */
+/** شريط «الجمهور» تحت نص الآية: يوضّح راوي النص الأساس المختار. */
 function BaselineBand({
   layout,
   viewBox,
+  baseNarratorName,
 }: {
   layout: { boxes: WordBox[] };
   viewBox: { x: number; y: number; width: number; height: number };
+  baseNarratorName: string;
 }) {
   if (layout.boxes.length === 0) return null;
 
@@ -536,7 +579,7 @@ function BaselineBand({
         fontFamily="system-ui, sans-serif"
         style={{ direction: 'rtl', userSelect: 'none', fontWeight: 700 }}
       >
-        الجمهور · حفص
+        الجمهور · {baseNarratorName}
       </text>
       <text
         x={viewBox.x + 12}
@@ -551,8 +594,88 @@ function BaselineBand({
   );
 }
 
+/**
+ * علامات الوقف والابتداء التي أدخلها المحقق. ترسم كدليل بصري فقط؛ لا تفترض
+ * صحة وقف من غير بيانات علمية ولا تمنع المحرر من تغيير اختياره.
+ */
+function BoundaryMarkers({
+  boundaries,
+  layout,
+}: {
+  boundaries: RecitationBoundary[];
+  layout: { boxByPosition: Map<number, WordBox> };
+}) {
+  const labels: Record<RecitationBoundary['kind'], string> = {
+    WAQF: 'وقف',
+    IBTIDA: 'ابتداء',
+    WASL: 'وصل',
+  };
+  const colors: Record<RecitationBoundary['kind'], string> = {
+    WAQF: '#7c3aed',
+    IBTIDA: '#0f766e',
+    WASL: '#0369a1',
+  };
+
+  return (
+    <g pointerEvents="none">
+      {boundaries.map((boundary) => {
+        const box = layout.boxByPosition.get(boundary.position);
+        if (!box) return null;
+        // بعد الكلمة في RTL يكون عند طرفها الأيسر، وقبلها عند طرفها الأيمن.
+        const x = boundary.kind === 'IBTIDA' ? box.x + box.width + 4 : box.x - 4;
+        const y = boundary.kind === 'IBTIDA' ? box.topY - 13 : box.bottomY + 16;
+        const color = colors[boundary.kind];
+        const text = `${boundary.label || labels[boundary.kind]}${
+          boundary.connectsToNextAyah ? ' ↔ التالية' : ''
+        }`;
+
+        return (
+          <g key={boundary.id} opacity={0.94}>
+            <line
+              x1={x}
+              y1={boundary.kind === 'IBTIDA' ? box.topY - 2 : box.bottomY + 2}
+              x2={x}
+              y2={y + (boundary.kind === 'IBTIDA' ? 4 : -4)}
+              stroke={color}
+              strokeWidth={1.1}
+              strokeDasharray="2 2"
+            />
+            <rect
+              x={x - 17}
+              y={y - 10}
+              width={Math.max(34, text.length * 6.5 + 10)}
+              height={17}
+              rx={5}
+              fill="#ffffff"
+              stroke={color}
+              strokeWidth={0.8}
+            />
+            <text
+              x={x}
+              y={y + 2}
+              textAnchor="middle"
+              fontSize={9.5}
+              fill={color}
+              fontFamily="system-ui, sans-serif"
+              style={{ direction: 'rtl', userSelect: 'none', fontWeight: 700 }}
+            >
+              {text}
+            </text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 /** خط «الجمهور» عندما لا توجد أي اختلافات في الآية. */
-function MajorityLine({ classic }: { classic: { textBottom: number; firstRowY: number } }) {
+function MajorityLine({
+  classic,
+  baseNarratorName,
+}: {
+  classic: { textBottom: number; firstRowY: number };
+  baseNarratorName: string;
+}) {
   const y = classic.firstRowY;
   return (
     <g pointerEvents="none">
@@ -573,7 +696,7 @@ function MajorityLine({ classic }: { classic: { textBottom: number; firstRowY: n
         fontFamily="system-ui, sans-serif"
         style={{ direction: 'rtl', userSelect: 'none', fontWeight: 700 }}
       >
-        الجمهور
+        الجمهور · {baseNarratorName}
       </text>
     </g>
   );
@@ -636,7 +759,13 @@ function CanvasMessage({ text, tone = 'muted' }: { text: string; tone?: 'muted' 
 }
 
 /** دليل رموز القراء: يربط كل رمز باسم راويه. */
-function SymbolsLegend({ onClose }: { onClose: () => void }) {
+function SymbolsLegend({
+  catalog,
+  onClose,
+}: {
+  catalog: TransmissionCatalog;
+  onClose: () => void;
+}) {
   return (
     <div className="absolute bottom-14 right-3 z-10 w-60 rounded-xl border border-stone-200 bg-white/95 p-3 shadow-lg backdrop-blur">
       <div className="mb-2 flex items-center justify-between">
@@ -651,7 +780,7 @@ function SymbolsLegend({ onClose }: { onClose: () => void }) {
         </button>
       </div>
       <ul className="grid grid-cols-2 gap-x-3 gap-y-1">
-        {NARRATORS_BY_TAYYIBAH.map((narrator) => (
+        {getNarratorsByTayyibah(catalog).map((narrator) => (
           <li key={narrator.id} className="flex items-center gap-1.5 text-[11px] text-stone-700">
             <span
               className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-emerald-600 text-[10px] font-bold text-white"

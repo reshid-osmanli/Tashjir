@@ -17,6 +17,8 @@
 import { create } from 'zustand';
 import type { VariantCategory } from '@/types';
 import type {
+  ManualTashjeerLine,
+  RecitationBoundary,
   TashjeerBranch,
   TashjeerDocument,
   Variant,
@@ -27,6 +29,8 @@ import type {
 import { getAyahWordsByKey, parseAyahKey } from '@/data/quran';
 import { layoutAyah } from '@/lib/tashjeer/layout-engine';
 import { generateBranches } from '@/lib/tashjeer/branch-engine';
+import { readTransmissionCatalog } from '@/lib/transmissions/catalog';
+import { readEngineSettings } from '@/lib/tashjeer/engine-settings';
 import {
   createDocument,
   loadOrCreateDocument,
@@ -104,8 +108,23 @@ interface EditorState {
 
   // ---------- إجراءات الخطوط ----------
   regenerateBranches: () => void;
+  /** يعيد حساب الناتج المشتق بعد تغيير الكتالوج أو إعداد المحرك بلا سجل تراجع. */
+  refreshDerivedBranches: () => void;
   toggleBranchVisibility: (branchId: string) => void;
   moveBranchLane: (branchId: string, delta: number) => void;
+  setBranchLane: (branchId: string, lane: number) => void;
+  setBranchRowOffset: (branchId: string, rowOffset: number) => void;
+  resetBranchPosition: (branchId: string) => void;
+  addManualLine: (line: ManualTashjeerLine) => void;
+  updateManualLine: (lineId: string, patch: Partial<ManualTashjeerLine>) => void;
+  deleteManualLine: (lineId: string) => void;
+
+  // ---------- الوقف والابتداء وتخطيط النص ----------
+  addBoundary: (boundary: RecitationBoundary) => void;
+  updateBoundary: (boundaryId: string, patch: Partial<RecitationBoundary>) => void;
+  deleteBoundary: (boundaryId: string) => void;
+  toggleForcedLineBreak: (position: number) => void;
+  setLineOffset: (lineIndex: number, offset: number) => void;
 
   // ---------- إجراءات التحديد ----------
   toggleMarkedPosition: (position: number) => void;
@@ -298,6 +317,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }));
   },
 
+  refreshDerivedBranches: () => {
+    const document = get().document;
+    if (!document) return;
+    // لا نسجل عملية اشتقاق في التراجع ولا نعلّم المستند «غير محفوظ»: لا
+    // تتغير بيانات الوجه، بل تتغير طريقة تحويلها إلى خطوط بسبب كتالوج جديد.
+    set({ document: withRegeneratedBranches(document) });
+  },
+
   toggleBranchVisibility: (branchId) => {
     mutate(set, get, (document) => ({
       ...document,
@@ -315,6 +342,106 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           ? { ...branch, lane: Math.max(0, branch.lane + delta), isManual: true }
           : branch
       ),
+    }));
+  },
+
+  setBranchLane: (branchId, lane) => {
+    mutate(set, get, (document) => ({
+      ...document,
+      branches: document.branches.map((branch) =>
+        branch.id === branchId
+          ? { ...branch, lane: Math.max(0, Math.round(lane)), isManual: true }
+          : branch
+      ),
+    }));
+  },
+
+  setBranchRowOffset: (branchId, rowOffset) => {
+    mutate(set, get, (document) => ({
+      ...document,
+      branches: document.branches.map((branch) =>
+        branch.id === branchId
+          ? { ...branch, rowOffset: Math.round(rowOffset), isManual: true }
+          : branch
+      ),
+    }));
+  },
+
+  resetBranchPosition: (branchId) => {
+    mutate(set, get, (document) => ({
+      ...document,
+      branches: document.branches.map((branch) =>
+        branch.id === branchId
+          ? { ...branch, lane: 0, rowOffset: undefined, isManual: false }
+          : branch
+      ),
+    }));
+  },
+
+  addManualLine: (line) => {
+    mutate(set, get, (document) => ({
+      ...document,
+      manualLines: [...document.manualLines, line],
+    }));
+  },
+
+  updateManualLine: (lineId, patch) => {
+    mutate(set, get, (document) => ({
+      ...document,
+      manualLines: document.manualLines.map((line) =>
+        line.id === lineId ? { ...line, ...patch } : line
+      ),
+    }));
+  },
+
+  deleteManualLine: (lineId) => {
+    mutate(set, get, (document) => ({
+      ...document,
+      manualLines: document.manualLines.filter((line) => line.id !== lineId),
+    }));
+  },
+
+  // ==================== الوقف والابتداء وتخطيط النص ====================
+
+  addBoundary: (boundary) => {
+    mutate(set, get, (document) => ({
+      ...document,
+      boundaries: [...document.boundaries, boundary].sort((first, second) => first.position - second.position),
+    }));
+  },
+
+  updateBoundary: (boundaryId, patch) => {
+    mutate(set, get, (document) => ({
+      ...document,
+      boundaries: document.boundaries
+        .map((boundary) => (boundary.id === boundaryId ? { ...boundary, ...patch } : boundary))
+        .sort((first, second) => first.position - second.position),
+    }));
+  },
+
+  deleteBoundary: (boundaryId) => {
+    mutate(set, get, (document) => ({
+      ...document,
+      boundaries: document.boundaries.filter((boundary) => boundary.id !== boundaryId),
+    }));
+  },
+
+  toggleForcedLineBreak: (position) => {
+    mutate(set, get, (document) => {
+      const forcedLineBreakAfter = document.layout.forcedLineBreakAfter.includes(position)
+        ? document.layout.forcedLineBreakAfter.filter((item) => item !== position)
+        : [...document.layout.forcedLineBreakAfter, position].sort((first, second) => first - second);
+      return { ...document, layout: { ...document.layout, forcedLineBreakAfter } };
+    });
+  },
+
+  setLineOffset: (lineIndex, offset) => {
+    mutate(set, get, (document) => ({
+      ...document,
+      layout: {
+        ...document.layout,
+        lineOffsets: { ...document.layout.lineOffsets, [lineIndex]: Math.round(offset) },
+      },
     }));
   },
 
@@ -449,12 +576,21 @@ function computeBranches(
   const words = getAyahWordsByKey(document.ayahKey);
   if (words.length === 0) return existing;
 
-  const layout = layoutAyah(document.ayahKey, words);
-  return generateBranches(document.variants, layout, existing);
+  const layout = layoutAyah(document.ayahKey, words, document.layout);
+  const engine = readEngineSettings();
+  return generateBranches(document.variants, layout, existing, {
+    catalog: readTransmissionCatalog(),
+    traversal: engine.traversal,
+    boundaries: document.boundaries,
+    wordsCount: words.length,
+  });
 }
 
 /** ترتيب الاختلافات: من آخر الآية إلى أولها، موافقا لقاعدة التشجير. */
 function compareVariants(a: Variant, b: Variant): number {
+  // ارتكاز التشجير الصحيح هو آخر كلمة في المدى عند السير من آخر الآية.
+  // استخدام startPosition هنا كان يقلب ترتيب اختلاف يمتد على أكثر من كلمة.
+  if (a.endPosition !== b.endPosition) return b.endPosition - a.endPosition;
   if (a.startPosition !== b.startPosition) return b.startPosition - a.startPosition;
   return a.title.localeCompare(b.title, 'ar');
 }

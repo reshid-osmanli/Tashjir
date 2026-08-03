@@ -105,6 +105,14 @@ describe('تخطيط الآية', () => {
     expect(secondLine.baselineY).toBeGreaterThan(firstLine.baselineY);
   });
 
+  it('يحترم كسرا نصيا يفرضه المحرر بعد كلمة محددة', () => {
+    const shortWords = getAyahWords(1, 2);
+    const layout = layoutAyah(makeAyahKey(1, 2), shortWords, { forcedLineBreakAfter: [1] });
+
+    expect(layout.boxByPosition.get(1)?.lineIndex).toBe(0);
+    expect(layout.boxByPosition.get(2)?.lineIndex).toBe(1);
+  });
+
   it('التخطيط حتمي: نفس المدخل ينتج نفس المخرج', () => {
     const first = layoutAyah(ayahKey, words);
     const second = layoutAyah(ayahKey, words);
