@@ -9,7 +9,8 @@ import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { useEditorStore } from '@/stores/editor-store';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { buildReadingPlan } from '@/lib/tashjeer/reading-plan';
-import { normalizeScope } from '@/lib/tashjeer/scope';
+import { normalizeScope, resolveScope } from '@/lib/tashjeer/scope';
+import { getNarratorSymbol } from '@/lib/tashjeer/symbols';
 import type { VariantCategory } from '@/types';
 import type { RecitationBoundaryKind } from '@/types/tashjeer';
 
@@ -462,6 +463,182 @@ export function ManualLinesControls() {
             </li>
           ))}
         </ul>
+      )}
+    </Section>
+  );
+}
+
+/**
+ * التحكم في ترتيب التشجير لهذه الآية بعينها.
+ *
+ * القاعدة العامة (آخر الآية أولا) وقاعدة قوة الوجه تُضبطان في لوحة التحكم،
+ * لكن الكتب تختلف في مواضع بعينها. هذه اللوحة تتيح للمحقق تثبيت رتبة
+ * الموضع وترتيب أوجهه داخل هذه الآية وحدها، فيُحفظ قراره مع المستند
+ * ويدخل في ملف التصدير ولا يضيع عند إعادة التوليد.
+ */
+export function TashjeerOrderControls() {
+  const catalog = useTransmissionCatalog();
+  const {
+    document,
+    selectedVariantId,
+    selectVariant,
+    setVariantOrderRank,
+    moveAlternative,
+    resetAlternativeOrder,
+  } = useEditorStore();
+
+  const ordered = useMemo(() => {
+    if (!document) return [];
+    // نعرض المواضع بالترتيب الذي يرسمه المحرك فعلا، لا بترتيب الإدخال،
+    // حتى يرى المحقق أثر قراره مباشرة.
+    return [...document.variants].sort((first, second) => {
+      const firstRank = first.orderRank;
+      const secondRank = second.orderRank;
+      if (typeof firstRank === 'number' && typeof secondRank === 'number' && firstRank !== secondRank) {
+        return firstRank - secondRank;
+      }
+      if (typeof firstRank === 'number' && typeof secondRank !== 'number') return -1;
+      if (typeof firstRank !== 'number' && typeof secondRank === 'number') return 1;
+      return second.endPosition - first.endPosition || second.startPosition - first.startPosition;
+    });
+  }, [document]);
+
+  if (!document) return null;
+
+  return (
+    <Section title="ترتيب التشجير في هذه الآية">
+      <p className="mb-2 text-[11px] leading-relaxed text-stone-500">
+        الترتيب الظاهر هو ترتيب الأسطر تحت الآية من أعلى إلى أسفل. ثبّت رتبة الموضع أو انقل
+        وجها داخل موضعه عند مخالفة الكتاب للقاعدة العامة.
+      </p>
+
+      {ordered.length === 0 ? (
+        <p className="rounded bg-stone-50 p-2 text-[11px] text-stone-500">
+          لا توجد مواضع اختلاف في هذه الآية بعد.
+        </p>
+      ) : (
+        <ol className="space-y-2">
+          {ordered.map((variant, index) => {
+            const drawable = variant.alternatives.filter((alternative) => !alternative.isBase);
+            const explicit = variant.alternativeOrder ?? [];
+            const known = new Set(drawable.map((alternative) => alternative.id));
+            const sequence = [
+              ...explicit.filter((id) => known.has(id)),
+              ...drawable.filter((alternative) => !explicit.includes(alternative.id)).map((a) => a.id),
+            ];
+            const isSelected = variant.id === selectedVariantId;
+
+            return (
+              <li
+                key={variant.id}
+                className={`rounded border p-2 ${
+                  isSelected ? 'border-emerald-500 bg-emerald-50/50' : 'border-stone-200 bg-white'
+                }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-stone-700 text-[10px] font-bold text-white">
+                    {index + 1}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => selectVariant(isSelected ? null : variant.id)}
+                    className="min-w-0 flex-1 truncate text-start text-[11px] font-medium text-stone-800 hover:underline"
+                    title={variant.title}
+                  >
+                    {variant.title}
+                  </button>
+                  <span className="shrink-0 text-[10px] text-stone-500">
+                    {variant.startPosition === variant.endPosition
+                      ? `ك${variant.startPosition}`
+                      : `ك${variant.startPosition}–${variant.endPosition}`}
+                  </span>
+                </div>
+
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  <label className="flex items-center gap-1 text-[10px] text-stone-600">
+                    رتبة يدوية
+                    <input
+                      type="number"
+                      min={1}
+                      value={variant.orderRank ?? ''}
+                      onChange={(event) =>
+                        setVariantOrderRank(
+                          variant.id,
+                          event.target.value === '' ? null : Number(event.target.value)
+                        )
+                      }
+                      placeholder="آلي"
+                      className="h-5 w-14 rounded border border-stone-300 px-1 text-[10px]"
+                    />
+                  </label>
+                  {typeof variant.orderRank === 'number' && (
+                    <button
+                      type="button"
+                      onClick={() => setVariantOrderRank(variant.id, null)}
+                      className="text-[10px] text-stone-500 hover:underline"
+                    >
+                      إلغاء التثبيت
+                    </button>
+                  )}
+                </div>
+
+                {sequence.length > 1 && (
+                  <ul className="mt-1.5 space-y-1 border-t border-stone-100 pt-1.5">
+                    {sequence.map((alternativeId, alternativeIndex) => {
+                      const alternative = drawable.find((item) => item.id === alternativeId);
+                      if (!alternative) return null;
+                      const symbols = resolveScope(alternative.scope, catalog)
+                        .map((narratorId) => getNarratorSymbol(narratorId, catalog))
+                        .filter(Boolean)
+                        .join(' ');
+
+                      return (
+                        <li key={alternativeId} className="flex items-center gap-1">
+                          <span className="w-3 shrink-0 text-[9px] text-stone-400">
+                            {alternativeIndex + 1}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-[10px] text-stone-700">
+                            {alternative.ruleLabel || alternative.label || alternative.text}
+                            {symbols && <span className="text-stone-400"> · {symbols}</span>}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => moveAlternative(variant.id, alternativeId, -1)}
+                            disabled={alternativeIndex === 0}
+                            className="rounded border border-stone-200 px-1 text-[9px] text-stone-600 hover:bg-stone-50 disabled:opacity-30"
+                            aria-label="تقديم الوجه"
+                          >
+                            ▲
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveAlternative(variant.id, alternativeId, 1)}
+                            disabled={alternativeIndex === sequence.length - 1}
+                            className="rounded border border-stone-200 px-1 text-[9px] text-stone-600 hover:bg-stone-50 disabled:opacity-30"
+                            aria-label="تأخير الوجه"
+                          >
+                            ▼
+                          </button>
+                        </li>
+                      );
+                    })}
+                    {variant.alternativeOrder && (
+                      <li>
+                        <button
+                          type="button"
+                          onClick={() => resetAlternativeOrder(variant.id)}
+                          className="text-[10px] text-stone-500 hover:underline"
+                        >
+                          إعادة ترتيب الأوجه إلى قاعدة المحرك
+                        </button>
+                      </li>
+                    )}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
+        </ol>
       )}
     </Section>
   );

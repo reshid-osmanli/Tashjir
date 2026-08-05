@@ -127,7 +127,10 @@ describe('أثر الوقف في شكل الشجرة', () => {
     const earlyLine = result.lines.find((line) => line.variantId === 'early')!;
     expect(lateLine.segmentIndex).toBe(0);
     expect(earlyLine.segmentIndex).toBe(1);
-    expect(earlyLine.lane).toBeGreaterThan(lateLine.lane + 1);
+    // الأسطر متتالية بلا فراغ: مقطع ما بعد الوقف يُقرأ أولا فيأخذ السطر
+    // الأعلى، ثم يليه مقطع ما قبله مباشرة. الفصل يظهر في الترتيب لا بسطر خال.
+    expect(lateLine.lane).toBe(0);
+    expect(earlyLine.lane).toBe(1);
   });
 });
 

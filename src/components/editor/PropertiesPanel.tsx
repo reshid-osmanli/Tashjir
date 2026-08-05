@@ -19,7 +19,12 @@ import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getImamColor } from '@/lib/tashjeer/color-system';
 import { describeScope, getFullNarratorName, resolveScope } from '@/lib/tashjeer/scope';
 import { StatusBadge } from './VariantsPanel';
-import { ManualLinesControls, RecitationControls, TextLayoutControls } from './RecitationControls';
+import {
+  ManualLinesControls,
+  RecitationControls,
+  TashjeerOrderControls,
+  TextLayoutControls,
+} from './RecitationControls';
 import type { VariantCategory } from '@/types';
 import type { VerificationStatus } from '@/types/tashjeer';
 
@@ -227,6 +232,7 @@ export function PropertiesPanel() {
         </div>
       </Section>
 
+      <TashjeerOrderControls />
       <TextLayoutControls />
       <RecitationControls />
       <ManualLinesControls />

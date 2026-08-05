@@ -1,9 +1,31 @@
 // محرك التشجير الكلاسيكي - Classic Tashjeer Engine
 //
-// يحوّل الأوجه إلى الأسطر المعهودة في المصحف المشجّر. ترتيب الأداء الافتراضي
-// هنا مقصود وصريح: يبدأ المحرك بآخر كلمة مختلفة في الآية، ثم يرجع إلى أولها.
-// لذلك في «ٱلْحَمْدُ لِلَّهِ رَبِّ ٱلْعَٰلَمِينَ» يكون ترتيب المواضع:
-// العالمين ← رب ← لله ← الحمد، لا العكس.
+// يحوّل الأوجه إلى الأسطر المعهودة في المصحف المشجّر، بالشكل المعتمد:
+//
+//   ┌──────────────────────────────────────────────────────────┐
+//   │            نص الآية (رواية الأساس) في سطر واحد            │
+//   └──────────────────────────────────────────────────────────┘
+//                        │        │
+//                     الحكم     الحكم        ← اسم الحكم تحت الكلمة تماما
+//   ٥ ├────────────────────────────────────────────┤  ج ع     ← رموز القراء يسارا
+//   ٤ ├────────────────────────────────────────────┤  ف
+//     ├────────────────────────────────────────────┤  ق
+//   ↑ حركات المد في الهامش الأيمن
+//
+// القواعد المطبّقة هنا:
+//
+//   1. كل الأسطر تحت الآية، متتالية تنازليا سطرا واحدا تلو الآخر. لا يُرسم
+//      شيء فوق النص؛ كان وضع الأصول والمدود فوقه خطأ في الإصدار السابق.
+//   2. السطر يمتد مع الآية كلها افتراضيا (LineSpanMode = FULL_AYAH)، لأن
+//      امتداده يبيّن اتفاق الراوي مع السطر الذي قبله. الوصلة الرأسية وحدها
+//      هي التي تشير إلى موضع الاختلاف.
+//   3. اسم الحكم (إمالة، تقليل، سكت، إدغام...) يُطبع تحت الكلمة المختلفة
+//      تماما، ورموز القراء تُطبع في طرف السطر الأيسر ليعرف القارئ أين يقرأ.
+//   4. حركات المد تُطبع في الهامش الأيمن قبالة السطر.
+//   5. ترتيب المواضع: من آخر الآية إلى أولها، ما لم يثبّت المحقق رتبة
+//      يدوية للموضع (`variant.orderRank`).
+//   6. ترتيب أوجه الموضع الواحد: قوة الوجه من الكتاب افتراضيا، ويمكن
+//      اعتماد ترتيب الطيبة أو ترتيب المحقق الصريح من لوحة التحكم.
 //
 // هذا المحرك لا يقرر صحة وجه أو وقف علميا. مهمته أن يرسم البيانات التي أدخلها
 // المحقق بصورة حتمية، مع احترام الوقف والابتداء والمواضع اليدوية للأسطر.
@@ -79,7 +101,7 @@ export interface ClassicLine {
   manualLineId?: string;
   category: VariantCategory;
   categoryLabel: string;
-  /** الأصول والمدود فوق النص، وبقية الفئات تحته. */
+  /** كل الأسطر تحت النص في التشجير المعتمد. */
   side: 'TOP' | 'BOTTOM';
   /** معرّفات كل القراء الذين يقرأون بهذا الوجه. */
   narratorIds: string[];
@@ -90,7 +112,7 @@ export interface ClassicLine {
   primaryNarratorName: string;
   /** أسماء القراء الذين اتفقوا معه، للتلميح. */
   readerNames: string[];
-  /** نص موجز على بطاقة السطر، بحسب إعداد عرض الرموز. */
+  /** نص موجز في طرف السطر الأيسر، بحسب إعداد عرض الرموز. */
   label: string;
   /** طريقة إظهار بطاقة القارئ التي اختارها المشرف. */
   symbolDisplay: TashjeerEngineSettings['symbolDisplay'];
@@ -98,10 +120,22 @@ export interface ClassicLine {
   readingText: string;
   /** وصف الوجه إن وُجد. */
   readingLabel: string;
+  /** اسم الحكم الذي يُطبع تحت الكلمة تماما: إمالة، تقليل، سكت... */
+  ruleLabel: string;
+  /** عدد حركات المد، يُطبع في الهامش الأيمن. */
+  maddHarakat?: number;
+  /** قوة الوجه المعتمدة في الترتيب (كلما صغرت تقدّم السطر). */
+  strength?: number;
   startPosition: number;
   endPosition: number;
-  /** رقم المسار (0 = الأقرب للنص). */
+  /** رقم السطر تحت الآية (0 = أول سطر مباشرة تحت النص). */
   lane: number;
+  /** رقم مجموعة الموضع: كل أوجه الموضع الواحد تشترك فيه. */
+  groupIndex: number;
+  /** ترتيب الوجه داخل مجموعته (0 = أول وجه). */
+  indexInGroup: number;
+  /** هل هذا أول سطر في مجموعة موضعه؟ يفيد في ترقيم الهامش. */
+  isGroupLeader: boolean;
   /** رقم مقطع الوقف/الابتداء في ترتيب الأداء. */
   segmentIndex: number;
   /** إزاحة دقيقة محفوظة للمحرر. */
@@ -110,6 +144,9 @@ export interface ClassicLine {
   isManual?: boolean;
   /** الإحداثي الرأسي للخط بعد الحساب. */
   rowY: number;
+  /** طرفا السطر الأفقيان بعد تطبيق إعداد الامتداد. */
+  spanStartX: number;
+  spanEndX: number;
   marks: ClassicMark[];
 }
 
@@ -118,7 +155,7 @@ export interface ClassicTashjeer {
   lines: ClassicLine[];
   /** أدنى نقطة لأسفل النص. */
   textBottom: number;
-  /** أعلى نقطة في الشجرة، لاستيعاب الأصول والمدود فوق النص. */
+  /** أعلى نقطة في الشجرة. */
   topY: number;
   /** إحداثي أول خط اختلاف تحت النص. */
   firstRowY: number;
@@ -126,6 +163,9 @@ export interface ClassicTashjeer {
   rowHeight: number;
   /** الارتفاع الكلي المطلوب للوحة. */
   totalHeight: number;
+  /** حدود كتلة النص أفقيا، تُستخدم في امتداد الأسطر والهوامش. */
+  textLeftX: number;
+  textRightX: number;
   /** هل في الآية اختلافات أصلا؟ */
   hasDifferences: boolean;
   /** خطة ترتيب الأداء التي استخدمها المحرك، للشرح والمراجعة. */
@@ -139,12 +179,19 @@ interface RawAlternative {
   alt: VariantAlternative;
 }
 
+/** مجموعة أوجه موضع واحد بعد الترتيب الداخلي. */
+interface PositionGroup {
+  variant: Variant;
+  anchor: number;
+  items: RawAlternative[];
+}
+
 /**
  * يولّد التشجير الكلاسيكي لآية من اختلافاتها.
  *
  * الترتيب لا يعتمد على ترتيب الإدخال في قائمة الاختلافات؛ يعتمد على خطة
- * القراءة. لذا لا يستطيع ترتيب واجهة المستخدم أو اسم الوجه قلب قاعدة
- * «آخر الآية أولا» سهوا.
+ * القراءة ورتبة الموضع اليدوية. لذا لا يستطيع ترتيب واجهة المستخدم أو اسم
+ * الوجه قلب قاعدة «آخر الآية أولا» سهوا.
  */
 export function generateClassicTashjeer(
   variants: Variant[],
@@ -162,6 +209,15 @@ export function generateClassicTashjeer(
   const textBottom = layout.boxes.length
     ? Math.max(...layout.boxes.map((box) => box.bottomY))
     : opts.textTop;
+  const textTop = layout.boxes.length
+    ? Math.min(...layout.boxes.map((box) => box.topY))
+    : opts.textTop;
+  const textLeftX = layout.boxes.length
+    ? Math.min(...layout.boxes.map((box) => box.x))
+    : opts.paddingLeft;
+  const textRightX = layout.boxes.length
+    ? Math.max(...layout.boxes.map((box) => box.x + box.width))
+    : opts.canvasWidth - opts.paddingRight;
 
   // 1. جمع الأوجه غير الأساسية وتطبيق التصفية العلمية/البصرية.
   const raw: RawAlternative[] = [];
@@ -181,15 +237,37 @@ export function generateClassicTashjeer(
     }
   }
 
+  // 2. تجميع الأوجه بمواضعها، ثم ترتيب المجموعات فيما بينها، ثم ترتيب
+  //    الأوجه داخل كل مجموعة. الفصل بين المرحلتين مقصود: قاعدة المواضع
+  //    (آخر الآية أولا) شيء، وقاعدة الأوجه (قوة الوجه) شيء آخر، ولا يجوز
+  //    أن تتداخلا فينكسر الترتيب في الآيات المزدحمة.
+  const groups = buildPositionGroups(raw, readingPlan, engine, catalog);
+
   const overrideByKey = new Map(
-    (runtime.branchOverrides ?? []).map((branch) => [`${branch.variantId}::${branch.alternativeId}`, branch])
+    (runtime.branchOverrides ?? []).map((branch) => [
+      `${branch.variantId}::${branch.alternativeId}`,
+      branch,
+    ])
   );
 
-  const lines: ClassicLine[] = raw
-    .map(({ variant, alt }) =>
-      alternativeToLine(variant, alt, layout, catalog, engine, overrideByKey.get(`${variant.id}::${alt.id}`))
-    )
-    .filter((line): line is ClassicLine => line !== null);
+  const lines: ClassicLine[] = [];
+  groups.forEach((group, groupIndex) => {
+    group.items.forEach(({ variant, alt }, indexInGroup) => {
+      const line = alternativeToLine(
+        variant,
+        alt,
+        layout,
+        catalog,
+        engine,
+        overrideByKey.get(`${variant.id}::${alt.id}`)
+      );
+      if (!line) return;
+      line.groupIndex = groupIndex;
+      line.indexInGroup = indexInGroup;
+      line.isGroupLeader = indexInGroup === 0;
+      lines.push(line);
+    });
+  });
 
   // الأسطر اليدوية لا تتجاوز التصفية؛ وهي تتبع نطاقها إن حُدد.
   for (const manualLine of runtime.manualLines ?? []) {
@@ -206,20 +284,16 @@ export function generateClassicTashjeer(
     if (line) lines.push(line);
   }
 
-  // 2. الترتيب من آخر الآية إلى أولها (أو وضع الاختبار الذي اختاره المشرف).
-  lines.sort((first, second) => compareLines(first, second, readingPlan, engine, catalog));
   for (const line of lines) {
     const anchor = variantTraversalAnchor(line.startPosition, line.endPosition, readingPlan.traversal);
     line.segmentIndex = readingSegmentIndex(anchor, readingPlan);
   }
+
   assignClassicLanes(lines);
 
-  // 3. الحساب الهندسي. نستخدم أكبر lane لا طول القائمة، لأن المحقق قد يضع
-  // سطرا يدويا في مسار بعيد عمدا. الأصول والمدود تصعد فوق النص، أما الفرش
-  // والوقف ونحوه فتتنازل تحته.
+  // 3. الحساب الهندسي. كل الأسطر تنزل تحت النص واحدا تلو الآخر.
   const rowGap = Math.max(opts.fontSize * 1.3 * engine.textToTreeGap, 30 * engine.textToTreeGap);
-  const rowHeight = Math.max(opts.fontSize * 1.85 * engine.rowSpacing, 44 * engine.rowSpacing);
-  const textTop = layout.boxes.length ? Math.min(...layout.boxes.map((box) => box.topY)) : opts.textTop;
+  const rowHeight = Math.max(opts.fontSize * 1.15 * engine.rowSpacing, 30 * engine.rowSpacing);
   const firstRowY = textBottom + rowGap;
   const firstTopRowY = textTop - rowGap;
 
@@ -228,15 +302,18 @@ export function generateClassicTashjeer(
       ? firstTopRowY - line.lane * rowHeight
       : firstRowY + line.lane * rowHeight;
     line.rowY = automaticY + (line.rowOffset ?? 0);
+    const span = lineSpan(line, engine, textLeftX, textRightX);
+    line.spanStartX = span.startX;
+    line.spanEndX = span.endX;
   }
 
-  const topY = lines.filter((line) => line.side === 'TOP').length
-    ? Math.min(...lines.filter((line) => line.side === 'TOP').map((line) => line.rowY))
-    : textTop;
-  const lowestLineY = lines.filter((line) => line.side === 'BOTTOM').length
-    ? Math.max(...lines.filter((line) => line.side === 'BOTTOM').map((line) => line.rowY))
+  const topLines = lines.filter((line) => line.side === 'TOP');
+  const bottomLines = lines.filter((line) => line.side === 'BOTTOM');
+  const topY = topLines.length ? Math.min(...topLines.map((line) => line.rowY)) : textTop;
+  const lowestLineY = bottomLines.length
+    ? Math.max(...bottomLines.map((line) => line.rowY))
     : textBottom;
-  const totalHeight = lines.some((line) => line.side === 'BOTTOM')
+  const totalHeight = bottomLines.length
     ? lowestLineY + rowHeight + rowGap
     : textBottom + rowGap + 60;
 
@@ -247,9 +324,160 @@ export function generateClassicTashjeer(
     firstRowY,
     rowHeight,
     totalHeight,
+    textLeftX,
+    textRightX,
     hasDifferences: lines.length > 0,
     readingPlan,
   };
+}
+
+/**
+ * يبني مجموعات المواضع مرتبة، وداخل كل مجموعة الأوجه مرتبة.
+ *
+ * ترتيب المجموعات:
+ *   1. الرتبة اليدوية `variant.orderRank` إن ثبّتها المحقق لهذه الآية.
+ *   2. خطة القراءة (من آخر الآية إلى أولها) مع مراعاة الوقف والابتداء.
+ *   3. المدى الأقصر أولا، ثم المعرّف حتى يكون الناتج حتميا.
+ */
+function buildPositionGroups(
+  raw: RawAlternative[],
+  plan: ReadingPlan,
+  engine: TashjeerEngineSettings,
+  catalog?: TransmissionCatalog
+): PositionGroup[] {
+  const byVariant = new Map<string, PositionGroup>();
+
+  for (const item of raw) {
+    const existing = byVariant.get(item.variant.id);
+    if (existing) {
+      existing.items.push(item);
+      continue;
+    }
+    byVariant.set(item.variant.id, {
+      variant: item.variant,
+      anchor: variantTraversalAnchor(
+        item.variant.startPosition,
+        item.variant.endPosition,
+        plan.traversal
+      ),
+      items: [item],
+    });
+  }
+
+  const groups = [...byVariant.values()];
+
+  groups.sort((first, second) => {
+    // رتبة يدوية للموضع: قرار صريح من المحقق يسبق كل قاعدة آلية.
+    const firstRank = first.variant.orderRank;
+    const secondRank = second.variant.orderRank;
+    if (typeof firstRank === 'number' && typeof secondRank === 'number' && firstRank !== secondRank) {
+      return firstRank - secondRank;
+    }
+    if (typeof firstRank === 'number' && typeof secondRank !== 'number') return -1;
+    if (typeof firstRank !== 'number' && typeof secondRank === 'number') return 1;
+
+    const traversalDiff = compareReadingPositions(first.anchor, second.anchor, plan);
+    if (traversalDiff !== 0) return traversalDiff;
+
+    const spanDiff = plan.traversal === 'END_TO_START'
+      ? second.variant.startPosition - first.variant.startPosition
+      : first.variant.endPosition - second.variant.endPosition;
+    if (spanDiff !== 0) return spanDiff;
+
+    return first.variant.id.localeCompare(second.variant.id, 'ar');
+  });
+
+  for (const group of groups) {
+    group.items.sort((first, second) =>
+      compareAlternatives(group.variant, first.alt, second.alt, engine, catalog)
+    );
+  }
+
+  return groups;
+}
+
+/**
+ * ترتيب وجهين داخل الموضع الواحد.
+ *
+ * القاعدة المعتمدة من صاحب المشروع: **قوة الوجه في الكتاب**. لذلك يُقدَّم
+ * الوجه ذو `strength` الأصغر. الوجه الذي لم تُسجَّل قوته يأتي بعد المسجّل،
+ * فلا يتقدم وجه غير محقَّق على وجه رجّحه المحقق.
+ */
+function compareAlternatives(
+  variant: Variant,
+  first: VariantAlternative,
+  second: VariantAlternative,
+  engine: TashjeerEngineSettings,
+  catalog?: TransmissionCatalog
+): number {
+  // ترتيب صريح للأوجه في هذا الموضع بعينه: أقوى من أي قاعدة عامة.
+  const explicit = variant.alternativeOrder ?? [];
+  if (explicit.length > 0) {
+    const firstIndex = explicit.indexOf(first.id);
+    const secondIndex = explicit.indexOf(second.id);
+    if (firstIndex !== -1 && secondIndex !== -1 && firstIndex !== secondIndex) {
+      return firstIndex - secondIndex;
+    }
+    if (firstIndex !== -1 && secondIndex === -1) return -1;
+    if (firstIndex === -1 && secondIndex !== -1) return 1;
+  }
+
+  if (engine.alternativeOrder === 'MANUAL') {
+    // لا ترتيب صريح محفوظ: نسقط إلى الطيبة حتى يكون الناتج حتميا.
+    return compareByTayyibah(first, second, catalog);
+  }
+
+  if (engine.alternativeOrder === 'STRENGTH') {
+    const firstStrength = first.strength;
+    const secondStrength = second.strength;
+    if (
+      typeof firstStrength === 'number' &&
+      typeof secondStrength === 'number' &&
+      firstStrength !== secondStrength
+    ) {
+      return firstStrength - secondStrength;
+    }
+    if (typeof firstStrength === 'number' && typeof secondStrength !== 'number') return -1;
+    if (typeof firstStrength !== 'number' && typeof secondStrength === 'number') return 1;
+  }
+
+  return compareByTayyibah(first, second, catalog);
+}
+
+function compareByTayyibah(
+  first: VariantAlternative,
+  second: VariantAlternative,
+  catalog?: TransmissionCatalog
+): number {
+  const firstOrder = leadNarratorOrder(first, catalog);
+  const secondOrder = leadNarratorOrder(second, catalog);
+  if (firstOrder !== secondOrder) return firstOrder - secondOrder;
+  return first.id.localeCompare(second.id, 'ar');
+}
+
+function leadNarratorOrder(alt: VariantAlternative, catalog?: TransmissionCatalog): number {
+  const narratorIds = resolveScope(alt.scope, catalog);
+  if (narratorIds.length === 0) return 999;
+  return Math.min(...narratorIds.map((id) => narratorTayyibahOrder(id, catalog)));
+}
+
+/** طرفا السطر الأفقيان بحسب إعداد الامتداد. */
+function lineSpan(
+  line: ClassicLine,
+  engine: TashjeerEngineSettings,
+  textLeftX: number,
+  textRightX: number
+): { startX: number; endX: number } {
+  if (engine.lineSpan === 'FULL_AYAH') {
+    // السطر يمتد مع الآية كلها: هكذا يظهر اتفاق الراوي مع السطر الذي قبله،
+    // وهو الشكل المعتمد في المصحف المشجّر.
+    return { startX: textLeftX, endX: textRightX };
+  }
+
+  const xs = line.marks.map((mark) => mark.x);
+  if (xs.length === 0) return { startX: textLeftX, endX: textRightX };
+  const pad = 16;
+  return { startX: Math.min(...xs) - pad, endX: Math.max(...xs) + pad };
 }
 
 function alternativeToLine(
@@ -288,13 +516,22 @@ function alternativeToLine(
     symbolDisplay: engine.symbolDisplay,
     readingText: alt.text,
     readingLabel: alt.label,
+    // اسم الحكم المطبوع تحت الكلمة: الحقل المخصص، وإلا وصف الوجه، وإلا فئته.
+    ruleLabel: alt.ruleLabel?.trim() || alt.label?.trim() || CATEGORY_LABELS[variant.category],
+    maddHarakat: alt.maddHarakat,
+    strength: alt.strength,
     startPosition: variant.startPosition,
     endPosition: variant.endPosition,
     lane: override?.isManual ? override.lane : 0,
+    groupIndex: 0,
+    indexInGroup: 0,
+    isGroupLeader: false,
     segmentIndex: 0,
     rowOffset: override?.isManual ? override.rowOffset : undefined,
     isManual: override?.isManual,
     rowY: 0,
+    spanStartX: 0,
+    spanEndX: 0,
     marks,
   };
 }
@@ -329,13 +566,19 @@ function manualToLine(
     symbolDisplay: engine.symbolDisplay,
     readingText: manual.title,
     readingLabel: manual.label ?? 'سطر يدوي',
+    ruleLabel: manual.label?.trim() || manual.title,
     startPosition: manual.startPosition,
     endPosition: manual.endPosition,
     lane: manual.lane,
+    groupIndex: Number.MAX_SAFE_INTEGER,
+    indexInGroup: 0,
+    isGroupLeader: true,
     segmentIndex: 0,
     rowOffset: manual.rowOffset,
     isManual: true,
     rowY: 0,
+    spanStartX: 0,
+    spanEndX: 0,
     marks,
   };
 }
@@ -372,78 +615,31 @@ function displayReaders(
   } else if (engine.symbolDisplay === 'SYMBOLS') {
     label = symbols.join(' ') || primaryName;
   } else {
-    label = symbols.length ? symbols.join(' ') : primaryName;
+    label = symbols.length ? `${symbols.join(' ')} · ${primaryName}` : primaryName;
   }
 
   return { symbols, primaryName, readerNames, label };
 }
 
 /**
- * ترتيب الأسطر: موضع الأداء أولا، ثم قاعدة كسر التعادل من لوحة التحكم.
- * `endPosition` هو مرساة الوضع الصحيح END_TO_START.
- */
-function compareLines(
-  first: ClassicLine,
-  second: ClassicLine,
-  plan: ReadingPlan,
-  engine: TashjeerEngineSettings,
-  catalog?: TransmissionCatalog
-): number {
-  const firstAnchor = variantTraversalAnchor(first.startPosition, first.endPosition, plan.traversal);
-  const secondAnchor = variantTraversalAnchor(second.startPosition, second.endPosition, plan.traversal);
-  const traversalDiff = compareReadingPositions(firstAnchor, secondAnchor, plan);
-  if (traversalDiff !== 0) return traversalDiff;
-
-  if (engine.tieBreakOrder === 'MANUAL') {
-    const laneDiff = first.lane - second.lane;
-    if (first.isManual && second.isManual && laneDiff !== 0) return laneDiff;
-  }
-
-  if (engine.tieBreakOrder === 'SYMBOL') {
-    const symbolDiff = (first.primarySymbol || first.primaryNarratorName).localeCompare(
-      second.primarySymbol || second.primaryNarratorName,
-      'ar'
-    );
-    if (symbolDiff !== 0) return symbolDiff;
-  } else {
-    const orderDiff =
-      narratorTayyibahOrder(first.narratorIds[0] ?? '', catalog) -
-      narratorTayyibahOrder(second.narratorIds[0] ?? '', catalog);
-    if (orderDiff !== 0) return orderDiff;
-  }
-
-  // نطاق أقصر في اتجاه الأداء قبل النطاق الأطول عند تساوي نقطة الارتكاز.
-  const spanDiff = plan.traversal === 'END_TO_START'
-    ? second.startPosition - first.startPosition
-    : first.endPosition - second.endPosition;
-  if (spanDiff !== 0) return spanDiff;
-
-  return first.id.localeCompare(second.id, 'ar');
-}
-
-/**
- * يحجز المسارات اليدوية ثم يضع الأسطر التلقائية في أول مسار حر. السطر
- * اليدوي يبقى في موضعه تماما؛ حتى إن اختار المحرر التراكب فهو قرار ظاهر
- * ومقصود وليس أثرا لإعادة التوليد.
+ * يوزّع الأسطر تنازليا: سطر واحد لكل وجه، واحدا تلو الآخر بلا تشارك.
+ *
+ * التشارك في المسار الواحد (interval packing) كان خطأ في الإصدار السابق:
+ * المصحف المشجّر يضع كل وجه في سطر مستقل حتى يقرأه القارئ متتابعا. أما
+ * السطر الذي ثبّت المحقق مساره فيبقى في موضعه تماما.
  */
 function assignClassicLanes(lines: ClassicLine[]): void {
   for (const side of ['TOP', 'BOTTOM'] as const) {
     const sideLines = lines.filter((line) => line.side === side);
     const reserved = new Set(sideLines.filter((line) => line.isManual).map((line) => line.lane));
     let nextLane = 0;
-    let previousSegment = -1;
 
     for (const line of sideLines) {
       if (line.isManual) continue;
-
-      // عند الوقف/الابتداء نترك مسارا فاصلا قبل المقطع التالي، فيظهر أثر
-      // قرار المحقق في شكل الشجرة لا في البيانات الخفية فقط.
-      if (previousSegment !== -1 && line.segmentIndex !== previousSegment) nextLane += 1;
       while (reserved.has(nextLane)) nextLane += 1;
       line.lane = nextLane;
       reserved.add(nextLane);
       nextLane += 1;
-      previousSegment = line.segmentIndex;
     }
   }
 }

@@ -43,10 +43,16 @@ import { buildReadingPlan, compareReadingPositions, variantTraversalAnchor } fro
 
 // ==================== توزيع الفئات على الجهات ====================
 
-/** الجهة التي تُرسم فيها كل فئة من فئات الاختلاف. */
+/**
+ * الجهة التي تُرسم فيها كل فئة من فئات الاختلاف.
+ *
+ * كل الفئات تحت النص. في المصحف المشجّر تنزل أسطر الأوجه جميعا تحت الآية
+ * واحدا تلو الآخر — الأصول والمدود والفرش سواء. وضع الأصول والمدود فوق
+ * النص كان خطأ في الإصدار السابق: يقطع تسلسل القراءة ويزاحم الحركات.
+ */
 export const CATEGORY_SIDE: Record<VariantCategory, AnchorSide> = {
-  USUL: 'TOP',
-  MADUD: 'TOP',
+  USUL: 'BOTTOM',
+  MADUD: 'BOTTOM',
   FARSH: 'BOTTOM',
   HAMZ: 'BOTTOM',
   WAQF: 'BOTTOM',
@@ -200,14 +206,17 @@ function branchKey(branch: TashjeerBranch): string {
 // ==================== توزيع المسارات ====================
 
 /**
- * يوزّع الخطوط على مسارات أفقية بحيث لا يتداخل خطان في نفس المسار.
+ * يوزّع الخطوط على مسارات أفقية: مسار مستقل لكل خط، تنازليا.
  *
  * الخوارزمية:
- *   1. تُقسم الخطوط حسب الجهة (فوق/تحت).
- *   2. تُرتب داخل كل جهة: «من آخر الآية إلى أولها» أولا، ثم أولوية الفئة
- *      عند تساوي موضع الارتكاز، حتى يكون الأقرب لنهاية الآية أقرب للنص.
- *   3. يُوضع كل خط في أول مسار خال يتسع لمداه الأفقي، مع هامش أمان
- *      يمنع التصاق البطاقات.
+ *   1. تُقسم الخطوط حسب الجهة (وكلها تحت النص في التشجير المعتمد).
+ *   2. تُرتب: «من آخر الآية إلى أولها» أولا، ثم أولوية الفئة عند تساوي
+ *      موضع الارتكاز، حتى يكون الأقرب لنهاية الآية أقرب للنص.
+ *   3. يأخذ كل خط أول مسار حر، والمسار الذي ثبّته المحرر يبقى محجوزا له.
+ *
+ * لا نتشارك المسار الواحد بين خطين متباعدين أفقيا. كان ذلك يقلل ارتفاع
+ * اللوحة لكنه يخالف شكل المصحف المشجّر: كل وجه في سطر مستقل يقرؤه القارئ
+ * متتابعا، وامتداد السطر مع الآية كلها هو ما يبيّن موافقة الوجه لما قبله.
  *
  * @returns نفس الخطوط بعد ضبط الحقل lane
  */
@@ -222,34 +231,24 @@ export function assignLanes(
       .filter((branch) => branch.side === side)
       .sort((first, second) => compareBranchesForLanes(first, second, options));
 
-    /** لكل مسار: قائمة المدى [start, end] المشغولة فيه. */
-    const lanes: Array<Array<{ start: number; end: number }>> = [];
-    const manualBranches = sideBranches.filter((branch) => branch.isManual);
-
     // المسار الذي اختاره المحرر يَجب أن يبقى كما هو بعد أي حفظ أو تعديل
     // للاختلافات. سابقا كانت assignLanes تعيد ترقيم الخط اليدوي، فتبدو عملية
     // التحريك ناجحة مؤقتا ثم تختفي عند الحفظ/إعادة التوليد.
-    for (const branch of manualBranches) {
-      while (lanes.length <= branch.lane) lanes.push([]);
-      lanes[branch.lane].push(branchSpan(branch));
-      result.push(branch);
-    }
+    const reserved = new Set(
+      sideBranches.filter((branch) => branch.isManual).map((branch) => branch.lane)
+    );
 
     for (const branch of sideBranches) {
+      if (branch.isManual) result.push(branch);
+    }
+
+    let nextLane = 0;
+    for (const branch of sideBranches) {
       if (branch.isManual) continue;
-
-      const span = branchSpan(branch);
-      let laneIndex = lanes.findIndex((intervals) =>
-        intervals.every((interval) => !overlaps(interval, span))
-      );
-
-      if (laneIndex === -1) {
-        lanes.push([]);
-        laneIndex = lanes.length - 1;
-      }
-
-      lanes[laneIndex].push(span);
-      result.push({ ...branch, lane: laneIndex });
+      while (reserved.has(nextLane)) nextLane += 1;
+      reserved.add(nextLane);
+      result.push({ ...branch, lane: nextLane });
+      nextLane += 1;
     }
   }
 
@@ -312,20 +311,6 @@ function branchPositionSpan(branch: TashjeerBranch): { start: number; end: numbe
   const positions = branch.nodes.map((node) => node.position);
   if (positions.length === 0) return { start: 0, end: 0 };
   return { start: Math.min(...positions), end: Math.max(...positions) };
-}
-
-/** مدى الخط للتزاحم البصري، مع هامش يسار للبطاقة. */
-function branchSpan(branch: TashjeerBranch): { start: number; end: number } {
-  const positions = branchPositionSpan(branch);
-  return {
-    // هامش قدره 2 من جهة اليسار لأن البطاقة تُرسم بعد نهاية الخط.
-    start: positions.start - 2,
-    end: positions.end,
-  };
-}
-
-function overlaps(a: { start: number; end: number }, b: { start: number; end: number }): boolean {
-  return a.start <= b.end && b.start <= a.end;
 }
 
 // ==================== الحساب الهندسي ====================

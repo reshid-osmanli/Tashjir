@@ -325,6 +325,8 @@ export const SEED_VARIANTS: Variant[] = [
         id: 'a-yakhdaun-alif',
         text: 'يُخَٰدِعُونَ',
         label: 'بالألف',
+        ruleLabel: 'بالألف',
+        strength: 1,
         scope: {
           kind: 'IMAMS',
           imamIds: [IMAM.nafi, IMAM.ibnKathir, IMAM.abuAmr, IMAM.abuJafar],
@@ -377,6 +379,9 @@ export const SEED_VARIANTS: Variant[] = [
         id: 'a-munfasil-qasr',
         text: 'إِلَّا أَنفُسَهُمۡ',
         label: 'القصر حركتان',
+        ruleLabel: 'قصر',
+        maddHarakat: 2,
+        strength: 1,
         scope: {
           kind: 'NARRATORS',
           narratorIds: [
@@ -395,6 +400,9 @@ export const SEED_VARIANTS: Variant[] = [
         id: 'a-munfasil-ishbaa',
         text: 'إِلَّآ أَنفُسَهُمۡ',
         label: 'الإشباع ست حركات',
+        ruleLabel: 'إشباع',
+        maddHarakat: 6,
+        strength: 2,
         scope: { kind: 'IMAMS', imamIds: [IMAM.hamzah] },
         notes: 'ولورش من طريق الأزرق الإشباع كذلك. يحتاج تحرير الطرق.',
       },

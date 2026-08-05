@@ -84,22 +84,24 @@ describe('توليد الخطوط', () => {
     expect(generateBranches([variant], layout)).toHaveLength(0);
   });
 
-  it('يضع الأصول فوق النص والفرش تحته', () => {
+  it('يضع كل الفئات تحت النص، فالأصول والفرش سواء', () => {
     const usul = makeVariant({ id: 'u1', category: 'USUL' });
     const farsh = makeVariant({ id: 'f1', category: 'FARSH', startPosition: 3, endPosition: 3 });
 
     const branches = generateBranches([usul, farsh], layout);
 
-    expect(branches.find((branch) => branch.variantId === 'u1')?.side).toBe('TOP');
+    // في المصحف المشجّر تنزل أسطر الأوجه كلها تحت الآية واحدا تلو الآخر.
+    expect(branches.find((branch) => branch.variantId === 'u1')?.side).toBe('BOTTOM');
     expect(branches.find((branch) => branch.variantId === 'f1')?.side).toBe('BOTTOM');
   });
 
-  it('توزيع الفئات على الجهات ثابت وموثق', () => {
-    expect(CATEGORY_SIDE.USUL).toBe('TOP');
-    expect(CATEGORY_SIDE.MADUD).toBe('TOP');
+  it('توزيع الفئات على الجهات ثابت وموثق: كلها تحت النص', () => {
+    expect(CATEGORY_SIDE.USUL).toBe('BOTTOM');
+    expect(CATEGORY_SIDE.MADUD).toBe('BOTTOM');
     expect(CATEGORY_SIDE.FARSH).toBe('BOTTOM');
     expect(CATEGORY_SIDE.HAMZ).toBe('BOTTOM');
     expect(CATEGORY_SIDE.WAQF).toBe('BOTTOM');
+    expect(CATEGORY_SIDE.TAJWEED).toBe('BOTTOM');
   });
 
   it('يحفظ الخطوط اليدوية ولا يعيد توليدها', () => {
@@ -152,12 +154,17 @@ describe('توزيع المسارات', () => {
     expect(new Set(lanes).size).toBe(2);
   });
 
-  it('الخطان المتباعدان يتشاركان المسار نفسه', () => {
+  it('الخطان المتباعدان يأخذان مسارين مستقلين لا مسارا مشتركا', () => {
+    // كل وجه في سطر مستقل. تشارك المسار كان يقلل الارتفاع لكنه يخالف شكل
+    // المصحف المشجّر الذي يقرأ فيه القارئ الأسطر متتابعة.
     const a = makeVariant({ id: 'a', startPosition: 1, endPosition: 1 });
     const b = makeVariant({ id: 'b', startPosition: 8, endPosition: 9 });
 
     const branches = generateBranches([a, b], layout);
-    expect(branches.every((branch) => branch.lane === 0)).toBe(true);
+    const lanes = branches.map((branch) => branch.lane).sort();
+    expect(lanes).toEqual([0, 1]);
+    // الأقرب لآخر الآية أقرب إلى النص.
+    expect(branches.find((branch) => branch.variantId === 'b')?.lane).toBe(0);
   });
 
   it('الخط الأقرب لآخر الآية يأخذ مسارا أقرب للنص', () => {
@@ -172,12 +179,13 @@ describe('توزيع المسارات', () => {
     expect(lateBranch.lane).toBeLessThan(earlyBranch.lane);
   });
 
-  it('جهتا الرسم تُحسبان بمسارات مستقلة', () => {
+  it('الأصول والفرش في الجهة الواحدة تتتابع في مسارين', () => {
     const usul = makeVariant({ id: 'u', category: 'USUL', startPosition: 1, endPosition: 9 });
     const farsh = makeVariant({ id: 'f', category: 'FARSH', startPosition: 1, endPosition: 9 });
 
     const branches = generateBranches([usul, farsh], layout);
-    expect(branches.every((branch) => branch.lane === 0)).toBe(true);
+    expect(branches.every((branch) => branch.side === 'BOTTOM')).toBe(true);
+    expect(branches.map((branch) => branch.lane).sort()).toEqual([0, 1]);
   });
 
   it('maxLane يحسب عدد المسارات المستخدمة', () => {
