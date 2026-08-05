@@ -11,19 +11,20 @@
 
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type WheelEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type WheelEvent } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
 import {
   CATEGORY_LABELS,
 } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-system';
+import { TashjeerFigure } from './TashjeerFigure';
 import { getNarratorsByTayyibah } from '@/lib/tashjeer/symbols';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
 import type { ClassicLine } from '@/lib/tashjeer/classic-tashjeer';
 import type { VariantCategory } from '@/types';
-import type { RecitationBoundary, WordBox } from '@/types/tashjeer';
+import type { WordBox } from '@/types/tashjeer';
 import type { TransmissionCatalog } from '@/lib/transmissions/catalog';
 
 interface TashjeerCanvasProps {
@@ -147,6 +148,18 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     [readOnly, selectBranch, selectVariant, selectedVariantId]
   );
 
+  // الكلمات المشمولة باختلاف: تُظلَّل تظليلا خفيفا يرشد المحرر.
+  const coveredPositions = useMemo(() => {
+    if (!document) return [];
+    const positions = new Set<number>();
+    for (const variant of document.variants) {
+      for (let position = variant.startPosition; position <= variant.endPosition; position++) {
+        positions.add(position);
+      }
+    }
+    return [...positions];
+  }, [document]);
+
   // ==================== حالات فارغة ====================
 
   if (!document) {
@@ -200,56 +213,29 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
             />
           )}
 
-          {filter.showRulers && <Rulers viewBox={viewBox} />}
-
-          {/* الخط الأساس: نص المصحف = «الجمهور» */}
-          <BaselineBand
+          <TashjeerFigure
             layout={layout}
+            classic={classic}
             viewBox={viewBox}
-            baseNarratorName={catalog.narrators.find((narrator) => narrator.id === 'narrator-hafs')?.name ?? 'حفص'}
+            fontSize={fontSize}
+            showLabels={filter.showLabels}
+            showRulers={filter.showRulers}
+            showAnchors={filter.showAnchors}
+            boundaries={document.boundaries}
+            baseNarratorName={
+              catalog.narrators.find((narrator) => narrator.id === 'narrator-hafs')?.name ?? 'حفص'
+            }
+            engine={engine}
+            markedPositions={markedPositions}
+            coveredPositions={coveredPositions}
+            selectedWordId={selectedWordId}
+            selectedVariantId={selectedVariantId}
+            hoveredLineId={hoveredLineId}
+            onWordClick={handleWordClick}
+            onLineClick={handleLineClick}
+            onLineHoverStart={(line) => setHoveredLineId(line.id)}
+            onLineHoverEnd={() => setHoveredLineId(null)}
           />
-
-          <BoundaryMarkers boundaries={document.boundaries} layout={layout} />
-
-          {/* خطوط التشجير الكلاسيكية */}
-          <g>
-            {classic.lines.map((line) => (
-              <ClassicLineShape
-                key={line.id}
-                line={line}
-                fontSize={fontSize}
-                showLabels={filter.showLabels}
-                isSelected={line.variantId === selectedVariantId}
-                isHovered={line.id === hoveredLineId}
-                onClick={() => handleLineClick(line)}
-                onHoverStart={() => setHoveredLineId(line.id)}
-                onHoverEnd={() => setHoveredLineId(null)}
-              />
-            ))}
-
-            {!classic.hasDifferences && (
-              <MajorityLine
-                classic={classic}
-                baseNarratorName={catalog.narrators.find((narrator) => narrator.id === 'narrator-hafs')?.name ?? 'حفص'}
-              />
-            )}
-          </g>
-
-          {/* نص الآية فوق الخطوط ليظل واضحا وقابلا للنقر */}
-          <g>
-            {layout.boxes.map((box) => (
-              <WordShape
-                key={box.wordId}
-                box={box}
-                fontSize={fontSize}
-                isMarked={markedPositions.includes(box.position)}
-                isSelected={box.wordId === selectedWordId}
-                isCovered={isCovered(box.position, document.variants)}
-                showAnchors={filter.showAnchors}
-                onClick={() => handleWordClick(box)}
-              />
-            ))}
-          </g>
         </g>
       </svg>
 
@@ -269,467 +255,7 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
   );
 }
 
-// ==================== الكلمة ====================
-
-function WordShape({
-  box,
-  fontSize,
-  isMarked,
-  isSelected,
-  isCovered,
-  showAnchors,
-  onClick,
-}: {
-  box: WordBox;
-  fontSize: number;
-  isMarked: boolean;
-  isSelected: boolean;
-  isCovered: boolean;
-  showAnchors: boolean;
-  onClick: () => void;
-}) {
-  const highlight = isMarked
-    ? '#fde68a'
-    : isSelected
-      ? '#bbf7d0'
-      : isCovered
-        ? '#f1f5f9'
-        : 'transparent';
-
-  return (
-    <g onClick={onClick} style={{ cursor: 'pointer' }} data-word-id={box.wordId}>
-      <rect
-        x={box.x - 4}
-        y={box.topY - 4}
-        width={box.width + 8}
-        height={box.height + 8}
-        rx={6}
-        fill={highlight}
-        stroke={isMarked || isSelected ? '#0f766e' : 'transparent'}
-        strokeWidth={1.2}
-      />
-
-      <text
-        x={box.centerX}
-        y={box.baselineY}
-        textAnchor="middle"
-        fontSize={fontSize}
-        fontFamily="'Amiri Quran', 'Amiri', serif"
-        fill="#1c1917"
-        style={{ direction: 'rtl', userSelect: 'none' }}
-      >
-        {box.text}
-      </text>
-
-      {showAnchors && (
-        <>
-          <circle cx={box.centerX} cy={box.topY - 3} r={2} fill="#94a3b8" opacity={0.55} />
-          <circle cx={box.centerX} cy={box.bottomY + 3} r={2} fill="#94a3b8" opacity={0.55} />
-        </>
-      )}
-
-      <title>{`الكلمة ${box.position}: ${box.text}`}</title>
-    </g>
-  );
-}
-
-// ==================== خط التشجير الكلاسيكي ====================
-
-function ClassicLineShape({
-  line,
-  fontSize,
-  showLabels,
-  isSelected,
-  isHovered,
-  onClick,
-  onHoverStart,
-  onHoverEnd,
-}: {
-  line: ClassicLine;
-  fontSize: number;
-  showLabels: boolean;
-  isSelected: boolean;
-  isHovered: boolean;
-  onClick: () => void;
-  onHoverStart: () => void;
-  onHoverEnd: () => void;
-}) {
-  const color = getCategoryColor(line.category);
-  const soft = getCategorySoftColor(line.category);
-  const strokeWidth = isSelected ? 3 : isHovered ? 2.4 : 1.8;
-  const opacity = isSelected || isHovered ? 1 : 0.9;
-
-  if (line.marks.length === 0) return null;
-
-  const xs = line.marks.map((mark) => mark.x);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const pad = 16;
-  const lineStart = minX - pad;
-  const lineEnd = maxX + pad;
-
-  return (
-    <g
-      onClick={onClick}
-      onMouseEnter={onHoverStart}
-      onMouseLeave={onHoverEnd}
-      style={{ cursor: 'pointer' }}
-      data-line-id={line.id}
-    >
-      {/* الممر الشفاف العريض لتسهيل النقر على الخط */}
-      <rect
-        x={lineStart}
-        y={line.rowY - 9}
-        width={lineEnd - lineStart}
-        height={18}
-        fill="transparent"
-      />
-
-      {/* الوصلات الرأسية من كل كلمة مختلفة إلى الخط. الأصول والمدود ترتبط
-          من أعلى الكلمة، وما عداها من أسفلها. */}
-      {line.marks.map((mark) => (
-        <line
-          key={`c-${mark.wordId}`}
-          x1={mark.x}
-          y1={line.side === 'TOP' ? mark.topY : mark.bottomY}
-          x2={mark.x}
-          y2={line.rowY}
-          stroke={color}
-          strokeWidth={1.1}
-          opacity={0.55}
-        />
-      ))}
-
-      {/* الخط الأفقي للوجه */}
-      <line
-        x1={lineStart}
-        y1={line.rowY}
-        x2={lineEnd}
-        y2={line.rowY}
-        stroke={color}
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-        opacity={opacity}
-        filter={isSelected ? 'url(#branch-glow)' : undefined}
-      />
-
-      {/* العقد على الكلمات المختلفة */}
-      {line.marks.map((mark) => (
-        <circle
-          key={`d-${mark.wordId}`}
-          cx={mark.x}
-          cy={line.rowY}
-          r={isSelected ? 4 : 3.2}
-          fill={color}
-          stroke="#ffffff"
-          strokeWidth={1.2}
-        />
-      ))}
-
-      {/* نص الاختلاف تحت الكلمة، ملوّناً بنوعه.
-          للاختلاف متعدد الكلمات نعرضه مرة واحدة فوق المدى لتفادي التداخل. */}
-      {showLabels &&
-        (line.marks.length > 1 ? (
-          <text
-            key="reading-span"
-            x={(minX + maxX) / 2}
-            y={line.rowY - 8}
-            textAnchor="middle"
-            fontSize={Math.round(fontSize * 0.5)}
-            fontFamily="'Amiri Quran', 'Amiri', serif"
-            fill={color}
-            style={{ direction: 'rtl', userSelect: 'none', fontWeight: 600 }}
-          >
-            {line.readingText}
-          </text>
-        ) : (
-          <text
-            key="reading-single"
-            x={line.marks[0].x}
-            y={line.rowY - 8}
-            textAnchor="middle"
-            fontSize={Math.round(fontSize * 0.5)}
-            fontFamily="'Amiri Quran', 'Amiri', serif"
-            fill={color}
-            style={{ direction: 'rtl', userSelect: 'none', fontWeight: 600 }}
-          >
-            {line.readingText}
-          </text>
-        ))}
-
-      {/* بطاقة رأس الخط: رموز القراء واسم الرئيس ونوع الاختلاف */}
-      {showLabels && (
-        <LineLabel line={line} color={color} soft={soft} x={maxX + 20} y={line.rowY} />
-      )}
-
-      <title>{lineTitle(line)}</title>
-    </g>
-  );
-}
-
-function LineLabel({
-  line,
-  color,
-  soft,
-  x,
-  y,
-}: {
-  line: ClassicLine;
-  color: string;
-  soft: string;
-  x: number;
-  y: number;
-}) {
-  const badgeWidth = Math.max(line.label.length * 13 + 18, 34);
-  const text =
-    line.symbolDisplay === 'BOTH'
-      ? `${line.primaryNarratorName} · ${line.categoryLabel}`
-      : line.categoryLabel;
-
-  return (
-    <g>
-      <rect
-        x={x}
-        y={y - 13}
-        width={badgeWidth}
-        height={26}
-        rx={8}
-        fill={soft}
-        stroke={color}
-        strokeWidth={1.2}
-      />
-      <text
-        x={x + badgeWidth / 2}
-        y={y + 5}
-        textAnchor="middle"
-        fontSize={14}
-        fontFamily="'Amiri Quran', 'Amiri', serif"
-        fill={color}
-        style={{ direction: 'rtl', userSelect: 'none', fontWeight: 700 }}
-      >
-        {line.label}
-      </text>
-      <text
-        x={x + badgeWidth + 8}
-        y={y + 5}
-        textAnchor="start"
-        fontSize={12.5}
-        fontFamily="system-ui, sans-serif"
-        fill="#475569"
-        style={{ direction: 'rtl', userSelect: 'none' }}
-      >
-        {text}
-      </text>
-    </g>
-  );
-}
-
-function lineTitle(line: ClassicLine): string {
-  const readers = line.readerNames.join('، ');
-  return `القارئ: ${line.primaryNarratorName} — النوع: ${line.categoryLabel}\nالقراء المتفقون: ${readers}\nالوجه: ${line.readingText}${line.readingLabel ? ` (${line.readingLabel})` : ''}`;
-}
-
-// ==================== عناصر مساعدة ====================
-
-/** شريط «الجمهور» تحت نص الآية: يوضّح راوي النص الأساس المختار. */
-function BaselineBand({
-  layout,
-  viewBox,
-  baseNarratorName,
-}: {
-  layout: { boxes: WordBox[] };
-  viewBox: { x: number; y: number; width: number; height: number };
-  baseNarratorName: string;
-}) {
-  if (layout.boxes.length === 0) return null;
-
-  const top = Math.min(...layout.boxes.map((box) => box.topY));
-  const bottom = Math.max(...layout.boxes.map((box) => box.bottomY));
-  const rightX = Math.max(...layout.boxes.map((box) => box.x + box.width));
-  const leftX = Math.min(...layout.boxes.map((box) => box.x));
-  const bandY = bottom + 10;
-
-  return (
-    <g pointerEvents="none">
-      <rect
-        x={leftX - 10}
-        y={top - 8}
-        width={rightX - leftX + 20}
-        height={bottom - top + 16}
-        rx={10}
-        fill="#fffdf7"
-        stroke="#e7e5e4"
-        strokeWidth={1}
-      />
-      <line
-        x1={leftX - 10}
-        y1={bandY}
-        x2={rightX + 10}
-        y2={bandY}
-        stroke="#94a3b8"
-        strokeWidth={1.4}
-        strokeDasharray="2 5"
-        opacity={0.8}
-      />
-      <text
-        x={rightX + 22}
-        y={bandY + 5}
-        fontSize={13}
-        fill="#0f766e"
-        fontFamily="system-ui, sans-serif"
-        style={{ direction: 'rtl', userSelect: 'none', fontWeight: 700 }}
-      >
-        الجمهور · {baseNarratorName}
-      </text>
-      <text
-        x={viewBox.x + 12}
-        y={top - 16}
-        fontSize={11}
-        fill="#0f766e"
-        fontFamily="system-ui, sans-serif"
-      >
-        نص المصحف (الأساس)
-      </text>
-    </g>
-  );
-}
-
-/**
- * علامات الوقف والابتداء التي أدخلها المحقق. ترسم كدليل بصري فقط؛ لا تفترض
- * صحة وقف من غير بيانات علمية ولا تمنع المحرر من تغيير اختياره.
- */
-function BoundaryMarkers({
-  boundaries,
-  layout,
-}: {
-  boundaries: RecitationBoundary[];
-  layout: { boxByPosition: Map<number, WordBox> };
-}) {
-  const labels: Record<RecitationBoundary['kind'], string> = {
-    WAQF: 'وقف',
-    IBTIDA: 'ابتداء',
-    WASL: 'وصل',
-  };
-  const colors: Record<RecitationBoundary['kind'], string> = {
-    WAQF: '#7c3aed',
-    IBTIDA: '#0f766e',
-    WASL: '#0369a1',
-  };
-
-  return (
-    <g pointerEvents="none">
-      {boundaries.map((boundary) => {
-        const box = layout.boxByPosition.get(boundary.position);
-        if (!box) return null;
-        // بعد الكلمة في RTL يكون عند طرفها الأيسر، وقبلها عند طرفها الأيمن.
-        const x = boundary.kind === 'IBTIDA' ? box.x + box.width + 4 : box.x - 4;
-        const y = boundary.kind === 'IBTIDA' ? box.topY - 13 : box.bottomY + 16;
-        const color = colors[boundary.kind];
-        const text = `${boundary.label || labels[boundary.kind]}${
-          boundary.connectsToNextAyah ? ' ↔ التالية' : ''
-        }`;
-
-        return (
-          <g key={boundary.id} opacity={0.94}>
-            <line
-              x1={x}
-              y1={boundary.kind === 'IBTIDA' ? box.topY - 2 : box.bottomY + 2}
-              x2={x}
-              y2={y + (boundary.kind === 'IBTIDA' ? 4 : -4)}
-              stroke={color}
-              strokeWidth={1.1}
-              strokeDasharray="2 2"
-            />
-            <rect
-              x={x - 17}
-              y={y - 10}
-              width={Math.max(34, text.length * 6.5 + 10)}
-              height={17}
-              rx={5}
-              fill="#ffffff"
-              stroke={color}
-              strokeWidth={0.8}
-            />
-            <text
-              x={x}
-              y={y + 2}
-              textAnchor="middle"
-              fontSize={9.5}
-              fill={color}
-              fontFamily="system-ui, sans-serif"
-              style={{ direction: 'rtl', userSelect: 'none', fontWeight: 700 }}
-            >
-              {text}
-            </text>
-          </g>
-        );
-      })}
-    </g>
-  );
-}
-
-/** خط «الجمهور» عندما لا توجد أي اختلافات في الآية. */
-function MajorityLine({
-  classic,
-  baseNarratorName,
-}: {
-  classic: { textBottom: number; firstRowY: number };
-  baseNarratorName: string;
-}) {
-  const y = classic.firstRowY;
-  return (
-    <g pointerEvents="none">
-      <line
-        x1={-200}
-        y1={y}
-        x2={1000}
-        y2={y}
-        stroke="#94a3b8"
-        strokeWidth={1.4}
-        strokeDasharray="2 5"
-      />
-      <text
-        x={20}
-        y={y + 5}
-        fontSize={14}
-        fill="#0f766e"
-        fontFamily="system-ui, sans-serif"
-        style={{ direction: 'rtl', userSelect: 'none', fontWeight: 700 }}
-      >
-        الجمهور · {baseNarratorName}
-      </text>
-    </g>
-  );
-}
-
-function Rulers({ viewBox }: { viewBox: { x: number; y: number; width: number; height: number } }) {
-  const step = 100;
-  const marks: number[] = [];
-  for (let x = Math.ceil(viewBox.x / step) * step; x < viewBox.x + viewBox.width; x += step) {
-    marks.push(x);
-  }
-
-  return (
-    <g opacity={0.6} pointerEvents="none">
-      {marks.map((x) => (
-        <g key={x}>
-          <line
-            x1={x}
-            y1={viewBox.y}
-            x2={x}
-            y2={viewBox.y + viewBox.height}
-            stroke="#cbd5e1"
-            strokeWidth={0.5}
-            strokeDasharray="4 6"
-          />
-          <text x={x + 3} y={viewBox.y + 12} fontSize={9} fill="#94a3b8">
-            {x}
-          </text>
-        </g>
-      ))}
-    </g>
-  );
-}
+// ==================== عناصر خاصة بالمحرر ====================
 
 function CanvasLegend() {
   const categories = Object.keys(CATEGORY_LABELS) as Array<VariantCategory>;
@@ -796,15 +322,5 @@ function SymbolsLegend({
         رمز «—» للأصل (حفص عن عاصم = نص المصحف). تتكرر الرموز لقراء كل إمام على حدة.
       </p>
     </div>
-  );
-}
-
-/** هل هذه الكلمة مشمولة بأي اختلاف؟ يُستخدم لتظليل خفيف يرشد المحرر. */
-function isCovered(
-  position: number,
-  variants: Array<{ startPosition: number; endPosition: number }>
-): boolean {
-  return variants.some(
-    (variant) => position >= variant.startPosition && position <= variant.endPosition
   );
 }

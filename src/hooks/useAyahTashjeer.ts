@@ -138,20 +138,20 @@ export function useAyahTashjeer(
   );
 
   const viewBox = useMemo(() => {
-    // هامش أيسر للبطاقات الجانبية، وهامش أيمن لرموز القراء على رأس كل خط.
-    const leftMargin = 70;
-    const rightMargin = 380;
+    // هامش أيسر لرموز القراء في طرف كل سطر، وهامش أيمن لأرقام حركات المد.
+    const leftMargin = 150;
+    const rightMargin = 90;
 
-    // نستوعب الأصول والمدود فوق النص أيضا؛ كان تثبيت البداية عند صفر يخفي
-    // الأسطر العليا في الآيات المزدحمة.
-    const top = Math.min(0, classic.topY - layoutOptions.laneHeight - 36);
+    // نبدأ من أعلى النص لا من الصفر: بعد نزول كل الأسطر تحت الآية لم يعد
+    // فوق النص شيء، وكان التثبيت عند صفر يترك فراغا كبيرا في رأس اللوحة.
+    const top = classic.topY - layoutOptions.fontSize - 30;
     const bottom = classic.totalHeight;
 
     return {
       x: -leftMargin,
       y: top,
       width: layoutOptions.canvasWidth + leftMargin + rightMargin,
-      height: Math.max(bottom - top, 360),
+      height: Math.max(bottom - top, 280),
     };
   }, [classic, layoutOptions]);
 

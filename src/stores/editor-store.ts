@@ -105,6 +105,12 @@ interface EditorState {
     patch: Partial<VariantAlternative>
   ) => void;
   deleteAlternative: (variantId: string, alternativeId: string) => void;
+  /** يثبّت رتبة الموضع في ترتيب المرور، أو يزيلها بتمرير null. */
+  setVariantOrderRank: (variantId: string, rank: number | null) => void;
+  /** ينقل وجها داخل موضعه صعودا أو نزولا، فيثبّت ترتيب أوجه الموضع. */
+  moveAlternative: (variantId: string, alternativeId: string, delta: number) => void;
+  /** يعيد ترتيب أوجه الموضع إلى قاعدة المحرك. */
+  resetAlternativeOrder: (variantId: string) => void;
 
   // ---------- إجراءات الخطوط ----------
   regenerateBranches: () => void;
@@ -304,6 +310,48 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         };
       }),
       branches: document.branches.filter((branch) => branch.alternativeId !== alternativeId),
+    }));
+  },
+
+  setVariantOrderRank: (variantId, rank) => {
+    mutate(set, get, (document) => ({
+      ...document,
+      variants: document.variants.map((variant) =>
+        variant.id === variantId
+          ? { ...variant, orderRank: rank === null ? undefined : Math.max(1, Math.round(rank)) }
+          : variant
+      ),
+    }));
+  },
+
+  moveAlternative: (variantId, alternativeId, delta) => {
+    mutate(set, get, (document) => ({
+      ...document,
+      variants: document.variants.map((variant) => {
+        if (variant.id !== variantId) return variant;
+
+        // نبني الترتيب الصريح من الترتيب الظاهر الآن، ثم ننقل الوجه فيه.
+        // هكذا لا يقفز بقية الأوجه عند أول نقلة يدوية.
+        const current = orderedAlternativeIds(variant);
+        const index = current.indexOf(alternativeId);
+        if (index === -1) return variant;
+
+        const target = index + delta;
+        if (target < 0 || target >= current.length) return variant;
+
+        const next = [...current];
+        [next[index], next[target]] = [next[target], next[index]];
+        return { ...variant, alternativeOrder: next };
+      }),
+    }));
+  },
+
+  resetAlternativeOrder: (variantId) => {
+    mutate(set, get, (document) => ({
+      ...document,
+      variants: document.variants.map((variant) =>
+        variant.id === variantId ? { ...variant, alternativeOrder: undefined } : variant
+      ),
     }));
   },
 
@@ -584,6 +632,22 @@ function computeBranches(
     boundaries: document.boundaries,
     wordsCount: words.length,
   });
+}
+
+/**
+ * ترتيب معرّفات أوجه موضع: الترتيب الصريح المحفوظ إن وُجد، وإلا ترتيب
+ * الإدخال. نستثني وجه الأساس لأنه نص المصحف ولا يُرسم له سطر.
+ */
+function orderedAlternativeIds(variant: Variant): string[] {
+  const drawable = variant.alternatives.filter((alternative) => !alternative.isBase);
+  const explicit = variant.alternativeOrder ?? [];
+  const known = new Set(drawable.map((alternative) => alternative.id));
+
+  const ordered = explicit.filter((id) => known.has(id));
+  for (const alternative of drawable) {
+    if (!ordered.includes(alternative.id)) ordered.push(alternative.id);
+  }
+  return ordered;
 }
 
 /** ترتيب الاختلافات: من آخر الآية إلى أولها، موافقا لقاعدة التشجير. */

@@ -296,6 +296,57 @@ function AlternativeEditor({
         </Field>
       </div>
 
+      {/* البيانات التي تُطبع في الشجرة: اسم الحكم تحت الكلمة، وحركات المد
+          في الهامش، وقوة الوجه التي يُرتَّب بها السطر. */}
+      <div className="grid gap-3 rounded-md border border-emerald-100 bg-emerald-50/40 p-3 md:grid-cols-3">
+        <Field label="اسم الحكم (يُطبع تحت الكلمة)">
+          <input
+            type="text"
+            value={alternative.ruleLabel ?? ''}
+            onChange={(event) => onUpdate({ ruleLabel: event.target.value || undefined })}
+            placeholder="إمالة، تقليل، سكت، إدغام"
+            className="input"
+            style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }}
+          />
+        </Field>
+
+        <Field label="حركات المد (الهامش الأيمن)">
+          <input
+            type="number"
+            min={0}
+            max={6}
+            value={alternative.maddHarakat ?? ''}
+            onChange={(event) =>
+              onUpdate({
+                maddHarakat: event.target.value === '' ? undefined : Number(event.target.value),
+              })
+            }
+            placeholder="٤ أو ٥ أو ٦"
+            className="input"
+          />
+        </Field>
+
+        <Field label="قوة الوجه في الكتاب">
+          <input
+            type="number"
+            min={1}
+            value={alternative.strength ?? ''}
+            onChange={(event) =>
+              onUpdate({
+                strength: event.target.value === '' ? undefined : Number(event.target.value),
+              })
+            }
+            placeholder="١ = الأقوى"
+            className="input"
+          />
+        </Field>
+
+        <p className="text-[11px] leading-relaxed text-stone-600 md:col-span-3">
+          الأصغر في «قوة الوجه» يأخذ السطر الأعلى تحت الآية عند اعتماد ترتيب قوة الوجه في لوحة
+          التحكم. اترك الحقل فارغا إن لم ترجّح، فيتأخر الوجه عن الأوجه المرجَّحة.
+        </p>
+      </div>
+
       <label className="flex items-center gap-2 text-xs text-stone-700">
         <input
           type="checkbox"

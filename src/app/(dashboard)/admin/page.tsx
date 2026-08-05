@@ -24,6 +24,8 @@ import {
   readEngineSettings,
   resetEngineSettings,
   saveEngineSettings,
+  type AlternativeOrderRule,
+  type LineSpanMode,
   type SymbolDisplay,
   type TashjeerEngineSettings,
   type TieBreakOrder,
@@ -532,14 +534,48 @@ function EngineManager({
           </SelectInput>
 
           <SelectInput
-            label="ما يظهر في بطاقة السطر"
+            label="ترتيب أوجه الموضع الواحد"
+            value={engine.alternativeOrder}
+            onChange={(alternativeOrder) =>
+              onChange({ ...engine, alternativeOrder: alternativeOrder as AlternativeOrderRule })
+            }
+          >
+            <option value="STRENGTH">قوة الوجه في الكتاب</option>
+            <option value="TAYYIBAH">ترتيب طيبة النشر</option>
+            <option value="MANUAL">ترتيب المحقق لكل موضع</option>
+          </SelectInput>
+
+          <SelectInput
+            label="ما يظهر في طرف السطر"
             value={engine.symbolDisplay}
             onChange={(symbolDisplay) => onChange({ ...engine, symbolDisplay: symbolDisplay as SymbolDisplay })}
           >
-            <option value="BOTH">الرمز مع الاسم</option>
-            <option value="SYMBOLS">الرموز</option>
+            <option value="SYMBOLS">رموز القراء</option>
             <option value="NAMES">الأسماء</option>
+            <option value="BOTH">الرمز مع الاسم</option>
           </SelectInput>
+
+          <SelectInput
+            label="امتداد السطر الأفقي"
+            value={engine.lineSpan}
+            onChange={(lineSpan) => onChange({ ...engine, lineSpan: lineSpan as LineSpanMode })}
+          >
+            <option value="FULL_AYAH">يمتد مع الآية كلها</option>
+            <option value="VARIANT_SPAN">يقتصر على مدى الاختلاف</option>
+          </SelectInput>
+
+          <div className="grid gap-2 rounded-lg border border-stone-200 p-3">
+            <CheckboxInput
+              label="إظهار اسم الحكم تحت الكلمة"
+              checked={engine.showRuleUnderWord}
+              onChange={(showRuleUnderWord) => onChange({ ...engine, showRuleUnderWord })}
+            />
+            <CheckboxInput
+              label="إظهار حركات المد في الهامش"
+              checked={engine.showMaddColumn}
+              onChange={(showMaddColumn) => onChange({ ...engine, showMaddColumn })}
+            />
+          </div>
 
           <RangeInput
             label="تباعد أسطر الشجرة"
@@ -669,6 +705,28 @@ function RangeInput({
     <label className="block rounded-lg border border-stone-200 p-3 text-xs text-stone-700">
       <span className="flex items-center justify-between font-medium"><span>{label}</span><span>{value.toFixed(1)}×</span></span>
       <input type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} className="mt-2 w-full accent-emerald-600" />
+    </label>
+  );
+}
+
+function CheckboxInput({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-xs text-stone-700">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="accent-emerald-600"
+      />
+      {label}
     </label>
   );
 }
