@@ -5,7 +5,12 @@
 // التصدير. لو بقي الرسم داخل مكوّن المحرر لتعذّر التحقق منه إلا بمتصفح.
 
 import { getCategoryColor } from '@/lib/tashjeer/color-system';
-import type { ClassicLine, ClassicTashjeer } from '@/lib/tashjeer/classic-tashjeer';
+import type {
+  ClassicAgreementLine,
+  ClassicLine,
+  ClassicReaderChip,
+  ClassicTashjeer,
+} from '@/lib/tashjeer/classic-tashjeer';
 import type { TashjeerEngineSettings } from '@/lib/tashjeer/engine-settings';
 import type { AyahLayout, RecitationBoundary, WordBox } from '@/types/tashjeer';
 
@@ -40,6 +45,7 @@ export function TashjeerFigure({
   onLineClick,
   onLineHoverStart,
   onLineHoverEnd,
+  onReaderClick,
 }: {
   layout: AyahLayout;
   classic: ClassicTashjeer;
@@ -60,6 +66,8 @@ export function TashjeerFigure({
   onLineClick?: (line: ClassicLine) => void;
   onLineHoverStart?: (line: ClassicLine) => void;
   onLineHoverEnd?: () => void;
+  /** النقر على رمز راوٍ: تفتح اللوحة بطاقة تعريفه. */
+  onReaderClick?: (reader: ClassicReaderChip) => void;
 }) {
   return (
     <>
@@ -84,11 +92,19 @@ export function TashjeerFigure({
             onClick={() => onLineClick?.(line)}
             onHoverStart={() => onLineHoverStart?.(line)}
             onHoverEnd={() => onLineHoverEnd?.()}
+            onReaderClick={onReaderClick}
           />
         ))}
 
-        {!classic.hasDifferences && (
-          <MajorityLine classic={classic} baseNarratorName={baseNarratorName} />
+        {classic.agreement && (
+          <AgreementLine
+            agreement={classic.agreement}
+            showLabels={showLabels}
+            isHovered={classic.agreement.id === hoveredLineId}
+            onHoverStart={() => onLineHoverStart?.({ id: classic.agreement!.id } as ClassicLine)}
+            onHoverEnd={() => onLineHoverEnd?.()}
+            onReaderClick={onReaderClick}
+          />
         )}
       </g>
 
@@ -178,14 +194,20 @@ function WordShape({
 //
 // شكل السطر الواحد، مطابقا للمصحف المشجّر:
 //
-//        كلمة الاختلاف                       (نص الآية أعلاه)
-//              │
-//            إمالة                ← اسم الحكم تحت الكلمة تماما
-//   ٤ ├────────┴───────────────────────┤ ج ع    ← رموز القراء في الطرف الأيسر
-//   ↑ حركات المد في الهامش الأيمن
+//                          كلمة الاختلاف          (نص الآية أعلاه)
+//                                │
+//                             إمالة              ← اسم الحكم عند الكلمة
+//   ج ع  ┈┈┈┈┈┈┈┈┈┈┈┈┈┈├────────┴────────┤┈┈┈┈┈┈┈┈┈┈  ٤
+//    ↑                       ↑                          ↑
+//  رموز القراء يسارا     خط الوجه              حركات المد يمينا
+//   (الترتيب من آخر الآية)
 //
-// السطر يمتد مع الآية كلها (حسب إعداد المحرك)، فيبيّن امتداده أن هذا الوجه
-// يوافق ما قبله في بقية الآية، ولا يشير إلى موضع الاختلاف إلا بالوصلة.
+// الخط التوضيحي الرفيع يمتد بطول الآية كلها دائما، منفصلا عن خط الوجه، حتى
+// تصل العين من الكلمة إلى بطاقة القارئ ولو كان الاختلاف كلمة واحدة.
+//
+// رموز القراء في **الطرف الأيسر**: ترتيب قراءة الاختلاف يبدأ من آخر كلمة في
+// الآية، وآخر الآية في الرسم العربي هو الطرف الأيسر، فتقع البطاقة حيث تنتهي
+// عين القارئ لا حيث تبدأ.
 
 function ClassicLineShape({
   line,
@@ -199,6 +221,7 @@ function ClassicLineShape({
   onClick,
   onHoverStart,
   onHoverEnd,
+  onReaderClick,
 }: {
   line: ClassicLine;
   fontSize: number;
@@ -212,6 +235,7 @@ function ClassicLineShape({
   onClick: () => void;
   onHoverStart: () => void;
   onHoverEnd: () => void;
+  onReaderClick?: (reader: ClassicReaderChip) => void;
 }) {
   const color = getCategoryColor(line.category);
   const strokeWidth = isSelected ? 2.6 : isHovered ? 2 : 1.4;
@@ -222,6 +246,13 @@ function ClassicLineShape({
   const startX = line.spanStartX;
   const endX = line.spanEndX;
   const ruleFontSize = Math.max(11, Math.round(fontSize * 0.42));
+
+  // حصر كلمات الاختلاف على السطر الممتد: من أول عقدة إلى آخرها مع هامش.
+  const markXs = line.marks.map((mark) => mark.x);
+  const emphasisPad = 10;
+  const emphasis = markXs.length
+    ? { startX: Math.min(...markXs) - emphasisPad, endX: Math.max(...markXs) + emphasisPad }
+    : null;
 
   return (
     <g
@@ -234,12 +265,28 @@ function ClassicLineShape({
     >
       {/* ممر شفاف عريض لتسهيل النقر على السطر */}
       <rect
-        x={startX}
+        x={Math.min(startX, line.guideStartX)}
         y={line.rowY - 9}
-        width={Math.max(endX - startX, 1)}
+        width={Math.max(Math.max(endX, line.guideEndX) - Math.min(startX, line.guideStartX), 1)}
         height={18}
         fill="transparent"
       />
+
+      {/* الخط التوضيحي بطول الآية كلها. لا نرسمه إلا حين يقصر خط الوجه عن
+          الآية (وضع VARIANT_SPAN)، إذ يكون خط الوجه نفسه هو خط الآية في
+          الوضع الافتراضي، فرسم خط ثانٍ فوقه تكرار لا يراه أحد. */}
+      {(line.guideStartX < startX - 0.5 || line.guideEndX > endX + 0.5) && (
+        <line
+          x1={line.guideStartX}
+          y1={line.rowY}
+          x2={line.guideEndX}
+          y2={line.rowY}
+          stroke={color}
+          strokeWidth={0.8}
+          strokeDasharray="1 4"
+          opacity={isSelected || isHovered ? 0.6 : 0.38}
+        />
+      )}
 
       {/* السطر الأفقي: يبدأ من الطرف الأيسر وينتهي عند الطرف الأيمن */}
       <line
@@ -253,6 +300,22 @@ function ClassicLineShape({
         opacity={opacity}
         filter={isSelected ? 'url(#branch-glow)' : undefined}
       />
+
+      {/* مدى الاختلاف نفسه، مغلّظا فوق السطر الممتد. بهذا ينفصل الاختلاف عن
+          الخط: الخط يمتد مع الآية فيبيّن موافقة الراوي لما قبله، والغليظ
+          يحصر الكلمات المختلفة وحدها. */}
+      {emphasis && (
+        <line
+          x1={emphasis.startX}
+          y1={line.rowY}
+          x2={emphasis.endX}
+          y2={line.rowY}
+          stroke={color}
+          strokeWidth={strokeWidth + 2.2}
+          strokeLinecap="round"
+          opacity={opacity}
+        />
+      )}
 
       {/* الوصلة الرأسية إلى موضع الاختلاف، على جزأين حتى لا تخترق النص:
             1. شارة قصيرة تحت الكلمة نفسها تعيّن موضعها بدقة.
@@ -312,7 +375,17 @@ function ClassicLineShape({
       )}
 
       {/* رموز القراء في الطرف الأيسر من السطر: أين يقرأ القارئ */}
-      {showLabels && <ReaderSymbols line={line} color={color} x={startX - 14} y={line.rowY} />}
+      {showLabels && (
+        <ReaderSymbols
+          readers={line.readers}
+          fallbackName={line.primaryNarratorName}
+          symbolDisplay={line.symbolDisplay}
+          color={color}
+          rightX={line.guideStartX - 12}
+          y={line.rowY}
+          onReaderClick={onReaderClick}
+        />
+      )}
 
       {/* حركات المد في الهامش الأيمن قبالة السطر */}
       {showMadd && typeof line.maddHarakat === 'number' && (
@@ -337,37 +410,142 @@ function ClassicLineShape({
 /**
  * رموز القراء في طرف السطر الأيسر. الرمز هو مفتاح القراءة في المصحف
  * المشجّر: يعرف القارئ من نظرة واحدة أن هذا السطر يخصه.
+ *
+ * كل رمز عنصر مستقل بإحداثي محسوب، لا نص واحد مجمّع. سببان:
+ *
+ *   1. **الجهة**. النص الواحد كان يُرسم بـ `text-anchor="end"` مع
+ *      `direction: rtl`، وفي هذه الحال يعني «end» طرفَ النص في اتجاه
+ *      الكتابة، أي حافته اليسرى، فينسكب النص يمينا من نقطة الإرساء ويظهر
+ *      في الجهة اليمنى — عكس المطلوب. الإحداثي الصريح مع `middle` لا
+ *      يتأثر باتجاه الكتابة أصلا، فالنتيجة واحدة في كل محرك رسم.
+ *   2. **التفاعل**. الرمز المستقل يمكن النقر عليه لمعرفة صاحبه.
+ *
+ * الترتيب من اليمين إلى اليسار: أول الرواة في الطيبة أقربهم إلى السطر.
  */
 function ReaderSymbols({
-  line,
+  readers,
+  fallbackName,
+  symbolDisplay,
   color,
-  x,
+  rightX,
   y,
+  onReaderClick,
 }: {
-  line: ClassicLine;
+  readers: ClassicReaderChip[];
+  fallbackName: string;
+  symbolDisplay: ClassicLine['symbolDisplay'];
   color: string;
-  x: number;
+  /** الحافة اليمنى لكتلة الرموز: تنمو الكتلة يسارا انطلاقا منها. */
+  rightX: number;
   y: number;
+  onReaderClick?: (reader: ClassicReaderChip) => void;
 }) {
-  const text = line.symbolDisplay === 'NAMES'
-    ? line.primaryNarratorName
-    : line.symbols.length
-      ? line.symbols.join(' ')
-      : line.primaryNarratorName;
+  const chips = layoutReaderChips(readers, fallbackName, symbolDisplay, rightX, y);
+
+  if (chips.length === 0) return null;
 
   return (
-    <text
-      x={x}
-      y={y + 5}
-      textAnchor="end"
-      fontSize={15}
-      fontFamily="'Amiri Quran', 'Amiri', serif"
-      fill={color}
-      style={{ direction: 'rtl', userSelect: 'none', fontWeight: 700 }}
-    >
-      {text}
-    </text>
+    <g>
+      {chips.map((chip) => (
+        <g
+          key={chip.key}
+          onClick={
+            chip.reader && onReaderClick
+              ? (event) => {
+                  // لا نفتح تحرير الوجه عند النقر على الرمز؛ المقصود صاحبه.
+                  event.stopPropagation();
+                  onReaderClick(chip.reader!);
+                }
+              : undefined
+          }
+          style={{ cursor: chip.reader && onReaderClick ? 'pointer' : 'inherit' }}
+          data-narrator-id={chip.reader?.narratorId}
+        >
+          <rect
+            x={chip.x - chip.width / 2}
+            y={y - 9}
+            width={chip.width}
+            height={18}
+            rx={4}
+            fill="transparent"
+          />
+          <text
+            x={chip.x}
+            y={y + 5}
+            textAnchor="middle"
+            fontSize={15}
+            fontFamily="'Amiri Quran', 'Amiri', serif"
+            fill={color}
+            style={{ userSelect: 'none', fontWeight: 700 }}
+          >
+            {chip.text}
+          </text>
+          {chip.reader && <title>{chip.reader.name}</title>}
+        </g>
+      ))}
+    </g>
   );
+}
+
+interface PlacedChip {
+  key: string;
+  text: string;
+  x: number;
+  width: number;
+  reader?: ClassicReaderChip;
+}
+
+/**
+ * يوزّع بطاقات القراء أفقيا انطلاقا من الحافة اليمنى نحو اليسار.
+ *
+ * القياس تقريبي مقصود: الغرض تباعد ثابت لا يعتمد على قياس المتصفح، حتى
+ * يكون ناتج الخادم والاختبارات هو ناتج الشاشة نفسه.
+ */
+function layoutReaderChips(
+  readers: ClassicReaderChip[],
+  fallbackName: string,
+  symbolDisplay: ClassicLine['symbolDisplay'],
+  rightX: number,
+  _y: number
+): PlacedChip[] {
+  const gap = 4;
+
+  // عرض الاسم يتناسب مع حروفه، والرمز حرف أو حرفان فله عرض ثابت مريح.
+  const measure = (text: string) => Math.max(13, text.length * 8.5 + 6);
+
+  if (symbolDisplay === 'NAMES') {
+    const text = readers[0]?.name ?? fallbackName;
+    if (!text) return [];
+    const width = measure(text);
+    return [{ key: 'name', text, x: rightX - width / 2, width, reader: readers[0] }];
+  }
+
+  const withSymbols = readers.filter((reader) => reader.symbol.trim().length > 0);
+
+  // لا رمز لأحد (حالة حفص وحده مثلا): نطبع الاسم حتى لا يبقى السطر مجهولا.
+  if (withSymbols.length === 0) {
+    const text = readers[0]?.name ?? fallbackName;
+    if (!text) return [];
+    const width = measure(text);
+    return [{ key: 'name', text, x: rightX - width / 2, width, reader: readers[0] }];
+  }
+
+  const chips: PlacedChip[] = [];
+  let cursor = rightX;
+
+  for (const reader of withSymbols) {
+    const width = measure(reader.symbol);
+    chips.push({
+      key: reader.narratorId,
+      text: reader.symbol,
+      x: cursor - width / 2,
+      width,
+      reader,
+    });
+    cursor -= width + gap;
+  }
+
+  return chips;
 }
 
 /** تحويل الرقم إلى أرقام عربية، كما تُطبع حركات المد في المصحف. */
@@ -504,36 +682,104 @@ function BoundaryMarkers({
   );
 }
 
-/** خط «الجمهور» عندما لا توجد أي اختلافات في الآية. */
-function MajorityLine({
-  classic,
-  baseNarratorName,
+/**
+ * سطر «جمهور»: يُرسم وحده حين تخلو الآية من أي اختلاف.
+ *
+ * لا يُنسب إلى راوٍ. كان يُطبع «الجمهور · حفص» وهو خطأ منهجي: نص المصحف
+ * مكتوب برواية حفص، لكن الوجه عند اتفاق القراء وجه الجمهور كلهم لا وجه حفص.
+ *
+ * وهو تفاعلي: عند التمرير عليه تنكشف رموز القراء، وبالنقر على أي رمز تُفتح
+ * بطاقة صاحبه.
+ */
+function AgreementLine({
+  agreement,
+  showLabels,
+  isHovered,
+  onHoverStart,
+  onHoverEnd,
+  onReaderClick,
 }: {
-  classic: { textBottom: number; firstRowY: number };
-  baseNarratorName: string;
+  agreement: ClassicAgreementLine;
+  showLabels: boolean;
+  isHovered: boolean;
+  onHoverStart: () => void;
+  onHoverEnd: () => void;
+  onReaderClick?: (reader: ClassicReaderChip) => void;
 }) {
-  const y = classic.firstRowY;
+  const color = '#0f766e';
+  const y = agreement.rowY;
+  // الكلمة في الطرف الأيسر كبقية بطاقات الأسطر، وترتيبها من آخر الآية.
+  const labelRightX = agreement.guideStartX - 12;
+  const labelWidth = Math.max(40, agreement.label.length * 9 + 10);
+  const labelCenterX = labelRightX - labelWidth / 2;
+
   return (
-    <g pointerEvents="none">
-      <line
-        x1={-200}
-        y1={y}
-        x2={1000}
-        y2={y}
-        stroke="#94a3b8"
-        strokeWidth={1.4}
-        strokeDasharray="2 5"
+    <g
+      onMouseEnter={onHoverStart}
+      onMouseLeave={onHoverEnd}
+      data-line-id={agreement.id}
+      data-agreement="true"
+    >
+      <rect
+        x={labelCenterX - labelWidth / 2}
+        y={y - 10}
+        width={agreement.guideEndX - (labelCenterX - labelWidth / 2)}
+        height={20}
+        fill="transparent"
       />
-      <text
-        x={20}
-        y={y + 5}
-        fontSize={14}
-        fill="#0f766e"
-        fontFamily="system-ui, sans-serif"
-        style={{ direction: 'rtl', userSelect: 'none', fontWeight: 700 }}
-      >
-        الجمهور · {baseNarratorName}
-      </text>
+
+      {/* الخط التوضيحي بطول الآية: مع الاتفاق خط كما مع الاختلاف. */}
+      <line
+        x1={agreement.guideStartX}
+        y1={y}
+        x2={agreement.guideEndX}
+        y2={y}
+        stroke={color}
+        strokeWidth={isHovered ? 1.1 : 0.8}
+        strokeDasharray="1 4"
+        opacity={isHovered ? 0.6 : 0.4}
+      />
+
+      {/* خط الاتفاق نفسه: ممتد مع الآية كلها، فالقراء كلهم على وجه واحد. */}
+      <line
+        x1={agreement.guideStartX}
+        y1={y}
+        x2={agreement.guideEndX}
+        y2={y}
+        stroke={color}
+        strokeWidth={isHovered ? 2 : 1.4}
+        strokeLinecap="round"
+        opacity={0.92}
+      />
+
+      {showLabels && (
+        <text
+          x={labelCenterX}
+          y={y + 5}
+          textAnchor="middle"
+          fontSize={15}
+          fontFamily="'Amiri Quran', 'Amiri', serif"
+          fill={color}
+          style={{ userSelect: 'none', fontWeight: 700 }}
+        >
+          {agreement.label}
+        </text>
+      )}
+
+      {/* عند التمرير تنكشف رموز القراء فوق السطر: من قرأ بهذا الوجه. */}
+      {showLabels && isHovered && (
+        <ReaderSymbols
+          readers={agreement.readers}
+          fallbackName={agreement.label}
+          symbolDisplay="SYMBOLS"
+          color={color}
+          rightX={agreement.guideEndX}
+          y={y - 18}
+          onReaderClick={onReaderClick}
+        />
+      )}
+
+      <title>{`اتفق القراء العشرة على وجه واحد في هذه الآية — ${agreement.label}`}</title>
     </g>
   );
 }

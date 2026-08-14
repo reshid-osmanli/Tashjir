@@ -20,9 +20,10 @@ import {
 import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-system';
 import { TashjeerFigure } from './TashjeerFigure';
 import { getNarratorsByTayyibah } from '@/lib/tashjeer/symbols';
+import { getNarratorProfile } from '@/data/qiraat-data/narrator-profiles';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
-import type { ClassicLine } from '@/lib/tashjeer/classic-tashjeer';
+import type { ClassicLine, ClassicReaderChip } from '@/lib/tashjeer/classic-tashjeer';
 import type { VariantCategory } from '@/types';
 import type { WordBox } from '@/types/tashjeer';
 import type { TransmissionCatalog } from '@/lib/transmissions/catalog';
@@ -39,6 +40,8 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
   const panState = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const [hoveredLineId, setHoveredLineId] = useState<string | null>(null);
   const [showSymbols, setShowSymbols] = useState(false);
+  // الراوي المفتوحة بطاقته بعد النقر على رمزه في طرف السطر.
+  const [openReader, setOpenReader] = useState<ClassicReaderChip | null>(null);
 
   const {
     document,
@@ -235,6 +238,7 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
             onLineClick={handleLineClick}
             onLineHoverStart={(line) => setHoveredLineId(line.id)}
             onLineHoverEnd={() => setHoveredLineId(null)}
+            onReaderClick={setOpenReader}
           />
         </g>
       </svg>
@@ -251,6 +255,108 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
       </button>
 
       {showSymbols && <SymbolsLegend catalog={catalog} onClose={() => setShowSymbols(false)} />}
+
+      {openReader && (
+        <ReaderCard
+          reader={openReader}
+          catalog={catalog}
+          onClose={() => setOpenReader(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * بطاقة تعريف الراوي: تُفتح بالنقر على رمزه في طرف السطر.
+ *
+ * النبذة مادة تعريفية موجزة لا تحقيق علمي، ولذلك تُذيَّل بتنبيه صريح. أما
+ * الاسم والإمام والرمز فمن الكتالوج، فتظهر صحيحة حتى لراوٍ أضافه المشرف.
+ */
+function ReaderCard({
+  reader,
+  catalog,
+  onClose,
+}: {
+  reader: ClassicReaderChip;
+  catalog: TransmissionCatalog;
+  onClose: () => void;
+}) {
+  const narrator = catalog.narrators.find((item) => item.id === reader.narratorId);
+  const imam = catalog.imams.find((item) => item.id === narrator?.imamId);
+  const profile = getNarratorProfile(reader.narratorId);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`تعريف الراوي ${reader.name}`}
+      className="absolute inset-0 z-20 flex items-center justify-center bg-stone-900/30 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-xl border border-stone-200 bg-white p-4 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2.5">
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-base font-bold text-white"
+              style={{ fontFamily: "'Amiri Quran', serif" }}
+            >
+              {reader.symbol || '—'}
+            </span>
+            <div>
+              <h4 className="text-sm font-bold text-stone-900">{reader.name}</h4>
+              <p className="text-[11px] text-stone-500">
+                {imam ? `راوٍ عن ${imam.name}` : 'راوٍ'}
+                {narrator?.legacyOrderInTayyibah
+                  ? ` · ترتيبه في الطيبة ${narrator.legacyOrderInTayyibah}`
+                  : ''}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded px-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+            aria-label="إغلاق"
+          >
+            ×
+          </button>
+        </div>
+
+        {profile ? (
+          <dl className="mt-3 space-y-1.5 border-t border-stone-100 pt-3 text-[12px] leading-relaxed">
+            {profile.fullName && (
+              <div>
+                <dt className="inline font-medium text-stone-800">الاسم: </dt>
+                <dd className="inline text-stone-600">{profile.fullName}</dd>
+              </div>
+            )}
+            {(profile.died || profile.place) && (
+              <div>
+                <dt className="inline font-medium text-stone-800">الوفاة: </dt>
+                <dd className="inline text-stone-600">
+                  {profile.died ?? '—'}
+                  {profile.place ? ` · ${profile.place}` : ''}
+                </dd>
+              </div>
+            )}
+            {profile.summary && (
+              <p className="pt-1 text-stone-700">{profile.summary}</p>
+            )}
+          </dl>
+        ) : (
+          <p className="mt-3 border-t border-stone-100 pt-3 text-[12px] text-stone-500">
+            لا توجد نبذة مسجّلة لهذا الراوي بعد.
+          </p>
+        )}
+
+        <p className="mt-3 border-t border-stone-100 pt-2 text-[10px] leading-relaxed text-stone-400">
+          نبذة تعريفية موجزة للاستئناس، وليست تحقيقا علميا. المرجع: غاية النهاية والنشر وطبقات القراء.
+        </p>
+      </div>
     </div>
   );
 }
