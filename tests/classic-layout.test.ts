@@ -288,3 +288,82 @@ describe('الآية الطويلة الملتفة على عدة أسطر', () =
     expect(line.spanEndX).toBe(Math.max(...longLayout.boxes.map((box) => box.x + box.width)));
   });
 });
+
+describe('سطر الاتفاق: جمهور', () => {
+  it('يرسم سطر «جمهور» وحده حين تخلو الآية من كل اختلاف', () => {
+    const result = build([]);
+
+    expect(result.hasDifferences).toBe(false);
+    expect(result.lines).toHaveLength(0);
+    expect(result.agreement).not.toBeNull();
+    expect(result.agreement?.label).toBe('جمهور');
+  });
+
+  it('لا ينسب الاتفاق إلى حفص ولا إلى أي راوٍ بعينه', () => {
+    // كان يُطبع «الجمهور · حفص»، وهو خطأ منهجي: حفص أحد القراء لا مرجع
+    // الاتفاق، وإنما نص المصحف مكتوب بروايته.
+    const label = build([]).agreement?.label ?? '';
+
+    expect(label).toBe('جمهور');
+    expect(label).not.toContain('حفص');
+  });
+
+  it('يحمل سطر الاتفاق كل القراء العشرين ليكشفهم العرض عند التمرير', () => {
+    const readers = build([]).agreement?.readers ?? [];
+
+    expect(readers).toHaveLength(20);
+    // مرتبون بترتيب طيبة النشر: قالون أولهم.
+    expect(readers[0].narratorId).toBe('narrator-qalun');
+    // ولكل راوٍ اسمه معه، فلا يسقط من لا رمز له كحفص.
+    expect(readers.every((reader) => reader.name.length > 0)).toBe(true);
+    expect(readers.some((reader) => reader.narratorId === 'narrator-hafs')).toBe(true);
+  });
+
+  it('يمتد سطر الاتفاق مع الآية كلها كبقية الأسطر', () => {
+    const result = build([]);
+
+    expect(result.agreement?.guideStartX).toBe(result.textLeftX);
+    expect(result.agreement?.guideEndX).toBe(result.textRightX);
+  });
+
+  it('يختفي سطر الاتفاق متى وُجد اختلاف واحد في الآية', () => {
+    // عند الاختلاف يبيّن امتدادُ أسطر الأوجه موافقةَ من وافق، فلا حاجة إلى
+    // سطر اتفاق ثانٍ يزاحمها.
+    const result = build([variant('one', 2, 2)]);
+
+    expect(result.hasDifferences).toBe(true);
+    expect(result.agreement).toBeNull();
+  });
+});
+
+describe('الخط التوضيحي وبطاقات القراء', () => {
+  it('يعطي كل سطر خطا توضيحيا بطول الآية كلها', () => {
+    const result = build([variant('one', 2, 2)]);
+    const line = result.lines[0];
+
+    expect(line.guideStartX).toBe(result.textLeftX);
+    expect(line.guideEndX).toBe(result.textRightX);
+  });
+
+  it('يبقي الخط التوضيحي ممتدا مع الآية حتى حين يقصر خط الوجه على مداه', () => {
+    // هذا هو موضع فائدته: خط الوجه محصور في كلمة، والخط التوضيحي يصلها
+    // ببطاقة القارئ في الطرف الأيسر.
+    const result = build([variant('one', 2, 2)], { lineSpan: 'VARIANT_SPAN' });
+    const line = result.lines[0];
+
+    expect(line.spanStartX).toBeGreaterThan(line.guideStartX);
+    expect(line.spanEndX).toBeLessThan(line.guideEndX);
+    expect(line.guideStartX).toBe(result.textLeftX);
+    expect(line.guideEndX).toBe(result.textRightX);
+  });
+
+  it('يقرن كل رمز بصاحبه في بطاقات السطر', () => {
+    const result = build([variant('one', 2, 2)]);
+    const readers = result.lines[0].readers;
+
+    expect(readers).toHaveLength(1);
+    expect(readers[0].narratorId).toBe('narrator-warsh');
+    expect(readers[0].name).toBe('ورش');
+    expect(readers[0].symbol).toBe('ج');
+  });
+});

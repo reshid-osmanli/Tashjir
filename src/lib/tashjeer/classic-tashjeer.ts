@@ -6,11 +6,15 @@
 //   │            نص الآية (رواية الأساس) في سطر واحد            │
 //   └──────────────────────────────────────────────────────────┘
 //                        │        │
-//                     الحكم     الحكم        ← اسم الحكم تحت الكلمة تماما
-//   ٥ ├────────────────────────────────────────────┤  ج ع     ← رموز القراء يسارا
-//   ٤ ├────────────────────────────────────────────┤  ف
-//     ├────────────────────────────────────────────┤  ق
-//   ↑ حركات المد في الهامش الأيمن
+//                     الحكم     الحكم        ← اسم الحكم فوق السطر عند الكلمة
+//   ج ع  ├───────────────────────────────────────────────┤ ٥
+//   ف    ├───────────────────────────────────────────────┤ ٤
+//   ق    ├───────────────────────────────────────────────┤
+//   ↑ رموز القراء في الطرف الأيسر        حركات المد في الهامش الأيمن ↑
+//
+// وإن خلت الآية من الخلاف رُسم سطر واحد وحده:
+//
+//   جمهور ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 //
 // القواعد المطبّقة هنا:
 //
@@ -19,9 +23,14 @@
 //   2. السطر يمتد مع الآية كلها افتراضيا (LineSpanMode = FULL_AYAH)، لأن
 //      امتداده يبيّن اتفاق الراوي مع السطر الذي قبله. الوصلة الرأسية وحدها
 //      هي التي تشير إلى موضع الاختلاف.
-//   3. اسم الحكم (إمالة، تقليل، سكت، إدغام...) يُطبع تحت الكلمة المختلفة
-//      تماما، ورموز القراء تُطبع في طرف السطر الأيسر ليعرف القارئ أين يقرأ.
+//   3. اسم الحكم (إمالة، تقليل، سكت، إدغام...) يُطبع عند الكلمة المختلفة
+//      تماما، ورموز القراء تُطبع في **الطرف الأيسر** من السطر: ترتيب قراءة
+//      الاختلاف يبدأ من آخر كلمة في الآية، وآخر الآية يسارا في الرسم العربي.
 //   4. حركات المد تُطبع في الهامش الأيمن قبالة السطر.
+//   4.b مع كل سطر — اختلافا كان أو اتفاقا — خط توضيحي رفيع بطول الآية كلها،
+//      منفصل عن خط الوجه، يقود العين من الكلمة إلى بطاقة قارئها.
+//   4.c عند خلو الآية من الخلاف يُرسم سطر واحد عنوانه «جمهور» بلا اسم راوٍ.
+//      تسميته «جمهور حفص» خطأ: حفص أحد القراء لا مرجع الاتفاق.
 //   5. ترتيب المواضع: من آخر الآية إلى أولها، ما لم يثبّت المحقق رتبة
 //      يدوية للموضع (`variant.orderRank`).
 //   6. ترتيب أوجه الموضع الواحد: قوة الوجه من الكتاب افتراضيا، ويمكن
@@ -81,6 +90,39 @@ export interface ClassicTashjeerOptions {
 
 // ==================== النواتج ====================
 
+/**
+ * بطاقة راوٍ واحد على السطر: معرّفه واسمه ورمزه، مقترنة في عنصر واحد.
+ *
+ * كانت الرموز والأسماء مصفوفتين متوازيتين، والرموز تُصفّى من الفارغ (حفص)
+ * فينكسر التقابل بينهما. الاقتران هنا هو ما يسمح بجعل كل رمز عنصرا قابلا
+ * للنقر يعرف صاحبه.
+ */
+export interface ClassicReaderChip {
+  narratorId: string;
+  name: string;
+  symbol: string;
+}
+
+/**
+ * سطر الاتفاق: يُرسم حين لا يكون في الآية أي اختلاف، فيقرأ الجميع بوجه واحد.
+ *
+ * لا يُسمّى براوٍ بعينه. الوجه حينئذ وجه **الجمهور**، وتسميته «جمهور حفص»
+ * خطأ منهجي: حفص أحد القراء لا مرجع الاتفاق، وإنما نص المصحف مكتوب بروايته.
+ */
+export interface ClassicAgreementLine {
+  id: string;
+  /** الكلمة المطبوعة في طرف السطر: «جمهور». */
+  label: string;
+  /** كل من قرأ بهذا الوجه، أي القراء جميعا عند الاتفاق. */
+  readers: ClassicReaderChip[];
+  rowY: number;
+  guideStartX: number;
+  guideEndX: number;
+}
+
+/** الكلمة المعتمدة في طرف سطر الاتفاق. */
+export const AGREEMENT_LABEL = 'جمهور';
+
 /** عقدة ربط الخط بكلمة مختلفة. */
 export interface ClassicMark {
   wordId: number;
@@ -112,6 +154,12 @@ export interface ClassicLine {
   primaryNarratorName: string;
   /** أسماء القراء الذين اتفقوا معه، للتلميح. */
   readerNames: string[];
+  /**
+   * بطاقات القراء مقترنة: كل رمز بصاحبه واسمه.
+   * تُطبع في **طرف السطر الأيسر**، لأن ترتيب قراءة الاختلاف يبدأ من آخر
+   * كلمة في الآية، وآخر الآية في الرسم العربي هو الطرف الأيسر.
+   */
+  readers: ClassicReaderChip[];
   /** نص موجز في طرف السطر الأيسر، بحسب إعداد عرض الرموز. */
   label: string;
   /** طريقة إظهار بطاقة القارئ التي اختارها المشرف. */
@@ -147,6 +195,15 @@ export interface ClassicLine {
   /** طرفا السطر الأفقيان بعد تطبيق إعداد الامتداد. */
   spanStartX: number;
   spanEndX: number;
+  /**
+   * الخط التوضيحي: خط رفيع بطول الآية كلها، مستقل عن خط الوجه نفسه.
+   *
+   * وظيفته أن يقود العين من نص الآية إلى بطاقة القارئ في الطرف الأيسر،
+   * فيقرأ المحقق السطر ولو كان مدى الاختلاف كلمة واحدة في وسط الآية.
+   * لذلك يمتد دائما بطول الآية ولا يتأثر بإعداد `lineSpan`.
+   */
+  guideStartX: number;
+  guideEndX: number;
   marks: ClassicMark[];
 }
 
@@ -168,6 +225,11 @@ export interface ClassicTashjeer {
   textRightX: number;
   /** هل في الآية اختلافات أصلا؟ */
   hasDifferences: boolean;
+  /**
+   * سطر «جمهور»: يظهر وحده حين تخلو الآية من أي اختلاف.
+   * غيابه عند وجود اختلاف مقصود: الاتفاق حينئذ يبيّنه امتداد أسطر الأوجه.
+   */
+  agreement: ClassicAgreementLine | null;
   /** خطة ترتيب الأداء التي استخدمها المحرك، للشرح والمراجعة. */
   readingPlan: ReadingPlan;
 }
@@ -305,6 +367,10 @@ export function generateClassicTashjeer(
     const span = lineSpan(line, engine, textLeftX, textRightX);
     line.spanStartX = span.startX;
     line.spanEndX = span.endX;
+    // الخط التوضيحي بطول الآية كلها دائما، حتى حين يقتصر خط الوجه على مدى
+    // الاختلاف. هو المسطرة التي تصل الكلمة ببطاقة قارئها في الطرف الأيسر.
+    line.guideStartX = textLeftX;
+    line.guideEndX = textRightX;
   }
 
   const topLines = lines.filter((line) => line.side === 'TOP');
@@ -317,6 +383,8 @@ export function generateClassicTashjeer(
     ? lowestLineY + rowHeight + rowGap
     : textBottom + rowGap + 60;
 
+  const hasDifferences = lines.length > 0;
+
   return {
     lines,
     textBottom,
@@ -326,9 +394,60 @@ export function generateClassicTashjeer(
     totalHeight,
     textLeftX,
     textRightX,
-    hasDifferences: lines.length > 0,
+    hasDifferences,
+    agreement: hasDifferences
+      ? null
+      : buildAgreementLine(firstRowY, textLeftX, textRightX, catalog),
     readingPlan,
   };
+}
+
+/**
+ * سطر الاتفاق حين لا يكون في الآية خلاف.
+ *
+ * الوجه هنا وجه **الجمهور**: اتفق عليه القراء العشرة جميعا. لا يُنسب إلى حفص
+ * ولا إلى غيره؛ نص المصحف مكتوب برواية حفص لكن الوجه ليس وجهه وحده.
+ * ورموز القراء تُحمل مع السطر ليكشفها العرض عند التمرير.
+ */
+function buildAgreementLine(
+  rowY: number,
+  textLeftX: number,
+  textRightX: number,
+  catalog?: TransmissionCatalog
+): ClassicAgreementLine {
+  const narratorIds = resolveScope({ kind: 'ALL' }, catalog);
+
+  return {
+    id: 'agreement',
+    label: AGREEMENT_LABEL,
+    readers: readerChips(narratorIds, catalog),
+    rowY,
+    guideStartX: textLeftX,
+    guideEndX: textRightX,
+  };
+}
+
+/**
+ * يبني بطاقات القراء مقترنة: كل رمز باسم صاحبه ومعرّفه.
+ *
+ * لا نحذف الراوي الذي لا رمز له (حفص في البذرة) كما كان يفعل ترشيح الرموز؛
+ * نضع له اسمه بديلا عن الرمز حتى لا يسقط من قائمة من قرأ بالوجه.
+ */
+function readerChips(
+  narratorIds: string[],
+  catalog?: TransmissionCatalog
+): ClassicReaderChip[] {
+  return narratorIds
+    .slice()
+    .sort(
+      (first, second) =>
+        narratorTayyibahOrder(first, catalog) - narratorTayyibahOrder(second, catalog)
+    )
+    .map((narratorId) => ({
+      narratorId,
+      name: getNarratorName(narratorId, catalog),
+      symbol: getNarratorSymbol(narratorId, catalog),
+    }));
 }
 
 /**
@@ -512,6 +631,7 @@ function alternativeToLine(
     primarySymbol: display.symbols[0] ?? '',
     primaryNarratorName: pathNames.length ? pathNames.join(' و ') : display.primaryName,
     readerNames: pathNames.length ? pathNames : display.readerNames,
+    readers: readerChips(narratorIds, catalog),
     label: display.label,
     symbolDisplay: engine.symbolDisplay,
     readingText: alt.text,
@@ -532,6 +652,8 @@ function alternativeToLine(
     rowY: 0,
     spanStartX: 0,
     spanEndX: 0,
+    guideStartX: 0,
+    guideEndX: 0,
     marks,
   };
 }
@@ -562,6 +684,7 @@ function manualToLine(
     primarySymbol: display.symbols[0] ?? '',
     primaryNarratorName: display.primaryName,
     readerNames: display.readerNames,
+    readers: readerChips(narratorIds, catalog),
     label: manual.label || display.label,
     symbolDisplay: engine.symbolDisplay,
     readingText: manual.title,
@@ -579,6 +702,8 @@ function manualToLine(
     rowY: 0,
     spanStartX: 0,
     spanEndX: 0,
+    guideStartX: 0,
+    guideEndX: 0,
     marks,
   };
 }
