@@ -36,6 +36,8 @@ export function EditorToolbar({
   const {
     currentTool,
     setTool,
+    markingMode,
+    setMarkingMode,
     zoom,
     zoomIn,
     zoomOut,
@@ -73,6 +75,24 @@ export function EditorToolbar({
             <span>{tool.label}</span>
           </ToolButton>
         ))}
+      </Group>
+
+      <Group label="نمط التعليم">
+        <span className="ms-1 text-[11px] text-stone-500">حدّد:</span>
+        <ToggleButton
+          active={markingMode === 'WORDS'}
+          title="تحديد كلمات كاملة لإنشاء اختلاف"
+          onClick={() => setMarkingMode('WORDS')}
+        >
+          كلمات
+        </ToggleButton>
+        <ToggleButton
+          active={markingMode === 'CHARACTERS'}
+          title="تحديد حروف مرئية مع تشكيلها لإنشاء حكم تجويد دقيق"
+          onClick={() => setMarkingMode('CHARACTERS')}
+        >
+          حروف
+        </ToggleButton>
       </Group>
 
       <Divider />

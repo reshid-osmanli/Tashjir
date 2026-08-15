@@ -62,6 +62,7 @@ import {
 } from './reading-plan';
 import { formatPathName, getNarratorName, resolveScope } from './scope';
 import { getNarratorSymbol, narratorTayyibahOrder } from './symbols';
+import { characterBoundsForWord, characterRangeCenterX } from '@/lib/quran-logic/characters';
 
 // ==================== الإعدادات ====================
 
@@ -127,8 +128,12 @@ export const AGREEMENT_LABEL = 'جمهور';
 export interface ClassicMark {
   wordId: number;
   position: number;
-  /** مركز الكلمة أفقيا (نقطة الارتباط). */
+  /** مركز الكلمة أو الحرف المحدد أفقيا (نقطة الارتباط). */
   x: number;
+  /** بداية الحروف التي يشير إليها السطر، إن كان الموضع حرفيا. */
+  characterStart?: number;
+  /** نهاية الحروف التي يشير إليها السطر، إن كان الموضع حرفيا. */
+  characterEnd?: number;
   topY: number;
   bottomY: number;
   baselineY: number;
@@ -610,7 +615,7 @@ function alternativeToLine(
   const narratorIds = resolveScope(alt.scope, catalog).sort(
     (first, second) => narratorTayyibahOrder(first, catalog) - narratorTayyibahOrder(second, catalog)
   );
-  const marks = marksForRange(variant.startPosition, variant.endPosition, layout);
+  const marks = marksForVariant(variant, layout);
   if (marks.length === 0) return null;
 
   const display = displayReaders(narratorIds, catalog, engine);
@@ -708,15 +713,34 @@ function manualToLine(
   };
 }
 
-function marksForRange(startPosition: number, endPosition: number, layout: AyahLayout): ClassicMark[] {
+function marksForVariant(variant: Variant, layout: AyahLayout): ClassicMark[] {
+  return marksForRange(
+    variant.startPosition,
+    variant.endPosition,
+    layout,
+    variant.targetKind === 'CHARACTERS' ? variant.characterRange : undefined
+  );
+}
+
+function marksForRange(
+  startPosition: number,
+  endPosition: number,
+  layout: AyahLayout,
+  characterRange?: import('@/types/tashjeer').CharacterRange
+): ClassicMark[] {
   const marks: ClassicMark[] = [];
   for (let position = startPosition; position <= endPosition; position++) {
     const box = layout.boxByPosition.get(position);
     if (!box) continue;
+    const bounds = characterBoundsForWord(characterRange, position, box.text);
     marks.push({
       wordId: box.wordId,
       position,
-      x: box.centerX,
+      x: bounds
+        ? characterRangeCenterX(box, bounds.start, bounds.end)
+        : box.centerX,
+      characterStart: bounds?.start,
+      characterEnd: bounds?.end,
       topY: box.topY,
       bottomY: box.bottomY,
       baselineY: box.baselineY,

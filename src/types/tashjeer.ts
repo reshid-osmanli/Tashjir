@@ -113,6 +113,23 @@ export interface VariantAlternative {
   strength?: number;
 }
 
+/** طريقة تثبيت موضع الاختلاف: كلمات كاملة أو حروف مرئية داخل الكلمات. */
+export type VariantTargetKind = 'WORDS' | 'CHARACTERS';
+
+/** مرجع حرف مرئي داخل كلمة. الفهرس 1-based ويضم الحرف مع تشكيله التابع. */
+export interface CharacterAnchor {
+  /** ترتيب الكلمة داخل الآية (1-based). */
+  position: number;
+  /** ترتيب الحرف المرئي داخل الكلمة (1-based). */
+  characterIndex: number;
+}
+
+/** نطاق متصل من الحروف، شامل للبداية والنهاية. */
+export interface CharacterRange {
+  start: CharacterAnchor;
+  end: CharacterAnchor;
+}
+
 /** اختلاف قرائي في موضع محدد من الآية. */
 export interface Variant {
   id: string;
@@ -126,6 +143,13 @@ export interface Variant {
   startPosition: number;
   /** آخر كلمة يشملها الاختلاف (1-based، وتساوي startPosition للكلمة الواحدة) */
   endPosition: number;
+  /**
+   * نوع التحديد. غيابه في ملفات الإصدار القديم يعني WORDS للحفاظ على التوافق.
+   * عند CHARACTERS يبقى مدى الكلمات موجودا كي يستطيع محرك التشجير ترتيب السطر.
+   */
+  targetKind?: VariantTargetKind;
+  /** البداية والنهاية الدقيقتان عند تحديد الحروف. */
+  characterRange?: CharacterRange;
   /** الأوجه، ويجب أن يكون فيها وجه واحد على الأقل غير وجه الأساس */
   alternatives: VariantAlternative[];
   /** حالة التوثيق: البيانات الأولية مسودة حتى يعتمدها مختص */
@@ -284,6 +308,10 @@ export interface LineNode {
   wordId: number;
   /** ترتيب الكلمة داخل الآية */
   position: number;
+  /** بداية الحروف التي ترتبط بها العقدة، إن كان الموضع حرفيا. */
+  characterStart?: number;
+  /** نهاية الحروف التي ترتبط بها العقدة، إن كان الموضع حرفيا. */
+  characterEnd?: number;
   /** جهة الارتباط */
   anchor: AnchorSide;
 }

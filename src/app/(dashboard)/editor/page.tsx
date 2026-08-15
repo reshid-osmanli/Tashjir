@@ -18,7 +18,7 @@ import { VariantsPanel } from '@/components/editor/VariantsPanel';
 import { ShortcutsDialog } from '@/components/editor/ShortcutsDialog';
 import { useEditorStore } from '@/stores/editor-store';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
-import { exportDocuments, importDocuments } from '@/lib/storage/document-store';
+import { exportDocument, importDocuments } from '@/lib/storage/document-store';
 import { makeAyahKey, parseAyahKey } from '@/data/quran';
 
 /** الآية الافتراضية عند فتح المحرر: الفاتحة 4، وفيها اختلاف مشهور. */
@@ -26,6 +26,10 @@ const DEFAULT_AYAH_KEY = makeAyahKey(1, 4);
 
 export default function EditorPage() {
   const [fontSize, setFontSize] = useState(34);
+  const [requestedRoute, setRequestedRoute] = useState({
+    ayahKey: DEFAULT_AYAH_KEY,
+    variantId: null as string | null,
+  });
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -33,7 +37,9 @@ export default function EditorPage() {
   const {
     document,
     isDirty,
+    selectedVariantId,
     openAyah,
+    selectVariant,
     replaceDocument,
     showPropertiesPanel,
     showVariantsPanel,
@@ -43,10 +49,38 @@ export default function EditorPage() {
   // تعطّل الاختصارات أثناء فتح نافذة، حتى لا تتضارب مع الكتابة فيها.
   useKeyboardShortcuts(!showShortcuts);
 
-  // فتح الآية الافتراضية عند أول تحميل.
+  // فتح الآية المطلوبة من المصحف/فهرس الاختلافات، أو الفاتحة 4 افتراضيا.
+  // الرابط يحمل الآية لأن الانتقال من أي صفحة يجب ألا يعيد المحرر إلى المثال.
+  // القراءة من location داخل effect بدلا من useSearchParams تجعل صفحة المحرر
+  // قابلة للبناء الساكن أيضا. الرابط ما زال يدعم ?ayah=...&variant=....
   useEffect(() => {
-    if (!document) openAyah(DEFAULT_AYAH_KEY);
-  }, [document, openAyah]);
+    const params = new URLSearchParams(window.location.search);
+    setRequestedRoute({
+      ayahKey: Number(params.get('ayah')) || DEFAULT_AYAH_KEY,
+      variantId: params.get('variant'),
+    });
+  }, []);
+
+  const requestedAyahKey = requestedRoute.ayahKey;
+  const requestedVariantId = requestedRoute.variantId;
+  const appliedRouteRef = useRef<string | null>(null);
+  useEffect(() => {
+    const routeKey = `${requestedAyahKey}:${requestedVariantId ?? ''}`;
+    if (appliedRouteRef.current === routeKey) return;
+    appliedRouteRef.current = routeKey;
+    if (!document || document.ayahKey !== requestedAyahKey) openAyah(requestedAyahKey);
+  }, [document, openAyah, requestedAyahKey, requestedVariantId]);
+
+  useEffect(() => {
+    if (
+      document?.ayahKey === requestedAyahKey &&
+      requestedVariantId &&
+      requestedVariantId !== selectedVariantId &&
+      document.variants.some((variant) => variant.id === requestedVariantId)
+    ) {
+      selectVariant(requestedVariantId);
+    }
+  }, [document, requestedAyahKey, requestedVariantId, selectVariant, selectedVariantId]);
 
   // تحذير المتصفح عند مغادرة الصفحة مع وجود تعديلات غير محفوظة.
   useEffect(() => {
@@ -70,7 +104,7 @@ export default function EditorPage() {
   const handleExport = useCallback(() => {
     if (!document) return;
 
-    const json = exportDocuments([document.ayahKey]);
+    const json = exportDocument(document);
     const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const anchor = window.document.createElement('a');

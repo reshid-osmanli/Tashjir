@@ -141,8 +141,12 @@ export function PropertiesPanel() {
           </div>
           <Row label="الفئة" value={CATEGORY_LABELS[selectedVariant.category]} />
           <Row
-            label="المدى"
-            value={`${selectedVariant.startPosition}–${selectedVariant.endPosition}`}
+            label={selectedVariant.targetKind === 'CHARACTERS' ? 'مدى الحروف' : 'المدى'}
+            value={
+              selectedVariant.targetKind === 'CHARACTERS' && selectedVariant.characterRange
+                ? `${selectedVariant.characterRange.start.position}/${selectedVariant.characterRange.start.characterIndex} – ${selectedVariant.characterRange.end.position}/${selectedVariant.characterRange.end.characterIndex}`
+                : `${selectedVariant.startPosition}–${selectedVariant.endPosition}`
+            }
           />
           {selectedVariant.description && (
             <p className="mt-2 text-[11px] leading-relaxed text-stone-600">

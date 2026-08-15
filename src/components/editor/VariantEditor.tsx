@@ -16,6 +16,8 @@ import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getImamColor } from '@/lib/tashjeer/color-system';
 import { describeScope, normalizeScope, resolveScope } from '@/lib/tashjeer/scope';
 import { getNarratorSymbol } from '@/lib/tashjeer/symbols';
+import { getAyahWordsByKey } from '@/data/quran';
+import { characterCount } from '@/lib/quran-logic/characters';
 import type { VariantCategory } from '@/types';
 import type {
   EvidenceSource,
@@ -186,6 +188,8 @@ export function VariantEditor({ variant, onClose }: VariantEditorProps) {
             </Field>
           </section>
 
+          <TargetEditor variant={variant} onUpdate={(patch) => updateVariant(variant.id, patch)} />
+
           {/* الأوجه */}
           <section className="mt-6">
             <div className="mb-2 flex items-center justify-between">
@@ -257,6 +261,141 @@ export function VariantEditor({ variant, onClose }: VariantEditorProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ==================== موضع الاختلاف ====================
+
+/**
+ * يبقي محرر الموضع الكلمات والحروف في المكان نفسه. الحقول هنا ليست بديلا عن
+ * النقر على خلايا الحروف في اللوحة؛ هي تدقيق دقيق قابل للتصحيح والتوثيق قبل
+ * اعتماد المادة العلمية.
+ */
+function TargetEditor({
+  variant,
+  onUpdate,
+}: {
+  variant: Variant;
+  onUpdate: (patch: Partial<Variant>) => void;
+}) {
+  const words = useMemo(() => getAyahWordsByKey(variant.ayahKey), [variant.ayahKey]);
+  const isCharacters = variant.targetKind === 'CHARACTERS';
+  const range = variant.characterRange;
+  const startWord = words.find((word) => word.position === (range?.start.position ?? variant.startPosition));
+  const endWord = words.find((word) => word.position === (range?.end.position ?? variant.endPosition));
+
+  const setCharacterRange = (patch: {
+    startPosition?: number;
+    startIndex?: number;
+    endPosition?: number;
+    endIndex?: number;
+  }) => {
+    const startPosition = patch.startPosition ?? range?.start.position ?? variant.startPosition;
+    const endPosition = patch.endPosition ?? range?.end.position ?? variant.endPosition;
+    const startText = words.find((word) => word.position === startPosition)?.text ?? '';
+    const endText = words.find((word) => word.position === endPosition)?.text ?? '';
+    const startIndex = Math.min(
+      Math.max(1, patch.startIndex ?? range?.start.characterIndex ?? 1),
+      Math.max(characterCount(startText), 1)
+    );
+    const endIndex = Math.min(
+      Math.max(1, patch.endIndex ?? range?.end.characterIndex ?? 1),
+      Math.max(characterCount(endText), 1)
+    );
+
+    const start = { position: Math.min(startPosition, endPosition), characterIndex: startIndex };
+    const end = { position: Math.max(startPosition, endPosition), characterIndex: endIndex };
+    // إذا كان الطرفان في كلمة واحدة لا يجوز أن تنعكس الحروف.
+    if (start.position === end.position && start.characterIndex > end.characterIndex) {
+      end.characterIndex = start.characterIndex;
+    }
+    onUpdate({
+      targetKind: 'CHARACTERS',
+      startPosition: start.position,
+      endPosition: end.position,
+      characterRange: { start, end },
+    });
+  };
+
+  return (
+    <section className="mt-4 rounded-md border border-cyan-200 bg-cyan-50/40 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-xs font-bold text-cyan-950">دقة موضع الاختلاف</h3>
+          <p className="mt-0.5 text-[11px] text-cyan-900/75">
+            اختر الحروف لأحكام التجويد الدقيقة؛ تبقى الكلمات نطاقا تنظيميا لخط التشجير.
+          </p>
+        </div>
+        <div className="flex rounded-md border border-cyan-200 bg-white p-0.5 text-[11px]">
+          <button
+            type="button"
+            onClick={() => onUpdate({ targetKind: 'WORDS', characterRange: undefined })}
+            className={`rounded px-2 py-1 ${!isCharacters ? 'bg-cyan-700 text-white' : 'text-stone-600 hover:bg-cyan-50'}`}
+          >
+            كلمات
+          </button>
+          <button
+            type="button"
+            onClick={() => setCharacterRange({})}
+            className={`rounded px-2 py-1 ${isCharacters ? 'bg-cyan-700 text-white' : 'text-stone-600 hover:bg-cyan-50'}`}
+          >
+            حروف
+          </button>
+        </div>
+      </div>
+
+      {isCharacters && range && (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <Field label={`بداية الحرف${startWord ? ` في «${startWord.text}»` : ''}`}>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="number"
+                min={1}
+                max={words.length}
+                value={range.start.position}
+                onChange={(event) => setCharacterRange({ startPosition: Number(event.target.value) })}
+                className="input"
+                aria-label="كلمة بداية نطاق الحروف"
+              />
+              <input
+                type="number"
+                min={1}
+                max={characterCount(startWord?.text ?? '') || 1}
+                value={range.start.characterIndex}
+                onChange={(event) => setCharacterRange({ startIndex: Number(event.target.value) })}
+                className="input"
+                aria-label="حرف بداية النطاق"
+              />
+            </div>
+          </Field>
+          <Field label={`نهاية الحرف${endWord ? ` في «${endWord.text}»` : ''}`}>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="number"
+                min={1}
+                max={words.length}
+                value={range.end.position}
+                onChange={(event) => setCharacterRange({ endPosition: Number(event.target.value) })}
+                className="input"
+                aria-label="كلمة نهاية نطاق الحروف"
+              />
+              <input
+                type="number"
+                min={1}
+                max={characterCount(endWord?.text ?? '') || 1}
+                value={range.end.characterIndex}
+                onChange={(event) => setCharacterRange({ endIndex: Number(event.target.value) })}
+                className="input"
+                aria-label="حرف نهاية النطاق"
+              />
+            </div>
+          </Field>
+          <p className="text-[10px] leading-relaxed text-cyan-900/75 sm:col-span-2">
+            ترتيب كل زوج: رقم الكلمة ثم رقم الحرف. الحرف يشمل علاماته وحركاته التابعة في الرسم العثماني.
+          </p>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -394,7 +533,7 @@ function AlternativeEditor({
  * النقر على اسم الإمام يختار رواته كلهم أو يلغيهم.
  * الاختيار يُختصر تلقائيا إلى أبسط تعبير عبر normalizeScope.
  */
-function ScopePicker({
+export function ScopePicker({
   scope,
   onChange,
 }: {

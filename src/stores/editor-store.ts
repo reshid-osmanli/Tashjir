@@ -19,6 +19,7 @@ import type { VariantCategory } from '@/types';
 import type {
   ManualTashjeerLine,
   RecitationBoundary,
+  CharacterAnchor,
   TashjeerBranch,
   TashjeerDocument,
   Variant,
@@ -38,6 +39,9 @@ import {
 } from '@/lib/storage/document-store';
 
 /** أدوات المحرر المتاحة في شريط الأدوات. */
+/** نمط التعليم داخل أداة التعليم: كلمة كاملة أو حرف مرئي مع تشكيله. */
+export type MarkingMode = 'WORDS' | 'CHARACTERS';
+
 export type EditorTool =
   /** تحديد وتفحص */
   | 'select'
@@ -80,6 +84,10 @@ interface EditorState {
   // ---------- التحديد ----------
   /** الكلمات المعلّمة استعدادا لإنشاء اختلاف */
   markedPositions: number[];
+  /** الحروف المعلّمة عند اختيار نمط الحروف. */
+  markedCharacters: CharacterAnchor[];
+  /** هل ينشئ التعليم اختلاف كلمات أم اختلاف حروف. */
+  markingMode: MarkingMode;
   selectedWordId: number | null;
   selectedVariantId: string | null;
   selectedBranchId: string | null;
@@ -134,7 +142,9 @@ interface EditorState {
 
   // ---------- إجراءات التحديد ----------
   toggleMarkedPosition: (position: number) => void;
+  toggleMarkedCharacter: (anchor: CharacterAnchor) => void;
   clearMarks: () => void;
+  setMarkingMode: (mode: MarkingMode) => void;
   selectWord: (wordId: number | null) => void;
   selectVariant: (variantId: string | null) => void;
   selectBranch: (branchId: string | null) => void;
@@ -173,6 +183,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   showVariantsPanel: true,
 
   markedPositions: [],
+  markedCharacters: [],
+  markingMode: 'WORDS',
   selectedWordId: null,
   selectedVariantId: null,
   selectedBranchId: null,
@@ -191,6 +203,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       past: [],
       future: [],
       markedPositions: [],
+      markedCharacters: [],
       selectedWordId: null,
       selectedVariantId: null,
       selectedBranchId: null,
@@ -208,6 +221,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       document: fresh,
       isDirty: true,
       markedPositions: [],
+      markedCharacters: [],
       selectedVariantId: null,
       selectedBranchId: null,
     }));
@@ -506,11 +520,37 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 
-  clearMarks: () => set({ markedPositions: [] }),
+  toggleMarkedCharacter: (anchor) => {
+    set((state) => {
+      const exists = state.markedCharacters.some(
+        (item) => item.position === anchor.position && item.characterIndex === anchor.characterIndex
+      );
+      const next = exists
+        ? state.markedCharacters.filter(
+            (item) => item.position !== anchor.position || item.characterIndex !== anchor.characterIndex
+          )
+        : [...state.markedCharacters, anchor];
+
+      return {
+        markedCharacters: next.sort(
+          (first, second) =>
+            first.position - second.position || first.characterIndex - second.characterIndex
+        ),
+      };
+    });
+  },
+
+  clearMarks: () => set({ markedPositions: [], markedCharacters: [] }),
+  setMarkingMode: (mode) => set({ markingMode: mode, markedPositions: [], markedCharacters: [] }),
   selectWord: (wordId) => set({ selectedWordId: wordId }),
   selectVariant: (variantId) => set({ selectedVariantId: variantId, selectedBranchId: null }),
   selectBranch: (branchId) => set({ selectedBranchId: branchId }),
-  setTool: (tool) => set({ currentTool: tool, markedPositions: tool === 'mark' ? get().markedPositions : [] }),
+  setTool: (tool) =>
+    set({
+      currentTool: tool,
+      markedPositions: tool === 'mark' ? get().markedPositions : [],
+      markedCharacters: tool === 'mark' ? get().markedCharacters : [],
+    }),
   setDraftCategory: (category) => set({ draftCategory: category }),
 
   // ==================== العرض ====================

@@ -37,6 +37,7 @@ import type { VariantCategory } from '@/types';
 import { getLaneY } from './layout-engine';
 import { describeScope, resolveScope } from './scope';
 import { getCategoryColor } from './color-system';
+import { characterBoundsForWord, characterRangeCenterX } from '@/lib/quran-logic/characters';
 import type { TransmissionCatalog } from '@/lib/transmissions/catalog';
 import type { TraversalOrder } from './engine-settings';
 import { buildReadingPlan, compareReadingPositions, variantTraversalAnchor } from './reading-plan';
@@ -173,19 +174,27 @@ export function generateBranches(
   return assignLanes([...manualBranches, ...generated], options);
 }
 
-/** يبني عقد الخط من مدى كلمات الاختلاف. */
+/**
+ * يبني عقد الخط من مدى الاختلاف. الموضع الحرفي يظل سطرا ذا مدى كلمات كي لا
+ * تتغير قواعد ترتيب التشجير، لكن وصلة السطر تثبت على الحرف/الحروف المحددة
+ * بدلا من مركز الكلمة كله.
+ */
 function buildNodes(variant: Variant, layout: AyahLayout): LineNode[] {
   const side = CATEGORY_SIDE[variant.category];
   const nodes: LineNode[] = [];
+  const characterRange = variant.targetKind === 'CHARACTERS' ? variant.characterRange : undefined;
 
   for (let position = variant.startPosition; position <= variant.endPosition; position++) {
     const box = layout.boxByPosition.get(position);
     if (!box) continue;
+    const bounds = characterBoundsForWord(characterRange, position, box.text);
 
     nodes.push({
       id: `${variant.id}-w${position}`,
       wordId: box.wordId,
       position,
+      characterStart: bounds?.start,
+      characterEnd: bounds?.end,
       anchor: side,
     });
   }
@@ -348,7 +357,10 @@ function renderBranch(
       const box = layout.boxById.get(node.wordId);
       if (!box) return null;
       return {
-        x: box.centerX,
+        x:
+          typeof node.characterStart === 'number'
+            ? characterRangeCenterX(box, node.characterStart, node.characterEnd ?? node.characterStart)
+            : box.centerX,
         y: node.anchor === 'TOP' ? box.topY : box.bottomY,
         wordId: node.wordId,
       };

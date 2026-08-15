@@ -12,7 +12,14 @@ import type {
   ClassicTashjeer,
 } from '@/lib/tashjeer/classic-tashjeer';
 import type { TashjeerEngineSettings } from '@/lib/tashjeer/engine-settings';
-import type { AyahLayout, RecitationBoundary, WordBox } from '@/types/tashjeer';
+import type {
+  AyahLayout,
+  CharacterAnchor,
+  CharacterRange,
+  RecitationBoundary,
+  WordBox,
+} from '@/types/tashjeer';
+import { splitQuranCharacters, isCharacterInRange } from '@/lib/quran-logic/characters';
 
 export interface ViewBox {
   x: number;
@@ -37,11 +44,15 @@ export function TashjeerFigure({
   showAnchors = false,
   showRulers = false,
   markedPositions = [],
+  markedCharacters = [],
   coveredPositions = [],
+  coveredCharacterRanges = [],
+  characterMarkingActive = false,
   selectedWordId = null,
   selectedVariantId = null,
   hoveredLineId = null,
   onWordClick,
+  onCharacterClick,
   onLineClick,
   onLineHoverStart,
   onLineHoverEnd,
@@ -58,11 +69,18 @@ export function TashjeerFigure({
   showAnchors?: boolean;
   showRulers?: boolean;
   markedPositions?: number[];
+  /** الحروف التي نقرها المحرر في جلسة التعليم الحالية. */
+  markedCharacters?: CharacterAnchor[];
   coveredPositions?: number[];
+  /** نطاقات حرفية محفوظة داخل اختلافات الآية. */
+  coveredCharacterRanges?: CharacterRange[];
+  /** يرسم خلايا الحروف القابلة للنقر من دون تفكيك تشكيل الكلمة. */
+  characterMarkingActive?: boolean;
   selectedWordId?: number | null;
   selectedVariantId?: string | null;
   hoveredLineId?: string | null;
   onWordClick?: (box: WordBox) => void;
+  onCharacterClick?: (box: WordBox, characterIndex: number) => void;
   onLineClick?: (line: ClassicLine) => void;
   onLineHoverStart?: (line: ClassicLine) => void;
   onLineHoverEnd?: () => void;
@@ -115,10 +133,14 @@ export function TashjeerFigure({
             box={box}
             fontSize={fontSize}
             isMarked={markedPositions.includes(box.position)}
+            markedCharacters={markedCharacters.filter((anchor) => anchor.position === box.position)}
             isSelected={box.wordId === selectedWordId}
             isCovered={coveredPositions.includes(box.position)}
+            coveredCharacterRanges={coveredCharacterRanges}
+            characterMarkingActive={characterMarkingActive}
             showAnchors={showAnchors}
             onClick={() => onWordClick?.(box)}
+            onCharacterClick={(characterIndex) => onCharacterClick?.(box, characterIndex)}
           />
         ))}
       </g>
@@ -132,26 +154,40 @@ function WordShape({
   box,
   fontSize,
   isMarked,
+  markedCharacters,
   isSelected,
   isCovered,
+  coveredCharacterRanges,
+  characterMarkingActive,
   showAnchors,
   onClick,
+  onCharacterClick,
 }: {
   box: WordBox;
   fontSize: number;
   isMarked: boolean;
+  markedCharacters: CharacterAnchor[];
   isSelected: boolean;
   isCovered: boolean;
+  coveredCharacterRanges: CharacterRange[];
+  characterMarkingActive: boolean;
   showAnchors: boolean;
   onClick: () => void;
+  onCharacterClick: (characterIndex: number) => void;
 }) {
+  const characters = splitQuranCharacters(box.text);
+  const markedIndexes = new Set(markedCharacters.map((anchor) => anchor.characterIndex));
+  const hasCharacterCoverage = coveredCharacterRanges.some((range) =>
+    range.start.position <= box.position && range.end.position >= box.position
+  );
   const highlight = isMarked
     ? '#fde68a'
     : isSelected
       ? '#bbf7d0'
-      : isCovered
+      : isCovered && !hasCharacterCoverage
         ? '#f1f5f9'
         : 'transparent';
+  const cellWidth = characters.length > 0 ? box.width / characters.length : box.width;
 
   return (
     <g onClick={onClick} style={{ cursor: 'pointer' }} data-word-id={box.wordId}>
@@ -166,6 +202,48 @@ function WordShape({
         strokeWidth={1.2}
       />
 
+      {/* لا نفصل النص إلى عناصر SVG مستقلة، لأن ذلك يكسر وصل الحروف العربية.
+          الخلايا الشفافة هنا هي طبقة تفاعل فقط، مرتبة RTL، وكل خلية تمثل
+          حرفا مرئيا واحدا مع تشكيله. */}
+      {(characterMarkingActive || hasCharacterCoverage || markedIndexes.size > 0) &&
+        characters.map((character, arrayIndex) => {
+          const characterIndex = character.index;
+          const x = box.x + box.width - (arrayIndex + 1) * cellWidth;
+          const isMarkedCharacter = markedIndexes.has(characterIndex);
+          const isCoveredCharacter = coveredCharacterRanges.some((range) =>
+            isCharacterInRange({ position: box.position, characterIndex }, range)
+          );
+
+          return (
+            <rect
+              key={`${box.wordId}-char-${characterIndex}`}
+              x={x}
+              y={box.topY - 2}
+              width={cellWidth}
+              height={box.height + 4}
+              rx={3}
+              fill={isMarkedCharacter ? '#fbbf24' : isCoveredCharacter ? '#cbd5e1' : 'transparent'}
+              fillOpacity={isMarkedCharacter ? 0.46 : isCoveredCharacter ? 0.36 : 1}
+              stroke={
+                characterMarkingActive
+                  ? isMarkedCharacter
+                    ? '#b45309'
+                    : '#94a3b8'
+                  : 'transparent'
+              }
+              strokeWidth={characterMarkingActive ? 0.55 : 0}
+              onClick={(event) => {
+                if (!characterMarkingActive) return;
+                event.stopPropagation();
+                onCharacterClick(characterIndex);
+              }}
+              data-character-index={characterIndex}
+            >
+              <title>{`الحرف ${characterIndex}: ${character.text}`}</title>
+            </rect>
+          );
+        })}
+
       <text
         x={box.centerX}
         y={box.baselineY}
@@ -173,6 +251,7 @@ function WordShape({
         fontSize={fontSize}
         fontFamily="'Amiri Quran', 'Amiri', serif"
         fill="#1c1917"
+        pointerEvents="none"
         style={{ direction: 'rtl', userSelect: 'none' }}
       >
         {box.text}
