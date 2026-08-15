@@ -16,7 +16,7 @@ import {
   getSurahOrFirst,
   searchSurahs,
 } from '@/data/quran';
-import { listDocuments } from '@/lib/storage/document-store';
+import { exportAyahDocument, listDocuments } from '@/lib/storage/document-store';
 
 export default function QuranPage() {
   const [surahNumber, setSurahNumber] = useState(1);
@@ -30,6 +30,16 @@ export default function QuranPage() {
   const surah = getSurahOrFirst(surahNumber);
   const ayahs = useMemo(() => getSurahAyahs(surahNumber), [surahNumber]);
   const filteredSurahs = useMemo(() => searchSurahs(query), [query]);
+
+  const exportAyahJson = (ayahKey: number, surah: number, ayah: number) => {
+    const blob = new Blob([exportAyahDocument(ayahKey)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = window.document.createElement('a');
+    anchor.href = url;
+    anchor.download = `tashjeer-${surah}-${ayah}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-4">
@@ -125,12 +135,22 @@ export default function QuranPage() {
                       {ayah.text}
                     </p>
 
-                    <Link
-                      href="/editor"
-                      className="mt-1.5 shrink-0 rounded-md border border-stone-300 bg-white px-2 py-1 text-[11px] text-stone-600 opacity-0 transition-opacity hover:bg-stone-50 group-hover:opacity-100"
-                    >
-                      تشجير
-                    </Link>
+                    <div className="mt-1.5 flex shrink-0 gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                      <Link
+                        href={`/editor?ayah=${ayah.key}`}
+                        className="rounded-md border border-stone-300 bg-white px-2 py-1 text-[11px] text-stone-600 hover:bg-stone-50"
+                      >
+                        تشجير
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => exportAyahJson(ayah.key, ayah.surahNumber, ayah.ayahNumber)}
+                        className="rounded-md border border-cyan-200 bg-white px-2 py-1 text-[11px] text-cyan-800 hover:bg-cyan-50"
+                        title="تصدير ملف JSON لهذه الآية"
+                      >
+                        JSON
+                      </button>
+                    </div>
                   </div>
                 </li>
               );

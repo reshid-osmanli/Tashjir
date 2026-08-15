@@ -9,6 +9,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useEditorStore } from '@/stores/editor-store';
 import { getAyahWordsByKey } from '@/data/quran';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
@@ -16,6 +17,7 @@ import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-system';
 import { describeScope, resolveScope } from '@/lib/tashjeer/scope';
 import { VariantEditor } from './VariantEditor';
+import { rangeFromCharacterAnchors, textForCharacterRange } from '@/lib/quran-logic/characters';
 import type { VariantCategory } from '@/types';
 import type { Variant } from '@/types/tashjeer';
 
@@ -23,6 +25,8 @@ export function VariantsPanel() {
   const {
     document,
     markedPositions,
+    markedCharacters,
+    markingMode,
     selectedVariantId,
     draftCategory,
     setDraftCategory,
@@ -40,13 +44,22 @@ export function VariantsPanel() {
     [document]
   );
 
-  const markedText = useMemo(
-    () =>
-      markedPositions
-        .map((position) => words.find((word) => word.position === position)?.text ?? '')
-        .join(' '),
-    [markedPositions, words]
+  const markedCharacterRange = useMemo(
+    () => rangeFromCharacterAnchors(markedCharacters),
+    [markedCharacters]
   );
+
+  const markedText = useMemo(() => {
+    if (markingMode === 'CHARACTERS' && markedCharacterRange) {
+      return textForCharacterRange(words, markedCharacterRange);
+    }
+    return markedPositions
+      .map((position) => words.find((word) => word.position === position)?.text ?? '')
+      .join(' ');
+  }, [markedCharacterRange, markedPositions, markingMode, words]);
+
+  const hasMarks =
+    markingMode === 'CHARACTERS' ? markedCharacterRange !== null : markedPositions.length > 0;
 
   if (!document) return null;
 
@@ -54,14 +67,21 @@ export function VariantsPanel() {
 
   /** ينشئ اختلافا جديدا من الكلمات المعلّمة، بوجه أساس واحد جاهز للتحرير. */
   const handleCreateVariant = () => {
-    if (markedPositions.length === 0) return;
+    if (!hasMarks) return;
 
-    const start = Math.min(...markedPositions);
-    const end = Math.max(...markedPositions);
-    const baseText = words
-      .filter((word) => word.position >= start && word.position <= end)
-      .map((word) => word.text)
-      .join(' ');
+    const characterRange = markingMode === 'CHARACTERS' ? markedCharacterRange : null;
+    const start = characterRange
+      ? characterRange.start.position
+      : Math.min(...markedPositions);
+    const end = characterRange
+      ? characterRange.end.position
+      : Math.max(...markedPositions);
+    const baseText = characterRange
+      ? textForCharacterRange(words, characterRange)
+      : words
+          .filter((word) => word.position >= start && word.position <= end)
+          .map((word) => word.text)
+          .join(' ');
 
     const id = `v-${document.ayahKey}-${start}-${Date.now().toString(36)}`;
 
@@ -71,6 +91,8 @@ export function VariantsPanel() {
       title: baseText,
       startPosition: start,
       endPosition: end,
+      targetKind: characterRange ? 'CHARACTERS' : 'WORDS',
+      characterRange: characterRange ?? undefined,
       status: 'DRAFT',
       alternatives: [
         {
@@ -90,19 +112,32 @@ export function VariantsPanel() {
   return (
     <aside className="flex h-full w-[340px] shrink-0 flex-col border-s border-stone-200 bg-white">
       <header className="border-b border-stone-200 px-4 py-3">
-        <h2 className="text-sm font-bold text-stone-900">اختلافات الآية</h2>
-        <p className="mt-0.5 text-xs text-stone-500">
-          {document.variants.length} اختلافا — مرتبة من آخر الآية إلى أولها
-        </p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-bold text-stone-900">اختلافات الآية</h2>
+            <p className="mt-0.5 text-xs text-stone-500">
+              {document.variants.length} اختلافا — مرتبة من آخر الآية إلى أولها
+            </p>
+          </div>
+          <Link
+            href="/variants"
+            className="shrink-0 rounded border border-violet-200 px-2 py-1 text-[10px] text-violet-800 hover:bg-violet-50"
+            title="إضافة قاعدة عامة أو البحث في كل الاختلافات"
+          >
+            الفهرس
+          </Link>
+        </div>
       </header>
 
       {/* إنشاء اختلاف من الكلمات المعلّمة */}
       <section className="border-b border-stone-200 bg-stone-50 px-4 py-3">
         <h3 className="text-xs font-semibold text-stone-700">اختلاف جديد</h3>
 
-        {markedPositions.length === 0 ? (
+        {!hasMarks ? (
           <p className="mt-1.5 text-xs leading-relaxed text-stone-500">
-            فعّل أداة التعليم (M) ثم انقر على الكلمات التي يقع فيها الاختلاف.
+            {markingMode === 'CHARACTERS'
+              ? 'فعّل أداة التعليم (M) ثم انقر على خلايا الحروف؛ احرص على تحديد بداية المدى ونهايته.'
+              : 'فعّل أداة التعليم (M) ثم انقر على الكلمات التي يقع فيها الاختلاف.'}
           </p>
         ) : (
           <div className="mt-2 space-y-2">
@@ -114,7 +149,9 @@ export function VariantsPanel() {
                 {markedText}
               </p>
               <p className="mt-1 text-[11px] text-stone-500">
-                الكلمات {Math.min(...markedPositions)}–{Math.max(...markedPositions)}
+                {markedCharacterRange
+                  ? `الحروف: كلمة ${markedCharacterRange.start.position} / حرف ${markedCharacterRange.start.characterIndex} إلى كلمة ${markedCharacterRange.end.position} / حرف ${markedCharacterRange.end.characterIndex}`
+                  : `الكلمات ${Math.min(...markedPositions)}–${Math.max(...markedPositions)}`}
               </p>
             </div>
 
@@ -229,9 +266,10 @@ function VariantRow({
             {variant.title}
           </p>
           <p className="mt-0.5 text-[11px] text-stone-500">
-            الكلمات {variant.startPosition}
-            {variant.endPosition !== variant.startPosition ? `–${variant.endPosition}` : ''} —{' '}
-            {drawnAlternatives.length} وجها مرسوما
+            {variant.targetKind === 'CHARACTERS' && variant.characterRange
+              ? `حروف: ${variant.characterRange.start.position}/${variant.characterRange.start.characterIndex} إلى ${variant.characterRange.end.position}/${variant.characterRange.end.characterIndex}`
+              : `الكلمات ${variant.startPosition}${variant.endPosition !== variant.startPosition ? `–${variant.endPosition}` : ''}`}{' '}
+            — {drawnAlternatives.length} وجها مرسوما
           </p>
         </button>
 

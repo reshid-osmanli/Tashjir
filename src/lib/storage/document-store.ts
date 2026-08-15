@@ -20,11 +20,14 @@ import type {
   Variant,
   VerificationStatus,
 } from '@/types/tashjeer';
+import { getAyahByKey, getAyahWordsByKey } from '@/data/quran';
+import { listGlobalRules, upsertGlobalRules, type GlobalRule } from './global-rules-store';
+import { characterCount, compareCharacterAnchors } from '@/lib/quran-logic/characters';
 import { getSeedVariants } from '@/data/variants/seed-variants';
 import { parseAyahKey } from '@/data/quran';
 
 /** إصدار صيغة المستند الحالي. */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 // نحتفظ بمفاتيح v2 كي تُقرأ مستندات المستخدمين القديمة ثم تُرقّى عند الحفظ.
 const DOC_PREFIX = 'tashjeer:doc:v2:';
@@ -36,6 +39,8 @@ export interface DocumentIndexEntry {
   surahNumber: number;
   ayahNumber: number;
   variantsCount: number;
+  /** عدد المواضع المحددة بالحروف، مفيد لفهرس العمل والمراجعة. */
+  characterVariantsCount?: number;
   branchesCount: number;
   status: VerificationStatus;
   updatedAt: string;
@@ -141,10 +146,22 @@ export function hasDocument(ayahKey: number): boolean {
 // ==================== التصدير والاستيراد ====================
 
 /** صيغة ملف التصدير: مستند واحد أو عدة مستندات. */
+export interface ExportedAyahSnapshot {
+  ayahKey: number;
+  surahNumber: number;
+  ayahNumber: number;
+  text: string;
+  words: Array<{ id: number; position: number; text: string }>;
+}
+
 export interface ExportBundle {
   format: 'tashjeer-export';
   schemaVersion: number;
   exportedAt: string;
+  /** كل قواعد المصحف العامة، حتى يكون ملف آية واحدة مفهوما بذاته. */
+  globalRules: GlobalRule[];
+  /** لقطة النص والكلمات التي استند إليها كل مستند، للقراءة بلا التطبيق. */
+  ayahs: ExportedAyahSnapshot[];
   documents: TashjeerDocument[];
 }
 
@@ -158,14 +175,48 @@ export function exportDocuments(ayahKeys?: number[]): string {
     .map((key) => loadDocument(key))
     .filter((document): document is TashjeerDocument => document !== null);
 
+  return exportDocumentBundle(documents);
+}
+
+/**
+ * يصدّر مستندا موجودا في ذاكرة المحرر، حتى قبل الضغط على «حفظ». هذا مهم
+ * لتسليم JSON لكل آية: لا يصبح الملف فارغا عند تصدير آية جديدة أو مسودة.
+ */
+export function exportDocument(document: TashjeerDocument): string {
+  return exportDocumentBundle([migrateDocument(document)]);
+}
+
+/** يصدر آية من فهرس المصحف حتى إن لم يسبق حفظ مستند لها. */
+export function exportAyahDocument(ayahKey: number): string {
+  return exportDocumentBundle([loadDocument(ayahKey) ?? createDocument(ayahKey)]);
+}
+
+function exportDocumentBundle(documents: TashjeerDocument[]): string {
   const bundle: ExportBundle = {
     format: 'tashjeer-export',
     schemaVersion: SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
+    globalRules: listGlobalRules(),
+    ayahs: documents.map(makeAyahSnapshot),
     documents,
   };
 
   return JSON.stringify(bundle, null, 2);
+}
+
+function makeAyahSnapshot(document: TashjeerDocument): ExportedAyahSnapshot {
+  const ayah = getAyahByKey(document.ayahKey);
+  return {
+    ayahKey: document.ayahKey,
+    surahNumber: document.surahNumber,
+    ayahNumber: document.ayahNumber,
+    text: ayah?.text ?? '',
+    words: getAyahWordsByKey(document.ayahKey).map((word) => ({
+      id: word.id,
+      position: word.position,
+      text: word.text,
+    })),
+  };
 }
 
 /** نتيجة عملية استيراد. */
@@ -196,6 +247,10 @@ export function importDocuments(json: string, overwrite = false): ImportResult {
     result.errors.push('الملف ليس ملف تصدير تشجير.');
     return result;
   }
+
+  // ملفات الإصدار 4 تحمل القواعد العامة أيضا؛ الملف الأقدم يبقى صالحا من
+  // دونها. لا نعطل استيراد آية بسبب قاعدة عامة فيها نقص.
+  if (Array.isArray(bundle.globalRules)) upsertGlobalRules(bundle.globalRules);
 
   for (const document of bundle.documents) {
     if (typeof document?.ayahKey !== 'number') {
@@ -241,6 +296,7 @@ function updateIndex(document: TashjeerDocument): void {
     surahNumber: document.surahNumber,
     ayahNumber: document.ayahNumber,
     variantsCount: document.variants.length,
+    characterVariantsCount: document.variants.filter((variant) => variant.targetKind === 'CHARACTERS').length,
     branchesCount: document.branches.length,
     status: document.meta.status,
     updatedAt: document.meta.updatedAt,
@@ -269,7 +325,9 @@ function migrateDocument(document: TashjeerDocument): TashjeerDocument {
     ayahKey: document.ayahKey,
     surahNumber: document.surahNumber ?? parseAyahKey(document.ayahKey).surahNumber,
     ayahNumber: document.ayahNumber ?? parseAyahKey(document.ayahKey).ayahNumber,
-    variants: Array.isArray(document.variants) ? document.variants : [],
+    variants: Array.isArray(document.variants)
+      ? document.variants.map((variant) => migrateVariant(variant, document.ayahKey))
+      : [],
     branches: Array.isArray(document.branches) ? document.branches : [],
     manualLines: Array.isArray(document.manualLines) ? document.manualLines : [],
     boundaries: Array.isArray(document.boundaries) ? document.boundaries : [],
@@ -284,6 +342,52 @@ function migrateDocument(document: TashjeerDocument): TashjeerDocument {
     },
     meta,
   };
+}
+
+/** يطبع موضع الحروف القديم/المستورد إلى نطاق صالح أو يعيده إلى كلمات بأمان. */
+function migrateVariant(variant: Variant, ayahKey: number): Variant {
+  const startPosition = Math.max(1, Math.round(variant.startPosition ?? 1));
+  const endPosition = Math.max(startPosition, Math.round(variant.endPosition ?? startPosition));
+  const candidate = variant.characterRange;
+
+  if (variant.targetKind === 'CHARACTERS' && candidate) {
+    const words = getAyahWordsByKey(ayahKey);
+    const startText = words.find((word) => word.position === candidate.start?.position)?.text;
+    const endText = words.find((word) => word.position === candidate.end?.position)?.text;
+    const start = {
+      position: Math.max(startPosition, Math.round(candidate.start?.position ?? startPosition)),
+      characterIndex: Math.max(1, Math.round(candidate.start?.characterIndex ?? 1)),
+    };
+    const end = {
+      position: Math.min(endPosition, Math.round(candidate.end?.position ?? endPosition)),
+      characterIndex: Math.max(1, Math.round(candidate.end?.characterIndex ?? 1)),
+    };
+
+    if (startText && endText && compareCharacterAnchors(start, end) <= 0) {
+      const safeStart = Math.min(start.characterIndex, characterCount(startText));
+      const safeEnd = Math.min(end.characterIndex, characterCount(endText));
+      if (safeStart > 0 && safeEnd > 0) {
+        return {
+          ...variant,
+          ayahKey,
+          startPosition: start.position,
+          endPosition: end.position,
+          targetKind: 'CHARACTERS',
+          characterRange: {
+            start: { ...start, characterIndex: safeStart },
+            end: { ...end, characterIndex: safeEnd },
+          },
+        };
+      }
+    }
+  }
+
+  // لا نضيف حقول WORDS إلى المستندات القديمة: غيابها هو القيمة المتوافقة
+  // تاريخيا، ويحافظ على ثبات ملف التصدير عند دورة استيراد/تصدير قديمة.
+  const { characterRange: _ignoredCharacterRange, targetKind, ...legacy } = variant;
+  return targetKind === 'WORDS'
+    ? { ...legacy, ayahKey, startPosition, endPosition, targetKind: 'WORDS' }
+    : { ...legacy, ayahKey, startPosition, endPosition };
 }
 
 function cloneVariants(variants: Variant[]): Variant[] {

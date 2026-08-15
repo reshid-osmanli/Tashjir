@@ -4,6 +4,7 @@ const navItems = [
   { href: '/', icon: '⌂', label: 'الرئيسية' },
   { href: '/editor', icon: '✎', label: 'المحرر' },
   { href: '/quran', icon: 'ق', label: 'المصحف' },
+  { href: '/variants', icon: '⌕', label: 'فهرس الاختلافات' },
   { href: '/qiraat', icon: 'ع', label: 'القراءات' },
   { href: '/review', icon: '✓', label: 'المراجعة' },
   { href: '/readers', icon: 'ر', label: 'القراء' },

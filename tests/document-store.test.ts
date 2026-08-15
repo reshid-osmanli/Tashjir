@@ -173,6 +173,52 @@ describe('التصدير والاستيراد', () => {
     expect(bundle.format).toBe('tashjeer-export');
     expect(bundle.schemaVersion).toBe(store.SCHEMA_VERSION);
     expect(bundle.documents).toHaveLength(1);
+    expect(bundle.ayahs).toHaveLength(1);
+    expect(bundle.ayahs[0].words.length).toBeGreaterThan(0);
+    expect(bundle.globalRules).toEqual([]);
+  });
+
+  it('يصدّر المسودة المفتوحة حتى قبل حفظها في الفهرس', async () => {
+    const store = await loadStore();
+    const document = store.createDocument(makeAyahKey(2, 2));
+    document.variants.push({
+      id: 'character-draft',
+      ayahKey: document.ayahKey,
+      category: 'TAJWEED',
+      title: 'حكم حرفي',
+      startPosition: 1,
+      endPosition: 1,
+      targetKind: 'CHARACTERS',
+      characterRange: {
+        start: { position: 1, characterIndex: 1 },
+        end: { position: 1, characterIndex: 1 },
+      },
+      alternatives: [],
+      status: 'DRAFT',
+    });
+
+    const bundle = JSON.parse(store.exportDocument(document));
+    expect(store.hasDocument(document.ayahKey)).toBe(false);
+    expect(bundle.documents[0].variants[0].characterRange).toEqual(document.variants[0].characterRange);
+    expect(bundle.ayahs[0].ayahKey).toBe(document.ayahKey);
+  });
+
+  it('يحمل JSON الآية القواعد العامة النشطة وسجلها', async () => {
+    const store = await loadStore();
+    const globalRules = await import('@/lib/storage/global-rules-store');
+    globalRules.saveGlobalRule({
+      id: 'global-madd',
+      title: 'مد منفصل عام',
+      category: 'MADUD',
+      scope: { kind: 'NARRATORS', narratorIds: ['narrator-hafs'] },
+      ruleLabel: 'مد منفصل',
+      status: 'DRAFT',
+      isActive: true,
+    });
+
+    const bundle = JSON.parse(store.exportAyahDocument(makeAyahKey(1, 1)));
+    expect(bundle.globalRules).toHaveLength(1);
+    expect(bundle.globalRules[0].title).toBe('مد منفصل عام');
   });
 
   it('دورة تصدير واستيراد تحفظ المحتوى كما هو', async () => {

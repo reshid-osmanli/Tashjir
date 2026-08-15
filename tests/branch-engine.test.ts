@@ -84,6 +84,23 @@ describe('توليد الخطوط', () => {
     expect(generateBranches([variant], layout)).toHaveLength(0);
   });
 
+  it('يثبت عقدة الموضع الحرفي على الحرف المحدد لا على الكلمة كاملة', () => {
+    const variant = makeVariant({
+      id: 'character-node',
+      targetKind: 'CHARACTERS',
+      characterRange: {
+        start: { position: 1, characterIndex: 1 },
+        end: { position: 1, characterIndex: 1 },
+      },
+    });
+
+    const [branch] = generateBranches([variant], layout);
+    const [rendered] = renderBranches([branch], layout);
+
+    expect(branch.nodes[0]).toMatchObject({ characterStart: 1, characterEnd: 1 });
+    expect(rendered.points[0].x).not.toBe(layout.boxByPosition.get(1)?.centerX);
+  });
+
   it('يضع كل الفئات تحت النص، فالأصول والفرش سواء', () => {
     const usul = makeVariant({ id: 'u1', category: 'USUL' });
     const farsh = makeVariant({ id: 'f1', category: 'FARSH', startPosition: 3, endPosition: 3 });

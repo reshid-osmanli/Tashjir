@@ -49,7 +49,9 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     zoom,
     pan,
     currentTool,
+    markingMode,
     markedPositions,
+    markedCharacters,
     selectedWordId,
     selectedVariantId,
     setZoom,
@@ -59,6 +61,7 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     selectBranch,
     refreshDerivedBranches,
     toggleMarkedPosition,
+    toggleMarkedCharacter,
   } = useEditorStore();
 
   const catalog = useTransmissionCatalog();
@@ -122,7 +125,9 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
       }
 
       if (currentTool === 'mark') {
-        toggleMarkedPosition(box.position);
+        // في وضع الحروف لا نعتمد النقر العام على الكلمة؛ انقر خلية الحرف
+        // الظاهرة فوق النص حتى يبقى التحديد دقيقا ولا يتحول سهوا إلى كلمة.
+        if (markingMode === 'WORDS') toggleMarkedPosition(box.position);
         return;
       }
 
@@ -133,7 +138,25 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
       );
       selectVariant(variant?.id ?? null);
     },
-    [currentTool, document, readOnly, selectVariant, selectWord, selectedWordId, toggleMarkedPosition]
+    [
+      currentTool,
+      document,
+      markingMode,
+      readOnly,
+      selectVariant,
+      selectWord,
+      selectedWordId,
+      toggleMarkedPosition,
+    ]
+  );
+
+  const handleCharacterClick = useCallback(
+    (box: WordBox, characterIndex: number) => {
+      if (readOnly || currentTool !== 'mark' || markingMode !== 'CHARACTERS') return;
+      toggleMarkedCharacter({ position: box.position, characterIndex });
+      selectWord(box.wordId);
+    },
+    [currentTool, markingMode, readOnly, selectWord, toggleMarkedCharacter]
   );
 
   const handleLineClick = useCallback(
@@ -162,6 +185,15 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     }
     return [...positions];
   }, [document]);
+
+  // النطاقات الحرفية المحفوظة تعرض بتظليل أدق من تظليل الكلمة الكاملة.
+  const coveredCharacterRanges = useMemo(
+    () =>
+      document?.variants
+        .filter((variant) => variant.targetKind === 'CHARACTERS' && Boolean(variant.characterRange))
+        .flatMap((variant) => (variant.characterRange ? [variant.characterRange] : [])) ?? [],
+    [document]
+  );
 
   // ==================== حالات فارغة ====================
 
@@ -230,11 +262,15 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
             }
             engine={engine}
             markedPositions={markedPositions}
+            markedCharacters={markedCharacters}
             coveredPositions={coveredPositions}
+            coveredCharacterRanges={coveredCharacterRanges}
+            characterMarkingActive={!readOnly && currentTool === 'mark' && markingMode === 'CHARACTERS'}
             selectedWordId={selectedWordId}
             selectedVariantId={selectedVariantId}
             hoveredLineId={hoveredLineId}
             onWordClick={handleWordClick}
+            onCharacterClick={handleCharacterClick}
             onLineClick={handleLineClick}
             onLineHoverStart={(line) => setHoveredLineId(line.id)}
             onLineHoverEnd={() => setHoveredLineId(null)}
@@ -243,7 +279,7 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
         </g>
       </svg>
 
-      <CanvasLegend />
+      <CanvasLegend characterMarkingActive={!readOnly && currentTool === 'mark' && markingMode === 'CHARACTERS'} />
 
       <button
         type="button"
@@ -363,10 +399,13 @@ function ReaderCard({
 
 // ==================== عناصر خاصة بالمحرر ====================
 
-function CanvasLegend() {
+function CanvasLegend({ characterMarkingActive = false }: { characterMarkingActive?: boolean }) {
   const categories = Object.keys(CATEGORY_LABELS) as Array<VariantCategory>;
   return (
     <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg border border-stone-200 bg-white/90 px-3 py-2 text-xs text-stone-600 shadow-sm backdrop-blur">
+      {characterMarkingActive && (
+        <p className="mb-1.5 font-medium text-amber-800">وضع الحروف: انقر خلايا الحروف لتحديد البداية والنهاية.</p>
+      )}
       <div className="flex flex-wrap items-center gap-3">
         {categories.map((category) => (
           <span key={category} className="flex items-center gap-1.5">
