@@ -30,6 +30,7 @@ import type {
 import { getAyahWordsByKey, parseAyahKey } from '@/data/quran';
 import { layoutAyah } from '@/lib/tashjeer/layout-engine';
 import { generateBranches } from '@/lib/tashjeer/branch-engine';
+import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
 import { readTransmissionCatalog } from '@/lib/transmissions/catalog';
 import { readEngineSettings } from '@/lib/tashjeer/engine-settings';
 import {
@@ -666,7 +667,10 @@ function computeBranches(
 
   const layout = layoutAyah(document.ayahKey, words, document.layout);
   const engine = readEngineSettings();
-  return generateBranches(document.variants, layout, existing, {
+  // القواعد العامة لا تُنسخ إلى كل مستند؛ تُحوّل هنا إلى اختلافات مشتقة
+  // وقت الرسم، فتظل قاعدة واحدة هي مصدر الحقيقة للمصحف كله.
+  const effectiveVariants = getEffectiveVariants(document);
+  return generateBranches(effectiveVariants, layout, existing, {
     catalog: readTransmissionCatalog(),
     traversal: engine.traversal,
     boundaries: document.boundaries,

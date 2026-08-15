@@ -21,6 +21,7 @@ import {
 } from '@/lib/storage/global-rules-store';
 import { listDocuments, loadDocument } from '@/lib/storage/document-store';
 import { getSurahOrFirst } from '@/data/quran';
+import { describeGlobalPattern } from '@/lib/quran-logic/global-rule-engine';
 import type { VariantCategory } from '@/types';
 import type { ReadingScope, Variant, VerificationStatus } from '@/types/tashjeer';
 
@@ -193,6 +194,11 @@ export default function VariantsIndexPage() {
                     {describeScope(item.scope, { catalog })} · {resolveScope(item.scope, catalog).length} راويا
                     {item.alternativesCount > 0 ? ` · ${item.alternativesCount} وجها` : ''}
                   </p>
+                  {item.globalRule && (
+                    <p className="mt-1 text-[11px] text-violet-700">
+                      التطبيق: {describeGlobalPattern(item.globalRule.pattern)}
+                    </p>
+                  )}
                   {item.description && <p className="mt-1 text-xs leading-relaxed text-stone-500">{item.description}</p>}
                   {item.sourceRef && <p className="mt-1 text-[11px] text-stone-400">المرجع: {item.sourceRef}</p>}
                 </div>
@@ -350,6 +356,7 @@ function GlobalRuleDialog({
       description: description.trim() || undefined,
       sourceRef: sourceRef.trim() || undefined,
       evidences: rule?.evidences ?? [],
+      pattern: rule?.pattern,
       status,
       isActive,
       createdAt: rule?.createdAt,
@@ -364,7 +371,7 @@ function GlobalRuleDialog({
           <div>
             <h2 className="text-base font-bold text-stone-900">{rule ? 'تحرير قاعدة عامة' : 'قاعدة عامة للمصحف'}</h2>
             <p className="mt-0.5 text-xs leading-relaxed text-stone-500">
-              تحفظ مرة واحدة وتظهر في فهرس المصحف وفي JSON كل آية. لا ترسم خطا على آية بعينها ما لم تسجل موضعها محليا.
+              تحفظ مرة واحدة وتظهر في فهرس المصحف وفي JSON كل آية. القاعدة الوصفية لا ترسم خطا حتى يسجل موضعها محليا، أما القاعدة النمطية المنشأة من المحرر فتطبق آليا على كل موضع مطابق.
             </p>
           </div>
           <button type="button" onClick={onClose} className="rounded border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-50">إغلاق</button>

@@ -22,6 +22,7 @@ import {
   renderBranches,
   type AyahTashjeerStats,
 } from '@/lib/tashjeer/branch-engine';
+import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
 import {
   generateClassicTashjeer,
   type ClassicTashjeer,
@@ -102,11 +103,16 @@ export function useAyahTashjeer(
     engine: runtime.engine,
   });
 
+  const effectiveVariants = useMemo(
+    () => (document ? getEffectiveVariants(document) : []),
+    [document]
+  );
+
   const visibleBranches = useMemo(() => {
     if (!document) return [];
-    return filterBranches(document.branches, document.variants, filter, runtime.catalog);
+    return filterBranches(document.branches, effectiveVariants, filter, runtime.catalog);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [document, filter, runtimeKey]);
+  }, [document, effectiveVariants, filter, runtimeKey]);
 
   const branches = useMemo(
     () => renderBranches(visibleBranches, layout, layoutOptions),
@@ -123,18 +129,18 @@ export function useAyahTashjeer(
       manualLines: document?.manualLines ?? [],
     };
     return generateClassicTashjeer(
-      document?.variants ?? [],
+      effectiveVariants,
       layout,
       filter,
       layoutOptions,
       classicRuntime
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [document, layout, filter, layoutOptions, runtimeKey]);
+  }, [document, effectiveVariants, layout, filter, layoutOptions, runtimeKey]);
 
   const stats = useMemo(
-    () => computeStats(document?.variants ?? [], visibleBranches),
-    [document, visibleBranches]
+    () => computeStats(effectiveVariants, visibleBranches),
+    [effectiveVariants, visibleBranches]
   );
 
   const viewBox = useMemo(() => {

@@ -12,6 +12,7 @@
 import { useMemo } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
+import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
 import { getWordById, stripHarakat } from '@/data/quran';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
@@ -60,7 +61,11 @@ export function PropertiesPanel() {
     [selectedWordId]
   );
 
-  const selectedVariant = document?.variants.find((variant) => variant.id === selectedVariantId);
+  const effectiveVariants = useMemo(
+    () => (document ? getEffectiveVariants(document) : []),
+    [document]
+  );
+  const selectedVariant = effectiveVariants.find((variant) => variant.id === selectedVariantId);
   const selectedBranch = document?.branches.find((branch) => branch.id === selectedBranchId);
 
   if (!document) return null;
@@ -140,6 +145,11 @@ export function PropertiesPanel() {
             <StatusBadge status={selectedVariant.status} />
           </div>
           <Row label="الفئة" value={CATEGORY_LABELS[selectedVariant.category]} />
+          {selectedVariant.isGlobalDerived && (
+            <p className="mb-1 rounded bg-violet-50 px-2 py-1 text-[11px] text-violet-800">
+              مشتق من قاعدة عامة في المصحف — لا يُعدَّل من قائمة اختلافات هذه الآية.
+            </p>
+          )}
           <Row
             label={selectedVariant.targetKind === 'CHARACTERS' ? 'مدى الحروف' : 'المدى'}
             value={
@@ -256,8 +266,9 @@ function EvidenceView({
   catalog: import('@/lib/transmissions/catalog').TransmissionCatalog;
 }) {
   const document = useEditorStore((state) => state.document);
+  const variants = useMemo(() => (document ? getEffectiveVariants(document) : []), [document]);
 
-  const alternative = document?.variants
+  const alternative = variants
     .find((variant) => variant.id === variantId)
     ?.alternatives.find((item) => item.id === alternativeId);
 

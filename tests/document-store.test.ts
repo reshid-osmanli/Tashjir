@@ -221,6 +221,38 @@ describe('التصدير والاستيراد', () => {
     expect(bundle.globalRules[0].title).toBe('مد منفصل عام');
   });
 
+  it('يصدر نمط القاعدة العامة مع سياسة الحركة ومجموعة الحروف', async () => {
+    const store = await loadStore();
+    const globalRules = await import('@/lib/storage/global-rules-store');
+    globalRules.saveGlobalRule({
+      id: 'global-ikhfaa-pattern',
+      title: 'نون ساكنة قبل الإخفاء',
+      category: 'TAJWEED',
+      scope: { kind: 'ALL' },
+      pattern: {
+        kind: 'CHARACTERS',
+        version: 1,
+        wordCount: 2,
+        words: [
+          {
+            offset: 0,
+            constraints: [{ baseLetter: 'ن', letterSet: 'EXACT', marks: 'ْ', harakaMode: 'EXACT', anchor: 'END', value: 0 }],
+          },
+          {
+            offset: 1,
+            constraints: [{ baseLetter: 'ت', letterSet: 'IKHFAA', marks: '', harakaMode: 'IGNORE', anchor: 'START', value: 0 }],
+          },
+        ],
+      },
+      status: 'DRAFT',
+      isActive: true,
+    });
+
+    const bundle = JSON.parse(store.exportAyahDocument(makeAyahKey(1, 1)));
+    expect(bundle.globalRules[0].pattern.words[1].constraints[0].letterSet).toBe('IKHFAA');
+    expect(bundle.globalRules[0].pattern.words[1].constraints[0].harakaMode).toBe('IGNORE');
+  });
+
   it('دورة تصدير واستيراد تحفظ المحتوى كما هو', async () => {
     const store = await loadStore();
     const ayahKey = makeAyahKey(1, 4);
