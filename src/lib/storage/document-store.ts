@@ -26,8 +26,8 @@ import { characterCount, compareCharacterAnchors } from '@/lib/quran-logic/chara
 import { getSeedVariants } from '@/data/variants/seed-variants';
 import { parseAyahKey } from '@/data/quran';
 
-/** إصدار صيغة المستند الحالي. */
-export const SCHEMA_VERSION = 4;
+/** إصدار صيغة المستند الحالي. القواعد العامة النمطية تُحفظ في bundle v5. */
+export const SCHEMA_VERSION = 5;
 
 // نحتفظ بمفاتيح v2 كي تُقرأ مستندات المستخدمين القديمة ثم تُرقّى عند الحفظ.
 const DOC_PREFIX = 'tashjeer:doc:v2:';

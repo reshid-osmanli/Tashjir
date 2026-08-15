@@ -21,6 +21,7 @@ import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-sys
 import { TashjeerFigure } from './TashjeerFigure';
 import { getNarratorsByTayyibah } from '@/lib/tashjeer/symbols';
 import { getNarratorProfile } from '@/data/qiraat-data/narrator-profiles';
+import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
 import type { ClassicLine, ClassicReaderChip } from '@/lib/tashjeer/classic-tashjeer';
@@ -80,6 +81,13 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     { catalog, engine }
   );
 
+  // يشمل هذا القائمة المحلية والقواعد العامة المشتقة؛ لذلك يتفاعل النقر
+  // مع موضع القاعدة العامة كما يتفاعل مع الاختلاف الذي أضيف يدويا.
+  const effectiveVariants = useMemo(
+    () => (document ? getEffectiveVariants(document) : []),
+    [document]
+  );
+
   // ==================== التفاعل ====================
 
   const handleWheel = useCallback(
@@ -133,14 +141,14 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
 
       selectWord(box.wordId === selectedWordId ? null : box.wordId);
 
-      const variant = document?.variants.find(
+      const variant = effectiveVariants.find(
         (item) => box.position >= item.startPosition && box.position <= item.endPosition
       );
       selectVariant(variant?.id ?? null);
     },
     [
       currentTool,
-      document,
+      effectiveVariants,
       markingMode,
       readOnly,
       selectVariant,
@@ -178,21 +186,21 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
   const coveredPositions = useMemo(() => {
     if (!document) return [];
     const positions = new Set<number>();
-    for (const variant of document.variants) {
+    for (const variant of effectiveVariants) {
       for (let position = variant.startPosition; position <= variant.endPosition; position++) {
         positions.add(position);
       }
     }
     return [...positions];
-  }, [document]);
+  }, [document, effectiveVariants]);
 
   // النطاقات الحرفية المحفوظة تعرض بتظليل أدق من تظليل الكلمة الكاملة.
   const coveredCharacterRanges = useMemo(
     () =>
-      document?.variants
+      effectiveVariants
         .filter((variant) => variant.targetKind === 'CHARACTERS' && Boolean(variant.characterRange))
-        .flatMap((variant) => (variant.characterRange ? [variant.characterRange] : [])) ?? [],
-    [document]
+        .flatMap((variant) => (variant.characterRange ? [variant.characterRange] : [])),
+    [effectiveVariants]
   );
 
   // ==================== حالات فارغة ====================

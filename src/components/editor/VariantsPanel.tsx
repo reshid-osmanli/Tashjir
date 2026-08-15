@@ -17,7 +17,10 @@ import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-system';
 import { describeScope, resolveScope } from '@/lib/tashjeer/scope';
 import { VariantEditor } from './VariantEditor';
+import { GlobalRuleBuilder } from './GlobalRuleBuilder';
 import { rangeFromCharacterAnchors, textForCharacterRange } from '@/lib/quran-logic/characters';
+import { listGlobalRules } from '@/lib/storage/global-rules-store';
+import { findGlobalRuleMatchesInAyah } from '@/lib/quran-logic/global-rule-engine';
 import type { VariantCategory } from '@/types';
 import type { Variant } from '@/types/tashjeer';
 
@@ -34,9 +37,13 @@ export function VariantsPanel() {
     deleteVariant,
     clearMarks,
     addVariant,
+    refreshDerivedBranches,
   } = useEditorStore();
 
   const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
+  const [showGlobalBuilder, setShowGlobalBuilder] = useState(false);
+  const [globalNotice, setGlobalNotice] = useState<string | null>(null);
+  const [globalBuilderKind, setGlobalBuilderKind] = useState<'CHARACTERS' | 'MORPHOLOGY'>('CHARACTERS');
   const catalog = useTransmissionCatalog();
 
   const words = useMemo(
@@ -60,6 +67,17 @@ export function VariantsPanel() {
 
   const hasMarks =
     markingMode === 'CHARACTERS' ? markedCharacterRange !== null : markedPositions.length > 0;
+
+  const activeGlobalRules = useMemo(
+    () =>
+      document
+        ? listGlobalRules()
+            .filter((rule) => rule.isActive && rule.pattern)
+            .map((rule) => ({ rule, matches: findGlobalRuleMatchesInAyah(rule, document.ayahKey) }))
+            .filter((item) => item.matches.length > 0)
+        : [],
+    [document]
+  );
 
   if (!document) return null;
 
@@ -129,6 +147,44 @@ export function VariantsPanel() {
         </div>
       </header>
 
+      {/* القواعد العامة المطبقة على هذه الآية، مع بقائها محفوظة مرة واحدة فقط. */}
+      <section className="border-b border-stone-200 bg-violet-50/50 px-4 py-3">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h3 className="text-xs font-semibold text-violet-950">قواعد عامة في هذا الموضع</h3>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-violet-900/75">
+              تظهر هنا النتائج المشتقة من قواعد المصحف، ولا تُنسخ إلى قائمة اختلافات الآية.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setGlobalBuilderKind('MORPHOLOGY');
+              setShowGlobalBuilder(true);
+            }}
+            className="shrink-0 rounded border border-violet-300 bg-white px-2 py-1 text-[10px] text-violet-900 hover:bg-violet-100"
+            title="إضافة قاعدة صرفية نمطية حتمية"
+          >
+            + قاعدة صرفية
+          </button>
+        </div>
+        {globalNotice && (
+          <p role="status" className="mt-2 rounded bg-emerald-50 px-2 py-1.5 text-[11px] text-emerald-800">{globalNotice}</p>
+        )}
+        {activeGlobalRules.length === 0 ? (
+          <p className="mt-2 text-[11px] text-violet-900/65">لا توجد قاعدة نمطية نشطة مطابقة لهذه الآية.</p>
+        ) : (
+          <ul className="mt-2 space-y-1.5">
+            {activeGlobalRules.map(({ rule, matches }) => (
+              <li key={rule.id} className="flex items-center justify-between gap-2 rounded border border-violet-100 bg-white px-2 py-1.5 text-[11px]">
+                <span className="min-w-0 truncate font-medium text-stone-800">{rule.ruleLabel || rule.title}</span>
+                <span className="shrink-0 text-violet-800">{matches.length} موضع</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       {/* إنشاء اختلاف من الكلمات المعلّمة */}
       <section className="border-b border-stone-200 bg-stone-50 px-4 py-3">
         <h3 className="text-xs font-semibold text-stone-700">اختلاف جديد</h3>
@@ -172,20 +228,33 @@ export function VariantsPanel() {
               ))}
             </div>
 
-            <div className="flex gap-2">
+            <div className="grid gap-2 sm:grid-cols-2">
               <button
                 type="button"
                 onClick={handleCreateVariant}
-                className="flex-1 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+                className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
               >
-                إنشاء الاختلاف
+                إنشاء الاختلاف في الآية
               </button>
+              {markingMode === 'CHARACTERS' && markedCharacterRange && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGlobalBuilderKind('CHARACTERS');
+                    setShowGlobalBuilder(true);
+                  }}
+                  className="rounded-md border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-900 hover:bg-violet-100"
+                  title="حفظ نمط الحروف وتطبيقه في كل المصحف"
+                >
+                  حفظ كقاعدة في كل المصحف
+                </button>
+              )}
               <button
                 type="button"
                 onClick={clearMarks}
-                className="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100"
+                className="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100 sm:col-span-2"
               >
-                إلغاء
+                إلغاء التحديد
               </button>
             </div>
           </div>
@@ -221,6 +290,21 @@ export function VariantsPanel() {
 
       {editingVariant && (
         <VariantEditor variant={editingVariant} onClose={() => setEditingVariantId(null)} />
+      )}
+
+      {showGlobalBuilder && (
+        <GlobalRuleBuilder
+          ayahKey={document.ayahKey}
+          characterRange={markedCharacterRange}
+          initialKind={globalBuilderKind}
+          onClose={() => setShowGlobalBuilder(false)}
+          onSaved={(_rule, matchCount) => {
+            setShowGlobalBuilder(false);
+            clearMarks();
+            refreshDerivedBranches();
+            setGlobalNotice(`تم حفظ القاعدة وتطبيقها على ${matchCount} موضع في المصحف.`);
+          }}
+        />
       )}
     </aside>
   );

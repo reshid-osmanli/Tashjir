@@ -6,6 +6,7 @@
 
 import type { VariantCategory } from '@/types';
 import type {
+  GlobalRulePattern,
   ReadingScope,
   VariantEvidence,
   VerificationStatus,
@@ -24,6 +25,9 @@ export interface GlobalRule {
   ruleLabel?: string;
   /** قيمة المد إن كانت القاعدة من المدود. */
   maddHarakat?: number;
+  /** نمط اختياري يجعل القاعدة قابلة للتطبيق الآلي على المصحف كله.
+   * القواعد القديمة التي لا تحمل نمطا تبقى وصفية فقط. */
+  pattern?: GlobalRulePattern;
   description?: string;
   sourceRef?: string;
   evidences?: VariantEvidence[];
@@ -44,12 +48,12 @@ export function saveGlobalRule(rule: Omit<GlobalRule, 'createdAt' | 'updatedAt'>
   const now = new Date().toISOString();
   const rules = readRules();
   const existing = rules.find((item) => item.id === rule.id);
-  const saved: GlobalRule = {
+  const saved = normalizeRule({
     ...rule,
     title: rule.title.trim(),
     createdAt: existing?.createdAt ?? rule.createdAt ?? now,
     updatedAt: now,
-  };
+  });
 
   writeRules([...rules.filter((item) => item.id !== saved.id), saved]);
   return saved;
@@ -119,10 +123,98 @@ function normalizeRule(rule: GlobalRule): GlobalRule {
     title: rule.title.trim(),
     status: rule.status ?? 'DRAFT',
     isActive: rule.isActive ?? true,
+    pattern: isValidPattern(rule.pattern) ? rule.pattern : undefined,
     evidences: Array.isArray(rule.evidences) ? rule.evidences : [],
     createdAt: rule.createdAt ?? now,
     updatedAt: rule.updatedAt ?? rule.createdAt ?? now,
   };
+}
+
+/** تتحقق من الحد الأدنى للنمط قبل إدخاله إلى محرك التطبيق. */
+function isValidPattern(value: unknown): value is GlobalRulePattern {
+  if (!value || typeof value !== 'object') return false;
+  const pattern = value as Partial<GlobalRulePattern>;
+  if (pattern.version !== 1 || (pattern.kind !== 'CHARACTERS' && pattern.kind !== 'MORPHOLOGY')) {
+    return false;
+  }
+  if (!Array.isArray(pattern.words) || pattern.words.length === 0) return false;
+
+  if (pattern.kind === 'CHARACTERS') {
+    if (
+      typeof pattern.wordCount !== 'number' ||
+      !Number.isInteger(pattern.wordCount) ||
+      pattern.wordCount < 1 ||
+      pattern.wordCount !== pattern.words.length
+    ) {
+      return false;
+    }
+
+    const wordCount = pattern.wordCount;
+    const offsets = new Set<number>();
+    return pattern.words.every((word) => {
+      if (!word || typeof word !== 'object') return false;
+      const candidate = word as {
+        offset?: unknown;
+        constraints?: unknown;
+        exactLength?: unknown;
+      };
+      if (
+        typeof candidate.offset !== 'number' ||
+        !Number.isInteger(candidate.offset) ||
+        candidate.offset < 0 ||
+        candidate.offset >= wordCount ||
+        offsets.has(candidate.offset) ||
+        !Array.isArray(candidate.constraints) ||
+        candidate.constraints.length === 0
+      ) {
+        return false;
+      }
+      offsets.add(candidate.offset);
+      if (
+        candidate.exactLength !== undefined &&
+        (typeof candidate.exactLength !== 'number' || !Number.isInteger(candidate.exactLength) || candidate.exactLength < 1)
+      ) {
+        return false;
+      }
+      return candidate.constraints.every((constraint) => {
+        if (!constraint || typeof constraint !== 'object') return false;
+        const item = constraint as Record<string, unknown>;
+        const validSet = ['EXACT', 'IKHFAA', 'IZHAR', 'IDGHAM', 'IQLAB', 'QALQALAH', 'GHUNNAH', 'MAD'];
+        const validMode = ['EXACT', 'IGNORE', 'NONE'];
+        const validAnchor = ['START', 'END', 'INDEX'];
+        return (
+          typeof item.baseLetter === 'string' &&
+          item.baseLetter.length > 0 &&
+          (item.letterSet === undefined || (typeof item.letterSet === 'string' && validSet.includes(item.letterSet))) &&
+          typeof item.marks === 'string' &&
+          typeof item.harakaMode === 'string' &&
+          validMode.includes(item.harakaMode) &&
+          typeof item.anchor === 'string' &&
+          validAnchor.includes(item.anchor) &&
+          typeof item.value === 'number' &&
+          Number.isInteger(item.value) &&
+          item.value >= (item.anchor === 'INDEX' ? 1 : 0)
+        );
+      });
+    }) && offsets.size === wordCount;
+  }
+
+  if (pattern.wordCount !== 1 || pattern.words.length !== 1) return false;
+  const word = pattern.words[0] as {
+    offset?: unknown;
+    template?: unknown;
+    prefix?: unknown;
+    suffix?: unknown;
+    harakaMode?: unknown;
+  } | undefined;
+  return Boolean(
+    word &&
+      word.offset === 0 &&
+      typeof word.harakaMode === 'string' &&
+      ['EXACT', 'IGNORE', 'NONE'].includes(word.harakaMode) &&
+      (typeof word.template === 'string' || typeof word.prefix === 'string' || typeof word.suffix === 'string') &&
+      [word.template, word.prefix, word.suffix].some((item) => typeof item === 'string' && item.length > 0)
+  );
 }
 
 function isBrowser(): boolean {

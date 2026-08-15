@@ -130,6 +130,84 @@ export interface CharacterRange {
   end: CharacterAnchor;
 }
 
+// ==================== قواعد المصحف العامة ====================
+
+/** سياسة مطابقة علامات الضبط عند تطبيق قاعدة نمطية. */
+export type HarakaMatchMode = 'EXACT' | 'IGNORE' | 'NONE';
+
+/** موضع الحرف المطلوب داخل الكلمة، حتى لا تقيد القاعدة طول الكلمة بلا داع. */
+export type PatternCharacterAnchor = 'START' | 'END' | 'INDEX';
+
+/** مجموعات حروف معلومة يمكن اختيارها بدلا من حرف واحد، مثل حروف الإخفاء. */
+export type GlobalCharacterSet =
+  | 'EXACT'
+  | 'IKHFAA'
+  | 'IZHAR'
+  | 'IDGHAM'
+  | 'IQLAB'
+  | 'QALQALAH'
+  | 'GHUNNAH'
+  | 'MAD';
+
+/** قيد حرف واحد في قاعدة حروف عامة. */
+export interface GlobalCharacterConstraint {
+  /** الحرف الأساسي كما هو في الرسم العثماني. */
+  baseLetter: string;
+  /** إن لم تكن EXACT: المجموعة التي يجوز أن ينتمي إليها الحرف. */
+  letterSet?: GlobalCharacterSet;
+  /** علامات الضبط التابعة للحرف وقت إنشاء القاعدة. */
+  marks: string;
+  /** هل تطابق القاعدة الضبط، تتجاهله، أم تشترط غيابه؟ */
+  harakaMode: HarakaMatchMode;
+  /** تثبيت من بداية الكلمة أو نهايتها أو على رقم حرف مطلق. */
+  anchor: PatternCharacterAnchor;
+  /** إزاحة صفرية من البداية/النهاية، أو فهرس 1-based عند INDEX. */
+  value: number;
+}
+
+/** نمط كلمة داخل قاعدة حروف متعددة الكلمات. */
+export interface GlobalWordCharacterPattern {
+  /** إزاحة الكلمة بالنسبة لأول كلمة في الموضع (0-based). */
+  offset: number;
+  /** الحروف التي يجب أن تتوافر في هذه الكلمة. */
+  constraints: GlobalCharacterConstraint[];
+  /** إن وُجد، يجب أن يساوي عدد الحروف المرئية في الكلمة تماما. */
+  exactLength?: number;
+}
+
+/** قاعدة حروف: كلمات متجاورة داخل الآية نفسها، بلا عبور حد الآية افتراضيا. */
+export interface GlobalCharacterPattern {
+  kind: 'CHARACTERS';
+  version: 1;
+  wordCount: number;
+  words: GlobalWordCharacterPattern[];
+  sourceAyahKey?: number;
+  sourceRange?: CharacterRange;
+}
+
+/** نمط صرفي/قالب محدود يمكن فحصه حتميا من الرسم والتشكيل. */
+export interface GlobalMorphologyWordPattern {
+  offset: 0;
+  /** قالب مثل «فَعْلَى»؛ ف وع ول حروف جذر بديلة، وما سواها حرف حرفي. */
+  template?: string;
+  /** بادئة أو لاحقة حرفية اختيارية، مثل «ال» أو «ة». */
+  prefix?: string;
+  suffix?: string;
+  /** سياسة مطابقة علامات الضبط للقالب والبادئة واللاحقة. */
+  harakaMode: HarakaMatchMode;
+}
+
+/** قاعدة صرفية نمطية؛ لا تدّعي إعرابا أو تحليلا لغويا احتماليا. */
+export interface GlobalMorphologyPattern {
+  kind: 'MORPHOLOGY';
+  version: 1;
+  wordCount: 1;
+  words: [GlobalMorphologyWordPattern];
+  sourceAyahKey?: number;
+}
+
+export type GlobalRulePattern = GlobalCharacterPattern | GlobalMorphologyPattern;
+
 /** اختلاف قرائي في موضع محدد من الآية. */
 export interface Variant {
   id: string;
@@ -154,6 +232,10 @@ export interface Variant {
   alternatives: VariantAlternative[];
   /** حالة التوثيق: البيانات الأولية مسودة حتى يعتمدها مختص */
   status: VerificationStatus;
+  /** هل هذا اختلاف مشتق مؤقتا من قاعدة عامة، وليس محفوظا في قائمة الآية؟ */
+  isGlobalDerived?: boolean;
+  /** معرّف القاعدة العامة التي اشتُق منها، عند العرض والتدقيق. */
+  globalRuleId?: string;
   /** شرح إضافي */
   description?: string;
   /** مصدر الاستقاء العام للاختلاف */
