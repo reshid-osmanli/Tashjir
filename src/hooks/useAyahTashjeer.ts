@@ -30,6 +30,7 @@ import {
 } from '@/lib/tashjeer/classic-tashjeer';
 import type { TransmissionCatalog } from '@/lib/transmissions/catalog';
 import type { TashjeerEngineSettings } from '@/lib/tashjeer/engine-settings';
+import type { StrengthDegreeCatalog } from '@/lib/tashjeer/strength-degrees';
 import type {
   AyahLayout,
   LayoutOptions,
@@ -44,6 +45,13 @@ export interface AyahTashjeerRuntime {
   catalog?: TransmissionCatalog;
   /** إعدادات ترتيب وعرض المحرك. */
   engine?: TashjeerEngineSettings;
+  /** سلّم درجات قوة الوجه بعد تعديلات الإعدادات. */
+  strengthDegrees?: StrengthDegreeCatalog;
+  /**
+   * مفتاح إبطال يتغير عند تعديل استثناءات المواضع (حذف موضع أو تخصيص درجته)،
+   * فيعاد اشتقاق الاختلافات دون انتظار إعادة تحميل المستند.
+   */
+  occurrencesKey?: string;
 }
 
 export interface AyahTashjeerResult {
@@ -101,11 +109,13 @@ export function useAyahTashjeer(
   const runtimeKey = JSON.stringify({
     catalogUpdatedAt: runtime.catalog?.updatedAt,
     engine: runtime.engine,
+    strengthUpdatedAt: runtime.strengthDegrees?.updatedAt,
   });
 
   const effectiveVariants = useMemo(
     () => (document ? getEffectiveVariants(document) : []),
-    [document]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [document, runtime.occurrencesKey]
   );
 
   const visibleBranches = useMemo(() => {
@@ -124,6 +134,7 @@ export function useAyahTashjeer(
     const classicRuntime: ClassicTashjeerOptions = {
       catalog: runtime.catalog,
       engine: runtime.engine,
+      strengthDegrees: runtime.strengthDegrees,
       boundaries: document?.boundaries ?? [],
       branchOverrides: document?.branches ?? [],
       manualLines: document?.manualLines ?? [],

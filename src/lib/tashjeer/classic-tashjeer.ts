@@ -51,6 +51,13 @@ import type {
   ViewFilter,
 } from '@/types/tashjeer';
 import type { TransmissionCatalog } from '@/lib/transmissions/catalog';
+import {
+  createDefaultStrengthDegrees,
+  resolveStrength,
+  UNGRADED_RANK,
+  type ResolvedStrength,
+  type StrengthDegreeCatalog,
+} from './strength-degrees';
 import { CATEGORY_LABELS, CATEGORY_SIDE } from './branch-engine';
 import { DEFAULT_ENGINE_SETTINGS, type TashjeerEngineSettings } from './engine-settings';
 import {
@@ -81,6 +88,8 @@ const DEFAULT_LAYOUT_OPTIONS: LayoutOptions = {
 /** خيارات تشغيل لا تُحفظ في الوجه نفسه، بل تأتي من المحرر ولوحة التحكم. */
 export interface ClassicTashjeerOptions {
   catalog?: TransmissionCatalog;
+  /** سلّم درجات قوة الوجه؛ يُستعمل في ترتيب أوجه الموضع الواحد وفي بطاقاتها. */
+  strengthDegrees?: StrengthDegreeCatalog;
   engine?: Partial<TashjeerEngineSettings>;
   boundaries?: RecitationBoundary[];
   /** تعديلات يدوية محفوظة لخطوط الأوجه المولدة. */
@@ -179,6 +188,18 @@ export interface ClassicLine {
   maddHarakat?: number;
   /** قوة الوجه المعتمدة في الترتيب (كلما صغرت تقدّم السطر). */
   strength?: number;
+  /** اسم درجة القوة كما تُعرض على البطاقة: مقدَّم، راجح... */
+  strengthLabel?: string;
+  /** اختصار الدرجة، لضيق المساحة. */
+  strengthShortLabel?: string;
+  /** لون الدرجة في الواجهة. */
+  strengthColor?: string;
+  /** هل هذه الدرجة هي «الوجه المقدَّم»؟ */
+  isPreferred?: boolean;
+  /** هل يختلف رواة هذا الوجه في درجته؟ */
+  hasMixedStrength?: boolean;
+  /** درجة كل راوٍ على حدة، للتلميح التفصيلي على البطاقة. */
+  strengthByNarrator?: Array<{ narratorId: string; degreeLabel?: string }>;
   startPosition: number;
   endPosition: number;
   /** رقم السطر تحت الآية (0 = أول سطر مباشرة تحت النص). */
@@ -270,6 +291,7 @@ export function generateClassicTashjeer(
   const opts = { ...DEFAULT_LAYOUT_OPTIONS, ...options };
   const engine: TashjeerEngineSettings = { ...DEFAULT_ENGINE_SETTINGS, ...runtime.engine };
   const catalog = runtime.catalog;
+  const strengthDegrees = runtime.strengthDegrees ?? createDefaultStrengthDegrees();
   const wordsCount = Math.max(0, ...layout.boxes.map((box) => box.position));
   const readingPlan = buildReadingPlan(wordsCount, runtime.boundaries ?? [], engine.traversal);
 
@@ -308,7 +330,7 @@ export function generateClassicTashjeer(
   //    الأوجه داخل كل مجموعة. الفصل بين المرحلتين مقصود: قاعدة المواضع
   //    (آخر الآية أولا) شيء، وقاعدة الأوجه (قوة الوجه) شيء آخر، ولا يجوز
   //    أن تتداخلا فينكسر الترتيب في الآيات المزدحمة.
-  const groups = buildPositionGroups(raw, readingPlan, engine, catalog);
+  const groups = buildPositionGroups(raw, readingPlan, engine, catalog, strengthDegrees);
 
   const overrideByKey = new Map(
     (runtime.branchOverrides ?? []).map((branch) => [
@@ -326,6 +348,7 @@ export function generateClassicTashjeer(
         layout,
         catalog,
         engine,
+        strengthDegrees,
         overrideByKey.get(`${variant.id}::${alt.id}`)
       );
       if (!line) return;
@@ -467,7 +490,8 @@ function buildPositionGroups(
   raw: RawAlternative[],
   plan: ReadingPlan,
   engine: TashjeerEngineSettings,
-  catalog?: TransmissionCatalog
+  catalog?: TransmissionCatalog,
+  strengthDegrees?: StrengthDegreeCatalog
 ): PositionGroup[] {
   const byVariant = new Map<string, PositionGroup>();
 
@@ -513,7 +537,7 @@ function buildPositionGroups(
 
   for (const group of groups) {
     group.items.sort((first, second) =>
-      compareAlternatives(group.variant, first.alt, second.alt, engine, catalog)
+      compareAlternatives(group.variant, first.alt, second.alt, engine, catalog, strengthDegrees)
     );
   }
 
@@ -523,16 +547,22 @@ function buildPositionGroups(
 /**
  * ترتيب وجهين داخل الموضع الواحد.
  *
- * القاعدة المعتمدة من صاحب المشروع: **قوة الوجه في الكتاب**. لذلك يُقدَّم
- * الوجه ذو `strength` الأصغر. الوجه الذي لم تُسجَّل قوته يأتي بعد المسجّل،
- * فلا يتقدم وجه غير محقَّق على وجه رجّحه المحقق.
+ * القاعدة المعتمدة من صاحب المشروع: **قوة الوجه في الكتاب**، وقد صارت بعد
+ * دمج «الوجه المقدَّم» مع القوة درجةً من سلّم قابل للتحرير. يُقدَّم الوجه
+ * ذو الرتبة الأصغر، وأصغر الرتب هي درجة «المقدَّم». والوجه الذي لم تُسجَّل
+ * درجته يأتي بعد المسجَّل، فلا يتقدم وجه غير محقَّق على وجه رجّحه المحقق.
+ *
+ * وحين تختلف درجة الوجه باختلاف الرواة يمثّله **أقوى** درجة أعطاها له أحد
+ * رواته: السطر واحد لا يتجزأ، وتقديمه عند من قدّمه أولى من تأخيره عند من
+ * أخّره، مع بقاء التفصيل ظاهرا على البطاقة.
  */
 function compareAlternatives(
   variant: Variant,
   first: VariantAlternative,
   second: VariantAlternative,
   engine: TashjeerEngineSettings,
-  catalog?: TransmissionCatalog
+  catalog?: TransmissionCatalog,
+  strengthDegrees?: StrengthDegreeCatalog
 ): number {
   // ترتيب صريح للأوجه في هذا الموضع بعينه: أقوى من أي قاعدة عامة.
   const explicit = variant.alternativeOrder ?? [];
@@ -552,17 +582,10 @@ function compareAlternatives(
   }
 
   if (engine.alternativeOrder === 'STRENGTH') {
-    const firstStrength = first.strength;
-    const secondStrength = second.strength;
-    if (
-      typeof firstStrength === 'number' &&
-      typeof secondStrength === 'number' &&
-      firstStrength !== secondStrength
-    ) {
-      return firstStrength - secondStrength;
-    }
-    if (typeof firstStrength === 'number' && typeof secondStrength !== 'number') return -1;
-    if (typeof firstStrength !== 'number' && typeof secondStrength === 'number') return 1;
+    const degrees = strengthDegrees ?? createDefaultStrengthDegrees();
+    const firstRank = strengthRankOf(first, degrees, catalog);
+    const secondRank = strengthRankOf(second, degrees, catalog);
+    if (firstRank !== secondRank) return firstRank - secondRank;
   }
 
   return compareByTayyibah(first, second, catalog);
@@ -577,6 +600,20 @@ function compareByTayyibah(
   const secondOrder = leadNarratorOrder(second, catalog);
   if (firstOrder !== secondOrder) return firstOrder - secondOrder;
   return first.id.localeCompare(second.id, 'ar');
+}
+
+/**
+ * رتبة قوة الوجه للترتيب. تشمل الحقل الرقمي القديم كي لا يفقد ما حُفظ قبل
+ * توحيد المفهومين ترتيبه بعد الترقية.
+ */
+function strengthRankOf(
+  alt: VariantAlternative,
+  degrees: StrengthDegreeCatalog,
+  catalog?: TransmissionCatalog
+): number {
+  const resolved: ResolvedStrength = resolveStrength(alt, alt.scope, degrees, catalog);
+  if (resolved.rank !== UNGRADED_RANK) return resolved.rank;
+  return typeof alt.strength === 'number' ? alt.strength : UNGRADED_RANK;
 }
 
 function leadNarratorOrder(alt: VariantAlternative, catalog?: TransmissionCatalog): number {
@@ -610,6 +647,7 @@ function alternativeToLine(
   layout: AyahLayout,
   catalog: TransmissionCatalog | undefined,
   engine: TashjeerEngineSettings,
+  strengthDegrees: StrengthDegreeCatalog,
   override?: TashjeerBranch
 ): ClassicLine | null {
   const narratorIds = resolveScope(alt.scope, catalog).sort(
@@ -619,6 +657,7 @@ function alternativeToLine(
   if (marks.length === 0) return null;
 
   const display = displayReaders(narratorIds, catalog, engine);
+  const strength = resolveStrength(alt, alt.scope, strengthDegrees, catalog);
   const pathNames = alt.scope.kind === 'PATHS' && alt.scope.pathIds?.length
     ? alt.scope.pathIds.map((pathId) => pathDisplayName(pathId, catalog))
     : [];
@@ -644,7 +683,18 @@ function alternativeToLine(
     // اسم الحكم المطبوع تحت الكلمة: الحقل المخصص، وإلا وصف الوجه، وإلا فئته.
     ruleLabel: alt.ruleLabel?.trim() || alt.label?.trim() || CATEGORY_LABELS[variant.category],
     maddHarakat: alt.maddHarakat,
-    strength: alt.strength,
+    strength: strength.rank === UNGRADED_RANK ? alt.strength : strength.rank,
+    strengthLabel: strength.degree?.label,
+    strengthShortLabel: strength.degree?.shortLabel,
+    strengthColor: strength.degree?.color,
+    isPreferred: strength.degree?.isPreferred === true,
+    hasMixedStrength: strength.isMixed,
+    strengthByNarrator: strength.isMixed
+      ? strength.perNarrator.map((item) => ({
+          narratorId: item.narratorId,
+          degreeLabel: item.degree?.label,
+        }))
+      : undefined,
     startPosition: variant.startPosition,
     endPosition: variant.endPosition,
     lane: override?.isManual ? override.lane : 0,

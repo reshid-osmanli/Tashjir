@@ -22,12 +22,29 @@ import type {
 } from '@/types/tashjeer';
 import { getAyahByKey, getAyahWordsByKey } from '@/data/quran';
 import { listGlobalRules, upsertGlobalRules, type GlobalRule } from './global-rules-store';
+import {
+  exportOccurrenceData,
+  upsertOccurrenceOverrides,
+  type OccurrenceLogEntry,
+  type RuleOccurrenceOverride,
+} from './rule-occurrences-store';
+import {
+  normalizeStrengthDegrees,
+  readStrengthDegrees,
+  saveStrengthDegrees,
+  type StrengthDegreeCatalog,
+} from '@/lib/tashjeer/strength-degrees';
 import { characterCount, compareCharacterAnchors } from '@/lib/quran-logic/characters';
 import { getSeedVariants } from '@/data/variants/seed-variants';
 import { parseAyahKey } from '@/data/quran';
 
-/** إصدار صيغة المستند الحالي. القواعد العامة النمطية تُحفظ في bundle v5. */
-export const SCHEMA_VERSION = 5;
+/**
+ * إصدار صيغة المستند الحالي.
+ *
+ * v5: القواعد العامة النمطية تُحفظ في الحزمة.
+ * v6: درجات قوة الوجه لكل راوٍ، واستثناءات مواضع القواعد وسجلّها.
+ */
+export const SCHEMA_VERSION = 6;
 
 // نحتفظ بمفاتيح v2 كي تُقرأ مستندات المستخدمين القديمة ثم تُرقّى عند الحفظ.
 const DOC_PREFIX = 'tashjeer:doc:v2:';
@@ -160,6 +177,15 @@ export interface ExportBundle {
   exportedAt: string;
   /** كل قواعد المصحف العامة، حتى يكون ملف آية واحدة مفهوما بذاته. */
   globalRules: GlobalRule[];
+  /**
+   * سلّم درجات قوة الوجه. بدونه تُقرأ معرّفات الدرجات في ملف مستورد على
+   * جهاز آخر بلا معنى، فيضيع ترجيح المحقق.
+   */
+  strengthDegrees?: StrengthDegreeCatalog;
+  /** استثناءات مواضع القواعد: ما حُذف موضعيا وما خُصِّصت درجته. */
+  ruleOccurrences?: RuleOccurrenceOverride[];
+  /** سجل ما جرى على المواضع، لتتبع أين حُذفت القاعدة ومتى. */
+  occurrenceLog?: OccurrenceLogEntry[];
   /** لقطة النص والكلمات التي استند إليها كل مستند، للقراءة بلا التطبيق. */
   ayahs: ExportedAyahSnapshot[];
   documents: TashjeerDocument[];
@@ -192,11 +218,16 @@ export function exportAyahDocument(ayahKey: number): string {
 }
 
 function exportDocumentBundle(documents: TashjeerDocument[]): string {
+  // قراءة واحدة للمخزن: الاستثناءات وسجلها يخرجان معا فلا يُقرأ المخزن مرتين.
+  const occurrences = exportOccurrenceData();
   const bundle: ExportBundle = {
     format: 'tashjeer-export',
     schemaVersion: SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
     globalRules: listGlobalRules(),
+    strengthDegrees: readStrengthDegrees(),
+    ruleOccurrences: occurrences.overrides,
+    occurrenceLog: occurrences.log,
     ayahs: documents.map(makeAyahSnapshot),
     documents,
   };
@@ -251,6 +282,14 @@ export function importDocuments(json: string, overwrite = false): ImportResult {
   // ملفات الإصدار 4 تحمل القواعد العامة أيضا؛ الملف الأقدم يبقى صالحا من
   // دونها. لا نعطل استيراد آية بسبب قاعدة عامة فيها نقص.
   if (Array.isArray(bundle.globalRules)) upsertGlobalRules(bundle.globalRules);
+
+  // سلّم الدرجات يُستورد قبل الاستثناءات، لأن معرّفات الدرجات فيها تشير إليه.
+  if (bundle.strengthDegrees && Array.isArray(bundle.strengthDegrees.degrees)) {
+    saveStrengthDegrees(normalizeStrengthDegrees(bundle.strengthDegrees));
+  }
+  if (Array.isArray(bundle.ruleOccurrences)) {
+    upsertOccurrenceOverrides(bundle.ruleOccurrences, bundle.occurrenceLog ?? []);
+  }
 
   for (const document of bundle.documents) {
     if (typeof document?.ayahKey !== 'number') {

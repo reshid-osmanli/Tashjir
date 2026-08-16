@@ -19,8 +19,11 @@ import { describeScope, resolveScope } from '@/lib/tashjeer/scope';
 import { VariantEditor } from './VariantEditor';
 import { GlobalRuleBuilder } from './GlobalRuleBuilder';
 import { rangeFromCharacterAnchors, textForCharacterRange } from '@/lib/quran-logic/characters';
-import { listGlobalRules } from '@/lib/storage/global-rules-store';
+import { listGlobalRules, type GlobalRule } from '@/lib/storage/global-rules-store';
 import { findGlobalRuleMatchesInAyah } from '@/lib/quran-logic/global-rule-engine';
+import { deletedOccurrenceIds, occurrenceIdFor } from '@/lib/storage/rule-occurrences-store';
+import { useRuleOccurrences } from '@/hooks/useRuleOccurrences';
+import { RuleOccurrenceReview } from './RuleOccurrenceReview';
 import type { VariantCategory } from '@/types';
 import type { Variant } from '@/types/tashjeer';
 
@@ -44,6 +47,9 @@ export function VariantsPanel() {
   const [showGlobalBuilder, setShowGlobalBuilder] = useState(false);
   const [globalNotice, setGlobalNotice] = useState<string | null>(null);
   const [globalBuilderKind, setGlobalBuilderKind] = useState<'CHARACTERS' | 'MORPHOLOGY'>('CHARACTERS');
+  const [reviewingRule, setReviewingRule] = useState<GlobalRule | null>(null);
+  // استثناءات المواضع كلها: تغيّرها يعيد حساب عدّادات هذه اللوحة فورا.
+  const occurrences = useRuleOccurrences();
   const catalog = useTransmissionCatalog();
 
   const words = useMemo(
@@ -68,16 +74,21 @@ export function VariantsPanel() {
   const hasMarks =
     markingMode === 'CHARACTERS' ? markedCharacterRange !== null : markedPositions.length > 0;
 
-  const activeGlobalRules = useMemo(
-    () =>
-      document
-        ? listGlobalRules()
-            .filter((rule) => rule.isActive && rule.pattern)
-            .map((rule) => ({ rule, matches: findGlobalRuleMatchesInAyah(rule, document.ayahKey) }))
-            .filter((item) => item.matches.length > 0)
-        : [],
-    [document]
-  );
+  const activeGlobalRules = useMemo(() => {
+    if (!document) return [];
+    // المفتاح ضمن الاعتماديات ليُعاد العدّ بعد حذف موضع أو إرجاعه.
+    void occurrences.key;
+    const deleted = deletedOccurrenceIds();
+
+    return listGlobalRules()
+      .filter((rule) => rule.isActive && rule.pattern)
+      .map((rule) => {
+        const matches = findGlobalRuleMatchesInAyah(rule, document.ayahKey);
+        const removedHere = matches.filter((match) => deleted.has(occurrenceIdFor(rule.id, match))).length;
+        return { rule, matches, removedHere };
+      })
+      .filter((item) => item.matches.length > 0);
+  }, [document, occurrences.key]);
 
   if (!document) return null;
 
@@ -175,10 +186,31 @@ export function VariantsPanel() {
           <p className="mt-2 text-[11px] text-violet-900/65">لا توجد قاعدة نمطية نشطة مطابقة لهذه الآية.</p>
         ) : (
           <ul className="mt-2 space-y-1.5">
-            {activeGlobalRules.map(({ rule, matches }) => (
-              <li key={rule.id} className="flex items-center justify-between gap-2 rounded border border-violet-100 bg-white px-2 py-1.5 text-[11px]">
-                <span className="min-w-0 truncate font-medium text-stone-800">{rule.ruleLabel || rule.title}</span>
-                <span className="shrink-0 text-violet-800">{matches.length} موضع</span>
+            {activeGlobalRules.map(({ rule, matches, removedHere }) => (
+              <li key={rule.id} className="rounded border border-violet-100 bg-white px-2 py-1.5 text-[11px]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate font-medium text-stone-800">{rule.ruleLabel || rule.title}</span>
+                  <span className="shrink-0 text-violet-800">
+                    {matches.length - removedHere} من {matches.length} موضع
+                  </span>
+                </div>
+                <div className="mt-1 flex items-center justify-between gap-2">
+                  {removedHere > 0 ? (
+                    <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] text-rose-800">
+                      حُذف هنا {removedHere} موضعا
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-stone-400">مطبَّقة في هذه الآية</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setReviewingRule(rule)}
+                    className="shrink-0 rounded border border-violet-300 px-1.5 py-0.5 text-[10px] text-violet-900 hover:bg-violet-50"
+                    title="مراجعة مواضع القاعدة في المصحف كله موضعا موضعا"
+                  >
+                    تتبّع المواضع
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -290,6 +322,17 @@ export function VariantsPanel() {
 
       {editingVariant && (
         <VariantEditor variant={editingVariant} onClose={() => setEditingVariantId(null)} />
+      )}
+
+      {reviewingRule && (
+        <RuleOccurrenceReview
+          rule={reviewingRule}
+          startAtAyahKey={document.ayahKey}
+          onClose={() => {
+            setReviewingRule(null);
+            refreshDerivedBranches();
+          }}
+        />
       )}
 
       {showGlobalBuilder && (

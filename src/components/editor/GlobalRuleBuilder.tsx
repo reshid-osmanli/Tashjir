@@ -12,6 +12,7 @@ import { characterCount } from '@/lib/quran-logic/characters';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { resolveScope } from '@/lib/tashjeer/scope';
+import { pruneStrengthMap } from '@/lib/tashjeer/strength-degrees';
 import {
   buildCharacterPattern,
   describeGlobalPattern,
@@ -23,19 +24,32 @@ import {
   saveGlobalRule,
   type GlobalRule,
 } from '@/lib/storage/global-rules-store';
+import {
+  MORPHOLOGY_FEATURE_HINTS,
+  MORPHOLOGY_FEATURE_LABELS,
+  PARTICLE_CLASS_LABELS,
+  WORD_ENDING_HARAKA_LABELS,
+} from '@/lib/quran-logic/arabic-grammar';
 import type { VariantCategory } from '@/types';
 import type {
+  AyahWordPosition,
   CharacterRange,
   GlobalCharacterPattern,
   GlobalCharacterSet,
   GlobalMorphologyPattern,
+  GlobalMorphologyWordPattern,
   GlobalRulePattern,
   GlobalWordCharacterPattern,
   HarakaMatchMode,
+  MorphologyFeature,
+  ParticleClass,
+  ReaderStrengthMap,
   ReadingScope,
   VerificationStatus,
+  WordEndingHaraka,
 } from '@/types/tashjeer';
 import { ScopePicker } from './VariantEditor';
+import { StrengthDegreePicker } from './StrengthDegreePicker';
 
 interface GlobalRuleBuilderProps {
   ayahKey: number;
@@ -75,10 +89,12 @@ export function GlobalRuleBuilder({
       return null;
     }
   });
-  const [template, setTemplate] = useState('');
-  const [prefix, setPrefix] = useState('');
-  const [suffix, setSuffix] = useState('');
-  const [morphologyMode, setMorphologyMode] = useState<HarakaMatchMode>('IGNORE');
+  const [morphologyWord, setMorphologyWord] = useState<GlobalMorphologyWordPattern>({
+    offset: 0,
+    harakaMode: 'IGNORE',
+  });
+  const [strengthDegreeId, setStrengthDegreeId] = useState<string | undefined>(undefined);
+  const [strengthByNarrator, setStrengthByNarrator] = useState<ReaderStrengthMap | undefined>(undefined);
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<VariantCategory>('TAJWEED');
   const [scope, setScope] = useState<ReadingScope>({ kind: 'ALL' });
@@ -90,25 +106,20 @@ export function GlobalRuleBuilder({
   const [isActive, setIsActive] = useState(true);
   const [error, setError] = useState('');
 
+  /** هل في القاعدة الصرفية معيار واحد مفعّل على الأقل؟ بدونه تطابق كل كلمة. */
+  const morphologyHasCriteria = useMemo(() => hasAnyCriteria(morphologyWord), [morphologyWord]);
+
   const pattern = useMemo<GlobalRulePattern | null>(() => {
     if (kind === 'CHARACTERS') return characterPattern;
-    if (!template.trim() && !prefix.trim() && !suffix.trim()) return null;
+    if (!morphologyHasCriteria) return null;
     return {
       kind: 'MORPHOLOGY',
       version: 1,
       wordCount: 1,
-      words: [
-        {
-          offset: 0,
-          template: template.trim() || undefined,
-          prefix: prefix.trim() || undefined,
-          suffix: suffix.trim() || undefined,
-          harakaMode: morphologyMode,
-        },
-      ],
+      words: [cleanMorphologyWord(morphologyWord)],
       sourceAyahKey: ayahKey,
     } satisfies GlobalMorphologyPattern;
-  }, [ayahKey, characterPattern, kind, morphologyMode, prefix, suffix, template]);
+  }, [ayahKey, characterPattern, kind, morphologyHasCriteria, morphologyWord]);
 
   const matches = useMemo(
     () => (pattern ? findGlobalRuleMatches({ id: 'preview', pattern }) : []),
@@ -183,7 +194,7 @@ export function GlobalRuleBuilder({
       setError(
         kind === 'CHARACTERS'
           ? 'لا يوجد تحديد حرفي صالح. أغلق النافذة وحدد حروفا من المصحف أولا.'
-          : 'أدخل قالبا صرفيا أو بادئة أو لاحقة واحدة على الأقل.'
+          : 'فعّل معيارا صرفيا أو نحويا واحدا على الأقل، وإلا طابقت القاعدة كل كلمة في المصحف.'
       );
       return;
     }
@@ -200,6 +211,8 @@ export function GlobalRuleBuilder({
       ruleLabel: ruleLabel.trim() || undefined,
       maddHarakat: maddHarakat === '' ? undefined : Number(maddHarakat),
       pattern,
+      strengthDegreeId,
+      strengthByNarrator: pruneStrengthMap(strengthByNarrator, resolveScope(scope, catalog)),
       description: description.trim() || undefined,
       sourceRef: sourceRef.trim() || undefined,
       evidences: [],
@@ -266,16 +279,7 @@ export function GlobalRuleBuilder({
               التحديد الحرفي غير صالح. أغلق النافذة وحدد بداية ونهاية داخل المصحف.
             </p>
           ) : (
-            <MorphologyPatternEditor
-              template={template}
-              prefix={prefix}
-              suffix={suffix}
-              mode={morphologyMode}
-              onTemplateChange={setTemplate}
-              onPrefixChange={setPrefix}
-              onSuffixChange={setSuffix}
-              onModeChange={setMorphologyMode}
-            />
+            <MorphologyPatternEditor word={morphologyWord} onChange={setMorphologyWord} />
           )}
 
           <section className="mt-5 grid gap-3 md:grid-cols-2">
@@ -308,6 +312,19 @@ export function GlobalRuleBuilder({
 
           <section className="mt-4 rounded-md border border-stone-200 p-3">
             <ScopePicker scope={scope} onChange={setScope} />
+          </section>
+
+          <section className="mt-4">
+            <StrengthDegreePicker
+              scope={scope}
+              degreeId={strengthDegreeId}
+              byNarrator={strengthByNarrator}
+              onChange={(next) => {
+                setStrengthDegreeId(next.degreeId);
+                setStrengthByNarrator(next.byNarrator);
+              }}
+              hint="تُطبَّق هذه الدرجة على كل مواضع القاعدة في المصحف، ثم يمكن تعديل درجة موضع بعينه من شاشة تتبّع المواضع."
+            />
           </section>
 
           <section className="mt-4 rounded-md border border-emerald-200 bg-emerald-50/50 p-3">
@@ -432,49 +449,358 @@ function CharacterPatternEditor({
   );
 }
 
+/** الخصائص الصرفية مقسّمة إلى مجموعات ليقرأها المحقق سريعا. */
+const FEATURE_GROUPS: Array<{ title: string; features: MorphologyFeature[] }> = [
+  { title: 'علامات التأنيث', features: ['TAA_MARBUTA', 'TAA_MAFTUHA', 'ALIF_MAQSURA', 'ALIF_MAMDUDA'] },
+  { title: 'العدد والنسب', features: ['DUAL_SUFFIX', 'SOUND_MASCULINE_PLURAL', 'SOUND_FEMININE_PLURAL', 'NISBA_YAA'] },
+  { title: 'التعريف والضبط', features: ['DEFINITE_AL', 'TANWEEN', 'SHADDA', 'HAMZA', 'MADD_LETTER'] },
+];
+
+const AYAH_POSITION_OPTIONS: Array<{ value: AyahWordPosition; label: string }> = [
+  { value: 'ANY', label: 'أي موضع من الآية' },
+  { value: 'FIRST', label: 'أول كلمة في الآية' },
+  { value: 'LAST', label: 'آخر كلمة في الآية' },
+  { value: 'NOT_LAST', label: 'ما عدا آخر كلمة' },
+];
+
+/** قوالب جاهزة لأكثر ما يُسأل عنه، تختصر على المحقق بناء المعايير يدويا. */
+const MORPHOLOGY_PRESETS: Array<{ label: string; description: string; word: GlobalMorphologyWordPattern }> = [
+  {
+    label: 'كل ما ينتهي بتاء التأنيث',
+    description: 'كل كلمة آخرها تاء مربوطة، مثل: رحمة، جنة.',
+    word: { offset: 0, harakaMode: 'IGNORE', morphologyFeatures: ['TAA_MARBUTA'] },
+  },
+  {
+    label: 'وزن «فُعْلَى»',
+    description: 'القالب الصرفي مع ألف التأنيث المقصورة، مثل: الكبرى، الحسنى.',
+    word: { offset: 0, harakaMode: 'EXACT', template: 'فُعْلَى' },
+  },
+  {
+    label: 'جمع المؤنث السالم',
+    description: 'كل كلمة آخرها ألف وتاء، مثل: المؤمنات، الصالحات.',
+    word: { offset: 0, harakaMode: 'IGNORE', morphologyFeatures: ['SOUND_FEMININE_PLURAL'] },
+  },
+  {
+    label: 'اسم مجرور بعد حرف جر',
+    description: 'كلمة تسبقها أداة جر مباشرة وآخرها كسرة أو تنوين كسر.',
+    word: {
+      offset: 0,
+      harakaMode: 'IGNORE',
+      precededBy: ['JARR'],
+      endingHaraka: ['KASRA', 'TANWEEN_KASR'],
+    },
+  },
+  {
+    label: 'منوّن بتنوين الفتح',
+    description: 'كل كلمة آخرها تنوين فتح، وهو موضع الوقف بالألف.',
+    word: { offset: 0, harakaMode: 'IGNORE', endingHaraka: ['TANWEEN_FATH'] },
+  },
+  {
+    label: 'المعرّف بأل في آخر الآية',
+    description: 'كلمة تبدأ بأل التعريف وتقع آخر الآية، لمسائل الوقف.',
+    word: { offset: 0, harakaMode: 'IGNORE', morphologyFeatures: ['DEFINITE_AL'], ayahPosition: 'LAST' },
+  },
+];
+
+/** هل في نمط الكلمة معيار مفعّل واحد على الأقل؟ */
+function hasAnyCriteria(word: GlobalMorphologyWordPattern): boolean {
+  return Boolean(
+    word.template?.trim() ||
+      word.prefix?.trim() ||
+      word.suffix?.trim() ||
+      word.morphologyFeatures?.length ||
+      word.excludedMorphologyFeatures?.length ||
+      word.endingHaraka?.length ||
+      word.precededBy?.length ||
+      word.followedBy?.length ||
+      (word.ayahPosition && word.ayahPosition !== 'ANY') ||
+      word.minLength ||
+      word.maxLength
+  );
+}
+
+/** يحذف الحقول الفارغة قبل الحفظ، فلا يُخزَّن معيار غير مفعّل. */
+function cleanMorphologyWord(word: GlobalMorphologyWordPattern): GlobalMorphologyWordPattern {
+  const list = <T,>(value: T[] | undefined): T[] | undefined =>
+    value && value.length > 0 ? value : undefined;
+
+  return {
+    offset: 0,
+    harakaMode: word.harakaMode,
+    template: word.template?.trim() || undefined,
+    prefix: word.prefix?.trim() || undefined,
+    suffix: word.suffix?.trim() || undefined,
+    morphologyFeatures: list(word.morphologyFeatures),
+    excludedMorphologyFeatures: list(word.excludedMorphologyFeatures),
+    endingHaraka: list(word.endingHaraka),
+    precededBy: list(word.precededBy),
+    followedBy: list(word.followedBy),
+    ayahPosition: word.ayahPosition && word.ayahPosition !== 'ANY' ? word.ayahPosition : undefined,
+    minLength: word.minLength && word.minLength > 0 ? word.minLength : undefined,
+    maxLength: word.maxLength && word.maxLength > 0 ? word.maxLength : undefined,
+  };
+}
+
+/**
+ * محرر القاعدة الصرفية والنحوية.
+ *
+ * المعايير هنا كلها تجتمع بـ«و» لا بـ«أو»: كل ما تفعّله يضيّق النتيجة. أما
+ * داخل المعيار الواحد (كقائمة الأدوات السابقة) فيكفي تحقق واحد منها.
+ * وسبب هذا التقسيم أن المحقق يبني القاعدة بالاستثناء لا بالجمع: يبدأ من
+ * علامة ظاهرة ثم يستبعد ما لا يريد.
+ */
 function MorphologyPatternEditor({
-  template,
-  prefix,
-  suffix,
-  mode,
-  onTemplateChange,
-  onPrefixChange,
-  onSuffixChange,
-  onModeChange,
+  word,
+  onChange,
 }: {
-  template: string;
-  prefix: string;
-  suffix: string;
-  mode: HarakaMatchMode;
-  onTemplateChange: (value: string) => void;
-  onPrefixChange: (value: string) => void;
-  onSuffixChange: (value: string) => void;
-  onModeChange: (value: HarakaMatchMode) => void;
+  word: GlobalMorphologyWordPattern;
+  onChange: (word: GlobalMorphologyWordPattern) => void;
 }) {
+  const patch = (changes: Partial<GlobalMorphologyWordPattern>) => onChange({ ...word, ...changes });
+
+  const toggleInList = <T,>(list: T[] | undefined, value: T): T[] | undefined => {
+    const current = list ?? [];
+    const next = current.includes(value) ? current.filter((item) => item !== value) : [...current, value];
+    return next.length > 0 ? next : undefined;
+  };
+
+  const toggleFeature = (feature: MorphologyFeature, excluded: boolean) => {
+    if (excluded) {
+      patch({
+        excludedMorphologyFeatures: toggleInList(word.excludedMorphologyFeatures, feature),
+        // لا يُطلب الشيء ويُستثنى في آن واحد.
+        morphologyFeatures: word.morphologyFeatures?.filter((item) => item !== feature),
+      });
+    } else {
+      patch({
+        morphologyFeatures: toggleInList(word.morphologyFeatures, feature),
+        excludedMorphologyFeatures: word.excludedMorphologyFeatures?.filter((item) => item !== feature),
+      });
+    }
+  };
+
   return (
-    <section className="mt-4 rounded-md border border-amber-200 bg-amber-50/60 p-3">
-      <h3 className="text-xs font-bold text-amber-950">قاعدة صرفية نمطية حتمية</h3>
-      <p className="mt-1 text-[11px] leading-relaxed text-amber-900/80">
-        اكتب قالبا مثل «فَعْلَى» أو «فَعِيلَة». الحروف ف وع ول خانات للجذر، وما سواها حرف حرفي.
-        ويمكن الاكتفاء بلاحقة مثل «ة» للبحث عن كل كلمة تنتهي بتاء مربوطة. هذا ليس تحليلا نحويا ولا تخمينا لجذر الكلمة.
-      </p>
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <Field label="القالب الصرفي (اختياري)">
-          <input value={template} onChange={(event) => onTemplateChange(event.target.value)} className="input" dir="rtl" placeholder="فَعْلَى أو فَعِيلَة" style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }} />
-        </Field>
-        <Field label="سياسة الحركات في القالب">
-          <select value={mode} onChange={(event) => onModeChange(event.target.value as HarakaMatchMode)} className="input">
-            {MODE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </Field>
-        <Field label="بادئة حرفية (اختياري)">
-          <input value={prefix} onChange={(event) => onPrefixChange(event.target.value)} className="input" placeholder="ال" />
-        </Field>
-        <Field label="لاحقة حرفية (اختياري)">
-          <input value={suffix} onChange={(event) => onSuffixChange(event.target.value)} className="input" placeholder="ة" />
-        </Field>
+    <section className="mt-4 space-y-3">
+      <div className="rounded-md border border-amber-200 bg-amber-50/60 p-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h3 className="text-xs font-bold text-amber-950">قاعدة على القواعد النحوية والصرفية</h3>
+            <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-amber-900/80">
+              كل معيار تفعّله يضيّق النتيجة (تجتمع بـ«و»)، وداخل المعيار الواحد يكفي تحقق خيار واحد.
+              وليس هنا تحليل إعرابي احتمالي: الشرط إما علامة ظاهرة في الرسم والضبط، أو أداة من قائمة معدودة.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {MORPHOLOGY_PRESETS.map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              title={preset.description}
+              onClick={() => onChange({ ...preset.word })}
+              className="rounded border border-amber-300 bg-white px-2 py-1 text-[11px] text-amber-900 hover:bg-amber-100"
+            >
+              {preset.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => onChange({ offset: 0, harakaMode: word.harakaMode })}
+            className="rounded border border-stone-300 bg-white px-2 py-1 text-[11px] text-stone-600 hover:bg-stone-100"
+          >
+            تفريغ كل المعايير
+          </button>
+        </div>
+      </div>
+
+      {/* الصرف: القالب والبناء */}
+      <div className="rounded-md border border-stone-200 p-3">
+        <h4 className="text-[11px] font-bold text-stone-800">أولا: بنية الكلمة (صرف)</h4>
+        <div className="mt-2 grid gap-3 md:grid-cols-2">
+          <Field label="القالب الصرفي (اختياري)">
+            <input
+              value={word.template ?? ''}
+              onChange={(event) => patch({ template: event.target.value })}
+              className="input"
+              dir="rtl"
+              placeholder="فُعْلَى أو فَعِيلَة"
+              style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }}
+            />
+            <span className="mt-1 block text-[10px] text-stone-500">
+              ف وع ول خانات للجذر، وما سواها حرف حرفي يُطابَق كما هو.
+            </span>
+          </Field>
+          <Field label="سياسة الحركات في القالب والبادئة واللاحقة">
+            <select
+              value={word.harakaMode}
+              onChange={(event) => patch({ harakaMode: event.target.value as HarakaMatchMode })}
+              className="input"
+            >
+              {MODE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="بادئة حرفية (اختياري)">
+            <input value={word.prefix ?? ''} onChange={(event) => patch({ prefix: event.target.value })} className="input" placeholder="ال" dir="rtl" />
+          </Field>
+          <Field label="لاحقة حرفية (اختياري)">
+            <input value={word.suffix ?? ''} onChange={(event) => patch({ suffix: event.target.value })} className="input" placeholder="ة" dir="rtl" />
+          </Field>
+          <Field label="أقل عدد حروف (اختياري)">
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={word.minLength ?? ''}
+              onChange={(event) => patch({ minLength: event.target.value ? Number(event.target.value) : undefined })}
+              className="input"
+            />
+          </Field>
+          <Field label="أكثر عدد حروف (اختياري)">
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={word.maxLength ?? ''}
+              onChange={(event) => patch({ maxLength: event.target.value ? Number(event.target.value) : undefined })}
+              className="input"
+            />
+          </Field>
+        </div>
+      </div>
+
+      {/* الصرف: الخصائص */}
+      <div className="rounded-md border border-stone-200 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h4 className="text-[11px] font-bold text-stone-800">ثانيا: الخصائص الصرفية</h4>
+          <span className="text-[10px] text-stone-500">
+            انقر مرة لاشتراط الخاصية، ومرة على «استثناء» لمنعها.
+          </span>
+        </div>
+        <div className="mt-2 space-y-2.5">
+          {FEATURE_GROUPS.map((group) => (
+            <div key={group.title}>
+              <p className="text-[10px] font-semibold text-stone-500">{group.title}</p>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {group.features.map((feature) => {
+                  const required = word.morphologyFeatures?.includes(feature) ?? false;
+                  const excluded = word.excludedMorphologyFeatures?.includes(feature) ?? false;
+                  return (
+                    <span key={feature} className="inline-flex overflow-hidden rounded border border-stone-300">
+                      <button
+                        type="button"
+                        title={MORPHOLOGY_FEATURE_HINTS[feature]}
+                        onClick={() => toggleFeature(feature, false)}
+                        className={`px-2 py-1 text-[11px] ${required ? 'bg-emerald-600 text-white' : 'bg-white text-stone-700 hover:bg-stone-50'}`}
+                      >
+                        {MORPHOLOGY_FEATURE_LABELS[feature]}
+                      </button>
+                      <button
+                        type="button"
+                        title={`استثناء: ${MORPHOLOGY_FEATURE_HINTS[feature]}`}
+                        onClick={() => toggleFeature(feature, true)}
+                        className={`border-s border-stone-300 px-1.5 py-1 text-[11px] ${excluded ? 'bg-rose-600 text-white' : 'bg-stone-50 text-stone-500 hover:bg-rose-50'}`}
+                        aria-label={`استثناء ${MORPHOLOGY_FEATURE_LABELS[feature]}`}
+                      >
+                        استثناء
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* النحو */}
+      <div className="rounded-md border border-stone-200 p-3">
+        <h4 className="text-[11px] font-bold text-stone-800">ثالثا: السياق النحوي</h4>
+        <p className="mt-1 text-[10px] leading-relaxed text-stone-500">
+          الشرط النحوي هنا محسوس: أداة قبل الكلمة أو بعدها من قائمة مغلقة، أو حركة آخرها الظاهرة في الضبط،
+          أو موقعها من الآية. ولا يُدَّعى إعراب لا تدل عليه علامة.
+        </p>
+
+        <div className="mt-2.5">
+          <p className="text-[10px] font-semibold text-stone-500">حركة آخر الكلمة (يكفي واحدة)</p>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {(Object.keys(WORD_ENDING_HARAKA_LABELS) as WordEndingHaraka[]).map((haraka) => {
+              const active = word.endingHaraka?.includes(haraka) ?? false;
+              return (
+                <button
+                  key={haraka}
+                  type="button"
+                  onClick={() => patch({ endingHaraka: toggleInList(word.endingHaraka, haraka) })}
+                  className={`rounded border px-2 py-1 text-[11px] ${active ? 'border-cyan-700 bg-cyan-700 text-white' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
+                >
+                  {WORD_ENDING_HARAKA_LABELS[haraka]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <ParticleSelector
+            title="تسبقها أداة من نوع"
+            selected={word.precededBy}
+            onToggle={(value) => patch({ precededBy: toggleInList(word.precededBy, value) })}
+          />
+          <ParticleSelector
+            title="تليها أداة من نوع"
+            selected={word.followedBy}
+            onToggle={(value) => patch({ followedBy: toggleInList(word.followedBy, value) })}
+          />
+        </div>
+
+        <div className="mt-3 max-w-sm">
+          <Field label="موقع الكلمة من الآية">
+            <select
+              value={word.ayahPosition ?? 'ANY'}
+              onChange={(event) => patch({ ayahPosition: event.target.value as AyahWordPosition })}
+              className="input"
+            >
+              {AYAH_POSITION_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
       </div>
     </section>
+  );
+}
+
+function ParticleSelector({
+  title,
+  selected,
+  onToggle,
+}: {
+  title: string;
+  selected?: ParticleClass[];
+  onToggle: (value: ParticleClass) => void;
+}) {
+  return (
+    <div>
+      <p className="text-[10px] font-semibold text-stone-500">{title} (يكفي واحدة)</p>
+      <div className="mt-1 flex flex-wrap gap-1.5">
+        {(Object.keys(PARTICLE_CLASS_LABELS) as ParticleClass[]).map((particleClass) => {
+          const active = selected?.includes(particleClass) ?? false;
+          return (
+            <button
+              key={particleClass}
+              type="button"
+              onClick={() => onToggle(particleClass)}
+              className={`rounded border px-2 py-1 text-[11px] ${active ? 'border-violet-700 bg-violet-700 text-white' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
+            >
+              {PARTICLE_CLASS_LABELS[particleClass]}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
