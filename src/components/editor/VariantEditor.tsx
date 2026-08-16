@@ -32,6 +32,11 @@ import type {
 interface VariantEditorProps {
   variant: Variant;
   onClose: () => void;
+  /**
+   * تحويل الاختلاف الحرفي إلى قاعدة عامة على المصحف كله، بنفس مدى الحروف
+   * وبيانات وجهه الأول. تظهر الزر فقط عندما يكون التحديد حرفيا.
+   */
+  onGeneralize?: () => void;
 }
 
 const STATUS_OPTIONS: Array<{ value: VerificationStatus; label: string }> = [
@@ -48,7 +53,7 @@ const SOURCE_OPTIONS: Array<{ value: EvidenceSource; label: string }> = [
   { value: 'OTHER', label: 'مصدر آخر' },
 ];
 
-export function VariantEditor({ variant, onClose }: VariantEditorProps) {
+export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorProps) {
   const { updateVariant, addAlternative, updateAlternative, deleteAlternative } = useEditorStore();
   const catalog = useTransmissionCatalog();
   const [activeAlternativeId, setActiveAlternativeId] = useState<string | null>(
@@ -86,13 +91,25 @@ export function VariantEditor({ variant, onClose }: VariantEditorProps) {
               {variant.endPosition !== variant.startPosition ? `–${variant.endPosition}` : ''}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-100"
-          >
-            إغلاق
-          </button>
+          <div className="flex items-center gap-2">
+            {onGeneralize && variant.targetKind === 'CHARACTERS' && variant.characterRange && (
+              <button
+                type="button"
+                onClick={onGeneralize}
+                className="rounded-md border border-violet-300 bg-violet-50 px-3 py-1.5 text-sm text-violet-900 hover:bg-violet-100"
+                title="تحويل هذا الاختلاف إلى قاعدة تُطبَّق على كل المواضع المطابقة في المصحف"
+              >
+                تعميم على المصحف
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-100"
+            >
+              إغلاق
+            </button>
+          </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-5">

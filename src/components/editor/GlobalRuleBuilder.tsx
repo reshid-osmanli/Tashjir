@@ -33,6 +33,7 @@ import {
 import type { VariantCategory } from '@/types';
 import type {
   AyahWordPosition,
+  CharacterMatchScope,
   CharacterRange,
   GlobalCharacterPattern,
   GlobalCharacterSet,
@@ -51,10 +52,25 @@ import type {
 import { ScopePicker } from './VariantEditor';
 import { StrengthDegreePicker } from './StrengthDegreePicker';
 
+/** بيانات ابتدائية تُزرع في النموذج عند التعميم من وجه أو اختلاف قائم. */
+export interface GlobalRuleSeed {
+  title?: string;
+  category?: VariantCategory;
+  scope?: ReadingScope;
+  ruleLabel?: string;
+  maddHarakat?: number;
+  description?: string;
+  sourceRef?: string;
+  strengthDegreeId?: string;
+  strengthByNarrator?: ReaderStrengthMap;
+}
+
 interface GlobalRuleBuilderProps {
   ayahKey: number;
   characterRange: CharacterRange | null;
   initialKind?: GlobalRulePattern['kind'];
+  /** يملأ الحقول الوصفية من وجه/اختلاف قائم عند «التعميم على المصحف». */
+  seed?: GlobalRuleSeed;
   onClose: () => void;
   onSaved: (rule: GlobalRule, matchCount: number) => void;
 }
@@ -69,13 +85,21 @@ const STATUS_OPTIONS: Array<{ value: VerificationStatus; label: string }> = [
 const MODE_OPTIONS: Array<{ value: HarakaMatchMode; label: string }> = [
   { value: 'EXACT', label: 'مطابقة الضبط المحدد' },
   { value: 'IGNORE', label: 'تجاهل الحركة (أي حركة)' },
-  { value: 'NONE', label: 'بلا حركة فقط' },
+  { value: 'SAKIN', label: 'ساكن (بعلامة السكون أو معرّى)' },
+  { value: 'NONE', label: 'بلا أي علامة فقط' },
+];
+
+const MATCH_SCOPE_OPTIONS: Array<{ value: CharacterMatchScope; label: string; hint: string }> = [
+  { value: 'WORDS', label: 'بين الكلمات كما حُدِّد', hint: 'يطابق التتابع موزعا على الكلمات كما في الموضع المصدر: نهاية كلمة فبداية أخرى.' },
+  { value: 'INSIDE_WORD', label: 'داخل الكلمة الواحدة', hint: 'يبحث عن التتابع نفسه حروفا متجاورة في جوف كل كلمة، مثل النون الساكنة في «أَنتُمْ».' },
+  { value: 'BOTH', label: 'بين الكلمات وداخلها معا', hint: 'الدقة الكاملة للأحكام الصوتية: الحكم يجري بين الكلمتين وفي داخل الكلمة سواء.' },
 ];
 
 export function GlobalRuleBuilder({
   ayahKey,
   characterRange,
   initialKind = 'CHARACTERS',
+  seed,
   onClose,
   onSaved,
 }: GlobalRuleBuilderProps) {
@@ -89,25 +113,27 @@ export function GlobalRuleBuilder({
       return null;
     }
   });
-  const [morphologyWord, setMorphologyWord] = useState<GlobalMorphologyWordPattern>({
-    offset: 0,
-    harakaMode: 'IGNORE',
-  });
-  const [strengthDegreeId, setStrengthDegreeId] = useState<string | undefined>(undefined);
-  const [strengthByNarrator, setStrengthByNarrator] = useState<ReaderStrengthMap | undefined>(undefined);
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState<VariantCategory>('TAJWEED');
-  const [scope, setScope] = useState<ReadingScope>({ kind: 'ALL' });
-  const [ruleLabel, setRuleLabel] = useState('');
-  const [maddHarakat, setMaddHarakat] = useState('');
-  const [description, setDescription] = useState('');
-  const [sourceRef, setSourceRef] = useState('');
+  const [morphologyWords, setMorphologyWords] = useState<GlobalMorphologyWordPattern[]>([
+    { offset: 0, harakaMode: 'IGNORE' },
+  ]);
+  const [strengthDegreeId, setStrengthDegreeId] = useState<string | undefined>(seed?.strengthDegreeId);
+  const [strengthByNarrator, setStrengthByNarrator] = useState<ReaderStrengthMap | undefined>(seed?.strengthByNarrator);
+  const [title, setTitle] = useState(seed?.title ?? '');
+  const [category, setCategory] = useState<VariantCategory>(seed?.category ?? 'TAJWEED');
+  const [scope, setScope] = useState<ReadingScope>(seed?.scope ?? { kind: 'ALL' });
+  const [ruleLabel, setRuleLabel] = useState(seed?.ruleLabel ?? '');
+  const [maddHarakat, setMaddHarakat] = useState(seed?.maddHarakat?.toString() ?? '');
+  const [description, setDescription] = useState(seed?.description ?? '');
+  const [sourceRef, setSourceRef] = useState(seed?.sourceRef ?? '');
   const [status, setStatus] = useState<VerificationStatus>('DRAFT');
   const [isActive, setIsActive] = useState(true);
   const [error, setError] = useState('');
 
-  /** هل في القاعدة الصرفية معيار واحد مفعّل على الأقل؟ بدونه تطابق كل كلمة. */
-  const morphologyHasCriteria = useMemo(() => hasAnyCriteria(morphologyWord), [morphologyWord]);
+  /** كل كلمات القاعدة الصرفية يجب أن تحمل معيارا، وإلا طابقت كل شيء. */
+  const morphologyHasCriteria = useMemo(
+    () => morphologyWords.length > 0 && morphologyWords.every((word) => hasAnyCriteria(word)),
+    [morphologyWords]
+  );
 
   const pattern = useMemo<GlobalRulePattern | null>(() => {
     if (kind === 'CHARACTERS') return characterPattern;
@@ -115,11 +141,11 @@ export function GlobalRuleBuilder({
     return {
       kind: 'MORPHOLOGY',
       version: 1,
-      wordCount: 1,
-      words: [cleanMorphologyWord(morphologyWord)],
+      wordCount: morphologyWords.length,
+      words: morphologyWords.map((word, index) => ({ ...cleanMorphologyWord(word), offset: index })),
       sourceAyahKey: ayahKey,
     } satisfies GlobalMorphologyPattern;
-  }, [ayahKey, characterPattern, kind, morphologyHasCriteria, morphologyWord]);
+  }, [ayahKey, characterPattern, kind, morphologyHasCriteria, morphologyWords]);
 
   const matches = useMemo(
     () => (pattern ? findGlobalRuleMatches({ id: 'preview', pattern }) : []),
@@ -259,7 +285,7 @@ export function GlobalRuleBuilder({
               onClick={() => setKind('MORPHOLOGY')}
               className={`rounded border px-2.5 py-1 text-[11px] ${kind === 'MORPHOLOGY' ? 'border-violet-700 bg-violet-700 text-white' : 'border-violet-200 bg-white text-violet-900'}`}
             >
-              قالب صرفي محدود
+              قاعدة نحوية وصرفية
             </button>
             <span className="ms-auto text-[11px] text-violet-900/75">
               {pattern ? describeGlobalPattern(pattern) : 'لم يكتمل النمط بعد'}
@@ -267,19 +293,56 @@ export function GlobalRuleBuilder({
           </div>
 
           {kind === 'CHARACTERS' && characterPattern ? (
-            <CharacterPatternEditor
-              pattern={characterPattern}
-              sourceWords={sourceWords}
-              onModeChange={updateConstraintMode}
-              onLetterSetChange={updateConstraintSet}
-              onExactLengthChange={toggleExactLength}
-            />
+            <>
+              <section className="mt-4 rounded-md border border-teal-200 bg-teal-50/50 p-3">
+                <h3 className="text-xs font-bold text-teal-950">أين يُبحث عن هذا التتابع؟</h3>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-teal-900/75">
+                  الحكم الصوتي الواحد قد يجري بين كلمتين («مِنْ ثَمَرَةٍ») ويجري داخل الكلمة الواحدة («أَنتُمْ»).
+                  اختر «بين الكلمات وداخلها» لتشمل القاعدة الحالتين معا بدقة.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {MATCH_SCOPE_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      title={option.hint}
+                      onClick={() =>
+                        setCharacterPattern((current) =>
+                          current ? { ...current, matchScope: option.value } : current
+                        )
+                      }
+                      className={`rounded border px-2.5 py-1 text-[11px] ${
+                        (characterPattern.matchScope ?? 'WORDS') === option.value
+                          ? 'border-teal-700 bg-teal-700 text-white'
+                          : 'border-teal-200 bg-white text-teal-900 hover:bg-teal-100'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                {(characterPattern.matchScope === 'INSIDE_WORD' || characterPattern.matchScope === 'BOTH') && (
+                  <p className="mt-2 rounded bg-white px-2 py-1.5 text-[10px] leading-relaxed text-teal-900/80">
+                    {characterPattern.words.reduce((total, word) => total + word.constraints.length, 0) < 2
+                      ? 'تنبيه: البحث داخل الكلمة يتطلب تحديد حرفين متتابعين على الأقل، وإلا لم يطابق داخل الكلمات شيئا.'
+                      : 'داخل الكلمة تُبسط قيود الكلمات إلى تتابع واحد متجاور من الحروف بترتيب التلاوة، وتُهمل مراسي البداية/النهاية وقيود الطول.'}
+                  </p>
+                )}
+              </section>
+              <CharacterPatternEditor
+                pattern={characterPattern}
+                sourceWords={sourceWords}
+                onModeChange={updateConstraintMode}
+                onLetterSetChange={updateConstraintSet}
+                onExactLengthChange={toggleExactLength}
+              />
+            </>
           ) : kind === 'CHARACTERS' ? (
             <p className="mt-4 rounded border border-dashed border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
               التحديد الحرفي غير صالح. أغلق النافذة وحدد بداية ونهاية داخل المصحف.
             </p>
           ) : (
-            <MorphologyPatternEditor word={morphologyWord} onChange={setMorphologyWord} />
+            <MorphologySequenceEditor words={morphologyWords} onChange={setMorphologyWords} />
           )}
 
           <section className="mt-5 grid gap-3 md:grid-cols-2">
@@ -452,8 +515,20 @@ function CharacterPatternEditor({
 /** الخصائص الصرفية مقسّمة إلى مجموعات ليقرأها المحقق سريعا. */
 const FEATURE_GROUPS: Array<{ title: string; features: MorphologyFeature[] }> = [
   { title: 'علامات التأنيث', features: ['TAA_MARBUTA', 'TAA_MAFTUHA', 'ALIF_MAQSURA', 'ALIF_MAMDUDA'] },
-  { title: 'العدد والنسب', features: ['DUAL_SUFFIX', 'SOUND_MASCULINE_PLURAL', 'SOUND_FEMININE_PLURAL', 'NISBA_YAA'] },
-  { title: 'التعريف والضبط', features: ['DEFINITE_AL', 'TANWEEN', 'SHADDA', 'HAMZA', 'MADD_LETTER'] },
+  { title: 'العدد والنسب والضمائر', features: ['DUAL_SUFFIX', 'SOUND_MASCULINE_PLURAL', 'SOUND_FEMININE_PLURAL', 'NISBA_YAA', 'PLURAL_WAW', 'ATTACHED_PRONOUN'] },
+  { title: 'التعريف وبداية الكلمة', features: ['DEFINITE_AL', 'SHAMSI_AL', 'QAMARI_AL', 'HAMZAT_WASL_START'] },
+  { title: 'الضبط والصوت', features: ['TANWEEN', 'SHADDA', 'HAMZA', 'MADD_LETTER', 'NOON_SAKINA_END', 'MEEM_SAKINA_END'] },
+];
+
+/** المجموعات المتاحة لقيدي أول الكلمة وآخرها. */
+const LETTER_SET_OPTIONS: Array<Exclude<GlobalCharacterSet, 'EXACT'>> = [
+  'IKHFAA',
+  'IZHAR',
+  'IDGHAM',
+  'IQLAB',
+  'QALQALAH',
+  'GHUNNAH',
+  'MAD',
 ];
 
 const AYAH_POSITION_OPTIONS: Array<{ value: AyahWordPosition; label: string }> = [
@@ -508,6 +583,8 @@ function hasAnyCriteria(word: GlobalMorphologyWordPattern): boolean {
     word.template?.trim() ||
       word.prefix?.trim() ||
       word.suffix?.trim() ||
+      word.startsWithSet ||
+      word.endsWithSet ||
       word.morphologyFeatures?.length ||
       word.excludedMorphologyFeatures?.length ||
       word.endingHaraka?.length ||
@@ -525,11 +602,13 @@ function cleanMorphologyWord(word: GlobalMorphologyWordPattern): GlobalMorpholog
     value && value.length > 0 ? value : undefined;
 
   return {
-    offset: 0,
+    offset: word.offset,
     harakaMode: word.harakaMode,
     template: word.template?.trim() || undefined,
     prefix: word.prefix?.trim() || undefined,
     suffix: word.suffix?.trim() || undefined,
+    startsWithSet: word.startsWithSet || undefined,
+    endsWithSet: word.endsWithSet || undefined,
     morphologyFeatures: list(word.morphologyFeatures),
     excludedMorphologyFeatures: list(word.excludedMorphologyFeatures),
     endingHaraka: list(word.endingHaraka),
@@ -539,6 +618,152 @@ function cleanMorphologyWord(word: GlobalMorphologyWordPattern): GlobalMorpholog
     minLength: word.minLength && word.minLength > 0 ? word.minLength : undefined,
     maxLength: word.maxLength && word.maxLength > 0 ? word.maxLength : undefined,
   };
+}
+
+/** أقصى عدد كلمات متجاورة في القاعدة الصرفية. */
+const MAX_SEQUENCE_WORDS = 4;
+
+/** قوالب جاهزة لسلاسل الكلمات: أحكام النون الساكنة والتنوين بين الكلمتين. */
+const SEQUENCE_PRESETS: Array<{
+  label: string;
+  description: string;
+  words: GlobalMorphologyWordPattern[];
+}> = [
+  {
+    label: 'إخفاء: نون ساكنة + حرف إخفاء',
+    description: 'كلمة تنتهي بنون ساكنة تليها كلمة أولها حرف من حروف الإخفاء الخمسة عشر، بغضّ النظر عن حركته.',
+    words: [
+      { offset: 0, harakaMode: 'IGNORE', morphologyFeatures: ['NOON_SAKINA_END'] },
+      { offset: 1, harakaMode: 'IGNORE', startsWithSet: 'IKHFAA' },
+    ],
+  },
+  {
+    label: 'إظهار: نون ساكنة + حرف حلقي',
+    description: 'كلمة تنتهي بنون ساكنة تليها كلمة أولها حرف من حروف الإظهار الحلقية الستة.',
+    words: [
+      { offset: 0, harakaMode: 'IGNORE', morphologyFeatures: ['NOON_SAKINA_END'] },
+      { offset: 1, harakaMode: 'IGNORE', startsWithSet: 'IZHAR' },
+    ],
+  },
+  {
+    label: 'إدغام: نون ساكنة + حرف يرملون',
+    description: 'كلمة تنتهي بنون ساكنة تليها كلمة أولها حرف من حروف الإدغام (يرملون).',
+    words: [
+      { offset: 0, harakaMode: 'IGNORE', morphologyFeatures: ['NOON_SAKINA_END'] },
+      { offset: 1, harakaMode: 'IGNORE', startsWithSet: 'IDGHAM' },
+    ],
+  },
+  {
+    label: 'إقلاب: نون ساكنة + باء',
+    description: 'كلمة تنتهي بنون ساكنة تليها كلمة أولها باء.',
+    words: [
+      { offset: 0, harakaMode: 'IGNORE', morphologyFeatures: ['NOON_SAKINA_END'] },
+      { offset: 1, harakaMode: 'IGNORE', startsWithSet: 'IQLAB' },
+    ],
+  },
+  {
+    label: 'إخفاء شفوي: ميم ساكنة + باء',
+    description: 'كلمة تنتهي بميم ساكنة تليها كلمة أولها باء.',
+    words: [
+      { offset: 0, harakaMode: 'IGNORE', morphologyFeatures: ['MEEM_SAKINA_END'] },
+      { offset: 1, harakaMode: 'IGNORE', startsWithSet: 'IQLAB' },
+    ],
+  },
+  {
+    label: 'مد منفصل: واو الجماعة + همزة وصلية أولى',
+    description: 'كلمة آخرها حرف مد (كواو الجماعة) تليها كلمة أولها همزة — أصل المد المنفصل.',
+    words: [
+      { offset: 0, harakaMode: 'IGNORE', endsWithSet: 'MAD' },
+      { offset: 1, harakaMode: 'IGNORE', morphologyFeatures: ['HAMZA'] },
+    ],
+  },
+];
+
+/**
+ * محرر سلسلة الكلمات في القاعدة النحوية/الصرفية.
+ *
+ * كل كلمة في السلسلة لها معاييرها المستقلة، والكلمات متجاورة وجوبا داخل
+ * الآية الواحدة. هذا يجعل «نون ساكنة في آخر كلمة + حرف إخفاء في أول
+ * التالية» قاعدة مبنية بالمعايير لا بتعداد الحروف.
+ */
+function MorphologySequenceEditor({
+  words,
+  onChange,
+}: {
+  words: GlobalMorphologyWordPattern[];
+  onChange: (words: GlobalMorphologyWordPattern[]) => void;
+}) {
+  const setWord = (index: number, word: GlobalMorphologyWordPattern) =>
+    onChange(words.map((item, position) => (position === index ? word : item)));
+
+  const addWord = () => {
+    if (words.length >= MAX_SEQUENCE_WORDS) return;
+    onChange([...words, { offset: words.length, harakaMode: 'IGNORE' }]);
+  };
+
+  const removeWord = (index: number) => {
+    if (words.length <= 1) return;
+    onChange(words.filter((_, position) => position !== index).map((word, position) => ({ ...word, offset: position })));
+  };
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="rounded-md border border-violet-200 bg-violet-50/60 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-xs font-bold text-violet-950">سلسلة الكلمات ({words.length} من {MAX_SEQUENCE_WORDS})</h3>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-violet-900/75">
+              كلمات متجاورة داخل الآية الواحدة، لكل واحدة معاييرها. تصلح لأحكام
+              «كلمة تنتهي بكذا تليها كلمة تبدأ بكذا».
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={addWord}
+            disabled={words.length >= MAX_SEQUENCE_WORDS}
+            className="rounded border border-violet-300 bg-white px-2.5 py-1 text-[11px] text-violet-900 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            + كلمة تالية
+          </button>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {SEQUENCE_PRESETS.map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              title={preset.description}
+              onClick={() => onChange(preset.words.map((word) => ({ ...word })))}
+              className="rounded border border-violet-300 bg-white px-2 py-1 text-[11px] text-violet-900 hover:bg-violet-100"
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {words.map((word, index) => (
+        <div key={index} className="rounded-md border border-stone-300">
+          <div className="flex items-center justify-between gap-2 border-b border-stone-200 bg-stone-50 px-3 py-1.5">
+            <span className="text-[11px] font-bold text-stone-800">
+              {words.length === 1 ? 'الكلمة' : `الكلمة ${index + 1}${index === 0 ? ' (الأولى)' : index === words.length - 1 ? ' (الأخيرة)' : ''}`}
+            </span>
+            {words.length > 1 && (
+              <button
+                type="button"
+                onClick={() => removeWord(index)}
+                className="rounded border border-rose-200 px-2 py-0.5 text-[10px] text-rose-700 hover:bg-rose-50"
+              >
+                حذف هذه الكلمة
+              </button>
+            )}
+          </div>
+          <div className="p-1">
+            <MorphologyPatternEditor word={word} onChange={(next) => setWord(index, next)} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -598,7 +823,7 @@ function MorphologyPatternEditor({
               key={preset.label}
               type="button"
               title={preset.description}
-              onClick={() => onChange({ ...preset.word })}
+              onClick={() => onChange({ ...preset.word, offset: word.offset })}
               className="rounded border border-amber-300 bg-white px-2 py-1 text-[11px] text-amber-900 hover:bg-amber-100"
             >
               {preset.label}
@@ -606,7 +831,7 @@ function MorphologyPatternEditor({
           ))}
           <button
             type="button"
-            onClick={() => onChange({ offset: 0, harakaMode: word.harakaMode })}
+            onClick={() => onChange({ offset: word.offset, harakaMode: word.harakaMode })}
             className="rounded border border-stone-300 bg-white px-2 py-1 text-[11px] text-stone-600 hover:bg-stone-100"
           >
             تفريغ كل المعايير
@@ -647,6 +872,33 @@ function MorphologyPatternEditor({
           </Field>
           <Field label="لاحقة حرفية (اختياري)">
             <input value={word.suffix ?? ''} onChange={(event) => patch({ suffix: event.target.value })} className="input" placeholder="ة" dir="rtl" />
+          </Field>
+          <Field label="أول حرف من مجموعة تجويدية (اختياري)">
+            <select
+              value={word.startsWithSet ?? ''}
+              onChange={(event) => patch({ startsWithSet: (event.target.value || undefined) as GlobalMorphologyWordPattern['startsWithSet'] })}
+              className="input"
+            >
+              <option value="">بلا تقييد</option>
+              {LETTER_SET_OPTIONS.map((value) => (
+                <option key={value} value={value}>{GLOBAL_CHARACTER_SET_LABELS[value]}</option>
+              ))}
+            </select>
+            <span className="mt-1 block text-[10px] text-stone-500">
+              همزة الوصل ٱ تُتخطى، فالحرف المنطوق بعدها هو المعتبر.
+            </span>
+          </Field>
+          <Field label="آخر حرف من مجموعة تجويدية (اختياري)">
+            <select
+              value={word.endsWithSet ?? ''}
+              onChange={(event) => patch({ endsWithSet: (event.target.value || undefined) as GlobalMorphologyWordPattern['endsWithSet'] })}
+              className="input"
+            >
+              <option value="">بلا تقييد</option>
+              {LETTER_SET_OPTIONS.map((value) => (
+                <option key={value} value={value}>{GLOBAL_CHARACTER_SET_LABELS[value]}</option>
+              ))}
+            </select>
           </Field>
           <Field label="أقل عدد حروف (اختياري)">
             <input

@@ -23,14 +23,42 @@ const DAMMA = '\u064F';
 const KASRA = '\u0650';
 const SHADDA = '\u0651';
 const SUKUN = '\u0652';
+/** السكون في الرسم العثماني (رأس خاء صغيرة U+06E1)، وهو الغالب في بيانات المصحف. */
+const UTHMANI_SUKUN = '\u06E1';
 const TANWEEN_FATH = '\u064B';
 const TANWEEN_DAMM = '\u064C';
 const TANWEEN_KASR = '\u064D';
+/**
+ * صور التنوين «المفتوح» (المتتابع) في الرسم العثماني، وتدل على الإخفاء أو
+ * الإدغام بعد التنوين: ـٖ كسرتان، ـٗ فتحتان، ـٞ ضمتان. أما U+064B وأخواتها
+ * فهي صور التنوين «المتراكب» الدالة على الإظهار.
+ */
+const OPEN_TANWEEN_KASR = '\u0656';
+const OPEN_TANWEEN_FATH = '\u0657';
+const OPEN_TANWEEN_DAMM = '\u065E';
 const SUPERSCRIPT_ALIF = '\u0670';
 
-const TANWEEN_MARKS = [TANWEEN_FATH, TANWEEN_DAMM, TANWEEN_KASR];
+/** علامتا السكون المعتبرتان معا: الحديثة والعثمانية. */
+const SUKUN_MARKS = [SUKUN, UTHMANI_SUKUN];
+const TANWEEN_MARKS = [
+  TANWEEN_FATH,
+  TANWEEN_DAMM,
+  TANWEEN_KASR,
+  OPEN_TANWEEN_FATH,
+  OPEN_TANWEEN_DAMM,
+  OPEN_TANWEEN_KASR,
+];
+/** الحركات التي تُخرج الحرف من حكم الساكن. */
+const VOWEL_MARKS = [FATHA, DAMMA, KASRA, ...TANWEEN_MARKS];
 const HAMZA_FORMS = ['ء', 'أ', 'إ', 'ؤ', 'ئ', 'آ'];
 const MADD_LETTERS = ['ا', 'و', 'ي', 'ى', 'آ'];
+
+/**
+ * الضمائر المتصلة الظاهرة في الرسم، قائمة مغلقة. تُفحص لاحقةً بعد تجريد
+ * الضبط، ويُشترط أن يبقى قبلها جذر ظاهر (حرفان فأكثر) حتى لا تُحسب
+ * «هُمْ» المستقلة أو «أنا» ضميرا متصلا.
+ */
+const ATTACHED_PRONOUN_SUFFIXES = ['كما', 'كنّ', 'هما', 'هنّ', 'هن', 'كم', 'كن', 'هم', 'ها', 'نا', 'ني'];
 
 // ==================== الأدوات النحوية ====================
 //
@@ -88,6 +116,13 @@ export const MORPHOLOGY_FEATURE_LABELS: Record<MorphologyFeature, string> = {
   SHADDA: 'فيه حرف مشدد',
   HAMZA: 'فيه همزة',
   MADD_LETTER: 'فيه حرف مد',
+  NOON_SAKINA_END: 'آخره نون ساكنة (ـنْ)',
+  MEEM_SAKINA_END: 'آخره ميم ساكنة (ـمْ)',
+  PLURAL_WAW: 'واو الجماعة (ـوا)',
+  HAMZAT_WASL_START: 'يبدأ بهمزة وصل (ٱ)',
+  SHAMSI_AL: 'أل الشمسية',
+  QAMARI_AL: 'أل القمرية',
+  ATTACHED_PRONOUN: 'ينتهي بضمير متصل',
 };
 
 export const MORPHOLOGY_FEATURE_HINTS: Record<MorphologyFeature, string> = {
@@ -100,10 +135,17 @@ export const MORPHOLOGY_FEATURE_HINTS: Record<MorphologyFeature, string> = {
   SOUND_MASCULINE_PLURAL: 'مثل: المؤمنون، الصابرين.',
   SOUND_FEMININE_PLURAL: 'مثل: المؤمنات، الصالحات.',
   DEFINITE_AL: 'يبدأ بألف ولام التعريف.',
-  TANWEEN: 'فيه تنوين ضم أو فتح أو كسر.',
+  TANWEEN: 'فيه تنوين ضم أو فتح أو كسر، متراكبا كان أو متتابعا.',
   SHADDA: 'فيه شدّة على أي حرف.',
   HAMZA: 'همزة بأي صورة: ء أ إ ؤ ئ آ.',
   MADD_LETTER: 'فيه ألف أو واو أو ياء مد.',
+  NOON_SAKINA_END: 'مثل: مِنْ، عَنْ، أَنْ — النون الساكنة بعلامة السكون أو معرّاة قبل الإدغام.',
+  MEEM_SAKINA_END: 'مثل: هُمْ، لَكُمْ، عَلَيْهِمْ.',
+  PLURAL_WAW: 'مثل: قَالُوا، آمَنُوا، كَفَرُوا.',
+  HAMZAT_WASL_START: 'مثل: ٱلْحَمْدُ، ٱهْدِنَا، ٱسْمُ.',
+  SHAMSI_AL: 'لام غير منطوقة وما بعدها مشدد، مثل: الشَّمْس، الرَّحْمَن.',
+  QAMARI_AL: 'لام ساكنة منطوقة، مثل: الْقَمَر، الْحَمْد.',
+  ATTACHED_PRONOUN: 'من قائمة مغلقة: هم، هما، هن، كم، كما، كن، ها، نا، ني.',
 };
 
 export const WORD_ENDING_HARAKA_LABELS: Record<WordEndingHaraka, string> = {
@@ -153,17 +195,37 @@ export function endingHarakaOf(word: string): WordEndingHaraka | undefined {
   const characters = splitQuranCharacters(word);
   for (let index = characters.length - 1; index >= 0; index -= 1) {
     const marks = marksOf(characters[index]);
-    if (marks.includes(TANWEEN_DAMM)) return 'TANWEEN_DAMM';
-    if (marks.includes(TANWEEN_FATH)) return 'TANWEEN_FATH';
-    if (marks.includes(TANWEEN_KASR)) return 'TANWEEN_KASR';
+    // التنوين بصورتيه: المتراكب (الإظهار) والمتتابع (الإخفاء والإدغام).
+    if (marks.includes(TANWEEN_DAMM) || marks.includes(OPEN_TANWEEN_DAMM)) return 'TANWEEN_DAMM';
+    if (marks.includes(TANWEEN_FATH) || marks.includes(OPEN_TANWEEN_FATH)) return 'TANWEEN_FATH';
+    if (marks.includes(TANWEEN_KASR) || marks.includes(OPEN_TANWEEN_KASR)) return 'TANWEEN_KASR';
     if (marks.includes(DAMMA)) return 'DAMMA';
     if (marks.includes(FATHA)) return 'FATHA';
     if (marks.includes(KASRA)) return 'KASRA';
-    if (marks.includes(SUKUN)) return 'SUKUN';
+    // السكون بعلامته الحديثة ْ أو العثمانية ۡ (رأس خاء صغيرة).
+    if (SUKUN_MARKS.some((mark) => marks.includes(mark))) return 'SUKUN';
     // حرف المد الأخير بلا ضبط تابع لما قبله، فنواصل البحث إلى الحرف السابق.
     if (!isBareMaddLetter(characters[index])) return undefined;
   }
   return undefined;
+}
+
+/**
+ * هل هذا الحرف ساكن في الأداء؟
+ *
+ * يشمل ثلاث صور كلها واردة في ضبط المصاحف:
+ *   1. علامة السكون الحديثة ْ (U+0652).
+ *   2. علامة السكون العثمانية ۡ (U+06E1) وهي الغالبة في بياناتنا.
+ *   3. الحرف «المعرّى» من كل حركة: في الضبط العثماني تُحذف علامة السكون
+ *      عن النون والميم قبل الإدغام والإخفاء («مِن رَّبِّهِمۡ»)، فيبقى الحرف
+ *      بلا علامة أصلا، أو بعلامة الإقلاب (الميم الصغيرة U+06E2) وحدها.
+ */
+export function isSakinCharacter(character: QuranCharacter): boolean {
+  const marks = marksOf(character);
+  if (SUKUN_MARKS.some((mark) => marks.includes(mark))) return true;
+  if (marks.includes(SHADDA)) return false;
+  // معرّى: لا حركة ولا تنوين. علامة الإقلاب أو علامات الوقف لا تنفي السكون.
+  return !VOWEL_MARKS.some((mark) => marks.includes(mark));
 }
 
 /**
@@ -226,6 +288,51 @@ export function hasMorphologyFeature(word: string, feature: MorphologyFeature): 
     case 'MADD_LETTER':
       return letters.some((letter) => MADD_LETTERS.includes(letter));
 
+    case 'NOON_SAKINA_END':
+      return endsWithSakinLetter(characters, 'ن');
+
+    case 'MEEM_SAKINA_END':
+      return endsWithSakinLetter(characters, 'م');
+
+    case 'PLURAL_WAW': {
+      // واو الجماعة: واو مضموم ما قبلها تليها ألف فارقة صامتة في آخر الكلمة
+      // (قد تلي الألفَ همزةُ وصل صغيرة ـاْ أو علامة مد ـآ في الرسم).
+      if (characters.length < 3) return false;
+      const last = characters[characters.length - 1];
+      const beforeLast = characters[characters.length - 2];
+      if (baseLetter(last) !== 'ا') return false;
+      if (baseLetter(beforeLast) !== 'و') return false;
+      // الواو المدّية معرّاة أو مضمومة؛ أما «وَا» المفتوحة فليست واو جماعة.
+      const wawMarks = marksOf(beforeLast);
+      return !VOWEL_MARKS.some((mark) => wawMarks.includes(mark)) || wawMarks.includes(DAMMA);
+    }
+
+    case 'HAMZAT_WASL_START':
+      return letters[0] === 'ٱ';
+
+    case 'SHAMSI_AL': {
+      // أل الشمسية: بعد اللام حرف مشدد واللام بلا سكون (غير منطوقة).
+      const al = definiteArticleParts(letters);
+      if (!al) return false;
+      const lamMarks = marks[al.lamIndex] ?? '';
+      const afterMarks = marks[al.lamIndex + 1] ?? '';
+      return afterMarks.includes(SHADDA) && !SUKUN_MARKS.some((mark) => lamMarks.includes(mark));
+    }
+
+    case 'QAMARI_AL': {
+      // أل القمرية: اللام ساكنة منطوقة وما بعدها غير مشدد.
+      const al = definiteArticleParts(letters);
+      if (!al) return false;
+      const lamMarks = marks[al.lamIndex] ?? '';
+      const afterMarks = marks[al.lamIndex + 1] ?? '';
+      return SUKUN_MARKS.some((mark) => lamMarks.includes(mark)) && !afterMarks.includes(SHADDA);
+    }
+
+    case 'ATTACHED_PRONOUN':
+      return ATTACHED_PRONOUN_SUFFIXES.some(
+        (suffix) => bare.length >= suffix.length + 2 && bare.endsWith(suffix)
+      );
+
     default:
       return false;
   }
@@ -244,6 +351,27 @@ function endsWithSuffix(letters: string[], suffix: string[]): boolean {
   if (letters.length < suffix.length + 1) return false;
   const tail = letters.slice(letters.length - suffix.length);
   return tail.every((letter, index) => letter === suffix[index]);
+}
+
+/** هل آخر حرف في الكلمة هو الحرف المطلوب ساكنا (بعلامة أو معرّى)؟ */
+function endsWithSakinLetter(characters: QuranCharacter[], letter: string): boolean {
+  if (characters.length < 2) return false;
+  const last = characters[characters.length - 1];
+  return baseLetter(last) === letter && isSakinCharacter(last);
+}
+
+/** موضع لام التعريف في الكلمة إن بدأت بأل، وإلا null. */
+function definiteArticleParts(letters: string[]): { lamIndex: number } | null {
+  // ال / ٱل في أول الكلمة، وقد تسبقها واو أو فاء أو باء أو كاف أو لام ملتصقة.
+  for (let start = 0; start <= 1 && start + 2 < letters.length; start += 1) {
+    const first = letters[start];
+    if ((first === 'ا' || first === 'ٱ') && letters[start + 1] === 'ل') {
+      return { lamIndex: start + 1 };
+    }
+    // «لِلَّهِ» ونحوها: لام الجر أدغمت في لام التعريف، فليست أل ظاهرة هنا.
+    if (start === 0 && !['و', 'ف', 'ب', 'ك'].includes(first)) return null;
+  }
+  return null;
 }
 
 function isBareMaddLetter(character: QuranCharacter): boolean {

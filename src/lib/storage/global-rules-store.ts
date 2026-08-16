@@ -168,6 +168,11 @@ export function isValidPattern(value: unknown): value is GlobalRulePattern {
       return false;
     }
 
+    const scope = (pattern as { matchScope?: unknown }).matchScope;
+    if (scope !== undefined && (typeof scope !== 'string' || !['WORDS', 'INSIDE_WORD', 'BOTH'].includes(scope))) {
+      return false;
+    }
+
     const wordCount = pattern.wordCount;
     const offsets = new Set<number>();
     return pattern.words.every((word) => {
@@ -199,7 +204,7 @@ export function isValidPattern(value: unknown): value is GlobalRulePattern {
         if (!constraint || typeof constraint !== 'object') return false;
         const item = constraint as Record<string, unknown>;
         const validSet = ['EXACT', 'IKHFAA', 'IZHAR', 'IDGHAM', 'IQLAB', 'QALQALAH', 'GHUNNAH', 'MAD'];
-        const validMode = ['EXACT', 'IGNORE', 'NONE'];
+        const validMode = ['EXACT', 'IGNORE', 'NONE', 'SAKIN'];
         const validAnchor = ['START', 'END', 'INDEX'];
         return (
           typeof item.baseLetter === 'string' &&
@@ -218,10 +223,42 @@ export function isValidPattern(value: unknown): value is GlobalRulePattern {
     }) && offsets.size === wordCount;
   }
 
-  if (pattern.wordCount !== 1 || pattern.words.length !== 1) return false;
-  const word = pattern.words[0] as unknown as Record<string, unknown> | undefined;
-  if (!word || word.offset !== 0) return false;
-  if (typeof word.harakaMode !== 'string' || !['EXACT', 'IGNORE', 'NONE'].includes(word.harakaMode)) {
+  // النمط الصرفي: كلمة واحدة أو حتى أربع كلمات متجاورة.
+  if (
+    typeof pattern.wordCount !== 'number' ||
+    !Number.isInteger(pattern.wordCount) ||
+    pattern.wordCount < 1 ||
+    pattern.wordCount > MAX_MORPHOLOGY_WORDS ||
+    pattern.words.length !== pattern.wordCount
+  ) {
+    return false;
+  }
+
+  const morphologyOffsets = new Set<number>();
+  for (const candidate of pattern.words) {
+    const word = candidate as unknown as Record<string, unknown> | undefined;
+    if (!word) return false;
+    if (
+      typeof word.offset !== 'number' ||
+      !Number.isInteger(word.offset) ||
+      word.offset < 0 ||
+      word.offset >= pattern.wordCount ||
+      morphologyOffsets.has(word.offset)
+    ) {
+      return false;
+    }
+    morphologyOffsets.add(word.offset);
+    if (!isValidMorphologyWord(word)) return false;
+  }
+
+  return morphologyOffsets.size === pattern.wordCount;
+}
+
+/** أقصى عدد كلمات متجاورة في القاعدة الصرفية الواحدة. */
+export const MAX_MORPHOLOGY_WORDS = 4;
+
+function isValidMorphologyWord(word: Record<string, unknown>): boolean {
+  if (typeof word.harakaMode !== 'string' || !['EXACT', 'IGNORE', 'NONE', 'SAKIN'].includes(word.harakaMode)) {
     return false;
   }
 
@@ -233,6 +270,18 @@ export function isValidPattern(value: unknown): value is GlobalRulePattern {
   if (!isValidEnumList(word.endingHaraka, WORD_ENDING_HARAKAT)) return false;
   if (!isValidEnumList(word.precededBy, PARTICLE_CLASSES)) return false;
   if (!isValidEnumList(word.followedBy, PARTICLE_CLASSES)) return false;
+  if (
+    word.startsWithSet !== undefined &&
+    (typeof word.startsWithSet !== 'string' || !LETTER_SETS.includes(word.startsWithSet))
+  ) {
+    return false;
+  }
+  if (
+    word.endsWithSet !== undefined &&
+    (typeof word.endsWithSet !== 'string' || !LETTER_SETS.includes(word.endsWithSet))
+  ) {
+    return false;
+  }
   if (
     word.ayahPosition !== undefined &&
     (typeof word.ayahPosition !== 'string' ||
@@ -261,10 +310,14 @@ export function isValidPattern(value: unknown): value is GlobalRulePattern {
   const hasBounds =
     typeof word.minLength === 'number' ||
     typeof word.maxLength === 'number' ||
+    typeof word.startsWithSet === 'string' ||
+    typeof word.endsWithSet === 'string' ||
     (typeof word.ayahPosition === 'string' && word.ayahPosition !== 'ANY');
 
   return hasLiteral || hasCriteria || hasBounds;
 }
+
+const LETTER_SETS = ['IKHFAA', 'IZHAR', 'IDGHAM', 'IQLAB', 'QALQALAH', 'GHUNNAH', 'MAD'];
 
 const MORPHOLOGY_FEATURES = [
   'TAA_MARBUTA',
@@ -280,6 +333,13 @@ const MORPHOLOGY_FEATURES = [
   'SHADDA',
   'HAMZA',
   'MADD_LETTER',
+  'NOON_SAKINA_END',
+  'MEEM_SAKINA_END',
+  'PLURAL_WAW',
+  'HAMZAT_WASL_START',
+  'SHAMSI_AL',
+  'QAMARI_AL',
+  'ATTACHED_PRONOUN',
 ];
 
 const WORD_ENDING_HARAKAT = [
