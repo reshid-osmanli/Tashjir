@@ -22,6 +22,7 @@ import {
   type DocumentIndexEntry,
 } from '@/lib/storage/document-store';
 import { MUSHAF_SOURCE, TOTAL_AYAHS, TOTAL_WORDS, getSurahOrFirst } from '@/data/quran';
+import { StrengthDegreesManager } from '@/components/settings/StrengthDegreesManager';
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<LocalAppSettings>(DEFAULT_APP_SETTINGS);
@@ -182,6 +183,10 @@ export default function SettingsPage() {
             حفظ الإعدادات
           </button>
         </div>
+      </Card>
+
+      <Card title="سلّم درجات قوة الوجه">
+        <StrengthDegreesManager onMessage={setMessage} />
       </Card>
 
       <Card title="البيانات المحفوظة">

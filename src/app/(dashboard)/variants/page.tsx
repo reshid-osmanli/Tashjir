@@ -22,8 +22,12 @@ import {
 import { listDocuments, loadDocument } from '@/lib/storage/document-store';
 import { getSurahOrFirst } from '@/data/quran';
 import { describeGlobalPattern } from '@/lib/quran-logic/global-rule-engine';
+import { RuleOccurrenceReview } from '@/components/editor/RuleOccurrenceReview';
+import { StrengthDegreePicker } from '@/components/editor/StrengthDegreePicker';
+import { pruneStrengthMap } from '@/lib/tashjeer/strength-degrees';
+import { occurrenceStats } from '@/lib/storage/rule-occurrences-store';
 import type { VariantCategory } from '@/types';
-import type { ReadingScope, Variant, VerificationStatus } from '@/types/tashjeer';
+import type { ReaderStrengthMap, ReadingScope, Variant, VerificationStatus } from '@/types/tashjeer';
 
 const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS) as VariantCategory[];
 const STATUS_OPTIONS: Array<{ value: VerificationStatus | 'ALL'; label: string }> = [
@@ -64,6 +68,7 @@ export default function VariantsIndexPage() {
   const [readerId, setReaderId] = useState('');
   const [editingRule, setEditingRule] = useState<GlobalRule | null>(null);
   const [showRuleForm, setShowRuleForm] = useState(false);
+  const [reviewingRule, setReviewingRule] = useState<GlobalRule | null>(null);
   const catalog = useMemo(() => readTransmissionCatalog(), []);
 
   const load = () => setItems(readIndexedVariants());
@@ -199,6 +204,7 @@ export default function VariantsIndexPage() {
                       التطبيق: {describeGlobalPattern(item.globalRule.pattern)}
                     </p>
                   )}
+                  {item.globalRule?.pattern && <OccurrenceSummary ruleId={item.globalRule.id} />}
                   {item.description && <p className="mt-1 text-xs leading-relaxed text-stone-500">{item.description}</p>}
                   {item.sourceRef && <p className="mt-1 text-[11px] text-stone-400">المرجع: {item.sourceRef}</p>}
                 </div>
@@ -213,6 +219,16 @@ export default function VariantsIndexPage() {
                   ) : null}
                   {item.globalRule && (
                     <>
+                      {item.globalRule.pattern && (
+                        <button
+                          type="button"
+                          onClick={() => setReviewingRule(item.globalRule ?? null)}
+                          className="rounded border border-violet-200 px-2.5 py-1.5 text-xs text-violet-800 hover:bg-violet-50"
+                          title="مراجعة مواضع القاعدة موضعا موضعا"
+                        >
+                          تتبّع المواضع
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -243,6 +259,16 @@ export default function VariantsIndexPage() {
         </ul>
       )}
 
+      {reviewingRule && (
+        <RuleOccurrenceReview
+          rule={reviewingRule}
+          onClose={() => {
+            setReviewingRule(null);
+            load();
+          }}
+        />
+      )}
+
       {showRuleForm && (
         <GlobalRuleDialog
           rule={editingRule}
@@ -254,6 +280,31 @@ export default function VariantsIndexPage() {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * ملخّص حالة مواضع القاعدة: كم موضعا حُذف موضعيا وكم روجع.
+ * يُقرأ من مخزن الاستثناءات وحده بلا فحص للمصحف، فلا يكلّف شيئا في القائمة.
+ */
+function OccurrenceSummary({ ruleId }: { ruleId: string }) {
+  const stats = useMemo(() => occurrenceStats(ruleId), [ruleId]);
+  if (stats.deleted === 0 && stats.confirmed === 0 && stats.edited === 0) return null;
+
+  return (
+    <p className="mt-1 flex flex-wrap gap-2 text-[11px]">
+      {stats.confirmed > 0 && (
+        <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-800">{stats.confirmed} موضعا معتمدا</span>
+      )}
+      {stats.deleted > 0 && (
+        <span className="rounded bg-rose-50 px-1.5 py-0.5 text-rose-800">{stats.deleted} موضعا محذوفا</span>
+      )}
+      {stats.edited > 0 && (
+        <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-indigo-800">
+          {stats.edited} بدرجة مخصَّصة
+        </span>
+      )}
+    </p>
   );
 }
 
@@ -335,6 +386,10 @@ function GlobalRuleDialog({
   const [sourceRef, setSourceRef] = useState(rule?.sourceRef ?? '');
   const [status, setStatus] = useState<VerificationStatus>(rule?.status ?? 'DRAFT');
   const [isActive, setIsActive] = useState(rule?.isActive ?? true);
+  const [strengthDegreeId, setStrengthDegreeId] = useState<string | undefined>(rule?.strengthDegreeId);
+  const [strengthByNarrator, setStrengthByNarrator] = useState<ReaderStrengthMap | undefined>(
+    rule?.strengthByNarrator
+  );
   const [error, setError] = useState('');
 
   const save = () => {
@@ -357,6 +412,9 @@ function GlobalRuleDialog({
       sourceRef: sourceRef.trim() || undefined,
       evidences: rule?.evidences ?? [],
       pattern: rule?.pattern,
+      strengthDegreeId,
+      // ما خُصِّص لراوٍ خرج من نطاق القاعدة لا يُحفظ، فلا تبقى تخصيصات معلّقة.
+      strengthByNarrator: pruneStrengthMap(strengthByNarrator, resolveScope(scope, readTransmissionCatalog())),
       status,
       isActive,
       createdAt: rule?.createdAt,
@@ -407,6 +465,19 @@ function GlobalRuleDialog({
 
         <div className="mt-4 rounded-md border border-stone-200 p-3">
           <ScopePicker scope={scope} onChange={setScope} />
+        </div>
+
+        <div className="mt-4 rounded-md border border-stone-200 p-3">
+          <StrengthDegreePicker
+            scope={scope}
+            degreeId={strengthDegreeId}
+            byNarrator={strengthByNarrator}
+            onChange={(next) => {
+              setStrengthDegreeId(next.degreeId);
+              setStrengthByNarrator(next.byNarrator);
+            }}
+            hint="درجة قوة هذا الوجه. خصّصها لكل راوٍ إن اختلف الترجيح بينهم؛ ومواضع بعينها يمكن تخصيصها من شاشة تتبّع المواضع."
+          />
         </div>
 
         <label className="mt-4 flex items-center gap-2 text-xs text-stone-700">

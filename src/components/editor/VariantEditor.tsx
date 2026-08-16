@@ -18,6 +18,8 @@ import { describeScope, normalizeScope, resolveScope } from '@/lib/tashjeer/scop
 import { getNarratorSymbol } from '@/lib/tashjeer/symbols';
 import { getAyahWordsByKey } from '@/data/quran';
 import { characterCount } from '@/lib/quran-logic/characters';
+import { pruneStrengthMap } from '@/lib/tashjeer/strength-degrees';
+import { StrengthDegreePicker } from './StrengthDegreePicker';
 import type { VariantCategory } from '@/types';
 import type {
   EvidenceSource,
@@ -411,6 +413,8 @@ function AlternativeEditor({
   onUpdate: (patch: Partial<VariantAlternative>) => void;
   onDelete: () => void;
 }) {
+  const catalog = useTransmissionCatalog();
+
   return (
     <div className="space-y-4 rounded-md border border-stone-200 p-4">
       <div className="grid gap-3 md:grid-cols-2">
@@ -465,25 +469,20 @@ function AlternativeEditor({
           />
         </Field>
 
-        <Field label="قوة الوجه في الكتاب">
-          <input
-            type="number"
-            min={1}
-            value={alternative.strength ?? ''}
-            onChange={(event) =>
+        <div className="md:col-span-3">
+          <StrengthDegreePicker
+            scope={alternative.scope}
+            degreeId={alternative.strengthDegreeId}
+            byNarrator={alternative.strengthByNarrator}
+            onChange={(next) =>
               onUpdate({
-                strength: event.target.value === '' ? undefined : Number(event.target.value),
+                strengthDegreeId: next.degreeId,
+                strengthByNarrator: next.byNarrator,
               })
             }
-            placeholder="١ = الأقوى"
-            className="input"
+            hint="الدرجة الأعلى رتبةً تأخذ السطر الأعلى تحت الآية عند اعتماد ترتيب قوة الوجه في لوحة التحكم. اترك الوجه بلا درجة إن لم ترجّح، فيتأخر عن الأوجه المرجَّحة."
           />
-        </Field>
-
-        <p className="text-[11px] leading-relaxed text-stone-600 md:col-span-3">
-          الأصغر في «قوة الوجه» يأخذ السطر الأعلى تحت الآية عند اعتماد ترتيب قوة الوجه في لوحة
-          التحكم. اترك الحقل فارغا إن لم ترجّح، فيتأخر الوجه عن الأوجه المرجَّحة.
-        </p>
+        </div>
       </div>
 
       <label className="flex items-center gap-2 text-xs text-stone-700">
@@ -496,7 +495,19 @@ function AlternativeEditor({
         هذا هو وجه المصحف المطبوع (رواية حفص) — لا يُرسم له خط
       </label>
 
-      <ScopePicker scope={alternative.scope} onChange={(scope) => onUpdate({ scope })} />
+      <ScopePicker
+        scope={alternative.scope}
+        onChange={(scope) =>
+          onUpdate({
+            scope,
+            // تضييق النطاق يُسقط تخصيصات رواة لم يعودوا في الوجه، فلا تبقى بيانات ميتة.
+            strengthByNarrator: pruneStrengthMap(
+              alternative.strengthByNarrator,
+              resolveScope(scope, catalog)
+            ),
+          })
+        }
+      />
 
       <Field label="ملاحظات المحرر">
         <textarea

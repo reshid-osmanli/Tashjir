@@ -13,6 +13,14 @@ import {
   type QuranCharacter,
 } from '@/lib/quran-logic/characters';
 import {
+  endingHarakaOf,
+  hasMorphologyFeature,
+  isParticleOfClass,
+  MORPHOLOGY_FEATURE_LABELS,
+  PARTICLE_CLASS_LABELS,
+  WORD_ENDING_HARAKA_LABELS,
+} from '@/lib/quran-logic/arabic-grammar';
+import {
   HURUF_ALIDGHAM,
   HURUF_ALIQLAB,
   HURUF_ALIKHFAA,
@@ -22,6 +30,7 @@ import {
   HURUF_QALQALAH,
 } from '@/lib/quran-logic/tajweed';
 import type {
+  AyahWordPosition,
   CharacterRange,
   GlobalCharacterConstraint,
   GlobalCharacterPattern,
@@ -34,6 +43,11 @@ import type {
   Variant,
 } from '@/types/tashjeer';
 import { listGlobalRules, type GlobalRule } from '@/lib/storage/global-rules-store';
+import {
+  occurrenceIdFor,
+  occurrenceOverrideMap,
+  type RuleOccurrenceOverride,
+} from '@/lib/storage/rule-occurrences-store';
 
 /** كلمة بالحد الأدنى الذي يحتاجه المحرك؛ يسهل اختبار المحرك دون تحميل المصحف. */
 export interface RuleEngineWord {
@@ -226,13 +240,37 @@ export function matchCharacterPatternInWords(
   };
 }
 
-/** يطابق قالبا صرفيا حتميا في كلمة واحدة. */
+/** سياق الكلمة داخل آيتها؛ تحتاجه المعايير النحوية (ما قبلها وما بعدها وموقعها). */
+export interface MorphologyWordContext {
+  /** الكلمة السابقة مباشرة في الآية نفسها. */
+  previous?: RuleEngineWord;
+  /** الكلمة التالية مباشرة في الآية نفسها. */
+  next?: RuleEngineWord;
+  /** هل هي أول كلمة في الآية؟ */
+  isFirst?: boolean;
+  /** هل هي آخر كلمة في الآية؟ */
+  isLast?: boolean;
+}
+
+/**
+ * يطابق نمطا صرفيا/نحويا حتميا في كلمة واحدة.
+ *
+ * كل المعايير تُجمع بـ AND: القالب، والبادئة واللاحقة، والخصائص الصرفية،
+ * والمستثنيات، وحركة الآخر، والأداة قبل الكلمة أو بعدها، وموقعها من الآية،
+ * وطولها. ترك المعيار فارغا يعني عدم التقييد به.
+ */
 export function matchMorphologyPatternInWord(
   word: RuleEngineWord,
-  pattern: GlobalMorphologyWordPattern
+  pattern: GlobalMorphologyWordPattern,
+  context: MorphologyWordContext = {}
 ): boolean {
   const actual = splitQuranCharacters(word.text);
+  if (actual.length === 0) return false;
+
   const template = pattern.template ? splitPatternCharacters(pattern.template) : [];
+
+  // المعايير النحوية والصرفية تُفحص أولا لأنها أرخص من مطابقة القالب حرفا حرفا.
+  if (!matchesGrammarCriteria(word, pattern, context, actual.length)) return false;
 
   if (template.length > 0) {
     if (actual.length !== template.length) return false;
@@ -265,7 +303,83 @@ export function matchMorphologyPatternInWord(
     return false;
   }
 
-  return template.length > 0 || Boolean(pattern.prefix || pattern.suffix);
+  // قاعدة بلا أي معيار تطابق المصحف كله، وهذا خطأ تحرير لا نتيجة مقصودة.
+  return (
+    template.length > 0 ||
+    Boolean(pattern.prefix || pattern.suffix) ||
+    hasGrammarCriteria(pattern)
+  );
+}
+
+/** هل في النمط معيار نحوي/صرفي واحد على الأقل (خارج القالب والبادئة واللاحقة)؟ */
+export function hasGrammarCriteria(pattern: GlobalMorphologyWordPattern): boolean {
+  return Boolean(
+    pattern.morphologyFeatures?.length ||
+      pattern.excludedMorphologyFeatures?.length ||
+      pattern.endingHaraka?.length ||
+      pattern.precededBy?.length ||
+      pattern.followedBy?.length ||
+      (pattern.ayahPosition && pattern.ayahPosition !== 'ANY') ||
+      typeof pattern.minLength === 'number' ||
+      typeof pattern.maxLength === 'number'
+  );
+}
+
+function matchesGrammarCriteria(
+  word: RuleEngineWord,
+  pattern: GlobalMorphologyWordPattern,
+  context: MorphologyWordContext,
+  characterCount: number
+): boolean {
+  if (typeof pattern.minLength === 'number' && characterCount < pattern.minLength) return false;
+  if (typeof pattern.maxLength === 'number' && characterCount > pattern.maxLength) return false;
+
+  if (pattern.morphologyFeatures?.length) {
+    // مطلوبة كلها: «فُعْلَى» + ألف مقصورة أضيق من كل منهما وحده.
+    const allPresent = pattern.morphologyFeatures.every((feature) =>
+      hasMorphologyFeature(word.text, feature)
+    );
+    if (!allPresent) return false;
+  }
+
+  if (pattern.excludedMorphologyFeatures?.length) {
+    const anyExcluded = pattern.excludedMorphologyFeatures.some((feature) =>
+      hasMorphologyFeature(word.text, feature)
+    );
+    if (anyExcluded) return false;
+  }
+
+  if (pattern.endingHaraka?.length) {
+    const ending = endingHarakaOf(word.text);
+    if (!ending || !pattern.endingHaraka.includes(ending)) return false;
+  }
+
+  if (pattern.precededBy?.length) {
+    if (!context.previous) return false;
+    const matches = pattern.precededBy.some((particleClass) =>
+      isParticleOfClass(context.previous!.text, particleClass)
+    );
+    if (!matches) return false;
+  }
+
+  if (pattern.followedBy?.length) {
+    if (!context.next) return false;
+    const matches = pattern.followedBy.some((particleClass) =>
+      isParticleOfClass(context.next!.text, particleClass)
+    );
+    if (!matches) return false;
+  }
+
+  switch (pattern.ayahPosition) {
+    case 'FIRST':
+      return context.isFirst === true;
+    case 'LAST':
+      return context.isLast === true;
+    case 'NOT_LAST':
+      return context.isLast !== true;
+    default:
+      return true;
+  }
 }
 
 /** يطابق نمط قاعدة في كلمات آية واحدة فقط. */
@@ -287,8 +401,17 @@ export function matchPatternInAyah(
   }
 
   const wordPattern = pattern.words[0];
-  for (const word of words) {
-    if (!matchMorphologyPatternInWord(word, wordPattern)) continue;
+  const ordered = [...words].sort((first, second) => first.position - second.position);
+
+  for (let index = 0; index < ordered.length; index += 1) {
+    const word = ordered[index];
+    const context: MorphologyWordContext = {
+      previous: ordered[index - 1],
+      next: ordered[index + 1],
+      isFirst: index === 0,
+      isLast: index === ordered.length - 1,
+    };
+    if (!matchMorphologyPatternInWord(word, wordPattern, context)) continue;
 
     const characters = splitQuranCharacters(word.text);
     const bounds = highlightBoundsForMorphology(wordPattern, characters.length);
@@ -347,21 +470,35 @@ export function findGlobalRuleMatches(
   return matches;
 }
 
-/** يضيف مواضع القواعد العامة النشطة إلى اختلافات آية دون حفظ نسخ مكررة. */
+/**
+ * يضيف مواضع القواعد العامة النشطة إلى اختلافات آية دون حفظ نسخ مكررة.
+ *
+ * المواضع التي حذفها المحقق فرديا تُستبعد هنا وحدها، فتبقى القاعدة عاملة في
+ * سائر المصحف. والمواضع التي خُصِّصت لها درجة قوة تأخذ تخصيصها لا درجة القاعدة.
+ */
 export function getEffectiveVariants(document: TashjeerDocument): Variant[] {
   const derived: Variant[] = [];
+  const overrides = occurrenceOverrideMap();
+
   for (const rule of listGlobalRules()) {
     if (!rule.isActive || !rule.pattern) continue;
     for (const match of findGlobalRuleMatchesInAyah(rule, document.ayahKey)) {
-      derived.push(variantFromGlobalMatch(rule, match));
+      const override = overrides.get(occurrenceIdFor(rule.id, match));
+      if (override?.state === 'DELETED') continue;
+      derived.push(variantFromGlobalMatch(rule, match, override));
     }
   }
+
   return [...document.variants, ...derived];
 }
 
 /** يحول نتيجة المطابقة إلى اختلاف مشتق يفهمه محرك التشجير الحالي. */
-export function variantFromGlobalMatch(rule: GlobalRule, match: GlobalRuleMatch): Variant {
-  const id = `global:${rule.id}:${match.ayahKey ?? 'ayah'}:${match.startPosition}:${match.endPosition}:${match.characterRange.start.characterIndex}:${match.characterRange.end.characterIndex}`;
+export function variantFromGlobalMatch(
+  rule: GlobalRule,
+  match: GlobalRuleMatch,
+  override?: RuleOccurrenceOverride
+): Variant {
+  const id = occurrenceIdFor(rule.id, match);
   return {
     id,
     ayahKey: match.ayahKey ?? 0,
@@ -386,6 +523,10 @@ export function variantFromGlobalMatch(rule: GlobalRule, match: GlobalRuleMatch)
         maddHarakat: rule.maddHarakat,
         notes: rule.description,
         evidences: rule.evidences,
+        // تخصيص الموضع يسبق درجة القاعدة، فقد يرجّح المحقق الوجه هنا
+        // ويؤخّره هناك بحسب السياق.
+        strengthDegreeId: override?.strengthDegreeId ?? rule.strengthDegreeId,
+        strengthByNarrator: override?.strengthByNarrator ?? rule.strengthByNarrator,
       },
     ],
   };
@@ -538,6 +679,59 @@ export function describeGlobalPattern(pattern?: GlobalRulePattern): string {
       .join(' … ');
     return `${pattern.wordCount} كلمة متجاورة: ${words || 'قيود حروف'}`;
   }
-  const word = pattern.words[0];
-  return `قالب صرفي: ${word.template || ''}${word.suffix ? ` / النهاية ${word.suffix}` : ''}`;
+  return describeMorphologyWord(pattern.words[0]);
+}
+
+/** أسماء مواقع الكلمة من الآية، للعرض في وصف القاعدة. */
+const AYAH_POSITION_LABELS: Record<AyahWordPosition, string> = {
+  ANY: 'أي موضع',
+  FIRST: 'أول الآية',
+  LAST: 'آخر الآية',
+  NOT_LAST: 'غير آخر الآية',
+};
+
+/**
+ * يصف القاعدة الصرفية/النحوية بعبارة عربية واحدة.
+ *
+ * الوصف مبني على المعايير المفعّلة فقط: القاعدة قد تكون قالبا صرفيا خالصا،
+ * أو شرطا نحويا خالصا (كأن تسبقها أداة جر)، أو مزيجا منهما. لذلك نجمع
+ * الأجزاء المتحققة ثم نصلها، بدل قالب ثابت يظهر فيه فراغ عند غياب المعيار.
+ */
+function describeMorphologyWord(word: GlobalMorphologyWordPattern): string {
+  const parts: string[] = [];
+
+  if (word.template) parts.push(`قالب «${word.template}»`);
+  if (word.prefix) parts.push(`تبدأ بـ«${word.prefix}»`);
+  if (word.suffix) parts.push(`تنتهي بـ«${word.suffix}»`);
+
+  if (word.morphologyFeatures?.length) {
+    parts.push(word.morphologyFeatures.map((feature) => MORPHOLOGY_FEATURE_LABELS[feature]).join(' + '));
+  }
+  if (word.excludedMorphologyFeatures?.length) {
+    const excluded = word.excludedMorphologyFeatures
+      .map((feature) => MORPHOLOGY_FEATURE_LABELS[feature])
+      .join('، ');
+    parts.push(`بلا ${excluded}`);
+  }
+  if (word.endingHaraka?.length) {
+    const harakat = word.endingHaraka.map((haraka) => WORD_ENDING_HARAKA_LABELS[haraka]).join(' أو ');
+    parts.push(`آخرها ${harakat}`);
+  }
+  if (word.precededBy?.length) {
+    parts.push(`بعد ${word.precededBy.map((item) => PARTICLE_CLASS_LABELS[item]).join(' أو ')}`);
+  }
+  if (word.followedBy?.length) {
+    parts.push(`قبل ${word.followedBy.map((item) => PARTICLE_CLASS_LABELS[item]).join(' أو ')}`);
+  }
+  if (word.ayahPosition && word.ayahPosition !== 'ANY') {
+    parts.push(AYAH_POSITION_LABELS[word.ayahPosition]);
+  }
+  if (word.minLength && word.maxLength) parts.push(`طولها ${word.minLength}-${word.maxLength} حرفا`);
+  else if (word.minLength) parts.push(`طولها ${word.minLength} حروف فأكثر`);
+  else if (word.maxLength) parts.push(`طولها ${word.maxLength} حروف فأقل`);
+
+  if (parts.length === 0) return 'قاعدة صرفية بلا معايير مفعّلة';
+
+  const scope = word.harakaMode === 'EXACT' ? 'بمطابقة الضبط' : 'بتجاهل الضبط';
+  return `كلمة: ${parts.join('، ')} (${scope})`;
 }

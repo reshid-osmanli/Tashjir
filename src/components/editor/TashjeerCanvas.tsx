@@ -24,6 +24,8 @@ import { getNarratorProfile } from '@/data/qiraat-data/narrator-profiles';
 import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
+import { useStrengthDegrees } from '@/hooks/useStrengthDegrees';
+import { useRuleOccurrences } from '@/hooks/useRuleOccurrences';
 import type { ClassicLine, ClassicReaderChip } from '@/lib/tashjeer/classic-tashjeer';
 import type { VariantCategory } from '@/types';
 import type { WordBox } from '@/types/tashjeer';
@@ -67,25 +69,37 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
 
   const catalog = useTransmissionCatalog();
   const engine = useEngineSettings();
+  const strengthDegrees = useStrengthDegrees();
+  const occurrences = useRuleOccurrences();
 
   // عند تعديل قارئ أو رمز أو طريق من لوحة التحكم، حدّث الخطوط المشتقة مع
   // إبقاء مواضع الأسطر اليدوية كما هي. لا يحتاج المحرر إلى إعادة فتح الآية.
   useEffect(() => {
     refreshDerivedBranches();
-  }, [catalog.updatedAt, engine.rowSpacing, engine.textToTreeGap, engine.tieBreakOrder, engine.symbolDisplay, refreshDerivedBranches]);
+  }, [
+    catalog.updatedAt,
+    engine.rowSpacing,
+    engine.textToTreeGap,
+    engine.tieBreakOrder,
+    engine.symbolDisplay,
+    strengthDegrees.updatedAt,
+    occurrences.key,
+    refreshDerivedBranches,
+  ]);
 
   const { ayah, layout, classic, viewBox } = useAyahTashjeer(
     document,
     filter,
     { fontSize },
-    { catalog, engine }
+    { catalog, engine, strengthDegrees, occurrencesKey: occurrences.key }
   );
 
   // يشمل هذا القائمة المحلية والقواعد العامة المشتقة؛ لذلك يتفاعل النقر
   // مع موضع القاعدة العامة كما يتفاعل مع الاختلاف الذي أضيف يدويا.
   const effectiveVariants = useMemo(
     () => (document ? getEffectiveVariants(document) : []),
-    [document]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [document, occurrences.key]
   );
 
   // ==================== التفاعل ====================
