@@ -286,3 +286,101 @@ describe('على نص المصحف', () => {
     expect(matched.every((item) => hasMorphologyFeature(item.text, 'DEFINITE_AL'))).toBe(true);
   });
 });
+
+// ==================== الإضافات: خصائص الأحكام الصوتية وبداية الكلمة ====================
+
+import { isSakinCharacter } from '@/lib/quran-logic/arabic-grammar';
+import { splitQuranCharacters } from '@/lib/quran-logic/characters';
+
+describe('النون والميم الساكنتان في آخر الكلمة', () => {
+  it('يقرأ السكون الحديث والعثماني والحرف المعرّى', () => {
+    expect(hasMorphologyFeature('مِنْ', 'NOON_SAKINA_END')).toBe(true);
+    // السكون العثماني (رأس خاء صغيرة) هو الغالب في بيانات المصحف.
+    expect(hasMorphologyFeature('مِن\u06E1', 'NOON_SAKINA_END')).toBe(true);
+    // النون المعرّاة: رسم الإدغام والإخفاء («مِن رَّبِّهِمۡ»).
+    expect(hasMorphologyFeature('مِن', 'NOON_SAKINA_END')).toBe(true);
+    // النون المتحركة ليست ساكنة.
+    expect(hasMorphologyFeature('مِنَ', 'NOON_SAKINA_END')).toBe(false);
+    expect(hasMorphologyFeature('نَحْنُ', 'NOON_SAKINA_END')).toBe(false);
+  });
+
+  it('الميم الساكنة كذلك', () => {
+    expect(hasMorphologyFeature('عَلَيۡهِم\u06E1', 'MEEM_SAKINA_END')).toBe(true);
+    expect(hasMorphologyFeature('لَهُمۡ', 'MEEM_SAKINA_END')).toBe(true);
+    expect(hasMorphologyFeature('عَلِيمٌ', 'MEEM_SAKINA_END')).toBe(false);
+  });
+});
+
+describe('واو الجماعة وهمزة الوصل', () => {
+  it('واو الجماعة: واو مدية تليها ألف فارقة', () => {
+    expect(hasMorphologyFeature('قَالُوا', 'PLURAL_WAW')).toBe(true);
+    expect(hasMorphologyFeature('ءَامَنُواْ', 'PLURAL_WAW')).toBe(true);
+    expect(hasMorphologyFeature('قَالَ', 'PLURAL_WAW')).toBe(false);
+    // «وَا» المفتوحة في وسط بنية الكلمة ليست واو جماعة.
+    expect(hasMorphologyFeature('سَوَاءٌ', 'PLURAL_WAW')).toBe(false);
+  });
+
+  it('همزة الوصل في أول الكلمة', () => {
+    expect(hasMorphologyFeature('ٱلۡحَمۡدُ', 'HAMZAT_WASL_START')).toBe(true);
+    expect(hasMorphologyFeature('ٱهۡدِنَا', 'HAMZAT_WASL_START')).toBe(true);
+    expect(hasMorphologyFeature('أَنۡعَمۡتَ', 'HAMZAT_WASL_START')).toBe(false);
+  });
+});
+
+describe('أل الشمسية والقمرية', () => {
+  it('الشمسية: اللام غير منطوقة وما بعدها مشدد', () => {
+    expect(hasMorphologyFeature('ٱلرَّحۡمَٰنِ', 'SHAMSI_AL')).toBe(true);
+    expect(hasMorphologyFeature('ٱلصِّرَٰطَ', 'SHAMSI_AL')).toBe(true);
+    expect(hasMorphologyFeature('ٱلۡحَمۡدُ', 'SHAMSI_AL')).toBe(false);
+  });
+
+  it('القمرية: اللام ساكنة منطوقة', () => {
+    expect(hasMorphologyFeature('ٱلۡحَمۡدُ', 'QAMARI_AL')).toBe(true);
+    expect(hasMorphologyFeature('ٱلۡعَٰلَمِينَ', 'QAMARI_AL')).toBe(true);
+    expect(hasMorphologyFeature('ٱلرَّحۡمَٰنِ', 'QAMARI_AL')).toBe(false);
+  });
+
+  it('ما لا أل فيه لا يوصف بشمسية ولا قمرية', () => {
+    expect(hasMorphologyFeature('رَحۡمَةٌ', 'SHAMSI_AL')).toBe(false);
+    expect(hasMorphologyFeature('رَحۡمَةٌ', 'QAMARI_AL')).toBe(false);
+  });
+});
+
+describe('الضمير المتصل الظاهر', () => {
+  it('يثبت للاحقة من القائمة المغلقة مع بقاء جذر قبلها', () => {
+    expect(hasMorphologyFeature('رَبُّهُمۡ', 'ATTACHED_PRONOUN')).toBe(true);
+    expect(hasMorphologyFeature('عَلَيۡكُمۡ', 'ATTACHED_PRONOUN')).toBe(true);
+    expect(hasMorphologyFeature('رَبَّنَا', 'ATTACHED_PRONOUN')).toBe(true);
+    // «هُمْ» المستقلة ليست ضميرا متصلا بغيرها.
+    expect(hasMorphologyFeature('هُمۡ', 'ATTACHED_PRONOUN')).toBe(false);
+  });
+});
+
+describe('حالة السكون على مستوى الحرف', () => {
+  it('يفرق الساكن من المتحرك والمشدد', () => {
+    const [meem, noonSakin] = splitQuranCharacters('مِنْ');
+    expect(isSakinCharacter(meem)).toBe(false);
+    expect(isSakinCharacter(noonSakin)).toBe(true);
+
+    const uthmani = splitQuranCharacters('مِن\u06E1');
+    expect(isSakinCharacter(uthmani[1])).toBe(true);
+
+    const bare = splitQuranCharacters('مِن');
+    expect(isSakinCharacter(bare[1])).toBe(true);
+
+    const shadda = splitQuranCharacters('رَبِّ');
+    expect(isSakinCharacter(shadda[1])).toBe(false);
+  });
+});
+
+describe('حركة آخر الكلمة بالتنوين المتتابع والسكون العثماني', () => {
+  it('التنوين المتتابع (ـٖ ـٗ ـٞ) يُقرأ تنوينا', () => {
+    expect(endingHarakaOf('ثَمَرَةٖ')).toBe('TANWEEN_KASR');
+    expect(endingHarakaOf('نَارٗا')).toBe('TANWEEN_FATH');
+    expect(endingHarakaOf('عَظِيمٞ')).toBe('TANWEEN_DAMM');
+  });
+
+  it('السكون العثماني يُقرأ سكونا', () => {
+    expect(endingHarakaOf('لَهُمۡ')).toBe('SUKUN');
+  });
+});

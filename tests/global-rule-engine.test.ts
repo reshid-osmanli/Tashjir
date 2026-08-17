@@ -143,3 +143,201 @@ describe('محرك القواعد العامة الحرفية', () => {
     expect(matches.map((match) => match.startPosition)).toEqual([1, 3]);
   });
 });
+
+// ==================== الإضافات: النطاق داخل الكلمة، السلاسل الصرفية، السكون ====================
+
+import {
+  matchCharacterPatternInsideWord,
+  findGlobalRuleMatchesInAyah,
+} from '@/lib/quran-logic/global-rule-engine';
+import type { GlobalCharacterConstraint } from '@/types/tashjeer';
+
+const noonSakinConstraint: GlobalCharacterConstraint = {
+  baseLetter: 'ن',
+  marks: '',
+  harakaMode: 'SAKIN',
+  anchor: 'END',
+  value: 0,
+};
+
+describe('وضع «ساكن» في مطابقة الحركة', () => {
+  it('يطابق السكون الحديث والعثماني والحرف المعرّى، ويرد المتحرك', () => {
+    const pattern: GlobalCharacterPattern = {
+      kind: 'CHARACTERS',
+      version: 1,
+      wordCount: 2,
+      words: [
+        { offset: 0, constraints: [noonSakinConstraint] },
+        {
+          offset: 1,
+          constraints: [
+            { baseLetter: 'ت', letterSet: 'IKHFAA', marks: '', harakaMode: 'IGNORE', anchor: 'START', value: 0 },
+          ],
+        },
+      ],
+    };
+
+    // سكون حديث U+0652
+    expect(matchCharacterPatternInWords([{ position: 1, text: 'مِنْ' }, { position: 2, text: 'ثَمَرَةٍ' }], pattern, 0)).not.toBeNull();
+    // سكون عثماني U+06E1 (رأس خاء صغيرة)
+    expect(matchCharacterPatternInWords([{ position: 1, text: 'مِن\u06E1' }, { position: 2, text: 'ثَمَرَةٍ' }], pattern, 0)).not.toBeNull();
+    // نون معرّاة (رسم الإدغام والإخفاء العثماني)
+    expect(matchCharacterPatternInWords([{ position: 1, text: 'مِن' }, { position: 2, text: 'ثَمَرَةٍ' }], pattern, 0)).not.toBeNull();
+    // نون متحركة: لا سكون فلا مطابقة
+    expect(matchCharacterPatternInWords([{ position: 1, text: 'مِنَ' }, { position: 2, text: 'ثَمَرَةٍ' }], pattern, 0)).toBeNull();
+  });
+});
+
+describe('المطابقة داخل الكلمة الواحدة (INSIDE_WORD)', () => {
+  const insidePattern: GlobalCharacterPattern = {
+    kind: 'CHARACTERS',
+    version: 1,
+    wordCount: 2,
+    matchScope: 'INSIDE_WORD',
+    words: [
+      { offset: 0, constraints: [noonSakinConstraint] },
+      {
+        offset: 1,
+        constraints: [
+          { baseLetter: 'ت', letterSet: 'IKHFAA', marks: '', harakaMode: 'IGNORE', anchor: 'START', value: 0 },
+        ],
+      },
+    ],
+  };
+
+  it('يجد النون الساكنة مع حرف الإخفاء في جوف الكلمة: أَنتُمْ ويُنفِقُونَ', () => {
+    const matchesAntum = matchCharacterPatternInsideWord({ position: 1, text: 'أَنتُمۡ' }, insidePattern);
+    expect(matchesAntum).toHaveLength(1);
+    expect(matchesAntum[0].characterRange).toEqual({
+      start: { position: 1, characterIndex: 2 },
+      end: { position: 1, characterIndex: 3 },
+    });
+
+    const matchesYunfiqun = matchCharacterPatternInsideWord({ position: 1, text: 'يُنفِقُونَ' }, insidePattern);
+    expect(matchesYunfiqun).toHaveLength(1);
+  });
+
+  it('لا يدّعي مطابقة عند غياب التجاور أو غياب السكون', () => {
+    // نون متحركة داخل الكلمة
+    expect(matchCharacterPatternInsideWord({ position: 1, text: 'نَتَقَبَّلُ' }, insidePattern)).toHaveLength(0);
+    // لا نون أصلا
+    expect(matchCharacterPatternInsideWord({ position: 1, text: 'قَالُوا' }, insidePattern)).toHaveLength(0);
+  });
+
+  it('BOTH يجمع بين الكلمات وداخلها في الآية الواحدة', () => {
+    const bothPattern: GlobalCharacterPattern = { ...insidePattern, matchScope: 'BOTH' };
+    const matches = matchPatternInAyah(
+      [
+        { position: 1, text: 'مِنْ' },
+        { position: 2, text: 'ثَمَرَةٍ' },
+        { position: 3, text: 'أَنتُمۡ' },
+      ],
+      bothPattern
+    );
+    // موضعان: بين الكلمتين 1-2، وداخل الكلمة 3.
+    expect(matches).toHaveLength(2);
+    expect(matches[0].startPosition).toBe(1);
+    expect(matches[1].startPosition).toBe(3);
+  });
+
+  it('WORDS وحده لا يرى ما في جوف الكلمة، وINSIDE_WORD وحده لا يرى ما بين الكلمات', () => {
+    const words = [
+      { position: 1, text: 'مِنْ' },
+      { position: 2, text: 'ثَمَرَةٍ' },
+      { position: 3, text: 'أَنتُمۡ' },
+    ];
+    const wordsOnly = matchPatternInAyah(words, { ...insidePattern, matchScope: 'WORDS' });
+    expect(wordsOnly).toHaveLength(1);
+    expect(wordsOnly[0].startPosition).toBe(1);
+
+    const insideOnly = matchPatternInAyah(words, insidePattern);
+    expect(insideOnly).toHaveLength(1);
+    expect(insideOnly[0].startPosition).toBe(3);
+  });
+});
+
+describe('السلسلة الصرفية متعددة الكلمات', () => {
+  it('نون ساكنة في آخر كلمة + حرف إخفاء في أول التالية، بالمعايير لا بالحروف', () => {
+    const matches = matchPatternInAyah(
+      [
+        { position: 1, text: 'مِن' },
+        { position: 2, text: 'ثَمَرَةٖ' },
+        { position: 3, text: 'قَالَ' },
+        { position: 4, text: 'مَن' },
+        { position: 5, text: 'أَحۡسَنَ' },
+      ],
+      {
+        kind: 'MORPHOLOGY',
+        version: 1,
+        wordCount: 2,
+        words: [
+          { offset: 0, harakaMode: 'IGNORE', morphologyFeatures: ['NOON_SAKINA_END'] },
+          { offset: 1, harakaMode: 'IGNORE', startsWithSet: 'IKHFAA' },
+        ],
+      }
+    );
+
+    // «مِن ثَمَرَةٖ» تطابق؛ أما «مَن أَحۡسَنَ» فأولها همزة وهي من حروف الإظهار.
+    expect(matches).toHaveLength(1);
+    expect(matches[0].startPosition).toBe(1);
+    expect(matches[0].endPosition).toBe(2);
+    // التعليم: آخر حرف من الأولى إلى أول حرف من الثانية.
+    expect(matches[0].characterRange.start.characterIndex).toBe(2);
+    expect(matches[0].characterRange.end.characterIndex).toBe(1);
+  });
+
+  it('همزة الوصل تُتخطى عند فحص أول الكلمة، فالمنطوق بعدها هو المعتبر', () => {
+    // «ٱصۡبِرۡ»: أولها همزة وصل، والمنطوق بعدها صاد وهي من حروف الإخفاء.
+    const matched = matchMorphologyPatternInWord(
+      { position: 2, text: 'ٱصۡبِرۡ' },
+      { offset: 0, harakaMode: 'IGNORE', startsWithSet: 'IKHFAA' }
+    );
+    expect(matched).toBe(true);
+
+    // «ٱلَّذِينَ»: بعد همزة الوصل لام، واللام ليست من حروف الإخفاء.
+    const notMatched = matchMorphologyPatternInWord(
+      { position: 2, text: 'ٱلَّذِينَ' },
+      { offset: 0, harakaMode: 'IGNORE', startsWithSet: 'IKHFAA' }
+    );
+    expect(notMatched).toBe(false);
+  });
+
+  it('يرفض النافذة غير المتجاورة في المواقع', () => {
+    const matches = matchPatternInAyah(
+      [
+        { position: 1, text: 'مِن' },
+        { position: 3, text: 'ثَمَرَةٖ' },
+      ],
+      {
+        kind: 'MORPHOLOGY',
+        version: 1,
+        wordCount: 2,
+        words: [
+          { offset: 0, harakaMode: 'IGNORE', morphologyFeatures: ['NOON_SAKINA_END'] },
+          { offset: 1, harakaMode: 'IGNORE', startsWithSet: 'IKHFAA' },
+        ],
+      }
+    );
+    expect(matches).toHaveLength(0);
+  });
+
+  it('يعمل على آية حقيقية من المصحف: البقرة 3 فيها يُنفِقُونَ', () => {
+    const rule = {
+      id: 'test-ikhfa-inside',
+      pattern: {
+        kind: 'CHARACTERS',
+        version: 1,
+        wordCount: 2,
+        matchScope: 'BOTH',
+        words: [
+          { offset: 0, constraints: [{ baseLetter: 'ن', marks: '', harakaMode: 'SAKIN', anchor: 'END', value: 0 }] },
+          { offset: 1, constraints: [{ baseLetter: 'ف', letterSet: 'IKHFAA', marks: '', harakaMode: 'IGNORE', anchor: 'START', value: 0 }] },
+        ],
+      } as GlobalCharacterPattern,
+    };
+    const matches = findGlobalRuleMatchesInAyah(rule, makeAyahKey(2, 3));
+    // «يُنفِقُونَ» في آخر الآية: نون معرّاة بعدها فاء (إخفاء داخل الكلمة).
+    expect(matches.length).toBeGreaterThanOrEqual(1);
+    expect(matches.some((match) => match.matchedText.includes('ن'))).toBe(true);
+  });
+});

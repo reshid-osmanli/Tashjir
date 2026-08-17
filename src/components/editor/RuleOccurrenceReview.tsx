@@ -37,6 +37,11 @@ interface RuleOccurrenceReviewProps {
   onClose: () => void;
   /** اسم الآية المفتوحة في المحرر، ليبدأ الاستعراض منها إن كانت من المواضع. */
   startAtAyahKey?: number;
+  /**
+   * فتح آية الموضع داخل المحرر نفسه دون إعادة تحميل الصفحة. عند غيابه
+   * (كصفحة الفهرس المستقلة) يُستعمل رابط عادي إلى المحرر.
+   */
+  onOpenInEditor?: (ayahKey: number) => void;
 }
 
 type OccurrenceFilter = 'ALL' | 'PENDING' | 'CONFIRMED' | 'DELETED' | 'EDITED';
@@ -56,7 +61,7 @@ const ACTION_LABELS: Record<OccurrenceLogEntry['action'], string> = {
   EDIT: 'تعديل درجة',
 };
 
-export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey }: RuleOccurrenceReviewProps) {
+export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEditor }: RuleOccurrenceReviewProps) {
   const catalog = useTransmissionCatalog();
   const strengthDegrees = useStrengthDegrees();
   const occurrences = useRuleOccurrences(rule.id);
@@ -280,6 +285,7 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey }: RuleOccu
                     onRestore={handleRestore}
                     onConfirm={handleConfirm}
                     onStrengthChange={handleStrength}
+                    onOpenInEditor={onOpenInEditor}
                     rule={rule}
                     degreeLabel={
                       strengthDegrees.degrees.find(
@@ -312,6 +318,7 @@ function OccurrenceCard({
   onRestore,
   onConfirm,
   onStrengthChange,
+  onOpenInEditor,
   rule,
   degreeLabel,
 }: {
@@ -329,6 +336,7 @@ function OccurrenceCard({
   onRestore: () => void;
   onConfirm: () => void;
   onStrengthChange: (next: { degreeId?: string; byNarrator?: ReaderStrengthMap }) => void;
+  onOpenInEditor?: (ayahKey: number) => void;
   rule: GlobalRule;
   degreeLabel?: string;
 }) {
@@ -360,14 +368,23 @@ function OccurrenceCard({
         </div>
         <div className="flex items-center gap-2 text-[11px] text-stone-600">
           <StateBadge override={override} />
-          {surah && ayah && (
+          {surah && ayah && (onOpenInEditor ? (
+            <button
+              type="button"
+              onClick={() => onOpenInEditor(ayah.key)}
+              className="rounded border border-stone-300 bg-white px-2 py-1 text-emerald-800 hover:bg-emerald-50"
+              title="فتح الآية في المحرر مباشرة دون مغادرة الجلسة"
+            >
+              فتح في المحرر: {surah.name} {ayah.ayahNumber}
+            </button>
+          ) : (
             <a
               href={`/editor?ayah=${ayah.key}`}
               className="rounded border border-stone-300 bg-white px-2 py-1 text-emerald-800 hover:bg-emerald-50"
             >
               فتح في المحرر: {surah.name} {ayah.ayahNumber}
             </a>
-          )}
+          ))}
         </div>
       </div>
 

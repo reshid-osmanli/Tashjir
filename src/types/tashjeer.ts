@@ -151,8 +151,14 @@ export interface CharacterRange {
 
 // ==================== قواعد المصحف العامة ====================
 
-/** سياسة مطابقة علامات الضبط عند تطبيق قاعدة نمطية. */
-export type HarakaMatchMode = 'EXACT' | 'IGNORE' | 'NONE';
+/**
+ * سياسة مطابقة علامات الضبط عند تطبيق قاعدة نمطية.
+ *
+ * SAKIN حالة أداء لا مجرد علامة: يطابق الحرف الساكن بعلامة السكون بصورتيها
+ * (ْ الحديثة و ۡ العثمانية) وكذلك الحرف «المعرّى» من الحركة، وهو رسم النون
+ * والميم الساكنتين قبل الإدغام والإخفاء في الضبط العثماني.
+ */
+export type HarakaMatchMode = 'EXACT' | 'IGNORE' | 'NONE' | 'SAKIN';
 
 /** موضع الحرف المطلوب داخل الكلمة، حتى لا تقيد القاعدة طول الكلمة بلا داع. */
 export type PatternCharacterAnchor = 'START' | 'END' | 'INDEX';
@@ -194,6 +200,16 @@ export interface GlobalWordCharacterPattern {
   exactLength?: number;
 }
 
+/**
+ * أين يُبحث عن تتابع الحروف؟
+ *
+ * القاعدة الصوتية الواحدة (كنون ساكنة قبل حرف إخفاء) تجري بين كلمتين
+ * («مِنۡ ثَمَرَةٖ») وتجري داخل الكلمة الواحدة («أَنتُمۡ»، «يُنفِقُونَ»).
+ * فالمحقق يختار: مطابقة عبر الكلمات كما حُدِّدت، أو داخل الكلمة الواحدة
+ * حيث يُبحث عن التتابع نفسه حروفا متجاورة، أو الاثنين معا للدقة الكاملة.
+ */
+export type CharacterMatchScope = 'WORDS' | 'INSIDE_WORD' | 'BOTH';
+
 /** قاعدة حروف: كلمات متجاورة داخل الآية نفسها، بلا عبور حد الآية افتراضيا. */
 export interface GlobalCharacterPattern {
   kind: 'CHARACTERS';
@@ -202,6 +218,11 @@ export interface GlobalCharacterPattern {
   words: GlobalWordCharacterPattern[];
   sourceAyahKey?: number;
   sourceRange?: CharacterRange;
+  /**
+   * نطاق البحث عن التتابع. غيابه يعني WORDS (سلوك الإصدارات السابقة):
+   * مطابقة الكلمات كما حُدِّدت بمراسي البداية/النهاية.
+   */
+  matchScope?: CharacterMatchScope;
 }
 
 /**
@@ -236,7 +257,21 @@ export type MorphologyFeature =
   /** فيه همزة بأي صورة */
   | 'HAMZA'
   /** فيه حرف مد */
-  | 'MADD_LETTER';
+  | 'MADD_LETTER'
+  /** آخره نون ساكنة (بعلامة السكون بصورتيها، أو نون معرّاة تُدغم) */
+  | 'NOON_SAKINA_END'
+  /** آخره ميم ساكنة (بعلامة السكون بصورتيها، أو ميم معرّاة) */
+  | 'MEEM_SAKINA_END'
+  /** واو الجماعة في الآخر: ـوا / ـواْ / ـوٓاْ */
+  | 'PLURAL_WAW'
+  /** يبدأ بهمزة الوصل ٱ كما في الرسم العثماني */
+  | 'HAMZAT_WASL_START'
+  /** معرّف بأل الشمسية (اللام غير المنطوقة وما بعدها مشدد) */
+  | 'SHAMSI_AL'
+  /** معرّف بأل القمرية (اللام الساكنة المنطوقة) */
+  | 'QAMARI_AL'
+  /** ينتهي بضمير متصل ظاهر من قائمة مغلقة: هم، هما، هن، كم، كما، كن، ها، نا */
+  | 'ATTACHED_PRONOUN';
 
 /**
  * فئة أداة نحوية مغلقة العدد.
@@ -289,7 +324,8 @@ export type AyahWordPosition = 'ANY' | 'FIRST' | 'LAST' | 'NOT_LAST';
  * عدم التقييد به.
  */
 export interface GlobalMorphologyWordPattern {
-  offset: 0;
+  /** إزاحة الكلمة بالنسبة لأول كلمة في الموضع (0-based). */
+  offset: number;
   /** قالب مثل «فَعْلَى»؛ ف وع ول حروف جذر بديلة، وما سواها حرف حرفي. */
   template?: string;
   /** بادئة أو لاحقة حرفية اختيارية، مثل «ال» أو «ة». */
@@ -297,6 +333,14 @@ export interface GlobalMorphologyWordPattern {
   suffix?: string;
   /** سياسة مطابقة علامات الضبط للقالب والبادئة واللاحقة. */
   harakaMode: HarakaMatchMode;
+  /**
+   * أول حرف في الكلمة من مجموعة تجويدية معلومة (حروف الإخفاء مثلا)،
+   * بغضّ النظر عن حركته. يجعل قاعدة «كلمة تليها كلمة تبدأ بحرف إخفاء»
+   * ممكنة بالمعايير لا بتعداد الحروف الخمسة عشر يدويا.
+   */
+  startsWithSet?: Exclude<GlobalCharacterSet, 'EXACT'>;
+  /** آخر حرف في الكلمة من مجموعة تجويدية معلومة، بغضّ النظر عن حركته. */
+  endsWithSet?: Exclude<GlobalCharacterSet, 'EXACT'>;
   /** خصائص صرفية يجب توافرها كلها في الكلمة. */
   morphologyFeatures?: MorphologyFeature[];
   /** خصائص صرفية يجب ألا تتوافر، لاستثناء ما يشبه المطلوب ولا يراد. */
@@ -324,8 +368,13 @@ export interface GlobalMorphologyWordPattern {
 export interface GlobalMorphologyPattern {
   kind: 'MORPHOLOGY';
   version: 1;
-  wordCount: 1;
-  words: [GlobalMorphologyWordPattern];
+  /**
+   * عدد الكلمات المتجاورة التي تصفها القاعدة. كان 1 حصرا في الإصدارات
+   * السابقة، وأصبح يقبل حتى 4 كلمات متتابعة داخل الآية الواحدة، فيمكن وصف
+   * «كلمة تنتهي بنون ساكنة تليها كلمة تبدأ بحرف إخفاء» نحويا لا حرفيا فقط.
+   */
+  wordCount: number;
+  words: GlobalMorphologyWordPattern[];
   sourceAyahKey?: number;
 }
 

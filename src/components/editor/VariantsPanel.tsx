@@ -9,7 +9,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useEditorStore } from '@/stores/editor-store';
 import { getAyahWordsByKey } from '@/data/quran';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
@@ -17,7 +16,8 @@ import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-system';
 import { describeScope, resolveScope } from '@/lib/tashjeer/scope';
 import { VariantEditor } from './VariantEditor';
-import { GlobalRuleBuilder } from './GlobalRuleBuilder';
+import { GlobalRuleBuilder, type GlobalRuleSeed } from './GlobalRuleBuilder';
+import { RulesIndexDialog } from './RulesIndexDialog';
 import { rangeFromCharacterAnchors, textForCharacterRange } from '@/lib/quran-logic/characters';
 import { listGlobalRules, type GlobalRule } from '@/lib/storage/global-rules-store';
 import { findGlobalRuleMatchesInAyah } from '@/lib/quran-logic/global-rule-engine';
@@ -41,13 +41,18 @@ export function VariantsPanel() {
     clearMarks,
     addVariant,
     refreshDerivedBranches,
+    openAyah,
   } = useEditorStore();
 
   const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
   const [showGlobalBuilder, setShowGlobalBuilder] = useState(false);
   const [globalNotice, setGlobalNotice] = useState<string | null>(null);
   const [globalBuilderKind, setGlobalBuilderKind] = useState<'CHARACTERS' | 'MORPHOLOGY'>('CHARACTERS');
+  const [globalBuilderSeed, setGlobalBuilderSeed] = useState<GlobalRuleSeed | undefined>(undefined);
+  // مدى حروف بديل عن التحديد الحالي، يُستعمل عند تعميم اختلاف حرفي قائم.
+  const [globalBuilderRange, setGlobalBuilderRange] = useState<import('@/types/tashjeer').CharacterRange | null>(null);
   const [reviewingRule, setReviewingRule] = useState<GlobalRule | null>(null);
+  const [showRulesIndex, setShowRulesIndex] = useState(false);
   // استثناءات المواضع كلها: تغيّرها يعيد حساب عدّادات هذه اللوحة فورا.
   const occurrences = useRuleOccurrences();
   const catalog = useTransmissionCatalog();
@@ -148,13 +153,14 @@ export function VariantsPanel() {
               {document.variants.length} اختلافا — مرتبة من آخر الآية إلى أولها
             </p>
           </div>
-          <Link
-            href="/variants"
+          <button
+            type="button"
+            onClick={() => setShowRulesIndex(true)}
             className="shrink-0 rounded border border-violet-200 px-2 py-1 text-[10px] text-violet-800 hover:bg-violet-50"
-            title="إضافة قاعدة عامة أو البحث في كل الاختلافات"
+            title="فهرس القواعد والاختلافات كاملا داخل المحرر: بحث وتتبع وتحرير"
           >
             الفهرس
-          </Link>
+          </button>
         </div>
       </header>
 
@@ -171,12 +177,14 @@ export function VariantsPanel() {
             type="button"
             onClick={() => {
               setGlobalBuilderKind('MORPHOLOGY');
+              setGlobalBuilderSeed(undefined);
+              setGlobalBuilderRange(null);
               setShowGlobalBuilder(true);
             }}
             className="shrink-0 rounded border border-violet-300 bg-white px-2 py-1 text-[10px] text-violet-900 hover:bg-violet-100"
-            title="إضافة قاعدة صرفية نمطية حتمية"
+            title="قاعدة بالمعايير النحوية والصرفية: كلمة أو سلسلة كلمات متجاورة"
           >
-            + قاعدة صرفية
+            + قاعدة نحوية
           </button>
         </div>
         {globalNotice && (
@@ -273,6 +281,8 @@ export function VariantsPanel() {
                   type="button"
                   onClick={() => {
                     setGlobalBuilderKind('CHARACTERS');
+                    setGlobalBuilderSeed(undefined);
+                    setGlobalBuilderRange(null);
                     setShowGlobalBuilder(true);
                   }}
                   className="rounded-md border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-900 hover:bg-violet-100"
@@ -309,6 +319,29 @@ export function VariantsPanel() {
                 isSelected={variant.id === selectedVariantId}
                 onSelect={() => selectVariant(variant.id === selectedVariantId ? null : variant.id)}
                 onEdit={() => setEditingVariantId(variant.id)}
+                onGeneralize={
+                  variant.targetKind === 'CHARACTERS' && variant.characterRange
+                    ? () => {
+                        // التعميم: نفس مدى الحروف يصبح قاعدة للمصحف كله،
+                        // وتنتقل بيانات الاختلاف ووجهه الأول إلى القاعدة.
+                        const first = variant.alternatives.find((alternative) => !alternative.isBase);
+                        setGlobalBuilderKind('CHARACTERS');
+                        setGlobalBuilderRange(variant.characterRange ?? null);
+                        setGlobalBuilderSeed({
+                          title: variant.title,
+                          category: variant.category,
+                          scope: first?.scope,
+                          ruleLabel: first?.ruleLabel ?? first?.label,
+                          maddHarakat: first?.maddHarakat,
+                          description: variant.description,
+                          sourceRef: variant.sourceRef,
+                          strengthDegreeId: first?.strengthDegreeId,
+                          strengthByNarrator: first?.strengthByNarrator,
+                        });
+                        setShowGlobalBuilder(true);
+                      }
+                    : undefined
+                }
                 onDelete={() => {
                   if (window.confirm(`حذف الاختلاف «${variant.title}»؟`)) {
                     deleteVariant(variant.id);
@@ -321,13 +354,43 @@ export function VariantsPanel() {
       </div>
 
       {editingVariant && (
-        <VariantEditor variant={editingVariant} onClose={() => setEditingVariantId(null)} />
+        <VariantEditor
+          variant={editingVariant}
+          onClose={() => setEditingVariantId(null)}
+          onGeneralize={
+            editingVariant.targetKind === 'CHARACTERS' && editingVariant.characterRange
+              ? () => {
+                  const first = editingVariant.alternatives.find((alternative) => !alternative.isBase);
+                  setEditingVariantId(null);
+                  setGlobalBuilderKind('CHARACTERS');
+                  setGlobalBuilderRange(editingVariant.characterRange ?? null);
+                  setGlobalBuilderSeed({
+                    title: editingVariant.title,
+                    category: editingVariant.category,
+                    scope: first?.scope,
+                    ruleLabel: first?.ruleLabel ?? first?.label,
+                    maddHarakat: first?.maddHarakat,
+                    description: editingVariant.description,
+                    sourceRef: editingVariant.sourceRef,
+                    strengthDegreeId: first?.strengthDegreeId,
+                    strengthByNarrator: first?.strengthByNarrator,
+                  });
+                  setShowGlobalBuilder(true);
+                }
+              : undefined
+          }
+        />
       )}
 
       {reviewingRule && (
         <RuleOccurrenceReview
           rule={reviewingRule}
           startAtAyahKey={document.ayahKey}
+          onOpenInEditor={(ayahKey) => {
+            setReviewingRule(null);
+            refreshDerivedBranches();
+            openAyah(ayahKey);
+          }}
           onClose={() => {
             setReviewingRule(null);
             refreshDerivedBranches();
@@ -338,15 +401,36 @@ export function VariantsPanel() {
       {showGlobalBuilder && (
         <GlobalRuleBuilder
           ayahKey={document.ayahKey}
-          characterRange={markedCharacterRange}
+          characterRange={globalBuilderRange ?? markedCharacterRange}
           initialKind={globalBuilderKind}
-          onClose={() => setShowGlobalBuilder(false)}
-          onSaved={(_rule, matchCount) => {
+          seed={globalBuilderSeed}
+          onClose={() => {
             setShowGlobalBuilder(false);
+            setGlobalBuilderSeed(undefined);
+            setGlobalBuilderRange(null);
+          }}
+          onSaved={(rule, matchCount) => {
+            setShowGlobalBuilder(false);
+            setGlobalBuilderSeed(undefined);
+            setGlobalBuilderRange(null);
             clearMarks();
             refreshDerivedBranches();
             setGlobalNotice(`تم حفظ القاعدة وتطبيقها على ${matchCount} موضع في المصحف.`);
+            // بعد الحفظ يُفتح التتبع مباشرة ليدقق المحقق المواضع واحدا واحدا.
+            setReviewingRule(rule);
           }}
+        />
+      )}
+
+      {showRulesIndex && (
+        <RulesIndexDialog
+          currentAyahKey={document.ayahKey}
+          onClose={() => setShowRulesIndex(false)}
+          onNavigate={(ayahKey, variantId) => {
+            openAyah(ayahKey);
+            if (variantId) selectVariant(variantId);
+          }}
+          onRulesChanged={refreshDerivedBranches}
         />
       )}
     </aside>
@@ -361,6 +445,7 @@ function VariantRow({
   isSelected,
   onSelect,
   onEdit,
+  onGeneralize,
   onDelete,
 }: {
   variant: Variant;
@@ -368,6 +453,8 @@ function VariantRow({
   isSelected: boolean;
   onSelect: () => void;
   onEdit: () => void;
+  /** يحوّل هذا الاختلاف الحرفي إلى قاعدة عامة على المصحف كله. */
+  onGeneralize?: () => void;
   onDelete: () => void;
 }) {
   const drawnAlternatives = variant.alternatives.filter((alternative) => !alternative.isBase);
@@ -429,7 +516,7 @@ function VariantRow({
           </ul>
         )}
 
-        <div className="mt-2 flex gap-2">
+        <div className="mt-2 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={onEdit}
@@ -437,6 +524,16 @@ function VariantRow({
           >
             تحرير
           </button>
+          {onGeneralize && (
+            <button
+              type="button"
+              onClick={onGeneralize}
+              className="rounded border border-violet-300 px-2 py-1 text-[11px] text-violet-800 hover:bg-violet-50"
+              title="تحويل هذا الاختلاف الحرفي إلى قاعدة تُطبَّق على كل المصحف، مع نقل بياناته ودرجاته"
+            >
+              تعميم على المصحف
+            </button>
+          )}
           <button
             type="button"
             onClick={onDelete}

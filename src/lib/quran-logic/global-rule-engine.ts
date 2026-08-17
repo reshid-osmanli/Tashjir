@@ -39,6 +39,7 @@ import type {
   GlobalRulePattern,
   GlobalWordCharacterPattern,
   HarakaMatchMode,
+  MorphologyFeature,
   TashjeerDocument,
   Variant,
 } from '@/types/tashjeer';
@@ -168,6 +169,61 @@ export function buildCharacterPattern(
     sourceAyahKey: ayahKey,
     sourceRange: normalizedRange,
   };
+}
+
+/**
+ * يطابق التتابع الحرفي نفسه داخل كلمة واحدة.
+ *
+ * القاعدة الصوتية (كنون ساكنة قبل حرف إخفاء) تجري بين الكلمتين وتجري في
+ * جوف الكلمة الواحدة: «مِنْ ثَمَرَةٍ» و«أَنتُمْ» حكمهما واحد. هذه الدالة
+ * تبسط قيود الكلمات إلى سلسلة واحدة مرتبة ثم تبحث عنها حروفا **متجاورة**
+ * داخل الكلمة، فلا يفرَّق التتابع ولا يُدّعى حكم بين حرفين بينهما فاصل.
+ */
+export function matchCharacterPatternInsideWord(
+  word: RuleEngineWord,
+  pattern: GlobalCharacterPattern,
+  ayahKey?: number,
+  ruleId?: string
+): GlobalRuleMatch[] {
+  const sequence = flattenedConstraints(pattern);
+  if (sequence.length < 2) return [];
+
+  const characters = splitQuranCharacters(word.text);
+  if (characters.length < sequence.length) return [];
+
+  const matches: GlobalRuleMatch[] = [];
+  for (let start = 0; start + sequence.length <= characters.length; start += 1) {
+    let all = true;
+    for (let index = 0; index < sequence.length; index += 1) {
+      if (!matchesConstraint(characters[start + index], sequence[index])) {
+        all = false;
+        break;
+      }
+    }
+    if (!all) continue;
+
+    const characterRange: CharacterRange = {
+      start: { position: word.position, characterIndex: start + 1 },
+      end: { position: word.position, characterIndex: start + sequence.length },
+    };
+    matches.push({
+      ruleId,
+      ayahKey,
+      startPosition: word.position,
+      endPosition: word.position,
+      characterRange,
+      matchedText: textForCharacterRange([word], characterRange),
+    });
+  }
+
+  return matches;
+}
+
+/** قيود النمط الحرفي مبسوطة سلسلة واحدة بترتيب التلاوة. */
+function flattenedConstraints(pattern: GlobalCharacterPattern): GlobalCharacterConstraint[] {
+  return [...pattern.words]
+    .sort((first, second) => first.offset - second.offset)
+    .flatMap((word) => word.constraints);
 }
 
 /** يطابق نمطا حرفيا في نافذة كلمات متجاورة. */
@@ -319,6 +375,8 @@ export function hasGrammarCriteria(pattern: GlobalMorphologyWordPattern): boolea
       pattern.endingHaraka?.length ||
       pattern.precededBy?.length ||
       pattern.followedBy?.length ||
+      pattern.startsWithSet ||
+      pattern.endsWithSet ||
       (pattern.ayahPosition && pattern.ayahPosition !== 'ANY') ||
       typeof pattern.minLength === 'number' ||
       typeof pattern.maxLength === 'number'
@@ -333,6 +391,21 @@ function matchesGrammarCriteria(
 ): boolean {
   if (typeof pattern.minLength === 'number' && characterCount < pattern.minLength) return false;
   if (typeof pattern.maxLength === 'number' && characterCount > pattern.maxLength) return false;
+
+  if (pattern.startsWithSet || pattern.endsWithSet) {
+    const characters = splitQuranCharacters(word.text);
+    if (characters.length === 0) return false;
+    if (pattern.startsWithSet) {
+      const first = baseLetter(characters[0]);
+      // همزة الوصل تُتخطى: الحرف المنطوق بعدها هو المعتبر في الأحكام الصوتية.
+      const effective = first === 'ٱ' && characters.length > 1 ? baseLetter(characters[1]) : first;
+      if (!GLOBAL_CHARACTER_SETS[pattern.startsWithSet]?.includes(effective)) return false;
+    }
+    if (pattern.endsWithSet) {
+      const last = baseLetter(characters[characters.length - 1]);
+      if (!GLOBAL_CHARACTER_SETS[pattern.endsWithSet]?.includes(last)) return false;
+    }
+  }
 
   if (pattern.morphologyFeatures?.length) {
     // مطلوبة كلها: «فُعْلَى» + ألف مقصورة أضيق من كل منهما وحده.
@@ -393,37 +466,93 @@ export function matchPatternInAyah(
   const matches: GlobalRuleMatch[] = [];
 
   if (pattern.kind === 'CHARACTERS') {
-    for (let startIndex = 0; startIndex <= words.length - pattern.wordCount; startIndex += 1) {
-      const match = matchCharacterPatternInWords(words, pattern, startIndex, ayahKey, ruleId);
-      if (match) matches.push(match);
+    const scope = pattern.matchScope ?? 'WORDS';
+
+    if (scope === 'WORDS' || scope === 'BOTH') {
+      for (let startIndex = 0; startIndex <= words.length - pattern.wordCount; startIndex += 1) {
+        const match = matchCharacterPatternInWords(words, pattern, startIndex, ayahKey, ruleId);
+        if (match) matches.push(match);
+      }
     }
+
+    if (scope === 'INSIDE_WORD' || scope === 'BOTH') {
+      for (const word of words) {
+        for (const match of matchCharacterPatternInsideWord(word, pattern, ayahKey, ruleId)) {
+          // BOTH قد يجد التتابع نفسه مرتين إذا كانت القاعدة كلمة واحدة؛
+          // نستبعد المكرر بمداه الحرفي حتى لا يُعرض الموضع الواحد مرتين.
+          const duplicate = matches.some(
+            (existing) =>
+              existing.characterRange.start.position === match.characterRange.start.position &&
+              existing.characterRange.start.characterIndex === match.characterRange.start.characterIndex &&
+              existing.characterRange.end.position === match.characterRange.end.position &&
+              existing.characterRange.end.characterIndex === match.characterRange.end.characterIndex
+          );
+          if (!duplicate) matches.push(match);
+        }
+      }
+      matches.sort(
+        (first, second) =>
+          first.characterRange.start.position - second.characterRange.start.position ||
+          first.characterRange.start.characterIndex - second.characterRange.start.characterIndex
+      );
+    }
+
     return matches;
   }
 
-  const wordPattern = pattern.words[0];
   const ordered = [...words].sort((first, second) => first.position - second.position);
+  const wordPatterns = [...pattern.words].sort((first, second) => first.offset - second.offset);
+  const windowSize = Math.max(pattern.wordCount, wordPatterns.length);
 
-  for (let index = 0; index < ordered.length; index += 1) {
-    const word = ordered[index];
-    const context: MorphologyWordContext = {
-      previous: ordered[index - 1],
-      next: ordered[index + 1],
-      isFirst: index === 0,
-      isLast: index === ordered.length - 1,
-    };
-    if (!matchMorphologyPatternInWord(word, wordPattern, context)) continue;
+  for (let index = 0; index + windowSize <= ordered.length; index += 1) {
+    // كل كلمات النافذة يجب أن توافق نمطها بمعاييرها وسياقها الخاص.
+    let all = true;
+    for (const wordPattern of wordPatterns) {
+      const wordIndex = index + wordPattern.offset;
+      const word = ordered[wordIndex];
+      if (!word) {
+        all = false;
+        break;
+      }
+      // النافذة متجاورة: لا فجوة بين مواقع الكلمات.
+      if (wordPattern.offset > 0) {
+        const previous = ordered[wordIndex - 1];
+        if (!previous || word.position !== previous.position + 1) {
+          all = false;
+          break;
+        }
+      }
+      const context: MorphologyWordContext = {
+        previous: ordered[wordIndex - 1],
+        next: ordered[wordIndex + 1],
+        isFirst: wordIndex === 0,
+        isLast: wordIndex === ordered.length - 1,
+      };
+      if (!matchMorphologyPatternInWord(word, wordPattern, context)) {
+        all = false;
+        break;
+      }
+    }
+    if (!all) continue;
 
-    const characters = splitQuranCharacters(word.text);
-    const bounds = highlightBoundsForMorphology(wordPattern, characters.length);
+    const firstWord = ordered[index + wordPatterns[0].offset];
+    const lastPattern = wordPatterns[wordPatterns.length - 1];
+    const lastWord = ordered[index + lastPattern.offset];
+
+    const firstCharacters = splitQuranCharacters(firstWord.text);
+    const firstBounds = highlightBoundsForMorphology(wordPatterns[0], firstCharacters.length);
+    const lastCharacters = splitQuranCharacters(lastWord.text);
+    const lastBounds = highlightBoundsForMorphology(lastPattern, lastCharacters.length);
+
     const characterRange: CharacterRange = {
-      start: { position: word.position, characterIndex: bounds.start },
-      end: { position: word.position, characterIndex: bounds.end },
+      start: { position: firstWord.position, characterIndex: firstBounds.start },
+      end: { position: lastWord.position, characterIndex: lastBounds.end },
     };
     matches.push({
       ruleId,
       ayahKey,
-      startPosition: word.position,
-      endPosition: word.position,
+      startPosition: firstWord.position,
+      endPosition: lastWord.position,
       characterRange,
       matchedText: textForCharacterRange(words, characterRange),
     });
@@ -607,7 +736,24 @@ function matchesMarks(
 ): boolean {
   if (mode === 'IGNORE') return true;
   if (mode === 'NONE') return actual.length === 0;
+  // «ساكن»: علامة السكون بصورتيها أو حرف معرّى من الحركة (رسم النون والميم
+  // الساكنتين قبل الإدغام والإخفاء في الضبط العثماني).
+  if (mode === 'SAKIN') return isSakinMarks(actual);
   return actual === expected;
+}
+
+const SUKUN_MARK_FORMS = ['\u0652', '\u06E1'];
+const VOWEL_MARK_FORMS = [
+  '\u064E', '\u064F', '\u0650', // فتحة ضمة كسرة
+  '\u064B', '\u064C', '\u064D', // تنوين متراكب
+  '\u0656', '\u0657', '\u065E', // تنوين متتابع
+];
+
+/** هل هذه العلامات علامات حرف ساكن في الأداء؟ */
+function isSakinMarks(marks: string): boolean {
+  if (SUKUN_MARK_FORMS.some((mark) => marks.includes(mark))) return true;
+  if (marks.includes('\u0651')) return false; // الشدة تنفي السكون
+  return !VOWEL_MARK_FORMS.some((mark) => marks.includes(mark));
 }
 
 function matchesLiteralEdge(
@@ -657,8 +803,48 @@ function highlightBoundsForMorphology(
       end: characterCount,
     };
   }
+  // معيار على آخر الكلمة وحده (نون ساكنة، مجموعة حروف): يُعلَّم آخر حرف.
+  if (!pattern.template && !pattern.prefix && isEndOnlyPattern(pattern)) {
+    return { start: characterCount, end: characterCount };
+  }
+  // معيار على أول الكلمة وحده (مجموعة حروف في البداية): يُعلَّم أول حرف.
+  if (!pattern.template && !pattern.suffix && isStartOnlyPattern(pattern)) {
+    return { start: 1, end: 1 };
+  }
   // القالب الصرفي يصف الكلمة كلها، وهو ما يحتاجه الخط في المراجعة.
   return { start: 1, end: characterCount };
+}
+
+/** هل معايير النمط كلها تخص آخر الكلمة؟ عندها يعلَّم آخر حرف فقط. */
+function isEndOnlyPattern(pattern: GlobalMorphologyWordPattern): boolean {
+  const endFeatures: MorphologyFeature[] = ['NOON_SAKINA_END', 'MEEM_SAKINA_END', 'PLURAL_WAW', 'TAA_MARBUTA', 'TAA_MAFTUHA'];
+  const hasEndCriteria = Boolean(
+    pattern.endsWithSet ||
+      pattern.endingHaraka?.length ||
+      pattern.morphologyFeatures?.some((feature) => endFeatures.includes(feature))
+  );
+  const hasOtherCriteria = Boolean(
+    pattern.startsWithSet ||
+      pattern.prefix ||
+      pattern.morphologyFeatures?.some((feature) => !endFeatures.includes(feature))
+  );
+  return hasEndCriteria && !hasOtherCriteria;
+}
+
+/** هل معايير النمط كلها تخص أول الكلمة؟ عندها يعلَّم أول حرف فقط. */
+function isStartOnlyPattern(pattern: GlobalMorphologyWordPattern): boolean {
+  const startFeatures: MorphologyFeature[] = ['HAMZAT_WASL_START', 'DEFINITE_AL', 'SHAMSI_AL', 'QAMARI_AL'];
+  const hasStartCriteria = Boolean(
+    pattern.startsWithSet ||
+      pattern.morphologyFeatures?.some((feature) => startFeatures.includes(feature))
+  );
+  const hasOtherCriteria = Boolean(
+    pattern.endsWithSet ||
+      pattern.suffix ||
+      pattern.endingHaraka?.length ||
+      pattern.morphologyFeatures?.some((feature) => !startFeatures.includes(feature))
+  );
+  return hasStartCriteria && !hasOtherCriteria;
 }
 
 /** ملخص قصير للعرض في الواجهات. */
@@ -677,9 +863,19 @@ export function describeGlobalPattern(pattern?: GlobalRulePattern): string {
       )
       .filter(Boolean)
       .join(' … ');
-    return `${pattern.wordCount} كلمة متجاورة: ${words || 'قيود حروف'}`;
+    const scopeLabel =
+      pattern.matchScope === 'INSIDE_WORD'
+        ? ' — داخل الكلمة الواحدة'
+        : pattern.matchScope === 'BOTH'
+          ? ' — بين الكلمات وداخلها'
+          : '';
+    return `${pattern.wordCount} كلمة متجاورة: ${words || 'قيود حروف'}${scopeLabel}`;
   }
-  return describeMorphologyWord(pattern.words[0]);
+  if (pattern.words.length === 1) return describeMorphologyWord(pattern.words[0]);
+  return [...pattern.words]
+    .sort((first, second) => first.offset - second.offset)
+    .map((word, index) => `${index + 1}) ${describeMorphologyWord(word)}`)
+    .join(' ثم ');
 }
 
 /** أسماء مواقع الكلمة من الآية، للعرض في وصف القاعدة. */
@@ -703,6 +899,8 @@ function describeMorphologyWord(word: GlobalMorphologyWordPattern): string {
   if (word.template) parts.push(`قالب «${word.template}»`);
   if (word.prefix) parts.push(`تبدأ بـ«${word.prefix}»`);
   if (word.suffix) parts.push(`تنتهي بـ«${word.suffix}»`);
+  if (word.startsWithSet) parts.push(`أولها ${GLOBAL_CHARACTER_SET_LABELS[word.startsWithSet]}`);
+  if (word.endsWithSet) parts.push(`آخرها ${GLOBAL_CHARACTER_SET_LABELS[word.endsWithSet]}`);
 
   if (word.morphologyFeatures?.length) {
     parts.push(word.morphologyFeatures.map((feature) => MORPHOLOGY_FEATURE_LABELS[feature]).join(' + '));
@@ -732,6 +930,11 @@ function describeMorphologyWord(word: GlobalMorphologyWordPattern): string {
 
   if (parts.length === 0) return 'قاعدة صرفية بلا معايير مفعّلة';
 
-  const scope = word.harakaMode === 'EXACT' ? 'بمطابقة الضبط' : 'بتجاهل الضبط';
+  const scope =
+    word.harakaMode === 'EXACT'
+      ? 'بمطابقة الضبط'
+      : word.harakaMode === 'SAKIN'
+        ? 'بشرط السكون'
+        : 'بتجاهل الضبط';
   return `كلمة: ${parts.join('، ')} (${scope})`;
 }

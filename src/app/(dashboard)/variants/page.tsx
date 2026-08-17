@@ -23,6 +23,7 @@ import { listDocuments, loadDocument } from '@/lib/storage/document-store';
 import { getSurahOrFirst } from '@/data/quran';
 import { describeGlobalPattern } from '@/lib/quran-logic/global-rule-engine';
 import { RuleOccurrenceReview } from '@/components/editor/RuleOccurrenceReview';
+import { GlobalRuleMetaEditor } from '@/components/editor/GlobalRuleMetaEditor';
 import { StrengthDegreePicker } from '@/components/editor/StrengthDegreePicker';
 import { pruneStrengthMap } from '@/lib/tashjeer/strength-degrees';
 import { occurrenceStats } from '@/lib/storage/rule-occurrences-store';
@@ -231,10 +232,7 @@ export default function VariantsIndexPage() {
                       )}
                       <button
                         type="button"
-                        onClick={() => {
-                          setEditingRule(item.globalRule ?? null);
-                          setShowRuleForm(true);
-                        }}
+                        onClick={() => setEditingRule(item.globalRule ?? null)}
                         className="rounded border border-stone-300 px-2.5 py-1.5 text-xs text-stone-700 hover:bg-stone-50"
                       >
                         تحرير
@@ -269,9 +267,20 @@ export default function VariantsIndexPage() {
         />
       )}
 
+      {editingRule && (
+        <GlobalRuleMetaEditor
+          rule={editingRule}
+          onClose={() => setEditingRule(null)}
+          onSaved={() => {
+            setEditingRule(null);
+            load();
+          }}
+        />
+      )}
+
       {showRuleForm && (
         <GlobalRuleDialog
-          rule={editingRule}
+          rule={null}
           onClose={() => setShowRuleForm(false)}
           onSaved={() => {
             setShowRuleForm(false);
