@@ -187,6 +187,53 @@ export function exclusiveLocusKey(variant: Variant): string {
   return `${variant.category}::${signature}`;
 }
 
+/** هل يتقاطع موضعا اختلاف في كلمة واحدة على الأقل؟ */
+export function variantsSharePosition(first: Variant, second: Variant): boolean {
+  const secondPositions = new Set(positionsOfVariant(second));
+  return positionsOfVariant(first).some((position) => secondPositions.has(position));
+}
+
+/**
+ * مفتاح التنافي داخل الآية: الفئة + مجموعة المواضع المتداخلة.
+ *
+ * مدّان في كلمتين منفصلتين يبقيان بعدين مستقلين فيجتمعان في السطر.
+ * أما مدّان أو صلتان يتقاطعان في كلمة فوجهان متنافيان لموضع واحد، ولو
+ * اختلفا في حدود المدى المسجّل (كما في الملفات القديمة التي تملأ الفجوة).
+ */
+export function exclusiveGroupKeys(variants: Variant[]): Map<string, string> {
+  const ids = variants.map((variant) => variant.id);
+  const parent = new Map(ids.map((id) => [id, id]));
+
+  const find = (id: string): string => {
+    const current = parent.get(id) ?? id;
+    if (current === id) return id;
+    const root = find(current);
+    parent.set(id, root);
+    return root;
+  };
+
+  const union = (first: string, second: string) => {
+    const a = find(first);
+    const b = find(second);
+    if (a !== b) parent.set(a, b);
+  };
+
+  for (let i = 0; i < variants.length; i++) {
+    for (let j = i + 1; j < variants.length; j++) {
+      const first = variants[i];
+      const second = variants[j];
+      if (first.category !== second.category) continue;
+      if (variantsSharePosition(first, second)) union(first.id, second.id);
+    }
+  }
+
+  const keys = new Map<string, string>();
+  for (const variant of variants) {
+    keys.set(variant.id, `${variant.category}::${find(variant.id)}`);
+  }
+  return keys;
+}
+
 /** عنوان مختصر للمواضع: «ك٨ و ك١٠» أو مدى واحد. */
 export function describeLoci(loci: VariantLocus[]): string {
   if (loci.length === 0) return '';

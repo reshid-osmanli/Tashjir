@@ -8,6 +8,7 @@ import { DEFAULT_ENGINE_SETTINGS } from '@/lib/tashjeer/engine-settings';
 import {
   buildLociFromMarks,
   clusterWordPositions,
+  exclusiveGroupKeys,
   exclusiveLocusKey,
   lociOfVariant,
   positionsOfVariant,
@@ -144,6 +145,8 @@ describe('تنافي أوجه الموضع الواحد المسجّلة اخت�
     );
 
     expect(exclusiveLocusKey(qasr)).toBe(exclusiveLocusKey(tawassut));
+    const groups = exclusiveGroupKeys([qasr, tawassut]);
+    expect(groups.get(qasr.id)).toBe(groups.get(tawassut.id));
 
     const { lines } = generateClassicTashjeer([qasr, tawassut], layout, filter, DEFAULT_LAYOUT_OPTIONS, {
       engine: DEFAULT_ENGINE_SETTINGS,

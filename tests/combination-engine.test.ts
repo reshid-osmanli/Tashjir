@@ -345,6 +345,84 @@ describe('الطريق وحدة قراءة مستقلة', () => {
   });
 });
 
+describe('تنافي المدى المتداخل لنفس الفئة', () => {
+  it('لا يضرب صلتين متداخلتين لنفس الطريق، بل يجعلهما وجهين متنافيين', () => {
+    const silahWide = variant(
+      'silah-wide',
+      1,
+      4,
+      [
+        {
+          id: 'silah-wide-alt',
+          text: 'صلة',
+          label: 'صلة',
+          ruleLabel: 'صلة',
+          scope: { kind: 'PATHS', pathIds: ['path-warsh-al-asbahani'] },
+        },
+      ],
+      { category: 'USUL' }
+    );
+    const silahNarrow = variant(
+      'silah-narrow',
+      2,
+      4,
+      [
+        {
+          id: 'silah-narrow-alt',
+          text: 'صلة ٢',
+          label: 'صلة ٢',
+          ruleLabel: 'صلة ٢',
+          scope: { kind: 'PATHS', pathIds: ['path-warsh-al-asbahani'] },
+        },
+      ],
+      { category: 'USUL' }
+    );
+
+    const { lines } = build([silahWide, silahNarrow]);
+    expect(lines).toHaveLength(2);
+    expect(lines.every((line) => line.entries.length === 1)).toBe(true);
+  });
+
+  it('يجمع مدّين في كلمتين منفصلتين في سطر واحد', () => {
+    const first = variant(
+      'madd-1',
+      1,
+      1,
+      [
+        {
+          id: 'madd-1-alt',
+          text: 'مد',
+          label: 'مد',
+          ruleLabel: 'مد',
+          maddHarakat: 2,
+          scope: { kind: 'NARRATORS', narratorIds: ['narrator-qalun'] },
+        },
+      ],
+      { category: 'MADUD' }
+    );
+    const second = variant(
+      'madd-4',
+      4,
+      4,
+      [
+        {
+          id: 'madd-4-alt',
+          text: 'مد',
+          label: 'مد',
+          ruleLabel: 'مد',
+          maddHarakat: 2,
+          scope: { kind: 'NARRATORS', narratorIds: ['narrator-qalun'] },
+        },
+      ],
+      { category: 'MADUD' }
+    );
+
+    const { lines } = build([first, second]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].entries).toHaveLength(2);
+  });
+});
+
 describe('حصر التشجير في مقطع', () => {
   it('لا يشجّر إلا المواضع الواقعة في المقطع المحدد', () => {
     const early = variant('early', 1, 1, [
