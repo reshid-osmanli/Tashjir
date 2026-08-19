@@ -23,6 +23,7 @@ import { getNarratorsByTayyibah } from '@/lib/tashjeer/symbols';
 import { getImamsWithSymbols } from '@/lib/tashjeer/reader-symbols';
 import { getNarratorProfile } from '@/data/qiraat-data/narrator-profiles';
 import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
+import { lociOfVariant, positionsOfVariant } from '@/lib/tashjeer/loci';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
 import { useStrengthDegrees } from '@/hooks/useStrengthDegrees';
@@ -270,9 +271,7 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     if (!document) return [];
     const positions = new Set<number>();
     for (const variant of effectiveVariants) {
-      for (let position = variant.startPosition; position <= variant.endPosition; position++) {
-        positions.add(position);
-      }
+      for (const position of positionsOfVariant(variant)) positions.add(position);
     }
     return [...positions];
   }, [document, effectiveVariants]);
@@ -280,9 +279,11 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
   // النطاقات الحرفية المحفوظة تعرض بتظليل أدق من تظليل الكلمة الكاملة.
   const coveredCharacterRanges = useMemo(
     () =>
-      effectiveVariants
-        .filter((variant) => variant.targetKind === 'CHARACTERS' && Boolean(variant.characterRange))
-        .flatMap((variant) => (variant.characterRange ? [variant.characterRange] : [])),
+      effectiveVariants.flatMap((variant) =>
+        lociOfVariant(variant)
+          .map((locus) => locus.characterRange)
+          .filter((range): range is NonNullable<typeof range> => Boolean(range))
+      ),
     [effectiveVariants]
   );
 
@@ -581,9 +582,9 @@ function SymbolsLegend({
       </ul>
 
       <p className="mt-2 border-t border-stone-100 pt-2 text-[10px] leading-relaxed text-stone-500">
-        القاعدة في طرف السطر: إذا اجتمع راويا الإمام على الوجه طُبع <strong>رمز الإمام</strong>،
-        وإذا انفرد راوٍ (أو اجتمع طريقاه) طُبع <strong>رمز الراوي</strong>، وإذا انفرد طريق واحد
-        ذُكر <strong>اسم الطريق</strong> — فالطرق لا رموز لها.
+        القاعدة في طرف السطر: اجتمع الراويان → <strong>رمز الإمام</strong>، انفرد راوٍ أو
+        اجتمع طريقاه → <strong>رمز الراوي</strong>، انفرد طريق → <strong>اسم الطريق</strong>.
+        يمكن وضع رمز للطريق من لوحة التحكم، ويبقى الاسم هو ما يُطبع على السطر.
       </p>
     </div>
   );

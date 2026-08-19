@@ -125,6 +125,50 @@ describe('رسم السطر المركّب', () => {
     expect(markup).toContain('>٢</text>');
   });
 
+  it('يرسم تغليظين منفصلين لموضعين متباعدين على السطر نفسه', () => {
+    const disjoint: Variant = {
+      id: 'silah',
+      ayahKey,
+      category: 'USUL',
+      title: 'صلة',
+      startPosition: 1,
+      endPosition: 4,
+      status: 'DRAFT',
+      loci: [
+        { startPosition: 1, endPosition: 1 },
+        { startPosition: 4, endPosition: 4 },
+      ],
+      alternatives: [
+        {
+          id: 'silah-alt',
+          text: 'صلة',
+          label: 'صلة',
+          ruleLabel: 'صلة',
+          scope: { kind: 'NARRATORS', narratorIds: ['narrator-qalun'] },
+        },
+      ],
+    };
+
+    const classic = generateClassicTashjeer([disjoint], layout, filter, DEFAULT_LAYOUT_OPTIONS, {
+      engine: DEFAULT_ENGINE_SETTINGS,
+    });
+    const markup = renderToStaticMarkup(
+      createElement(TashjeerFigure, {
+        layout,
+        classic,
+        viewBox: { x: -150, y: 0, width: layout.canvasWidth + 240, height: 800 },
+        fontSize: 34,
+        showLabels: true,
+        boundaries: [],
+        baseNarratorName: 'حفص',
+        engine: DEFAULT_ENGINE_SETTINGS,
+      })
+    );
+
+    expect(classic.lines[0].entries[0].emphases).toHaveLength(2);
+    expect(markup).toContain('data-emphases="2"');
+  });
+
   it('يظلّل المقطع المشجَّر ويخفّت ما خرج عنه', () => {
     const { markup } = render();
     expect(markup).toContain('المقطع المشجَّر');

@@ -36,6 +36,7 @@ import {
   type StrengthDegreeCatalog,
 } from '@/lib/tashjeer/strength-degrees';
 import { characterCount, compareCharacterAnchors } from '@/lib/quran-logic/characters';
+import { boundsOfLoci, normalizeLocus } from '@/lib/tashjeer/loci';
 import { getSeedVariants } from '@/data/variants/seed-variants';
 import { parseAyahKey } from '@/data/quran';
 
@@ -405,8 +406,12 @@ function normalizeFocusSegmentValue(
 
 /** يطبع موضع الحروف القديم/المستورد إلى نطاق صالح أو يعيده إلى كلمات بأمان. */
 function migrateVariant(variant: Variant, ayahKey: number): Variant {
-  const startPosition = Math.max(1, Math.round(variant.startPosition ?? 1));
-  const endPosition = Math.max(startPosition, Math.round(variant.endPosition ?? startPosition));
+  const loci = Array.isArray(variant.loci)
+    ? variant.loci.map(normalizeLocus).filter((locus) => locus.endPosition >= locus.startPosition)
+    : undefined;
+  const locusBounds = loci && loci.length > 0 ? boundsOfLoci(loci) : null;
+  const startPosition = Math.max(1, Math.round(locusBounds?.startPosition ?? variant.startPosition ?? 1));
+  const endPosition = Math.max(startPosition, Math.round(locusBounds?.endPosition ?? variant.endPosition ?? startPosition));
   const candidate = variant.characterRange;
 
   if (variant.targetKind === 'CHARACTERS' && candidate) {
@@ -436,6 +441,7 @@ function migrateVariant(variant: Variant, ayahKey: number): Variant {
             start: { ...start, characterIndex: safeStart },
             end: { ...end, characterIndex: safeEnd },
           },
+          loci: loci && loci.length > 1 ? loci : undefined,
         };
       }
     }
@@ -444,9 +450,10 @@ function migrateVariant(variant: Variant, ayahKey: number): Variant {
   // لا نضيف حقول WORDS إلى المستندات القديمة: غيابها هو القيمة المتوافقة
   // تاريخيا، ويحافظ على ثبات ملف التصدير عند دورة استيراد/تصدير قديمة.
   const { characterRange: _ignoredCharacterRange, targetKind, ...legacy } = variant;
+  const withLoci = loci && loci.length > 1 ? { loci } : {};
   return targetKind === 'WORDS'
-    ? { ...legacy, ayahKey, startPosition, endPosition, targetKind: 'WORDS' }
-    : { ...legacy, ayahKey, startPosition, endPosition };
+    ? { ...legacy, ayahKey, startPosition, endPosition, targetKind: 'WORDS', ...withLoci }
+    : { ...legacy, ayahKey, startPosition, endPosition, ...withLoci };
 }
 
 function cloneVariants(variants: Variant[]): Variant[] {

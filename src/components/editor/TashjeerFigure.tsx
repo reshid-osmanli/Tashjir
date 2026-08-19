@@ -495,83 +495,92 @@ function ClassicEntryShape({
   const color = entry.color;
   const madd = typeof entry.maddHarakat === 'number' ? toArabicDigits(entry.maddHarakat) : '';
   const ruleText = madd ? `${entry.ruleLabel} ${madd}` : entry.ruleLabel;
+  const emphases =
+    entry.emphases && entry.emphases.length > 0
+      ? entry.emphases
+      : [
+          {
+            startX: entry.emphasisStartX,
+            endX: entry.emphasisEndX,
+            labelX: entry.labelX,
+            marks: entry.marks,
+          },
+        ];
 
   return (
     <g
       data-entry-variant={entry.variantId}
       data-entry-alternative={entry.alternativeId}
+      data-emphases={emphases.length}
       onClick={
         onClick
           ? (event) => {
-              // النقر على الحكم يفتح موضعه هو، لا أول مواضع السطر.
               event.stopPropagation();
               onClick();
             }
           : undefined
       }
     >
-      {/* مدى الحكم مغلّظا فوق السطر الممتد: الخط يمتد مع الآية فيبيّن
-          الموافقة، والغليظ يحصر موضع هذا الحكم وحده. */}
-      <line
-        x1={entry.emphasisStartX}
-        y1={rowY}
-        x2={entry.emphasisEndX}
-        y2={rowY}
-        stroke={color}
-        strokeWidth={strokeWidth + 2.2}
-        strokeLinecap="round"
-        opacity={opacity}
-      />
-
-      {/* الوصلة الرأسية إلى موضع الحكم، على جزأين حتى لا تخترق النص:
-            1. شارة قصيرة تحت الكلمة تعيّن موضعها بدقة.
-            2. وصلة في الفراغ الذي بين كتلة النص والسطر. */}
-      {entry.marks.map((mark) => (
-        <g key={`c-${entry.alternativeId}-${mark.wordId}`}>
+      {emphases.map((emphasis, emphasisIndex) => (
+        <g key={`emphasis-${entry.alternativeId}-${emphasisIndex}`}>
           <line
-            x1={mark.x}
-            y1={mark.bottomY + 2}
-            x2={mark.x}
-            y2={mark.bottomY + 10}
-            stroke={color}
-            strokeWidth={1.2}
-            opacity={0.75}
-          />
-          <line
-            x1={mark.x}
-            y1={textBottom + 6}
-            x2={mark.x}
+            x1={emphasis.startX}
+            y1={rowY}
+            x2={emphasis.endX}
             y2={rowY}
             stroke={color}
-            strokeWidth={1}
-            strokeDasharray="2 2"
-            opacity={0.5}
+            strokeWidth={strokeWidth + 2.2}
+            strokeLinecap="round"
+            opacity={opacity}
           />
-          <circle
-            cx={mark.x}
-            cy={rowY}
-            r={isSelected ? 3.4 : 2.6}
-            fill={color}
-            stroke="#ffffff"
-            strokeWidth={1}
-          />
+
+          {emphasis.marks.map((mark) => (
+            <g key={`c-${entry.alternativeId}-${mark.wordId}-${mark.position}`}>
+              <line
+                x1={mark.x}
+                y1={mark.bottomY + 2}
+                x2={mark.x}
+                y2={mark.bottomY + 10}
+                stroke={color}
+                strokeWidth={1.2}
+                opacity={0.75}
+              />
+              <line
+                x1={mark.x}
+                y1={textBottom + 6}
+                x2={mark.x}
+                y2={rowY}
+                stroke={color}
+                strokeWidth={1}
+                strokeDasharray="2 2"
+                opacity={0.5}
+              />
+              <circle
+                cx={mark.x}
+                cy={rowY}
+                r={isSelected ? 3.4 : 2.6}
+                fill={color}
+                stroke="#ffffff"
+                strokeWidth={1}
+              />
+            </g>
+          ))}
+
+          {showRule && (
+            <text
+              x={emphasis.labelX}
+              y={rowY - 6}
+              textAnchor="middle"
+              fontSize={ruleFontSize}
+              fontFamily="'Amiri Quran', 'Amiri', serif"
+              fill={color}
+              style={{ direction: 'rtl', userSelect: 'none', fontWeight: 700 }}
+            >
+              {showMadd ? ruleText : entry.ruleLabel}
+            </text>
+          )}
         </g>
       ))}
-
-      {/* اسم الحكم فوق السطر عند موضعه تماما، ومعه مقدار المد بالعربية */}
-      {showRule && (
-        <text
-          x={entry.labelX}
-          y={rowY - 6}
-          textAnchor="middle"
-          fontSize={ruleFontSize}
-          fontFamily="'Amiri Quran', 'Amiri', serif"
-          fill={color}
-          style={{ direction: 'rtl', userSelect: 'none', fontWeight: 700 }}
-        >
-          {showMadd ? ruleText : entry.ruleLabel}
-        </text>
-      )}
 
       <title>{`${entry.ruleLabel} — ${entry.categoryLabel}${
         typeof entry.maddHarakat === 'number' ? ` — ${toArabicDigits(entry.maddHarakat)} حركات` : ''
@@ -693,24 +702,16 @@ function layoutReaderChips(
     return [{ key: 'name', text, x: rightX - width / 2, width, reader: readers[0] }];
   }
 
-  const withSymbols = readers.filter((reader) => reader.symbol.trim().length > 0);
-
-  // لا رمز لأحد (حالة حفص وحده مثلا): نطبع الاسم حتى لا يبقى السطر مجهولا.
-  if (withSymbols.length === 0) {
-    const text = readers[0]?.name ?? fallbackName;
-    if (!text) return [];
-    const width = measure(text);
-    return [{ key: 'name', text, x: rightX - width / 2, width, reader: readers[0] }];
-  }
-
   const chips: PlacedChip[] = [];
   let cursor = rightX;
 
-  for (const reader of withSymbols) {
-    const width = measure(reader.symbol);
+  for (const reader of readers) {
+    const text = chipDisplayText(reader, symbolDisplay);
+    if (!text) continue;
+    const width = measure(text);
     chips.push({
-      key: reader.narratorId,
-      text: reader.symbol,
+      key: `${reader.kind}-${reader.id}`,
+      text,
       x: cursor - width / 2,
       width,
       reader,
@@ -718,7 +719,38 @@ function layoutReaderChips(
     cursor -= width + gap;
   }
 
+  if (chips.length === 0) {
+    const text = fallbackName;
+    if (!text) return [];
+    const width = measure(text);
+    return [{ key: 'name', text, x: rightX - width / 2, width, reader: readers[0] }];
+  }
+
   return chips;
+}
+
+/**
+ * نص البطاقة حسب القاعدة:
+ *   إمام اجتمع راوياه → رمز الإمام.
+ *   راوٍ انفرد أو اجتمع طريقاه → رمز الراوي إن وُجد وإلا اسمه.
+ *   طريق انفرد → اسم الطريق دائما (والرمز إن وُضع لا يغني عن الاسم).
+ */
+function chipDisplayText(
+  reader: ClassicReaderChip,
+  symbolDisplay: ClassicLine['symbolDisplay']
+): string {
+  if (reader.kind === 'PATH') {
+    if (symbolDisplay === 'SYMBOLS') return reader.name;
+    if (reader.symbol.trim()) return `${reader.symbol} ${reader.name}`.trim();
+    return reader.name;
+  }
+
+  if (symbolDisplay === 'NAMES') return reader.name;
+  if (symbolDisplay === 'BOTH') {
+    return reader.symbol.trim() ? `${reader.symbol} ${reader.name}`.trim() : reader.name;
+  }
+
+  return reader.symbol.trim() || reader.name;
 }
 
 function lineTitle(line: ClassicLine): string {

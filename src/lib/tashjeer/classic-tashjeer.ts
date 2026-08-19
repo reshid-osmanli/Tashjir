@@ -83,6 +83,7 @@ import {
 } from './ordering';
 import { characterBoundsForWord, characterRangeCenterX } from '@/lib/quran-logic/characters';
 import { getCategoryColor } from './color-system';
+import { lociOfVariant, positionsOfVariant } from './loci';
 
 // ==================== الإعدادات ====================
 
@@ -210,6 +211,21 @@ export interface ClassicLineEntry {
   emphasisEndX: number;
   /** مركز الحكم أفقيا، حيث يُطبع اسمه. */
   labelX: number;
+  /**
+   * تغليظ مستقل لكل مجموعة كلمات متصلة.
+   *
+   * إن وقع الحكم في كلمتين متباعدتين لا يُمدّ خط غليظ بينهما؛ لكل كلمة
+   * (أو مدى متصل) تغليظها واسم حكمها.
+   */
+  emphases: ClassicEmphasis[];
+}
+
+/** مدى تغليظ متصل فوق السطر. */
+export interface ClassicEmphasis {
+  startX: number;
+  endX: number;
+  labelX: number;
+  marks: ClassicMark[];
 }
 
 /** خط تشجير كلاسيكي واحد = تركيب قراءة كامل، أو سطر يدوي دلالي. */
@@ -394,7 +410,7 @@ export function generateClassicTashjeer(
   //    به أحد من المعروضين.
   const eligibleVariants = variants.filter((variant) => {
     if (!filter.categories.includes(variant.category)) return false;
-    if (focus && !intersectsSegment(variant.startPosition, variant.endPosition, focus)) return false;
+    if (focus && !intersectsSegmentForVariant(variant, focus)) return false;
     return variant.alternatives.some((alt) => {
       if (alt.isBase) return false;
       const narratorIds = resolveScope(alt.scope, catalog);
@@ -480,15 +496,15 @@ export function generateClassicTashjeer(
     line.guideStartX = textLeftX;
     line.guideEndX = textRightX;
 
-    // تغليظ مستقل لكل حكم في السطر، فيقرأ الناظر «مد» هنا و«إدغام» هناك
-    // على السطر نفسه، كلٌّ فوق كلمته.
+    // تغليظ مستقل لكل حكم، ثم لكل مجموعة كلمات متصلة داخله: صلة في
+    // كلمتين متباعدتين علامتان لا خطّا يملأ ما بينهما.
     for (const entry of line.entries) {
-      const xs = entry.marks.map((mark) => mark.x);
-      if (xs.length === 0) continue;
-      const pad = 10;
-      entry.emphasisStartX = Math.min(...xs) - pad;
-      entry.emphasisEndX = Math.max(...xs) + pad;
-      entry.labelX = (Math.min(...xs) + Math.max(...xs)) / 2;
+      entry.emphases = buildEmphases(entry.marks);
+      const first = entry.emphases[0];
+      if (!first) continue;
+      entry.emphasisStartX = first.startX;
+      entry.emphasisEndX = first.endX;
+      entry.labelX = first.labelX;
     }
   }
 
@@ -609,6 +625,44 @@ function intersectsSegment(
   segment: { startPosition: number; endPosition: number }
 ): boolean {
   return startPosition <= segment.endPosition && endPosition >= segment.startPosition;
+}
+
+/** يتقاطع الاختلاف مع المقطع إن وقع أحد مواضعه الفعلية فيه. */
+function intersectsSegmentForVariant(
+  variant: Variant,
+  segment: { startPosition: number; endPosition: number }
+): boolean {
+  return positionsOfVariant(variant).some(
+    (position) => position >= segment.startPosition && position <= segment.endPosition
+  );
+}
+
+/** يبني تغليظا لكل مجموعة كلمات متجاورة، ويفصل المتباعدة. */
+export function buildEmphases(marks: ClassicMark[]): ClassicEmphasis[] {
+  if (marks.length === 0) return [];
+
+  const ordered = [...marks].sort((first, second) => first.position - second.position);
+  const clusters: ClassicMark[][] = [[ordered[0]]];
+  for (let index = 1; index < ordered.length; index++) {
+    const mark = ordered[index];
+    const cluster = clusters[clusters.length - 1];
+    if (mark.position <= cluster[cluster.length - 1].position + 1) {
+      cluster.push(mark);
+    } else {
+      clusters.push([mark]);
+    }
+  }
+
+  const pad = 10;
+  return clusters.map((cluster) => {
+    const xs = cluster.map((mark) => mark.x);
+    return {
+      startX: Math.min(...xs) - pad,
+      endX: Math.max(...xs) + pad,
+      labelX: (Math.min(...xs) + Math.max(...xs)) / 2,
+      marks: cluster,
+    };
+  });
 }
 
 /**
@@ -762,6 +816,7 @@ function combinationToLine(
       emphasisStartX: 0,
       emphasisEndX: 0,
       labelX: 0,
+      emphases: [],
     });
   }
 
@@ -957,6 +1012,7 @@ function alternativeToLine(
       emphasisStartX: 0,
       emphasisEndX: 0,
       labelX: 0,
+      emphases: [],
     },
   ];
 
@@ -1060,6 +1116,7 @@ function manualToLine(
         emphasisStartX: 0,
         emphasisEndX: 0,
         labelX: 0,
+        emphases: [],
       },
     ],
     startPosition: manual.startPosition,
@@ -1081,12 +1138,25 @@ function manualToLine(
 }
 
 function marksForVariant(variant: Variant, layout: AyahLayout): ClassicMark[] {
-  return marksForRange(
-    variant.startPosition,
-    variant.endPosition,
-    layout,
-    variant.targetKind === 'CHARACTERS' ? variant.characterRange : undefined
-  );
+  const marks: ClassicMark[] = [];
+  for (const locus of lociOfVariant(variant)) {
+    marks.push(
+      ...marksForRange(
+        locus.startPosition,
+        locus.endPosition,
+        layout,
+        locus.characterRange
+      )
+    );
+  }
+
+  const seen = new Set<string>();
+  return marks.filter((mark) => {
+    const key = `${mark.position}:${mark.characterStart ?? ''}:${mark.characterEnd ?? ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function marksForRange(

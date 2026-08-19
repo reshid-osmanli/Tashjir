@@ -57,6 +57,19 @@ describe('اختصار البطاقات', () => {
     expect(chips[0]).toMatchObject({ kind: 'NARRATOR', id: 'narrator-qalun', symbol: 'ب' });
   });
 
+  it('يحفظ رمز الطريق إن وضعه المشرف، ويبقى النص اسم الطريق', () => {
+    const base = createDefaultTransmissionCatalog();
+    const catalog = normalizeTransmissionCatalog({
+      ...base,
+      paths: base.paths.map((path) =>
+        path.id === 'path-warsh-al-azraq' ? { ...path, symbol: 'أز' } : path
+      ),
+    });
+
+    const chips = resolveReaderChips({ kind: 'PATHS', pathIds: ['path-warsh-al-azraq'] }, catalog);
+    expect(chips[0]).toMatchObject({ kind: 'PATH', name: 'الأزرق', symbol: 'أز', text: 'الأزرق' });
+  });
+
   it('يطبع اسم الطريق بلا رمز إذا انفرد بالوجه', () => {
     const chips = resolveReaderChips({ kind: 'PATHS', pathIds: ['path-warsh-al-azraq'] });
 

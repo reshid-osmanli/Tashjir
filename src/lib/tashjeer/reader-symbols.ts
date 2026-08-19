@@ -109,6 +109,11 @@ export function getPathShortName(pathId: string, catalog?: TransmissionCatalog):
   return parts.length === 2 ? parts[1] : path.shortName;
 }
 
+/** رمز الطريق إن وضعه المشرف في لوحة التحكم. */
+export function getPathSymbol(pathId: string, catalog?: TransmissionCatalog): string {
+  return context(catalog).paths.find((item) => item.id === pathId)?.symbol?.trim() ?? '';
+}
+
 /** كل طرق راوٍ في الكتالوج، مرتبة. */
 export function pathsOfNarrator(narratorId: string, catalog?: TransmissionCatalog) {
   return context(catalog)
@@ -166,12 +171,15 @@ export function chipsForUnits(units: ReadingUnit[], catalog?: TransmissionCatalo
     }
 
     for (const pathId of [...entry.pathIds].sort()) {
+      const path = ctx.paths.find((item) => item.id === pathId);
+      const name = getPathShortName(pathId, catalog);
       pathChips.push({
         kind: 'PATH',
         id: pathId,
-        name: getPathShortName(pathId, catalog),
-        symbol: '',
-        text: getPathShortName(pathId, catalog),
+        name,
+        symbol: path?.symbol?.trim() ?? '',
+        // الطريق المنفرد يُذكر باسمه على السطر، ولو وُضع له رمز في اللوحة.
+        text: name,
         order: narratorOrder(narratorId, ctx),
         narratorIds: [narratorId],
       });
