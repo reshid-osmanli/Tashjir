@@ -33,14 +33,15 @@ describe('generateClassicTashjeer', () => {
 
     const line = lines[0];
     expect(line.category).toBe('FARSH');
-    // الرئيس هو قالون (الأعلى ترتيبا في طيبة) ورمزه ب.
-    expect(line.primarySymbol).toBe('ب');
-    expect(line.primaryNarratorName).toBe('قالون');
-    // رموز كل القراء الذين يقرؤون «ملك» بلا ألف (نافع وابن كثير وأبو عمرو
-    // وابن عامر وحمزة وأبو جعفر = ١٢ راويا).
-    expect(line.symbols).toEqual([
-      'ب', 'ج', 'د', 'هـ', 'و', 'ز', 'ح', 'ط', 'ك', 'ل', 'س', 'ع',
-    ]);
+    // «ملك» بلا ألف يقرؤها ستة أئمة بكمالهم: نافع وابن كثير وأبو عمرو وابن
+    // عامر وحمزة وأبو جعفر. ولمّا اجتمع راويا كل إمام على الوجه ارتفع الرمز
+    // إلى الإمام، فلا تُطبع عشرون بطاقة حيث تكفي ست.
+    expect(line.primarySymbol).toBe('أ');
+    expect(line.primaryNarratorName).toBe('نافع');
+    expect(line.symbols).toEqual(['أ', 'ت', 'ث', 'خ', 'ض', 'غ']);
+    expect(line.readers.every((reader) => reader.kind === 'IMAM')).toBe(true);
+    // وقائمة الرواة الكاملة باقية للتصفية والتدقيق: اثنا عشر راويا.
+    expect(line.narratorIds).toHaveLength(12);
     // عقدة واحدة عند الكلمة الأولى.
     expect(line.marks.map((m) => m.position)).toEqual([1]);
     expect(line.readingText).toContain('مَلِك');

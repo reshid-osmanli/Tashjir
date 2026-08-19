@@ -16,7 +16,7 @@ import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getImamColor } from '@/lib/tashjeer/color-system';
 import { describeScope, normalizeScope, resolveScope } from '@/lib/tashjeer/scope';
 import { getNarratorSymbol } from '@/lib/tashjeer/symbols';
-import { getAyahWordsByKey } from '@/data/quran';
+import { documentWindowWords } from '@/lib/tashjeer/reading-window';
 import { characterCount } from '@/lib/quran-logic/characters';
 import { pruneStrengthMap } from '@/lib/tashjeer/strength-degrees';
 import { StrengthDegreePicker } from './StrengthDegreePicker';
@@ -297,7 +297,13 @@ function TargetEditor({
   variant: Variant;
   onUpdate: (patch: Partial<Variant>) => void;
 }) {
-  const words = useMemo(() => getAyahWordsByKey(variant.ayahKey), [variant.ayahKey]);
+  // كلمات نافذة العمل لا كلمات الآية وحدها: قد يكون الموضع في الآية
+  // الموصولة بها، فلا يُعثر عليه لو اقتصرنا على كلمات آية المستند.
+  const editorDocument = useEditorStore((state) => state.document);
+  const words = useMemo(
+    () => documentWindowWords(editorDocument ?? { ayahKey: variant.ayahKey }),
+    [editorDocument, variant.ayahKey]
+  );
   const isCharacters = variant.targetKind === 'CHARACTERS';
   const range = variant.characterRange;
   const startWord = words.find((word) => word.position === (range?.start.position ?? variant.startPosition));

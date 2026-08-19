@@ -21,6 +21,7 @@ import {
   type QuranSearchHit,
 } from '@/data/quran';
 import { listDocuments } from '@/lib/storage/document-store';
+import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 
 interface AyahNavigatorProps {
   ayahKey: number;
@@ -93,7 +94,7 @@ export function AyahNavigator({ ayahKey, onNavigate }: AyahNavigatorProps) {
         >
           {SURAHS.map((item) => (
             <option key={item.number} value={item.number}>
-              {item.number}. {item.name}
+              {toArabicDigits(item.number)}. {item.name}
             </option>
           ))}
         </select>
@@ -108,7 +109,7 @@ export function AyahNavigator({ ayahKey, onNavigate }: AyahNavigatorProps) {
         >
           {ayahOptions.map((number) => (
             <option key={number} value={number}>
-              {number}
+              {toArabicDigits(number)}
               {savedKeys.has(makeAyahKey(surahNumber, number)) ? ' ●' : ''}
             </option>
           ))}

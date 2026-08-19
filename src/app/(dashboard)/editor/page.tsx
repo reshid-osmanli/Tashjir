@@ -20,6 +20,7 @@ import { useEditorStore } from '@/stores/editor-store';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { exportDocument, importDocuments } from '@/lib/storage/document-store';
 import { makeAyahKey, parseAyahKey } from '@/data/quran';
+import { formatAyahRef } from '@/lib/utils/arabic-numbers';
 
 /** الآية الافتراضية عند فتح المحرر: الفاتحة 4، وفيها اختلاف مشهور. */
 const DEFAULT_AYAH_KEY = makeAyahKey(1, 4);
@@ -225,7 +226,7 @@ function StatusBar({
     <div className="flex items-center justify-between border-t border-stone-200 bg-white px-3 py-1.5 text-[11px] text-stone-600">
       <div className="flex items-center gap-4">
         <span>
-          الموضع: {surahNumber}:{ayahNumber}
+          الموضع: {formatAyahRef(surahNumber, ayahNumber)}
         </span>
         <span>الأداة: {toolLabels[tool] ?? tool}</span>
       </div>

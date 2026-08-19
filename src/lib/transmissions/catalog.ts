@@ -13,7 +13,7 @@ import {
   READING_IMAMS,
   TRANSMISSION_PATH_SEEDS,
 } from '@/data/qiraat-data/qiraat';
-import { DEFAULT_NARRATOR_SYMBOLS } from '@/data/qiraat-data/symbols';
+import { DEFAULT_IMAM_SYMBOLS, DEFAULT_NARRATOR_SYMBOLS } from '@/data/qiraat-data/symbols';
 
 export const TRANSMISSION_CATALOG_VERSION = 1;
 export const TRANSMISSION_CATALOG_STORAGE_KEY = 'tashjeer:transmissions:v1';
@@ -33,7 +33,10 @@ export function createDefaultTransmissionCatalog(): TransmissionCatalog {
   return normalizeTransmissionCatalog({
     schemaVersion: TRANSMISSION_CATALOG_VERSION,
     updatedAt: new Date().toISOString(),
-    imams: READING_IMAMS.map((imam) => ({ ...imam })),
+    imams: READING_IMAMS.map((imam) => ({
+      ...imam,
+      symbol: imam.symbol ?? DEFAULT_IMAM_SYMBOLS[imam.id] ?? '',
+    })),
     narrators: NARRATORS.map((narrator) => ({
       ...narrator,
       symbol: narrator.symbol ?? DEFAULT_NARRATOR_SYMBOLS[narrator.id] ?? '',
@@ -61,6 +64,8 @@ export function normalizeTransmissionCatalog(
       ...imam,
       order: positiveInteger(imam.order, index + 1),
       slug: imam.slug || slugFromId(imam.id),
+      // رمز الإمام: ما حفظه المشرف، وإلا بذرة المشروع، وإلا فراغ يظهر بالاسم.
+      symbol: imam.symbol ?? DEFAULT_IMAM_SYMBOLS[imam.id] ?? '',
     }))
     .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, 'ar'));
 
@@ -168,7 +173,10 @@ function createSeedWithoutNormalization(): TransmissionCatalog {
   return {
     schemaVersion: TRANSMISSION_CATALOG_VERSION,
     updatedAt: new Date().toISOString(),
-    imams: READING_IMAMS.map((imam) => ({ ...imam })),
+    imams: READING_IMAMS.map((imam) => ({
+      ...imam,
+      symbol: imam.symbol ?? DEFAULT_IMAM_SYMBOLS[imam.id] ?? '',
+    })),
     narrators: NARRATORS.map((narrator) => ({
       ...narrator,
       symbol: narrator.symbol ?? DEFAULT_NARRATOR_SYMBOLS[narrator.id] ?? '',

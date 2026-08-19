@@ -54,9 +54,11 @@ function variant(
   };
 }
 
+// هذه المجموعة تحرس قواعد **الموضع الواحد**، فتعمل في وضع «سطر لكل وجه».
+// أما التركيب (اجتماع أحكام الراوي في سطر واحد) فله ملف اختبار مستقل.
 function build(variants: Variant[], engine = {}) {
   return generateClassicTashjeer(variants, layout, filter, DEFAULT_LAYOUT_OPTIONS, {
-    engine: { ...DEFAULT_ENGINE_SETTINGS, ...engine },
+    engine: { ...DEFAULT_ENGINE_SETTINGS, lineComposition: 'PER_VARIANT', ...engine },
   });
 }
 
@@ -265,7 +267,7 @@ describe('الآية الطويلة الملتفة على عدة أسطر', () =
       longLayout,
       filter,
       DEFAULT_LAYOUT_OPTIONS,
-      { engine: DEFAULT_ENGINE_SETTINGS }
+      { engine: { ...DEFAULT_ENGINE_SETTINGS, lineComposition: 'PER_VARIANT' } }
     );
 
     // أسفل كتلة النص هو أسفل آخر سطر نصي، وكل الأسطر تنزل بعده.
@@ -280,7 +282,7 @@ describe('الآية الطويلة الملتفة على عدة أسطر', () =
       longLayout,
       filter,
       DEFAULT_LAYOUT_OPTIONS,
-      { engine: DEFAULT_ENGINE_SETTINGS }
+      { engine: { ...DEFAULT_ENGINE_SETTINGS, lineComposition: 'PER_VARIANT' } }
     );
 
     const line = result.lines[0];
@@ -308,15 +310,18 @@ describe('سطر الاتفاق: جمهور', () => {
     expect(label).not.toContain('حفص');
   });
 
-  it('يحمل سطر الاتفاق كل القراء العشرين ليكشفهم العرض عند التمرير', () => {
+  it('يحمل سطر الاتفاق القراء كلهم مختصرين برموز الأئمة', () => {
     const readers = build([]).agreement?.readers ?? [];
 
-    expect(readers).toHaveLength(20);
+    // اتفق القراء كلهم، فاجتمع راويا كل إمام على وجه واحد: يُرمز للإمام
+    // مرة واحدة بدل رمزي راوييه. عشرة أئمة = عشر بطاقات لا عشرون.
+    expect(readers).toHaveLength(10);
+    expect(readers.every((reader) => reader.kind === 'IMAM')).toBe(true);
     // مرتبون بترتيب طيبة النشر: قالون أولهم.
     expect(readers[0].narratorId).toBe('narrator-qalun');
-    // ولكل راوٍ اسمه معه، فلا يسقط من لا رمز له كحفص.
+    // ولكل بطاقة اسمها، فلا يسقط من لا رمز له كحفص.
     expect(readers.every((reader) => reader.name.length > 0)).toBe(true);
-    expect(readers.some((reader) => reader.narratorId === 'narrator-hafs')).toBe(true);
+    expect(readers.some((reader) => reader.narratorIds.includes('narrator-hafs'))).toBe(true);
   });
 
   it('يمتد سطر الاتفاق مع الآية كلها كبقية الأسطر', () => {

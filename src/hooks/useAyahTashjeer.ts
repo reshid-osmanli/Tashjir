@@ -11,11 +11,13 @@
 'use client';
 
 import { useMemo } from 'react';
-import { getAyahByKey, getAyahWordsByKey, type MushafAyah, type MushafWord } from '@/data/quran';
+import { getAyahByKey, type MushafAyah, type MushafWord } from '@/data/quran';
 import {
   DEFAULT_LAYOUT_OPTIONS,
   layoutAyah,
+  type TextMetricsProvider,
 } from '@/lib/tashjeer/layout-engine';
+import { buildReadingWindow, type ReadingWindow } from '@/lib/tashjeer/reading-window';
 import {
   computeStats,
   filterBranches,
@@ -52,13 +54,20 @@ export interface AyahTashjeerRuntime {
    * فيعاد اشتقاق الاختلافات دون انتظار إعادة تحميل المستند.
    */
   occurrencesKey?: string;
+  /**
+   * مقياس نص حقيقي من المتصفح. غيابه يعيد القياس النموذجي الحتمي، وهو ما
+   * يعمل به الخادم والاختبارات.
+   */
+  metrics?: TextMetricsProvider;
 }
 
 export interface AyahTashjeerResult {
   /** بيانات الآية، أو undefined إن كان المعرّف غير صالح */
   ayah?: MushafAyah;
-  /** كلمات الآية */
+  /** كلمات نافذة العمل (الآية، أو الآيتان الموصولتان) */
   words: MushafWord[];
+  /** نافذة العمل: أي آيات تشملها المواضع الحالية */
+  window: ReadingWindow;
   /** تخطيط الكلمات */
   layout: AyahLayout;
   /** الخطوط بعد التصفية والحساب الهندسي (للتوافق مع اللوحات) */
@@ -99,11 +108,21 @@ export function useAyahTashjeer(
   );
 
   const ayah = useMemo(() => (ayahKey ? getAyahByKey(ayahKey) : undefined), [ayahKey]);
-  const words = useMemo(() => (ayahKey ? getAyahWordsByKey(ayahKey) : []), [ayahKey]);
+
+  // نافذة العمل: الآية وحدها، أو موصولة بالتي بعدها إن اختار المحقق ذلك.
+  const linkNextAyah = document?.readingWindow?.linkNextAyah === true;
+  const window = useMemo(
+    () =>
+      ayahKey
+        ? buildReadingWindow(ayahKey, linkNextAyah)
+        : { ayahKey: 0, ayahKeys: [], words: [], firstAyahEndPosition: 0, isLinked: false },
+    [ayahKey, linkNextAyah]
+  );
+  const words = window.words;
 
   const layout = useMemo(
-    () => layoutAyah(ayahKey, words, layoutOptions),
-    [ayahKey, words, layoutOptions]
+    () => layoutAyah(ayahKey, words, layoutOptions, runtime.metrics),
+    [ayahKey, words, layoutOptions, runtime.metrics]
   );
 
   const runtimeKey = JSON.stringify({
@@ -138,6 +157,7 @@ export function useAyahTashjeer(
       boundaries: document?.boundaries ?? [],
       branchOverrides: document?.branches ?? [],
       manualLines: document?.manualLines ?? [],
+      focusSegment: document?.readingWindow?.focusSegment ?? null,
     };
     return generateClassicTashjeer(
       effectiveVariants,
@@ -167,10 +187,12 @@ export function useAyahTashjeer(
     return {
       x: -leftMargin,
       y: top,
-      width: layoutOptions.canvasWidth + leftMargin + rightMargin,
+      // عرض اللوحة المقيس لا المضبوط: في وضع السطر الواحد تتمدد الآية
+      // الطويلة، فلو ثبّتنا العرض خرج آخرها من الإطار.
+      width: layout.canvasWidth + leftMargin + rightMargin,
       height: Math.max(bottom - top, 280),
     };
-  }, [classic, layoutOptions]);
+  }, [classic, layout.canvasWidth, layoutOptions]);
 
-  return { ayah, words, layout, branches, classic, stats, options: layoutOptions, viewBox };
+  return { ayah, words, window, layout, branches, classic, stats, options: layoutOptions, viewBox };
 }
