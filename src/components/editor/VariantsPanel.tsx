@@ -10,7 +10,8 @@
 
 import { useMemo, useState } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
-import { getAyahWordsByKey } from '@/data/quran';
+import { documentWindowWords } from '@/lib/tashjeer/reading-window';
+import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-system';
@@ -58,7 +59,7 @@ export function VariantsPanel() {
   const catalog = useTransmissionCatalog();
 
   const words = useMemo(
-    () => (document ? getAyahWordsByKey(document.ayahKey) : []),
+    () => documentWindowWords(document),
     [document]
   );
 
@@ -150,7 +151,7 @@ export function VariantsPanel() {
           <div>
             <h2 className="text-sm font-bold text-stone-900">اختلافات الآية</h2>
             <p className="mt-0.5 text-xs text-stone-500">
-              {document.variants.length} اختلافا — مرتبة من آخر الآية إلى أولها
+              {toArabicDigits(document.variants.length)} اختلافا — مرتبة من آخر الآية إلى أولها
             </p>
           </div>
           <button
@@ -163,6 +164,12 @@ export function VariantsPanel() {
           </button>
         </div>
       </header>
+
+      {/* إرشاد منهجي مختصر: كل موضع اختلاف مستقل، والمحرك هو الذي يجمع. */}
+      <p className="border-b border-stone-100 bg-emerald-50/60 px-4 py-2 text-[11px] leading-relaxed text-emerald-950">
+        أنشئ لكل موضع اختلافا مستقلا ولو كان في الآية نفسها. يجمع المحرك أحكام الراوي الواحد في
+        سطر واحد — مدٌّ هنا وفرشٌ هناك وإدغام في موضع ثالث — ويولّد سطرا لكل تركيب إن تعددت أوجهه.
+      </p>
 
       {/* القواعد العامة المطبقة على هذه الآية، مع بقائها محفوظة مرة واحدة فقط. */}
       <section className="border-b border-stone-200 bg-violet-50/50 px-4 py-3">
@@ -246,7 +253,7 @@ export function VariantsPanel() {
               </p>
               <p className="mt-1 text-[11px] text-stone-500">
                 {markedCharacterRange
-                  ? `الحروف: كلمة ${markedCharacterRange.start.position} / حرف ${markedCharacterRange.start.characterIndex} إلى كلمة ${markedCharacterRange.end.position} / حرف ${markedCharacterRange.end.characterIndex}`
+                  ? `الحروف: كلمة ${toArabicDigits(markedCharacterRange.start.position)} / حرف ${toArabicDigits(markedCharacterRange.start.characterIndex)} إلى كلمة ${toArabicDigits(markedCharacterRange.end.position)} / حرف ${toArabicDigits(markedCharacterRange.end.characterIndex)}`
                   : `الكلمات ${Math.min(...markedPositions)}–${Math.max(...markedPositions)}`}
               </p>
             </div>
@@ -481,8 +488,8 @@ function VariantRow({
           </p>
           <p className="mt-0.5 text-[11px] text-stone-500">
             {variant.targetKind === 'CHARACTERS' && variant.characterRange
-              ? `حروف: ${variant.characterRange.start.position}/${variant.characterRange.start.characterIndex} إلى ${variant.characterRange.end.position}/${variant.characterRange.end.characterIndex}`
-              : `الكلمات ${variant.startPosition}${variant.endPosition !== variant.startPosition ? `–${variant.endPosition}` : ''}`}{' '}
+              ? `حروف: ${toArabicDigits(variant.characterRange.start.position)}/${toArabicDigits(variant.characterRange.start.characterIndex)} إلى ${toArabicDigits(variant.characterRange.end.position)}/${toArabicDigits(variant.characterRange.end.characterIndex)}`
+              : `الكلمات ${toArabicDigits(variant.startPosition)}${variant.endPosition !== variant.startPosition ? `–${toArabicDigits(variant.endPosition)}` : ''}`}{' '}
             — {drawnAlternatives.length} وجها مرسوما
           </p>
         </button>

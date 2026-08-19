@@ -11,6 +11,7 @@
 
 import { useMemo } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
+import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
 import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
 import { getWordById, stripHarakat } from '@/data/quran';
@@ -133,7 +134,7 @@ export function PropertiesPanel() {
           >
             {selectedWord.text}
           </p>
-          <Row label="الترتيب" value={selectedWord.position} />
+          <Row label="الترتيب" value={toArabicDigits(selectedWord.position)} />
           <Row label="بلا تشكيل" value={stripHarakat(selectedWord.text)} />
           <Row label="المعرّف" value={selectedWord.id} />
         </Section>
@@ -156,7 +157,7 @@ export function PropertiesPanel() {
             label={selectedVariant.targetKind === 'CHARACTERS' ? 'مدى الحروف' : 'المدى'}
             value={
               selectedVariant.targetKind === 'CHARACTERS' && selectedVariant.characterRange
-                ? `${selectedVariant.characterRange.start.position}/${selectedVariant.characterRange.start.characterIndex} – ${selectedVariant.characterRange.end.position}/${selectedVariant.characterRange.end.characterIndex}`
+                ? `${toArabicDigits(selectedVariant.characterRange.start.position)}/${toArabicDigits(selectedVariant.characterRange.start.characterIndex)} – ${toArabicDigits(selectedVariant.characterRange.end.position)}/${toArabicDigits(selectedVariant.characterRange.end.characterIndex)}`
                 : `${selectedVariant.startPosition}–${selectedVariant.endPosition}`
             }
           />

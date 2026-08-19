@@ -111,21 +111,75 @@ export function textForCharacterRange(
   return parts.join(' ');
 }
 
+/** صندوق كلمة بالقدر الذي تحتاجه حسابات مواضع الحروف. */
+export interface CharacterBoxGeometry {
+  x: number;
+  width: number;
+  text: string;
+  /** حدود الحروف من الحافة اليمنى، إن قِيست في محرك التخطيط. */
+  characterOffsets?: number[];
+}
+
 /**
- * إحداثي تقريبي لنطاق حروف داخل صندوق كلمة RTL.
+ * حدود حرف واحد داخل صندوق كلمة RTL: حافته اليمنى وعرضه.
+ *
+ * تعتمد الحدود المقيسة (`characterOffsets`) إن وُجدت، وإلا قسمت الكلمة
+ * بالتساوي. والفرق بينهما هو الفرق بين وصلة تقع على الحرف ووصلة تقع بجواره:
+ * حروف العربية شديدة التفاوت في العرض، فالقسمة المتساوية تخطئ دائما في
+ * الكلمات المختلطة مثل «ٱلرَّحِيمُ».
+ */
+export function characterCellBounds(
+  box: CharacterBoxGeometry,
+  characterIndex: number
+): { rightX: number; leftX: number; width: number; centerX: number } {
+  const count = Math.max(characterCount(box.text), 1);
+  const index = Math.min(Math.max(characterIndex, 1), count);
+  const offsets = box.characterOffsets;
+
+  if (offsets && offsets.length === count + 1) {
+    const rightX = box.x + box.width - offsets[index - 1];
+    const leftX = box.x + box.width - offsets[index];
+    return { rightX, leftX, width: rightX - leftX, centerX: (rightX + leftX) / 2 };
+  }
+
+  const cell = box.width / count;
+  const rightX = box.x + box.width - (index - 1) * cell;
+  const leftX = rightX - cell;
+  return { rightX, leftX, width: cell, centerX: (rightX + leftX) / 2 };
+}
+
+/**
+ * إحداثي مركز نطاق حروف داخل صندوق كلمة RTL.
+ *
  * النص نفسه يبقى مرسوما ككلمة واحدة حتى لا تنكسر الوصلات العربية؛ أما هذا
- * الحساب فيستعمل فقط لخلايا النقر ولتثبيت وصلة التشجير على الحرف المقصود.
+ * الحساب فيستعمل لخلايا النقر ولتثبيت وصلة التشجير على الحرف المقصود.
  */
 export function characterRangeCenterX(
-  box: { x: number; width: number; text: string },
+  box: CharacterBoxGeometry,
   start: number,
   end = start
 ): number {
   const count = Math.max(characterCount(box.text), 1);
   const safeStart = Math.min(Math.max(start, 1), count);
   const safeEnd = Math.min(Math.max(end, safeStart), count);
-  // لأن الكلمة RTL: الحرف الأول عند الطرف الأيمن. مركز النطاق هو متوسط
-  // مراكز خلاياه من اليمين إلى اليسار.
-  const averageIndex = (safeStart + safeEnd) / 2;
-  return box.x + box.width - ((averageIndex - 0.5) / count) * box.width;
+
+  // لأن الكلمة RTL: الحرف الأول عند الطرف الأيمن، والنطاق يمتد يسارا.
+  const rightX = characterCellBounds(box, safeStart).rightX;
+  const leftX = characterCellBounds(box, safeEnd).leftX;
+  return (rightX + leftX) / 2;
+}
+
+/** طرفا نطاق حروف داخل صندوق كلمة: يمينه ويساره بعد القياس. */
+export function characterRangeBounds(
+  box: CharacterBoxGeometry,
+  start: number,
+  end = start
+): { rightX: number; leftX: number } {
+  const count = Math.max(characterCount(box.text), 1);
+  const safeStart = Math.min(Math.max(start, 1), count);
+  const safeEnd = Math.min(Math.max(end, safeStart), count);
+  return {
+    rightX: characterCellBounds(box, safeStart).rightX,
+    leftX: characterCellBounds(box, safeEnd).leftX,
+  };
 }

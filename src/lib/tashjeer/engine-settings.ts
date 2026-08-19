@@ -17,6 +17,16 @@ export type SymbolDisplay = 'SYMBOLS' | 'NAMES' | 'BOTH';
  */
 export type AlternativeOrderRule = 'STRENGTH' | 'TAYYIBAH' | 'MANUAL';
 
+/**
+ * طريقة تكوين السطر.
+ *
+ * - COMBINED: سطر لكل **تركيب قراءة**؛ يجتمع فيه المد والفرش والإدغام معا
+ *   إن كانت كلها في قراءة الراوي، كلٌّ فوق كلمته. هذا هو التشجير المعتمد،
+ *   لأن الراوي يقرأ الآية مرة واحدة لا مرة لكل حكم.
+ * - PER_VARIANT: سطر لكل وجه في كل موضع؛ يفيد في المراجعة الموضعية.
+ */
+export type LineCompositionMode = 'COMBINED' | 'PER_VARIANT';
+
 /** امتداد السطر الأفقي تحت الآية. */
 export type LineSpanMode =
   /** يمتد مع الآية كلها (المطلوب في المصحف المشجّر). */
@@ -33,6 +43,16 @@ export interface TashjeerEngineSettings {
   alternativeOrder: AlternativeOrderRule;
   /** ما الذي يظهر على بطاقة السطر. */
   symbolDisplay: SymbolDisplay;
+  /** سطر لكل تركيب قراءة، أم سطر لكل وجه في كل موضع. */
+  lineComposition: LineCompositionMode;
+  /**
+   * نص الآية في سطر واحد مهما طال.
+   *
+   * التفاف النص كان يقطع الآية سطرين فتنكسر معه أعمدة التشجير وتتقاطع
+   * الوصلات مع أسطر النص. المصحف المشجّر يضع الآية على خط واحد ويعرض
+   * اللوحة أفقيا.
+   */
+  singleLineText: boolean;
   /** هل يمتد السطر مع الآية كلها أم مع مدى الاختلاف فقط. */
   lineSpan: LineSpanMode;
   /** إظهار أرقام حركات المد في الهامش الأيمن. */
@@ -53,6 +73,8 @@ export const DEFAULT_ENGINE_SETTINGS: TashjeerEngineSettings = {
   tieBreakOrder: 'TAYYIBAH',
   alternativeOrder: 'STRENGTH',
   symbolDisplay: 'SYMBOLS',
+  lineComposition: 'COMBINED',
+  singleLineText: true,
   lineSpan: 'FULL_AYAH',
   showMaddColumn: true,
   showRuleUnderWord: true,
@@ -78,6 +100,12 @@ export function normalizeEngineSettings(
       ['SYMBOLS', 'NAMES', 'BOTH'],
       DEFAULT_ENGINE_SETTINGS.symbolDisplay
     ),
+    lineComposition: oneOf(
+      value?.lineComposition,
+      ['COMBINED', 'PER_VARIANT'],
+      DEFAULT_ENGINE_SETTINGS.lineComposition
+    ),
+    singleLineText: value?.singleLineText ?? DEFAULT_ENGINE_SETTINGS.singleLineText,
     lineSpan: oneOf(value?.lineSpan, ['FULL_AYAH', 'VARIANT_SPAN'], DEFAULT_ENGINE_SETTINGS.lineSpan),
     showMaddColumn: value?.showMaddColumn ?? DEFAULT_ENGINE_SETTINGS.showMaddColumn,
     showRuleUnderWord: value?.showRuleUnderWord ?? DEFAULT_ENGINE_SETTINGS.showRuleUnderWord,

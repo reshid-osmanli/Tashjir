@@ -3,14 +3,18 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { getAyahWordsByKey } from '@/data/quran';
+import { documentWindowWords } from '@/lib/tashjeer/reading-window';
 import { layoutAyah } from '@/lib/tashjeer/layout-engine';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
+import { useEngineSettings } from '@/hooks/useEngineSettings';
 import { useEditorStore } from '@/stores/editor-store';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { buildReadingPlan } from '@/lib/tashjeer/reading-plan';
 import { normalizeScope, resolveScope } from '@/lib/tashjeer/scope';
 import { getNarratorSymbol } from '@/lib/tashjeer/symbols';
+import { documentReadingWindow, nextAyahKeyInSurah } from '@/lib/tashjeer/reading-window';
+import { toArabicDigits } from '@/lib/utils/arabic-numbers';
+import { parseAyahKey } from '@/data/quran';
 import type { VariantCategory } from '@/types';
 import type { RecitationBoundaryKind } from '@/types/tashjeer';
 
@@ -32,6 +36,8 @@ export function RecitationControls() {
     addBoundary,
     updateBoundary,
     deleteBoundary,
+    setLinkNextAyah,
+    setFocusSegment,
   } = useEditorStore();
   const [kind, setKind] = useState<RecitationBoundaryKind>('WAQF');
   const [label, setLabel] = useState('');
@@ -39,10 +45,13 @@ export function RecitationControls() {
   const [narratorIds, setNarratorIds] = useState<string[]>([]);
 
   const words = useMemo(
-    () => (document ? getAyahWordsByKey(document.ayahKey) : []),
+    () => documentWindowWords(document),
     [document]
   );
   const selectedPosition = words.find((word) => word.id === selectedWordId)?.position;
+  const readingWindow = useMemo(() => documentReadingWindow(document), [document]);
+  const nextKey = document ? nextAyahKeyInSurah(document.ayahKey) : null;
+  const focusSegment = document?.readingWindow?.focusSegment ?? null;
   const plan = useMemo(
     () => buildReadingPlan(words.length, document?.boundaries ?? []),
     [document?.boundaries, words.length]
@@ -201,10 +210,95 @@ export function RecitationControls() {
       <div className="mt-3 rounded bg-stone-50 p-2">
         <p className="text-[10px] font-semibold text-stone-700">خطة الأداء الناتجة</p>
         <p className="mt-0.5 text-[11px] text-stone-600" dir="ltr">
-          {plan.positions.length ? plan.positions.join(' ← ') : '—'}
+          {plan.positions.length
+            ? plan.positions.map((position) => toArabicDigits(position)).join(' ← ')
+            : '—'}
         </p>
         {plan.connectsToNextAyah && (
           <p className="mt-1 text-[10px] text-sky-700">آخر الآية موصول بما بعدها.</p>
+        )}
+      </div>
+
+      {/* المقاطع الناتجة عن الوقف: يختار المحقق أيّها يُشجَّر وحده. */}
+      <div className="mt-3 space-y-1.5">
+        <p className="text-[10px] font-semibold text-stone-700">تشجير مقطع وحده</p>
+        <p className="text-[10px] leading-relaxed text-stone-500">
+          الوقف يقسم النافذة مقاطع. اختر مقطعا ليقتصر التشجير عليه، ويبقى ما عداه ظاهرا مخفَّتا.
+        </p>
+        <div className="flex flex-wrap gap-1">
+          {plan.segments.map((segment) => {
+            const isActive =
+              focusSegment?.startPosition === segment.startPosition &&
+              focusSegment?.endPosition === segment.endPosition;
+            return (
+              <button
+                key={`${segment.startPosition}-${segment.endPosition}`}
+                type="button"
+                onClick={() =>
+                  setFocusSegment(
+                    isActive
+                      ? null
+                      : {
+                          startPosition: segment.startPosition,
+                          endPosition: segment.endPosition,
+                        }
+                  )
+                }
+                className={`rounded border px-1.5 py-1 text-[10px] ${
+                  isActive
+                    ? 'border-cyan-700 bg-cyan-700 text-white'
+                    : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
+                }`}
+              >
+                {toArabicDigits(segment.startPosition)}–{toArabicDigits(segment.endPosition)}
+                {segment.endsWithWaqf ? ' ⏸' : ''}
+              </button>
+            );
+          })}
+        </div>
+        {selectedPosition && (
+          <button
+            type="button"
+            onClick={() =>
+              setFocusSegment({ startPosition: 1, endPosition: selectedPosition })
+            }
+            className="w-full rounded border border-cyan-200 bg-cyan-50 px-2 py-1 text-[10px] text-cyan-900 hover:bg-cyan-100"
+          >
+            تشجير ما قبل الكلمة المحددة (١–{toArabicDigits(selectedPosition)})
+          </button>
+        )}
+        {focusSegment && (
+          <button
+            type="button"
+            onClick={() => setFocusSegment(null)}
+            className="w-full rounded border border-stone-300 bg-white px-2 py-1 text-[10px] text-stone-700 hover:bg-stone-50"
+          >
+            إلغاء الحصر وتشجير النافذة كلها
+          </button>
+        )}
+      </div>
+
+      {/* وصل الآيتين: الحكم قد يقع بين آخر آية وأول التي بعدها. */}
+      <div className="mt-3 rounded border border-sky-200 bg-sky-50/60 p-2">
+        <p className="text-[10px] font-semibold text-sky-900">وصل الآيتين</p>
+        {nextKey ? (
+          <>
+            <label className="mt-1 flex items-center gap-1.5 text-[11px] text-sky-900">
+              <input
+                type="checkbox"
+                checked={readingWindow.isLinked}
+                onChange={(event) => setLinkNextAyah(event.target.checked)}
+                className="accent-sky-700"
+              />
+              ضمّ الآية {toArabicDigits(parseAyahKey(nextKey).ayahNumber)} إلى نافذة العمل
+            </label>
+            <p className="mt-1 text-[10px] leading-relaxed text-sky-800">
+              عند الوصل تتسلسل مواضع الكلمات عبر الآيتين، فيمكن تحديد حكم يبدأ في آخر الأولى
+              وينتهي في أول الثانية، ويشجّره المحرك سطرا واحدا.
+            </p>
+          </>
+        ) : (
+          <p className="mt-1 text-[10px] text-sky-800">هذه آخر آية في السورة، فلا وصل بعدها.</p>
         )}
       </div>
     </Section>
@@ -214,8 +308,9 @@ export function RecitationControls() {
 /** تحكم في كسر السطر النصي وإزاحته، لا في مسارات الشجرة فقط. */
 export function TextLayoutControls() {
   const { document, selectedWordId, toggleForcedLineBreak, setLineOffset } = useEditorStore();
+  const engine = useEngineSettings();
   const words = useMemo(
-    () => (document ? getAyahWordsByKey(document.ayahKey) : []),
+    () => documentWindowWords(document),
     [document]
   );
   const selected = words.find((word) => word.id === selectedWordId);
@@ -229,6 +324,12 @@ export function TextLayoutControls() {
   const breaks = document.layout.forcedLineBreakAfter;
   return (
     <Section title="مواضع أسطر النص">
+      {engine.singleLineText && (
+        <p className="mb-2 rounded border border-amber-200 bg-amber-50 p-2 text-[10px] leading-relaxed text-amber-900">
+          وضع «السطر الواحد» مفعّل، فنص الآية على خط واحد وكسور الأسطر معطّلة. أوقفه من شريط
+          الأدوات إن أردت تقسيم الآية أسطرا.
+        </p>
+      )}
       {selected ? (
         <button
           type="button"
@@ -298,7 +399,7 @@ export function ManualLinesControls() {
   const [startInput, setStartInput] = useState('');
   const [endInput, setEndInput] = useState('');
   const words = useMemo(
-    () => (document ? getAyahWordsByKey(document.ayahKey) : []),
+    () => documentWindowWords(document),
     [document]
   );
   const selected = words.find((word) => word.id === selectedWordId);

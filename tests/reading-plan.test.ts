@@ -120,7 +120,10 @@ describe('أثر الوقف في شكل الشجرة', () => {
         showAnchors: true,
       },
       {},
-      { boundaries: [{ id: 'waqf', kind: 'WAQF', position: 2 }] }
+      {
+        boundaries: [{ id: 'waqf', kind: 'WAQF', position: 2 }],
+        engine: { lineComposition: 'PER_VARIANT' },
+      }
     );
 
     const lateLine = result.lines.find((line) => line.variantId === 'late')!;

@@ -8,6 +8,7 @@ import { getCategoryColor } from '@/lib/tashjeer/color-system';
 import type {
   ClassicAgreementLine,
   ClassicLine,
+  ClassicLineEntry,
   ClassicReaderChip,
   ClassicTashjeer,
 } from '@/lib/tashjeer/classic-tashjeer';
@@ -19,7 +20,12 @@ import type {
   RecitationBoundary,
   WordBox,
 } from '@/types/tashjeer';
-import { splitQuranCharacters, isCharacterInRange } from '@/lib/quran-logic/characters';
+import {
+  characterCellBounds,
+  splitQuranCharacters,
+  isCharacterInRange,
+} from '@/lib/quran-logic/characters';
+import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 
 export interface ViewBox {
   x: number;
@@ -45,6 +51,8 @@ export function TashjeerFigure({
   showRulers = false,
   markedPositions = [],
   markedCharacters = [],
+  ayahMarkers = [],
+  focusSegment = null,
   coveredPositions = [],
   coveredCharacterRanges = [],
   characterMarkingActive = false,
@@ -54,6 +62,7 @@ export function TashjeerFigure({
   onWordClick,
   onCharacterClick,
   onLineClick,
+  onEntryClick,
   onLineHoverStart,
   onLineHoverEnd,
   onReaderClick,
@@ -71,6 +80,10 @@ export function TashjeerFigure({
   markedPositions?: number[];
   /** الحروف التي نقرها المحرر في جلسة التعليم الحالية. */
   markedCharacters?: CharacterAnchor[];
+  /** نهايات الآيات داخل نافذة العمل، لطبع رقم الآية بين الآيتين الموصولتين. */
+  ayahMarkers?: Array<{ position: number; ayahNumber: number }>;
+  /** المقطع المشجَّر وحده؛ ما خرج عنه يُخفَّت في العرض. */
+  focusSegment?: { startPosition: number; endPosition: number } | null;
   coveredPositions?: number[];
   /** نطاقات حرفية محفوظة داخل اختلافات الآية. */
   coveredCharacterRanges?: CharacterRange[];
@@ -82,6 +95,8 @@ export function TashjeerFigure({
   onWordClick?: (box: WordBox) => void;
   onCharacterClick?: (box: WordBox, characterIndex: number) => void;
   onLineClick?: (line: ClassicLine) => void;
+  /** النقر على حكم بعينه داخل سطر مركّب: يفتح موضعه لا موضع أول أحكامه. */
+  onEntryClick?: (line: ClassicLine, entry: ClassicLineEntry) => void;
   onLineHoverStart?: (line: ClassicLine) => void;
   onLineHoverEnd?: () => void;
   /** النقر على رمز راوٍ: تفتح اللوحة بطاقة تعريفه. */
@@ -92,6 +107,10 @@ export function TashjeerFigure({
       {showRulers && <Rulers viewBox={viewBox} />}
 
       <BaselineBand layout={layout} viewBox={viewBox} baseNarratorName={baseNarratorName} />
+
+      <FocusSegmentShade layout={layout} focusSegment={focusSegment} />
+
+      <AyahMarkers layout={layout} markers={ayahMarkers} fontSize={fontSize} />
 
       <BoundaryMarkers boundaries={boundaries} layout={layout} />
 
@@ -108,6 +127,7 @@ export function TashjeerFigure({
             isSelected={line.variantId === selectedVariantId}
             isHovered={line.id === hoveredLineId}
             onClick={() => onLineClick?.(line)}
+            onEntryClick={(entry) => onEntryClick?.(line, entry)}
             onHoverStart={() => onLineHoverStart?.(line)}
             onHoverEnd={() => onLineHoverEnd?.()}
             onReaderClick={onReaderClick}
@@ -132,6 +152,10 @@ export function TashjeerFigure({
             key={box.wordId}
             box={box}
             fontSize={fontSize}
+            isOutsideFocus={
+              focusSegment !== null &&
+              (box.position < focusSegment.startPosition || box.position > focusSegment.endPosition)
+            }
             isMarked={markedPositions.includes(box.position)}
             markedCharacters={markedCharacters.filter((anchor) => anchor.position === box.position)}
             isSelected={box.wordId === selectedWordId}
@@ -153,6 +177,7 @@ export function TashjeerFigure({
 function WordShape({
   box,
   fontSize,
+  isOutsideFocus = false,
   isMarked,
   markedCharacters,
   isSelected,
@@ -165,6 +190,8 @@ function WordShape({
 }: {
   box: WordBox;
   fontSize: number;
+  /** خارج المقطع المشجَّر: يُعرض مخفَّتا فيبقى مقروءا ولا يشتّت. */
+  isOutsideFocus?: boolean;
   isMarked: boolean;
   markedCharacters: CharacterAnchor[];
   isSelected: boolean;
@@ -187,10 +214,14 @@ function WordShape({
       : isCovered && !hasCharacterCoverage
         ? '#f1f5f9'
         : 'transparent';
-  const cellWidth = characters.length > 0 ? box.width / characters.length : box.width;
 
   return (
-    <g onClick={onClick} style={{ cursor: 'pointer' }} data-word-id={box.wordId}>
+    <g
+      onClick={onClick}
+      style={{ cursor: 'pointer' }}
+      data-word-id={box.wordId}
+      opacity={isOutsideFocus ? 0.32 : 1}
+    >
       <rect
         x={box.x - 4}
         y={box.topY - 4}
@@ -206,9 +237,11 @@ function WordShape({
           الخلايا الشفافة هنا هي طبقة تفاعل فقط، مرتبة RTL، وكل خلية تمثل
           حرفا مرئيا واحدا مع تشكيله. */}
       {(characterMarkingActive || hasCharacterCoverage || markedIndexes.size > 0) &&
-        characters.map((character, arrayIndex) => {
+        characters.map((character) => {
           const characterIndex = character.index;
-          const x = box.x + box.width - (arrayIndex + 1) * cellWidth;
+          // حدود الخلية من القياس الحقيقي للحروف، لا من قسمة الكلمة بالتساوي:
+          // «الألف» ثلث عرض «السين»، فالقسمة المتساوية تضع علامة حرف على غيره.
+          const cell = characterCellBounds(box, characterIndex);
           const isMarkedCharacter = markedIndexes.has(characterIndex);
           const isCoveredCharacter = coveredCharacterRanges.some((range) =>
             isCharacterInRange({ position: box.position, characterIndex }, range)
@@ -217,9 +250,9 @@ function WordShape({
           return (
             <rect
               key={`${box.wordId}-char-${characterIndex}`}
-              x={x}
+              x={cell.leftX}
               y={box.topY - 2}
-              width={cellWidth}
+              width={Math.max(cell.width, 0.5)}
               height={box.height + 4}
               rx={3}
               fill={isMarkedCharacter ? '#fbbf24' : isCoveredCharacter ? '#cbd5e1' : 'transparent'}
@@ -298,6 +331,7 @@ function ClassicLineShape({
   isSelected,
   isHovered,
   onClick,
+  onEntryClick,
   onHoverStart,
   onHoverEnd,
   onReaderClick,
@@ -312,6 +346,7 @@ function ClassicLineShape({
   isSelected: boolean;
   isHovered: boolean;
   onClick: () => void;
+  onEntryClick?: (entry: ClassicLineEntry) => void;
   onHoverStart: () => void;
   onHoverEnd: () => void;
   onReaderClick?: (reader: ClassicReaderChip) => void;
@@ -326,12 +361,9 @@ function ClassicLineShape({
   const endX = line.spanEndX;
   const ruleFontSize = Math.max(11, Math.round(fontSize * 0.42));
 
-  // حصر كلمات الاختلاف على السطر الممتد: من أول عقدة إلى آخرها مع هامش.
-  const markXs = line.marks.map((mark) => mark.x);
-  const emphasisPad = 10;
-  const emphasis = markXs.length
-    ? { startX: Math.min(...markXs) - emphasisPad, endX: Math.max(...markXs) + emphasisPad }
-    : null;
+  // أحكام السطر: في التشجير المعتمد يجتمع في السطر الواحد مدٌّ وفرشٌ وإدغام،
+  // كلٌّ فوق كلمته. لذلك نرسم لكل حكم تغليظه ووصلاته واسمه على حدة.
+  const entries = line.entries.length > 0 ? line.entries : [];
 
   return (
     <g
@@ -341,6 +373,7 @@ function ClassicLineShape({
       style={{ cursor: 'pointer' }}
       data-line-id={line.id}
       data-lane={line.lane}
+      data-entries={entries.length}
     >
       {/* ممر شفاف عريض لتسهيل النقر على السطر */}
       <rect
@@ -380,78 +413,21 @@ function ClassicLineShape({
         filter={isSelected ? 'url(#branch-glow)' : undefined}
       />
 
-      {/* مدى الاختلاف نفسه، مغلّظا فوق السطر الممتد. بهذا ينفصل الاختلاف عن
-          الخط: الخط يمتد مع الآية فيبيّن موافقة الراوي لما قبله، والغليظ
-          يحصر الكلمات المختلفة وحدها. */}
-      {emphasis && (
-        <line
-          x1={emphasis.startX}
-          y1={line.rowY}
-          x2={emphasis.endX}
-          y2={line.rowY}
-          stroke={color}
-          strokeWidth={strokeWidth + 2.2}
-          strokeLinecap="round"
+      {entries.map((entry, index) => (
+        <ClassicEntryShape
+          key={`${entry.variantId}-${entry.alternativeId}-${index}`}
+          entry={entry}
+          rowY={line.rowY}
+          textBottom={textBottom}
+          strokeWidth={strokeWidth}
           opacity={opacity}
-        />
-      )}
-
-      {/* الوصلة الرأسية إلى موضع الاختلاف، على جزأين حتى لا تخترق النص:
-            1. شارة قصيرة تحت الكلمة نفسها تعيّن موضعها بدقة.
-            2. وصلة في الفراغ الذي بين كتلة النص والسطر.
-          في الآية الطويلة الملتفة كانت الوصلة الواحدة تنزل من كلمة في السطر
-          الأول فتقطع أسطر النص التالية كلها. */}
-      {line.marks.map((mark) => (
-        <g key={`c-${mark.wordId}`}>
-          <line
-            x1={mark.x}
-            y1={mark.bottomY + 2}
-            x2={mark.x}
-            y2={mark.bottomY + 10}
-            stroke={color}
-            strokeWidth={1.2}
-            opacity={0.75}
-          />
-          <line
-            x1={mark.x}
-            y1={textBottom + 6}
-            x2={mark.x}
-            y2={line.rowY}
-            stroke={color}
-            strokeWidth={1}
-            strokeDasharray="2 2"
-            opacity={0.5}
-          />
-        </g>
-      ))}
-
-      {/* العقدة على موضع الكلمة المختلفة */}
-      {line.marks.map((mark) => (
-        <circle
-          key={`d-${mark.wordId}`}
-          cx={mark.x}
-          cy={line.rowY}
-          r={isSelected ? 3.4 : 2.6}
-          fill={color}
-          stroke="#ffffff"
-          strokeWidth={1}
+          isSelected={isSelected}
+          showRule={showRule}
+          showMadd={showMadd}
+          ruleFontSize={ruleFontSize}
+          onClick={onEntryClick ? () => onEntryClick(entry) : undefined}
         />
       ))}
-
-      {/* اسم الحكم فوق السطر عند موضع الكلمة تماما: إمالة، تقليل، سكت... */}
-      {showRule && (
-        <text
-          x={(Math.min(...line.marks.map((m) => m.x)) + Math.max(...line.marks.map((m) => m.x))) / 2}
-          y={line.rowY - 6}
-          textAnchor="middle"
-          fontSize={ruleFontSize}
-          fontFamily="'Amiri Quran', 'Amiri', serif"
-          fill={color}
-          style={{ direction: 'rtl', userSelect: 'none', fontWeight: 700 }}
-        >
-          {line.ruleLabel}
-        </text>
-      )}
 
       {/* رموز القراء في الطرف الأيسر من السطر: أين يقرأ القارئ */}
       {showLabels && (
@@ -466,13 +442,13 @@ function ClassicLineShape({
         />
       )}
 
-      {/* حركات المد في الهامش الأيمن قبالة السطر */}
+      {/* حركات المد في الهامش الأيمن قبالة السطر، بالأرقام العربية */}
       {showMadd && typeof line.maddHarakat === 'number' && (
         <text
           x={endX + 18}
           y={line.rowY + 4}
           textAnchor="middle"
-          fontSize={13}
+          fontSize={15}
           fontFamily="'Amiri Quran', 'Amiri', serif"
           fill="#78716c"
           style={{ userSelect: 'none', fontWeight: 700 }}
@@ -482,6 +458,126 @@ function ClassicLineShape({
       )}
 
       <title>{lineTitle(line)}</title>
+    </g>
+  );
+}
+
+/**
+ * حكم واحد على السطر: تغليظ مداه، ووصلاته إلى كلماته، واسمه فوقه.
+ *
+ * هذا هو موضع التصحيح الجوهري في العرض: كان السطر يحمل حكما واحدا، فصار
+ * يحمل أحكام قراءة الراوي كلها في هذه الآية، كل حكم مثبَّت على كلمته
+ * ومكتوب فوقها بمقدار مدّه إن كان مدّا.
+ */
+function ClassicEntryShape({
+  entry,
+  rowY,
+  textBottom,
+  strokeWidth,
+  opacity,
+  isSelected,
+  showRule,
+  showMadd,
+  ruleFontSize,
+  onClick,
+}: {
+  entry: ClassicLineEntry;
+  rowY: number;
+  textBottom: number;
+  strokeWidth: number;
+  opacity: number;
+  isSelected: boolean;
+  showRule: boolean;
+  showMadd: boolean;
+  ruleFontSize: number;
+  onClick?: () => void;
+}) {
+  if (entry.marks.length === 0) return null;
+
+  const color = entry.color;
+  const madd = typeof entry.maddHarakat === 'number' ? toArabicDigits(entry.maddHarakat) : '';
+  const ruleText = madd ? `${entry.ruleLabel} ${madd}` : entry.ruleLabel;
+
+  return (
+    <g
+      data-entry-variant={entry.variantId}
+      data-entry-alternative={entry.alternativeId}
+      onClick={
+        onClick
+          ? (event) => {
+              // النقر على الحكم يفتح موضعه هو، لا أول مواضع السطر.
+              event.stopPropagation();
+              onClick();
+            }
+          : undefined
+      }
+    >
+      {/* مدى الحكم مغلّظا فوق السطر الممتد: الخط يمتد مع الآية فيبيّن
+          الموافقة، والغليظ يحصر موضع هذا الحكم وحده. */}
+      <line
+        x1={entry.emphasisStartX}
+        y1={rowY}
+        x2={entry.emphasisEndX}
+        y2={rowY}
+        stroke={color}
+        strokeWidth={strokeWidth + 2.2}
+        strokeLinecap="round"
+        opacity={opacity}
+      />
+
+      {/* الوصلة الرأسية إلى موضع الحكم، على جزأين حتى لا تخترق النص:
+            1. شارة قصيرة تحت الكلمة تعيّن موضعها بدقة.
+            2. وصلة في الفراغ الذي بين كتلة النص والسطر. */}
+      {entry.marks.map((mark) => (
+        <g key={`c-${entry.alternativeId}-${mark.wordId}`}>
+          <line
+            x1={mark.x}
+            y1={mark.bottomY + 2}
+            x2={mark.x}
+            y2={mark.bottomY + 10}
+            stroke={color}
+            strokeWidth={1.2}
+            opacity={0.75}
+          />
+          <line
+            x1={mark.x}
+            y1={textBottom + 6}
+            x2={mark.x}
+            y2={rowY}
+            stroke={color}
+            strokeWidth={1}
+            strokeDasharray="2 2"
+            opacity={0.5}
+          />
+          <circle
+            cx={mark.x}
+            cy={rowY}
+            r={isSelected ? 3.4 : 2.6}
+            fill={color}
+            stroke="#ffffff"
+            strokeWidth={1}
+          />
+        </g>
+      ))}
+
+      {/* اسم الحكم فوق السطر عند موضعه تماما، ومعه مقدار المد بالعربية */}
+      {showRule && (
+        <text
+          x={entry.labelX}
+          y={rowY - 6}
+          textAnchor="middle"
+          fontSize={ruleFontSize}
+          fontFamily="'Amiri Quran', 'Amiri', serif"
+          fill={color}
+          style={{ direction: 'rtl', userSelect: 'none', fontWeight: 700 }}
+        >
+          {showMadd ? ruleText : entry.ruleLabel}
+        </text>
+      )}
+
+      <title>{`${entry.ruleLabel} — ${entry.categoryLabel}${
+        typeof entry.maddHarakat === 'number' ? ` — ${toArabicDigits(entry.maddHarakat)} حركات` : ''
+      }`}</title>
     </g>
   );
 }
@@ -627,16 +723,17 @@ function layoutReaderChips(
   return chips;
 }
 
-/** تحويل الرقم إلى أرقام عربية، كما تُطبع حركات المد في المصحف. */
-function toArabicDigits(value: number): string {
-  const digits = '٠١٢٣٤٥٦٧٨٩';
-  return String(value).replace(/\d/g, (digit) => digits[Number(digit)]);
-}
-
 function lineTitle(line: ClassicLine): string {
   const readers = line.readerNames.join('، ');
-  const madd = typeof line.maddHarakat === 'number' ? `\nحركات المد: ${line.maddHarakat}` : '';
-  return `الحكم: ${line.ruleLabel} — النوع: ${line.categoryLabel}\nالقراء: ${readers}\nالوجه: ${line.readingText}${line.readingLabel ? ` (${line.readingLabel})` : ''}${madd}`;
+  const rules = line.entries
+    .map((entry) => {
+      const madd =
+        typeof entry.maddHarakat === 'number' ? ` (${toArabicDigits(entry.maddHarakat)} حركات)` : '';
+      return `• ${entry.ruleLabel}${madd} — ${entry.categoryLabel}`;
+    })
+    .join('\n');
+
+  return `القراء: ${readers}\nأحكام هذا السطر:\n${rules}`;
 }
 
 // ==================== عناصر مساعدة ====================
@@ -859,6 +956,105 @@ function AgreementLine({
       )}
 
       <title>{`اتفق القراء العشرة على وجه واحد في هذه الآية — ${agreement.label}`}</title>
+    </g>
+  );
+}
+
+/**
+ * ظل المقطع المشجَّر: حين يحدّد المحقق وقفا ويطلب تشجير ما قبله وحده، يجب
+ * أن يرى حدود ما يعمل عليه، لا أن يخمّنها من غياب الأسطر.
+ */
+function FocusSegmentShade({
+  layout,
+  focusSegment,
+}: {
+  layout: AyahLayout;
+  focusSegment: { startPosition: number; endPosition: number } | null;
+}) {
+  if (!focusSegment) return null;
+
+  const boxes = layout.boxes.filter(
+    (box) =>
+      box.position >= focusSegment.startPosition && box.position <= focusSegment.endPosition
+  );
+  if (boxes.length === 0) return null;
+
+  const left = Math.min(...boxes.map((box) => box.x));
+  const right = Math.max(...boxes.map((box) => box.x + box.width));
+  const top = Math.min(...boxes.map((box) => box.topY));
+  const bottom = Math.max(...boxes.map((box) => box.bottomY));
+
+  return (
+    <g pointerEvents="none">
+      <rect
+        x={left - 8}
+        y={top - 10}
+        width={right - left + 16}
+        height={bottom - top + 20}
+        rx={8}
+        fill="#ecfeff"
+        stroke="#0e7490"
+        strokeWidth={1}
+        strokeDasharray="6 4"
+        opacity={0.75}
+      />
+      <text
+        x={right + 6}
+        y={top - 14}
+        fontSize={10}
+        fill="#0e7490"
+        fontFamily="system-ui, sans-serif"
+        style={{ direction: 'rtl', userSelect: 'none' }}
+      >
+        المقطع المشجَّر
+      </text>
+    </g>
+  );
+}
+
+/**
+ * رقم الآية بين الآيتين الموصولتين.
+ *
+ * حين يصل المحقق آخر آية بأول التي بعدها لا يجوز أن يختفي حد الآية: علامة
+ * رأس الآية جزء من الرسم، وبها يعرف الناظر أن الحكم واقع بين آيتين.
+ */
+function AyahMarkers({
+  layout,
+  markers,
+  fontSize,
+}: {
+  layout: AyahLayout;
+  markers: Array<{ position: number; ayahNumber: number }>;
+  fontSize: number;
+}) {
+  if (markers.length === 0) return null;
+
+  return (
+    <g pointerEvents="none">
+      {markers.map((marker) => {
+        const box = layout.boxByPosition.get(marker.position);
+        if (!box) return null;
+        const radius = Math.max(11, fontSize * 0.36);
+        const cx = box.x - radius - 4;
+        const cy = box.baselineY - fontSize * 0.28;
+
+        return (
+          <g key={`ayah-marker-${marker.position}`}>
+            <circle cx={cx} cy={cy} r={radius} fill="#fffdf7" stroke="#a8a29e" strokeWidth={1} />
+            <text
+              x={cx}
+              y={cy + radius * 0.38}
+              textAnchor="middle"
+              fontSize={radius * 1.05}
+              fontFamily="'Amiri Quran', 'Amiri', serif"
+              fill="#57534e"
+              style={{ userSelect: 'none' }}
+            >
+              {toArabicDigits(marker.ayahNumber)}
+            </text>
+          </g>
+        );
+      })}
     </g>
   );
 }

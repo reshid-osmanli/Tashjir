@@ -27,7 +27,8 @@ import type {
   VerificationStatus,
   ViewFilter,
 } from '@/types/tashjeer';
-import { getAyahWordsByKey, parseAyahKey } from '@/data/quran';
+import { parseAyahKey } from '@/data/quran';
+import { documentWindowWords } from '@/lib/tashjeer/reading-window';
 import { layoutAyah } from '@/lib/tashjeer/layout-engine';
 import { generateBranches } from '@/lib/tashjeer/branch-engine';
 import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
@@ -139,6 +140,10 @@ interface EditorState {
   updateBoundary: (boundaryId: string, patch: Partial<RecitationBoundary>) => void;
   deleteBoundary: (boundaryId: string) => void;
   toggleForcedLineBreak: (position: number) => void;
+  /** وصل الآية بالتي بعدها في نافذة عمل واحدة، أو فك الوصل. */
+  setLinkNextAyah: (linked: boolean) => void;
+  /** حصر التشجير في مقطع محدد، أو إلغاء الحصر بتمرير null. */
+  setFocusSegment: (segment: { startPosition: number; endPosition: number } | null) => void;
   setLineOffset: (lineIndex: number, offset: number) => void;
 
   // ---------- إجراءات التحديد ----------
@@ -489,6 +494,34 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }));
   },
 
+  setLinkNextAyah: (linked) => {
+    mutate(set, get, (document) => ({
+      ...document,
+      readingWindow: {
+        ...(document.readingWindow ?? {}),
+        linkNextAyah: linked,
+        // فك الوصل يبطل مقطعا قد يكون امتد إلى الآية الثانية.
+        focusSegment: linked ? (document.readingWindow?.focusSegment ?? null) : null,
+      },
+    }));
+    set({ selectedWordId: null, markedPositions: [], markedCharacters: [] });
+  },
+
+  setFocusSegment: (segment) => {
+    mutate(set, get, (document) => ({
+      ...document,
+      readingWindow: {
+        ...(document.readingWindow ?? {}),
+        focusSegment: segment
+          ? {
+              startPosition: Math.max(1, Math.min(segment.startPosition, segment.endPosition)),
+              endPosition: Math.max(segment.startPosition, segment.endPosition),
+            }
+          : null,
+      },
+    }));
+  },
+
   toggleForcedLineBreak: (position) => {
     mutate(set, get, (document) => {
       const forcedLineBreakAfter = document.layout.forcedLineBreakAfter.includes(position)
@@ -662,7 +695,7 @@ function computeBranches(
   document: TashjeerDocument,
   existing: TashjeerBranch[]
 ): TashjeerBranch[] {
-  const words = getAyahWordsByKey(document.ayahKey);
+  const words = documentWindowWords(document);
   if (words.length === 0) return existing;
 
   const layout = layoutAyah(document.ayahKey, words, document.layout);

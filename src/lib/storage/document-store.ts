@@ -21,6 +21,7 @@ import type {
   VerificationStatus,
 } from '@/types/tashjeer';
 import { getAyahByKey, getAyahWordsByKey } from '@/data/quran';
+import { documentWindowWords } from '@/lib/tashjeer/reading-window';
 import { listGlobalRules, upsertGlobalRules, type GlobalRule } from './global-rules-store';
 import {
   exportOccurrenceData,
@@ -86,6 +87,7 @@ export function createDocument(ayahKey: number, author = 'محرر محلي'): T
     manualLines: [],
     boundaries: [],
     layout: { forcedLineBreakAfter: [], lineOffsets: {} },
+    readingWindow: { linkNextAyah: false, focusSegment: null },
     meta: {
       createdAt: now,
       updatedAt: now,
@@ -242,7 +244,9 @@ function makeAyahSnapshot(document: TashjeerDocument): ExportedAyahSnapshot {
     surahNumber: document.surahNumber,
     ayahNumber: document.ayahNumber,
     text: ayah?.text ?? '',
-    words: getAyahWordsByKey(document.ayahKey).map((word) => ({
+    // كلمات نافذة العمل: تشمل الآية التالية إن وصلها المحقق، فيبقى الملف
+    // المصدَّر مفهوما بذاته ولو كان الحكم واقعا بين آيتين.
+    words: documentWindowWords(document).map((word) => ({
       id: word.id,
       position: word.position,
       text: word.text,
@@ -379,8 +383,24 @@ function migrateDocument(document: TashjeerDocument): TashjeerDocument {
           ? document.layout.lineOffsets
           : {},
     },
+    readingWindow: {
+      linkNextAyah: document.readingWindow?.linkNextAyah === true,
+      focusSegment: normalizeFocusSegmentValue(document.readingWindow?.focusSegment),
+    },
     meta,
   };
+}
+
+/** يقبل المقطع المحفوظ إن كان مدى صحيحا، وإلا أسقطه بلا ضجيج. */
+function normalizeFocusSegmentValue(
+  value: { startPosition?: number; endPosition?: number } | null | undefined
+): { startPosition: number; endPosition: number } | null {
+  if (!value) return null;
+  const start = Math.round(value.startPosition ?? 0);
+  const end = Math.round(value.endPosition ?? 0);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  if (start < 1 || end < start) return null;
+  return { startPosition: start, endPosition: end };
 }
 
 /** يطبع موضع الحروف القديم/المستورد إلى نطاق صالح أو يعيده إلى كلمات بأمان. */

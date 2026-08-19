@@ -62,6 +62,13 @@ export interface ReadingImam {
   slug: string;
   order: number;
   region?: string;
+  /**
+   * رمز الإمام في التشجير الكلاسيكي (أ ت ث خ ...).
+   *
+   * يُطبع حين يجتمع راويا الإمام على وجه واحد، فيُختصر السطر برمز واحد بدل
+   * رمزين، كما هو العمل في المصاحف المشجّرة.
+   */
+  symbol?: string;
   narrators?: Narrator[];
 }
 

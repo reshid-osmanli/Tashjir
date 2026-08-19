@@ -25,6 +25,7 @@ import {
   resetEngineSettings,
   saveEngineSettings,
   type AlternativeOrderRule,
+  type LineCompositionMode,
   type LineSpanMode,
   type SymbolDisplay,
   type TashjeerEngineSettings,
@@ -235,9 +236,18 @@ function TransmissionManager({
               return (
                 <section key={imam.id} className="overflow-hidden rounded-xl border border-stone-200 bg-white">
                   <header className="flex flex-wrap items-center justify-between gap-2 bg-stone-50 px-4 py-3">
-                    <div>
-                      <h2 className="font-bold text-stone-900">{imam.order}. {imam.name}</h2>
-                      <p className="text-[11px] text-stone-500">{imam.region || 'البلد غير مسجل'} · {imam.slug}</p>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="flex h-7 min-w-7 items-center justify-center rounded bg-stone-800 px-1 text-sm font-bold text-white"
+                        style={{ fontFamily: "'Amiri Quran', serif" }}
+                        title="رمز الإمام: يُطبع إذا اجتمع راوياه على وجه واحد"
+                      >
+                        {imam.symbol || '—'}
+                      </span>
+                      <div>
+                        <h2 className="font-bold text-stone-900">{imam.order}. {imam.name}</h2>
+                        <p className="text-[11px] text-stone-500">{imam.region || 'البلد غير مسجل'} · {imam.slug}</p>
+                      </div>
                     </div>
                     <div className="flex gap-1.5">
                       <TinyButton onClick={() => onOpenEditor({ kind: 'NARRATOR', imamId: imam.id })}>إضافة راوٍ</TinyButton>
@@ -364,6 +374,8 @@ function ImamForm({
   const [region, setRegion] = useState(value?.region ?? '');
   const [slug, setSlug] = useState(value?.slug ?? '');
   const [order, setOrder] = useState(value?.order ?? catalog.imams.length + 1);
+  // رمز الإمام: يُطبع في طرف السطر إذا اجتمع راوياه على وجه واحد.
+  const [symbol, setSymbol] = useState(value?.symbol ?? '');
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!name.trim()) return;
@@ -373,6 +385,7 @@ function ImamForm({
       region: region.trim() || undefined,
       slug: slug.trim() || undefinedSlug(name),
       order: Math.max(1, Number(order) || 1),
+      symbol: symbol.trim(),
     };
     onSave(
       { ...catalog, imams: value ? catalog.imams.map((item) => item.id === value.id ? imam : item) : [...catalog.imams, imam] },
@@ -381,10 +394,15 @@ function ImamForm({
   };
   return <EntityForm title={value ? 'تعديل قارئ' : 'إضافة قارئ'} onSubmit={submit} onClose={onClose}>
     <TextInput label="اسم القارئ" value={name} onChange={setName} required />
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid grid-cols-3 gap-2">
+      <TextInput label="الرمز" value={symbol} onChange={setSymbol} placeholder="أ" />
       <TextInput label="الترتيب" value={String(order)} onChange={(next) => setOrder(Number(next))} type="number" required />
       <TextInput label="البلد" value={region} onChange={setRegion} />
     </div>
+    <p className="text-[11px] leading-relaxed text-stone-500">
+      رمز الإمام يُطبع في طرف السطر إذا اجتمع راوياه على الوجه نفسه، فيُختصر رمزان في رمز.
+      أما الطريق فلا رمز له: يُذكر باسمه إذا انفرد بالوجه دون سائر طرق راويه.
+    </p>
     <TextInput label="المعرّف المختصر" value={slug} onChange={setSlug} placeholder="nafi" />
   </EntityForm>;
 }
@@ -534,6 +552,17 @@ function EngineManager({
           </SelectInput>
 
           <SelectInput
+            label="تكوين السطر"
+            value={engine.lineComposition}
+            onChange={(lineComposition) =>
+              onChange({ ...engine, lineComposition: lineComposition as LineCompositionMode })
+            }
+          >
+            <option value="COMBINED">سطر لكل تركيب قراءة (المعتمد)</option>
+            <option value="PER_VARIANT">سطر لكل وجه في كل موضع</option>
+          </SelectInput>
+
+          <SelectInput
             label="ترتيب أوجه الموضع الواحد"
             value={engine.alternativeOrder}
             onChange={(alternativeOrder) =>
@@ -574,6 +603,11 @@ function EngineManager({
               label="إظهار حركات المد في الهامش"
               checked={engine.showMaddColumn}
               onChange={(showMaddColumn) => onChange({ ...engine, showMaddColumn })}
+            />
+            <CheckboxInput
+              label="نص الآية في سطر واحد مهما طال"
+              checked={engine.singleLineText}
+              onChange={(singleLineText) => onChange({ ...engine, singleLineText })}
             />
           </div>
 

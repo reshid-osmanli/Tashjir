@@ -10,7 +10,13 @@
 import { useEditorStore, type EditorTool } from '@/stores/editor-store';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor } from '@/lib/tashjeer/color-system';
+import { useEngineSettings } from '@/hooks/useEngineSettings';
+import { saveEngineSettings } from '@/lib/tashjeer/engine-settings';
+import { formatPercent, toArabicDigits } from '@/lib/utils/arabic-numbers';
 import type { VariantCategory } from '@/types';
+
+/** مستويات تكبير جاهزة، حتى لا يضطر المحقق إلى نقر «+» عشر مرات. */
+const ZOOM_PRESETS = [0.5, 0.75, 1, 1.5, 2, 3];
 
 interface EditorToolbarProps {
   fontSize: number;
@@ -39,6 +45,7 @@ export function EditorToolbar({
     markingMode,
     setMarkingMode,
     zoom,
+    setZoom,
     zoomIn,
     zoomOut,
     resetView,
@@ -57,6 +64,10 @@ export function EditorToolbar({
     toggleVariantsPanel,
     regenerateBranches,
   } = useEditorStore();
+
+  // إعدادات المحرك في متناول اليد: تكوين السطر وسطر النص الواحد يُبدَّلان
+  // كثيرا أثناء العمل، فلا يُطلب من المحقق فتح لوحة التحكم لكل تبديل.
+  const engine = useEngineSettings();
 
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-stone-200 bg-white px-3 py-2">
@@ -114,14 +125,30 @@ export function EditorToolbar({
         <ToolButton title="تصغير (Ctrl+-)" onClick={zoomOut}>
           −
         </ToolButton>
-        <span className="min-w-14 text-center text-xs tabular-nums text-stone-600">
-          {Math.round(zoom * 100)}%
-        </span>
+        <select
+          value={ZOOM_PRESETS.includes(round2(zoom)) ? String(round2(zoom)) : 'custom'}
+          onChange={(event) => {
+            const next = Number(event.target.value);
+            if (Number.isFinite(next) && next > 0) setZoom(next);
+          }}
+          title="مستوى التكبير"
+          aria-label="مستوى التكبير"
+          className="h-7 min-w-20 rounded-md border border-stone-200 bg-white px-1 text-center text-xs text-stone-700"
+        >
+          {!ZOOM_PRESETS.includes(round2(zoom)) && (
+            <option value="custom">{formatPercent(zoom)}</option>
+          )}
+          {ZOOM_PRESETS.map((preset) => (
+            <option key={preset} value={preset}>
+              {formatPercent(preset)}
+            </option>
+          ))}
+        </select>
         <ToolButton title="تكبير (Ctrl+=)" onClick={zoomIn}>
           +
         </ToolButton>
-        <ToolButton title="إعادة ضبط العرض (Ctrl+0)" onClick={resetView}>
-          ضبط
+        <ToolButton title="ملء العرض وإعادة الضبط (Ctrl+0)" onClick={resetView}>
+          ملء العرض
         </ToolButton>
 
         <label className="flex items-center gap-1.5 text-xs text-stone-600">
@@ -129,15 +156,40 @@ export function EditorToolbar({
           <input
             type="range"
             min={24}
-            max={54}
+            max={72}
             step={2}
             value={fontSize}
             onChange={(event) => onFontSizeChange(Number(event.target.value))}
             className="h-1 w-24 accent-emerald-600"
             aria-label="حجم خط المصحف"
           />
-          <span className="w-6 tabular-nums">{fontSize}</span>
+          <span className="w-7 text-center">{toArabicDigits(fontSize)}</span>
         </label>
+      </Group>
+
+      <Divider />
+
+      {/* تكوين الشجرة: ما يميز التشجير المعتمد عن العرض الموضعي */}
+      <Group label="تكوين الشجرة">
+        <ToggleButton
+          active={engine.lineComposition === 'COMBINED'}
+          title="سطر لكل تركيب قراءة: يجتمع المد والفرش والإدغام في سطر الراوي الواحد"
+          onClick={() =>
+            saveEngineSettings({
+              ...engine,
+              lineComposition: engine.lineComposition === 'COMBINED' ? 'PER_VARIANT' : 'COMBINED',
+            })
+          }
+        >
+          {engine.lineComposition === 'COMBINED' ? 'أوجه مركّبة' : 'سطر لكل وجه'}
+        </ToggleButton>
+        <ToggleButton
+          active={engine.singleLineText}
+          title="نص الآية في سطر واحد مهما طال، مع التمرير الأفقي"
+          onClick={() => saveEngineSettings({ ...engine, singleLineText: !engine.singleLineText })}
+        >
+          سطر واحد
+        </ToggleButton>
       </Group>
 
       <Divider />
@@ -252,6 +304,11 @@ export function EditorToolbar({
 }
 
 // ==================== عناصر واجهة صغيرة ====================
+
+/** تقريب لمنزلتين، حتى تُطابق قيمة التكبير أحد المستويات الجاهزة. */
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
 
 function Group({ label, children }: { label: string; children: React.ReactNode }) {
   return (

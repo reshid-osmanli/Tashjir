@@ -55,21 +55,34 @@ import {
   createDefaultStrengthDegrees,
   resolveStrength,
   UNGRADED_RANK,
-  type ResolvedStrength,
   type StrengthDegreeCatalog,
 } from './strength-degrees';
 import { CATEGORY_LABELS, CATEGORY_SIDE } from './branch-engine';
 import { DEFAULT_ENGINE_SETTINGS, type TashjeerEngineSettings } from './engine-settings';
 import {
   buildReadingPlan,
-  compareReadingPositions,
   readingSegmentIndex,
   variantTraversalAnchor,
   type ReadingPlan,
 } from './reading-plan';
 import { formatPathName, getNarratorName, resolveScope } from './scope';
 import { getNarratorSymbol, narratorTayyibahOrder } from './symbols';
+import {
+  chipsForUnits,
+  scopeToUnits,
+  type ReaderChip,
+  type ReadingUnit,
+} from './reader-symbols';
+import {
+  buildReadingCombinations,
+  type ReadingCombination,
+} from './combination-engine';
+import {
+  compareAlternatives,
+  compareVariantsForReading,
+} from './ordering';
 import { characterBoundsForWord, characterRangeCenterX } from '@/lib/quran-logic/characters';
+import { getCategoryColor } from './color-system';
 
 // ==================== الإعدادات ====================
 
@@ -96,6 +109,11 @@ export interface ClassicTashjeerOptions {
   branchOverrides?: TashjeerBranch[];
   /** أسطر مستقلة أضافها المحقق للبيان أو التنظيم. */
   manualLines?: ManualTashjeerLine[];
+  /**
+   * مقطع العمل: حين يحدّد المحقق وقفا ويطلب تشجير ما قبله وحده، لا يُشجَّر
+   * إلا ما وقع داخل هذا المدى من الكلمات، وتُحصر أطراف الأسطر فيه.
+   */
+  focusSegment?: { startPosition: number; endPosition: number } | null;
 }
 
 // ==================== النواتج ====================
@@ -108,10 +126,23 @@ export interface ClassicTashjeerOptions {
  * للنقر يعرف صاحبه.
  */
 export interface ClassicReaderChip {
+  /** مستوى البطاقة: إمام أو راوٍ أو طريق. */
+  kind: ReaderChipKindCompat;
+  /** معرّف العنصر نفسه: إمام أو راوٍ أو طريق. */
+  id: string;
+  /**
+   * راوٍ يمثّل البطاقة، لفتح بطاقة التعريف عند النقر. في بطاقة الإمام هو
+   * أول رواته، وفي بطاقة الطريق هو صاحب الطريق.
+   */
   narratorId: string;
+  /** كل الرواة الذين تمثلهم البطاقة. */
+  narratorIds: string[];
   name: string;
   symbol: string;
 }
+
+/** نُسخة محلية من نوع البطاقة حتى لا يُستورد النوع في كل ملف واجهة. */
+export type ReaderChipKindCompat = 'IMAM' | 'NARRATOR' | 'PATH';
 
 /**
  * سطر الاتفاق: يُرسم حين لا يكون في الآية أي اختلاف، فيقرأ الجميع بوجه واحد.
@@ -148,7 +179,40 @@ export interface ClassicMark {
   baselineY: number;
 }
 
-/** خط تشجير كلاسيكي واحد = وجه قرائي أو سطر يدوي دلالي. */
+/**
+ * حكم واحد داخل سطر مركّب: مدٌّ في أول الآية، أو فرشٌ في كلمة، أو إدغام.
+ *
+ * وجوده هو جوهر التصحيح: السطر الواحد يحمل الآن كل أحكام قراءة الراوي في
+ * هذه الآية، كلٌّ مثبَّت على كلمته، بدل أن يُفرَد لكل حكم سطر مستقل يوهم أن
+ * الراوي يقرأ الآية مرات.
+ */
+export interface ClassicLineEntry {
+  variantId: string;
+  alternativeId: string;
+  category: VariantCategory;
+  categoryLabel: string;
+  /** اسم الحكم المطبوع فوق موضعه: مد، إدغام، سكت، تقليل... */
+  ruleLabel: string;
+  /** النص المقروء بهذا الحكم. */
+  readingText: string;
+  /** وصف الوجه إن وُجد. */
+  readingLabel: string;
+  /** عدد حركات المد لهذا الحكم بعينه. */
+  maddHarakat?: number;
+  /** لون فئة الحكم، فقد تختلف فئات الأحكام في السطر الواحد. */
+  color: string;
+  /** عقد ارتباط هذا الحكم بكلماته أو حروفه. */
+  marks: ClassicMark[];
+  startPosition: number;
+  endPosition: number;
+  /** طرفا التغليظ فوق السطر: مدى هذا الحكم وحده. */
+  emphasisStartX: number;
+  emphasisEndX: number;
+  /** مركز الحكم أفقيا، حيث يُطبع اسمه. */
+  labelX: number;
+}
+
+/** خط تشجير كلاسيكي واحد = تركيب قراءة كامل، أو سطر يدوي دلالي. */
 export interface ClassicLine {
   id: string;
   source: 'ALTERNATIVE' | 'MANUAL';
@@ -200,6 +264,13 @@ export interface ClassicLine {
   hasMixedStrength?: boolean;
   /** درجة كل راوٍ على حدة، للتلميح التفصيلي على البطاقة. */
   strengthByNarrator?: Array<{ narratorId: string; degreeLabel?: string }>;
+  /**
+   * أحكام هذا السطر مرتبة بترتيب المرور. في الوضع المركّب تكون أكثر من حكم،
+   * وفي الوضع القديم (سطر لكل وجه) يكون فيها حكم واحد.
+   */
+  entries: ClassicLineEntry[];
+  /** بصمة التركيب في الوضع المركّب، للتتبع والاختبار. */
+  combinationId?: string;
   startPosition: number;
   endPosition: number;
   /** رقم السطر تحت الآية (0 = أول سطر مباشرة تحت النص). */
@@ -301,36 +372,42 @@ export function generateClassicTashjeer(
   const textTop = layout.boxes.length
     ? Math.min(...layout.boxes.map((box) => box.topY))
     : opts.textTop;
-  const textLeftX = layout.boxes.length
-    ? Math.min(...layout.boxes.map((box) => box.x))
+
+  // مقطع العمل: عند تحديد وقف يقتصر التشجير على مداه، فتُحصر أطراف الأسطر
+  // في كلماته أيضا حتى لا يمتد السطر إلى ما لا يُشجَّر.
+  const focus = normalizeFocusSegment(runtime.focusSegment, wordsCount);
+  const focusedBoxes = focus
+    ? layout.boxes.filter(
+        (box) => box.position >= focus.startPosition && box.position <= focus.endPosition
+      )
+    : layout.boxes;
+  const spanBoxes = focusedBoxes.length > 0 ? focusedBoxes : layout.boxes;
+
+  const textLeftX = spanBoxes.length
+    ? Math.min(...spanBoxes.map((box) => box.x))
     : opts.paddingLeft;
-  const textRightX = layout.boxes.length
-    ? Math.max(...layout.boxes.map((box) => box.x + box.width))
+  const textRightX = spanBoxes.length
+    ? Math.max(...spanBoxes.map((box) => box.x + box.width))
     : opts.canvasWidth - opts.paddingRight;
 
-  // 1. جمع الأوجه غير الأساسية وتطبيق التصفية العلمية/البصرية.
-  const raw: RawAlternative[] = [];
-  for (const variant of variants) {
-    if (!filter.categories.includes(variant.category)) continue;
-    for (const alt of variant.alternatives) {
-      if (alt.isBase) continue;
+  // 1. تصفية المواضع: الفئة الظاهرة، ومقطع العمل، ووجود وجه غير أساسي يقرأ
+  //    به أحد من المعروضين.
+  const eligibleVariants = variants.filter((variant) => {
+    if (!filter.categories.includes(variant.category)) return false;
+    if (focus && !intersectsSegment(variant.startPosition, variant.endPosition, focus)) return false;
+    return variant.alternatives.some((alt) => {
+      if (alt.isBase) return false;
       const narratorIds = resolveScope(alt.scope, catalog);
-      if (narratorIds.length === 0) continue;
+      if (narratorIds.length === 0) return false;
       if (
         filter.narratorIds.length > 0 &&
         !filter.narratorIds.some((narratorId) => narratorIds.includes(narratorId))
       ) {
-        continue;
+        return false;
       }
-      raw.push({ variant, alt });
-    }
-  }
-
-  // 2. تجميع الأوجه بمواضعها، ثم ترتيب المجموعات فيما بينها، ثم ترتيب
-  //    الأوجه داخل كل مجموعة. الفصل بين المرحلتين مقصود: قاعدة المواضع
-  //    (آخر الآية أولا) شيء، وقاعدة الأوجه (قوة الوجه) شيء آخر، ولا يجوز
-  //    أن تتداخلا فينكسر الترتيب في الآيات المزدحمة.
-  const groups = buildPositionGroups(raw, readingPlan, engine, catalog, strengthDegrees);
+      return true;
+    });
+  });
 
   const overrideByKey = new Map(
     (runtime.branchOverrides ?? []).map((branch) => [
@@ -339,25 +416,28 @@ export function generateClassicTashjeer(
     ])
   );
 
-  const lines: ClassicLine[] = [];
-  groups.forEach((group, groupIndex) => {
-    group.items.forEach(({ variant, alt }, indexInGroup) => {
-      const line = alternativeToLine(
-        variant,
-        alt,
-        layout,
-        catalog,
-        engine,
-        strengthDegrees,
-        overrideByKey.get(`${variant.id}::${alt.id}`)
-      );
-      if (!line) return;
-      line.groupIndex = groupIndex;
-      line.indexInGroup = indexInGroup;
-      line.isGroupLeader = indexInGroup === 0;
-      lines.push(line);
-    });
-  });
+  const lines: ClassicLine[] =
+    engine.lineComposition === 'PER_VARIANT'
+      ? buildPerVariantLines(
+          eligibleVariants,
+          layout,
+          filter,
+          readingPlan,
+          engine,
+          catalog,
+          strengthDegrees,
+          overrideByKey
+        )
+      : buildCombinedLines(
+          eligibleVariants,
+          layout,
+          filter,
+          readingPlan,
+          engine,
+          catalog,
+          strengthDegrees,
+          overrideByKey
+        );
 
   // الأسطر اليدوية لا تتجاوز التصفية؛ وهي تتبع نطاقها إن حُدد.
   for (const manualLine of runtime.manualLines ?? []) {
@@ -399,6 +479,17 @@ export function generateClassicTashjeer(
     // الاختلاف. هو المسطرة التي تصل الكلمة ببطاقة قارئها في الطرف الأيسر.
     line.guideStartX = textLeftX;
     line.guideEndX = textRightX;
+
+    // تغليظ مستقل لكل حكم في السطر، فيقرأ الناظر «مد» هنا و«إدغام» هناك
+    // على السطر نفسه، كلٌّ فوق كلمته.
+    for (const entry of line.entries) {
+      const xs = entry.marks.map((mark) => mark.x);
+      if (xs.length === 0) continue;
+      const pad = 10;
+      entry.emphasisStartX = Math.min(...xs) - pad;
+      entry.emphasisEndX = Math.max(...xs) + pad;
+      entry.labelX = (Math.min(...xs) + Math.max(...xs)) / 2;
+    }
   }
 
   const topLines = lines.filter((line) => line.side === 'TOP');
@@ -465,17 +556,298 @@ function readerChips(
   narratorIds: string[],
   catalog?: TransmissionCatalog
 ): ClassicReaderChip[] {
-  return narratorIds
-    .slice()
-    .sort(
-      (first, second) =>
-        narratorTayyibahOrder(first, catalog) - narratorTayyibahOrder(second, catalog)
-    )
-    .map((narratorId) => ({
-      narratorId,
-      name: getNarratorName(narratorId, catalog),
-      symbol: getNarratorSymbol(narratorId, catalog),
-    }));
+  return unitChips(
+    narratorIds.map((narratorId) => ({ narratorId })),
+    catalog
+  );
+}
+
+/**
+ * بطاقات السطر من وحدات القراءة: ترتفع إلى رمز الإمام عند اجتماع راوييه،
+ * وتنزل إلى اسم الطريق عند انفراده. هذا هو المطلوب في التشجير المعتمد بدل
+ * طبع رموز الرواة دائما.
+ */
+function unitChips(units: ReadingUnit[], catalog?: TransmissionCatalog): ClassicReaderChip[] {
+  return chipsForUnits(units, catalog).map((chip: ReaderChip) => ({
+    kind: chip.kind,
+    id: chip.id,
+    narratorId: chip.narratorIds[0] ?? chip.id,
+    narratorIds: chip.narratorIds,
+    name: chip.name,
+    symbol: chip.symbol,
+  }));
+}
+
+/** يحوّل نطاق وجه إلى بطاقات مباشرة (يُستعمل في الوضع القديم والأسطر اليدوية). */
+function scopeChips(
+  scope: Parameters<typeof scopeToUnits>[0],
+  catalog?: TransmissionCatalog
+): ClassicReaderChip[] {
+  return unitChips(scopeToUnits(scope, catalog), catalog);
+}
+
+/** مقطع العمل بعد التحقق من صلاحيته لهذه الآية. */
+function normalizeFocusSegment(
+  segment: ClassicTashjeerOptions['focusSegment'],
+  wordsCount: number
+): { startPosition: number; endPosition: number } | null {
+  if (!segment || wordsCount <= 0) return null;
+
+  const start = Math.max(1, Math.min(segment.startPosition, segment.endPosition));
+  const end = Math.min(wordsCount, Math.max(segment.startPosition, segment.endPosition));
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+
+  // مقطع يغطي الآية كلها ليس تحديدا؛ نعامله كأنه لا تحديد.
+  if (start === 1 && end === wordsCount) return null;
+  return { startPosition: start, endPosition: end };
+}
+
+/** هل يتقاطع مدى الموضع مع مقطع العمل؟ */
+function intersectsSegment(
+  startPosition: number,
+  endPosition: number,
+  segment: { startPosition: number; endPosition: number }
+): boolean {
+  return startPosition <= segment.endPosition && endPosition >= segment.startPosition;
+}
+
+/**
+ * الوضع القديم: سطر مستقل لكل وجه في كل موضع.
+ *
+ * أُبقي عليه لأنه يفيد في المراجعة الموضعية («أرني أوجه هذا الموضع وحده»)،
+ * وفي الاختبارات التي تحرس قواعد ترتيب المواضع مجردةً عن التركيب.
+ */
+function buildPerVariantLines(
+  variants: Variant[],
+  layout: AyahLayout,
+  filter: ViewFilter,
+  plan: ReadingPlan,
+  engine: TashjeerEngineSettings,
+  catalog: TransmissionCatalog | undefined,
+  strengthDegrees: StrengthDegreeCatalog,
+  overrideByKey: Map<string, TashjeerBranch>
+): ClassicLine[] {
+  const raw: RawAlternative[] = [];
+  for (const variant of variants) {
+    for (const alt of variant.alternatives) {
+      if (alt.isBase) continue;
+      const narratorIds = resolveScope(alt.scope, catalog);
+      if (narratorIds.length === 0) continue;
+      if (
+        filter.narratorIds.length > 0 &&
+        !filter.narratorIds.some((narratorId) => narratorIds.includes(narratorId))
+      ) {
+        continue;
+      }
+      raw.push({ variant, alt });
+    }
+  }
+
+  const groups = buildPositionGroups(raw, plan, engine, catalog, strengthDegrees);
+  const lines: ClassicLine[] = [];
+
+  groups.forEach((group, groupIndex) => {
+    group.items.forEach(({ variant, alt }, indexInGroup) => {
+      const line = alternativeToLine(
+        variant,
+        alt,
+        layout,
+        catalog,
+        engine,
+        strengthDegrees,
+        overrideByKey.get(`${variant.id}::${alt.id}`)
+      );
+      if (!line) return;
+      line.groupIndex = groupIndex;
+      line.indexInGroup = indexInGroup;
+      line.isGroupLeader = indexInGroup === 0;
+      lines.push(line);
+    });
+  });
+
+  return lines;
+}
+
+/**
+ * الوضع المعتمد: سطر لكل **تركيب قراءة**.
+ *
+ * كل سطر هنا قراءة كاملة لوحدة قراءة واحدة أو أكثر: يجتمع فيه المد والفرش
+ * والإدغام معا إن كانت كلها في قراءة هذا الراوي، كلٌّ فوق كلمته. والسطور
+ * مرتبة بترتيب الأمة: قالون ومن وافقه، ثم أوجه قالون الباقية، ثم من بعده.
+ */
+function buildCombinedLines(
+  variants: Variant[],
+  layout: AyahLayout,
+  filter: ViewFilter,
+  plan: ReadingPlan,
+  engine: TashjeerEngineSettings,
+  catalog: TransmissionCatalog | undefined,
+  strengthDegrees: StrengthDegreeCatalog,
+  overrideByKey: Map<string, TashjeerBranch>
+): ClassicLine[] {
+  const combinations = buildReadingCombinations(variants, plan, {
+    catalog,
+    engine,
+    strengthDegrees,
+  }).filter((combination) => {
+    if (filter.narratorIds.length === 0) return true;
+    return filter.narratorIds.some((narratorId) => combination.narratorIds.includes(narratorId));
+  });
+
+  const lines: ClassicLine[] = [];
+  let groupIndex = -1;
+  let currentLead = '';
+
+  for (const combination of combinations) {
+    const line = combinationToLine(
+      combination,
+      layout,
+      catalog,
+      engine,
+      strengthDegrees,
+      overrideByKey.get(
+        `${combination.picks[0]?.variant.id}::${combination.picks[0]?.alternative.id}`
+      )
+    );
+    if (!line) continue;
+
+    // المجموعة هنا هي «القارئ الرائد»: سطوره كلها متتالية بلا فاصل، كما
+    // يُقرأ في الطيبة: كل أوجه قالون، ثم كل أوجه ورش...
+    const leadKey = combination.leadUnit.pathId ?? combination.leadUnit.narratorId;
+    if (leadKey !== currentLead) {
+      currentLead = leadKey;
+      groupIndex += 1;
+    }
+
+    line.groupIndex = groupIndex;
+    line.indexInGroup = combination.rankInLead;
+    line.isGroupLeader = combination.rankInLead === 0;
+    lines.push(line);
+  }
+
+  return lines;
+}
+
+/** يحوّل تركيب قراءة إلى سطر كامل بأحكامه كلها. */
+function combinationToLine(
+  combination: ReadingCombination,
+  layout: AyahLayout,
+  catalog: TransmissionCatalog | undefined,
+  engine: TashjeerEngineSettings,
+  strengthDegrees: StrengthDegreeCatalog,
+  override?: TashjeerBranch
+): ClassicLine | null {
+  const entries: ClassicLineEntry[] = [];
+
+  for (const pick of combination.picks) {
+    const marks = marksForVariant(pick.variant, layout);
+    if (marks.length === 0) continue;
+
+    entries.push({
+      variantId: pick.variant.id,
+      alternativeId: pick.alternative.id,
+      category: pick.variant.category,
+      categoryLabel: CATEGORY_LABELS[pick.variant.category],
+      ruleLabel:
+        pick.alternative.ruleLabel?.trim() ||
+        pick.alternative.label?.trim() ||
+        CATEGORY_LABELS[pick.variant.category],
+      readingText: pick.alternative.text,
+      readingLabel: pick.alternative.label,
+      maddHarakat: pick.alternative.maddHarakat,
+      color: getCategoryColor(pick.variant.category),
+      marks,
+      startPosition: pick.variant.startPosition,
+      endPosition: pick.variant.endPosition,
+      emphasisStartX: 0,
+      emphasisEndX: 0,
+      labelX: 0,
+    });
+  }
+
+  if (entries.length === 0) return null;
+
+  const primary = entries[0];
+  const primaryPick = combination.picks[0];
+  const chips = unitChips(combination.units, catalog);
+  const narratorIds = [...combination.narratorIds].sort(
+    (first, second) => narratorTayyibahOrder(first, catalog) - narratorTayyibahOrder(second, catalog)
+  );
+
+  const strength = resolveStrength(
+    primaryPick.alternative,
+    primaryPick.alternative.scope,
+    strengthDegrees,
+    catalog
+  );
+
+  const marks = entries
+    .flatMap((entry) => entry.marks)
+    .sort((first, second) => first.position - second.position);
+
+  const symbols = chips.map((chip) => chip.symbol).filter(Boolean);
+  const readerNames = chips.map((chip) => chip.name);
+
+  return {
+    id: `combo::${combination.id}`,
+    source: 'ALTERNATIVE',
+    variantId: primary.variantId,
+    alternativeId: primary.alternativeId,
+    category: primary.category,
+    categoryLabel: primary.categoryLabel,
+    side: CATEGORY_SIDE[primary.category],
+    narratorIds,
+    symbols,
+    primarySymbol: symbols[0] ?? '',
+    primaryNarratorName: chips[0]?.name ?? 'الجميع',
+    readerNames,
+    readers: chips,
+    label: chipsLabel(chips, engine),
+    symbolDisplay: engine.symbolDisplay,
+    readingText: entries.map((entry) => entry.readingText).join(' … '),
+    readingLabel: entries.map((entry) => entry.readingLabel).filter(Boolean).join(' + '),
+    ruleLabel: entries.map((entry) => entry.ruleLabel).join(' + '),
+    maddHarakat: entries.find((entry) => typeof entry.maddHarakat === 'number')?.maddHarakat,
+    strength: strength.rank === UNGRADED_RANK ? primaryPick.alternative.strength : strength.rank,
+    strengthLabel: strength.degree?.label,
+    strengthShortLabel: strength.degree?.shortLabel,
+    strengthColor: strength.degree?.color,
+    isPreferred: combination.rankInLead === 0,
+    hasMixedStrength: strength.isMixed,
+    strengthByNarrator: strength.isMixed
+      ? strength.perNarrator.map((item) => ({
+          narratorId: item.narratorId,
+          degreeLabel: item.degree?.label,
+        }))
+      : undefined,
+    entries,
+    combinationId: combination.id,
+    startPosition: Math.min(...entries.map((entry) => entry.startPosition)),
+    endPosition: Math.max(...entries.map((entry) => entry.endPosition)),
+    lane: override?.isManual ? override.lane : 0,
+    groupIndex: 0,
+    indexInGroup: 0,
+    isGroupLeader: false,
+    segmentIndex: 0,
+    rowOffset: override?.isManual ? override.rowOffset : undefined,
+    isManual: override?.isManual,
+    rowY: 0,
+    spanStartX: 0,
+    spanEndX: 0,
+    guideStartX: 0,
+    guideEndX: 0,
+    marks,
+  };
+}
+
+/** نص بطاقة السطر بحسب إعداد عرض الرموز. */
+function chipsLabel(chips: ClassicReaderChip[], engine: TashjeerEngineSettings): string {
+  const names = chips.map((chip) => chip.name);
+  const texts = chips.map((chip) => chip.symbol || chip.name);
+
+  if (engine.symbolDisplay === 'NAMES') return names[0] ?? 'الجميع';
+  if (engine.symbolDisplay === 'SYMBOLS') return texts.join(' ') || (names[0] ?? 'الجميع');
+  return texts.length ? `${texts.join(' ')} · ${names[0] ?? ''}`.trim() : names[0] ?? 'الجميع';
 }
 
 /**
@@ -514,26 +886,9 @@ function buildPositionGroups(
 
   const groups = [...byVariant.values()];
 
-  groups.sort((first, second) => {
-    // رتبة يدوية للموضع: قرار صريح من المحقق يسبق كل قاعدة آلية.
-    const firstRank = first.variant.orderRank;
-    const secondRank = second.variant.orderRank;
-    if (typeof firstRank === 'number' && typeof secondRank === 'number' && firstRank !== secondRank) {
-      return firstRank - secondRank;
-    }
-    if (typeof firstRank === 'number' && typeof secondRank !== 'number') return -1;
-    if (typeof firstRank !== 'number' && typeof secondRank === 'number') return 1;
-
-    const traversalDiff = compareReadingPositions(first.anchor, second.anchor, plan);
-    if (traversalDiff !== 0) return traversalDiff;
-
-    const spanDiff = plan.traversal === 'END_TO_START'
-      ? second.variant.startPosition - first.variant.startPosition
-      : first.variant.endPosition - second.variant.endPosition;
-    if (spanDiff !== 0) return spanDiff;
-
-    return first.variant.id.localeCompare(second.variant.id, 'ar');
-  });
+  groups.sort((first, second) =>
+    compareVariantsForReading(first.variant, second.variant, plan)
+  );
 
   for (const group of groups) {
     group.items.sort((first, second) =>
@@ -542,84 +897,6 @@ function buildPositionGroups(
   }
 
   return groups;
-}
-
-/**
- * ترتيب وجهين داخل الموضع الواحد.
- *
- * القاعدة المعتمدة من صاحب المشروع: **قوة الوجه في الكتاب**، وقد صارت بعد
- * دمج «الوجه المقدَّم» مع القوة درجةً من سلّم قابل للتحرير. يُقدَّم الوجه
- * ذو الرتبة الأصغر، وأصغر الرتب هي درجة «المقدَّم». والوجه الذي لم تُسجَّل
- * درجته يأتي بعد المسجَّل، فلا يتقدم وجه غير محقَّق على وجه رجّحه المحقق.
- *
- * وحين تختلف درجة الوجه باختلاف الرواة يمثّله **أقوى** درجة أعطاها له أحد
- * رواته: السطر واحد لا يتجزأ، وتقديمه عند من قدّمه أولى من تأخيره عند من
- * أخّره، مع بقاء التفصيل ظاهرا على البطاقة.
- */
-function compareAlternatives(
-  variant: Variant,
-  first: VariantAlternative,
-  second: VariantAlternative,
-  engine: TashjeerEngineSettings,
-  catalog?: TransmissionCatalog,
-  strengthDegrees?: StrengthDegreeCatalog
-): number {
-  // ترتيب صريح للأوجه في هذا الموضع بعينه: أقوى من أي قاعدة عامة.
-  const explicit = variant.alternativeOrder ?? [];
-  if (explicit.length > 0) {
-    const firstIndex = explicit.indexOf(first.id);
-    const secondIndex = explicit.indexOf(second.id);
-    if (firstIndex !== -1 && secondIndex !== -1 && firstIndex !== secondIndex) {
-      return firstIndex - secondIndex;
-    }
-    if (firstIndex !== -1 && secondIndex === -1) return -1;
-    if (firstIndex === -1 && secondIndex !== -1) return 1;
-  }
-
-  if (engine.alternativeOrder === 'MANUAL') {
-    // لا ترتيب صريح محفوظ: نسقط إلى الطيبة حتى يكون الناتج حتميا.
-    return compareByTayyibah(first, second, catalog);
-  }
-
-  if (engine.alternativeOrder === 'STRENGTH') {
-    const degrees = strengthDegrees ?? createDefaultStrengthDegrees();
-    const firstRank = strengthRankOf(first, degrees, catalog);
-    const secondRank = strengthRankOf(second, degrees, catalog);
-    if (firstRank !== secondRank) return firstRank - secondRank;
-  }
-
-  return compareByTayyibah(first, second, catalog);
-}
-
-function compareByTayyibah(
-  first: VariantAlternative,
-  second: VariantAlternative,
-  catalog?: TransmissionCatalog
-): number {
-  const firstOrder = leadNarratorOrder(first, catalog);
-  const secondOrder = leadNarratorOrder(second, catalog);
-  if (firstOrder !== secondOrder) return firstOrder - secondOrder;
-  return first.id.localeCompare(second.id, 'ar');
-}
-
-/**
- * رتبة قوة الوجه للترتيب. تشمل الحقل الرقمي القديم كي لا يفقد ما حُفظ قبل
- * توحيد المفهومين ترتيبه بعد الترقية.
- */
-function strengthRankOf(
-  alt: VariantAlternative,
-  degrees: StrengthDegreeCatalog,
-  catalog?: TransmissionCatalog
-): number {
-  const resolved: ResolvedStrength = resolveStrength(alt, alt.scope, degrees, catalog);
-  if (resolved.rank !== UNGRADED_RANK) return resolved.rank;
-  return typeof alt.strength === 'number' ? alt.strength : UNGRADED_RANK;
-}
-
-function leadNarratorOrder(alt: VariantAlternative, catalog?: TransmissionCatalog): number {
-  const narratorIds = resolveScope(alt.scope, catalog);
-  if (narratorIds.length === 0) return 999;
-  return Math.min(...narratorIds.map((id) => narratorTayyibahOrder(id, catalog)));
 }
 
 /** طرفا السطر الأفقيان بحسب إعداد الامتداد. */
@@ -661,6 +938,27 @@ function alternativeToLine(
   const pathNames = alt.scope.kind === 'PATHS' && alt.scope.pathIds?.length
     ? alt.scope.pathIds.map((pathId) => pathDisplayName(pathId, catalog))
     : [];
+  const ruleLabel =
+    alt.ruleLabel?.trim() || alt.label?.trim() || CATEGORY_LABELS[variant.category];
+  const entries: ClassicLineEntry[] = [
+    {
+      variantId: variant.id,
+      alternativeId: alt.id,
+      category: variant.category,
+      categoryLabel: CATEGORY_LABELS[variant.category],
+      ruleLabel,
+      readingText: alt.text,
+      readingLabel: alt.label,
+      maddHarakat: alt.maddHarakat,
+      color: getCategoryColor(variant.category),
+      marks,
+      startPosition: variant.startPosition,
+      endPosition: variant.endPosition,
+      emphasisStartX: 0,
+      emphasisEndX: 0,
+      labelX: 0,
+    },
+  ];
 
   return {
     id: `${variant.id}::${alt.id}`,
@@ -675,13 +973,14 @@ function alternativeToLine(
     primarySymbol: display.symbols[0] ?? '',
     primaryNarratorName: pathNames.length ? pathNames.join(' و ') : display.primaryName,
     readerNames: pathNames.length ? pathNames : display.readerNames,
-    readers: readerChips(narratorIds, catalog),
+    readers: scopeChips(alt.scope, catalog),
     label: display.label,
     symbolDisplay: engine.symbolDisplay,
     readingText: alt.text,
     readingLabel: alt.label,
     // اسم الحكم المطبوع تحت الكلمة: الحقل المخصص، وإلا وصف الوجه، وإلا فئته.
-    ruleLabel: alt.ruleLabel?.trim() || alt.label?.trim() || CATEGORY_LABELS[variant.category],
+    ruleLabel,
+    entries,
     maddHarakat: alt.maddHarakat,
     strength: strength.rank === UNGRADED_RANK ? alt.strength : strength.rank,
     strengthLabel: strength.degree?.label,
@@ -739,12 +1038,30 @@ function manualToLine(
     primarySymbol: display.symbols[0] ?? '',
     primaryNarratorName: display.primaryName,
     readerNames: display.readerNames,
-    readers: readerChips(narratorIds, catalog),
+    readers: scopeChips(manual.scope ?? { kind: 'ALL' }, catalog),
     label: manual.label || display.label,
     symbolDisplay: engine.symbolDisplay,
     readingText: manual.title,
     readingLabel: manual.label ?? 'سطر يدوي',
     ruleLabel: manual.label?.trim() || manual.title,
+    entries: [
+      {
+        variantId: '',
+        alternativeId: '',
+        category: manual.category,
+        categoryLabel: CATEGORY_LABELS[manual.category],
+        ruleLabel: manual.label?.trim() || manual.title,
+        readingText: manual.title,
+        readingLabel: manual.label ?? 'سطر يدوي',
+        color: getCategoryColor(manual.category),
+        marks,
+        startPosition: manual.startPosition,
+        endPosition: manual.endPosition,
+        emphasisStartX: 0,
+        emphasisEndX: 0,
+        labelX: 0,
+      },
+    ],
     startPosition: manual.startPosition,
     endPosition: manual.endPosition,
     lane: manual.lane,

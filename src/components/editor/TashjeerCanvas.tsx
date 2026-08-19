@@ -20,12 +20,15 @@ import {
 import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-system';
 import { TashjeerFigure } from './TashjeerFigure';
 import { getNarratorsByTayyibah } from '@/lib/tashjeer/symbols';
+import { getImamsWithSymbols } from '@/lib/tashjeer/reader-symbols';
 import { getNarratorProfile } from '@/data/qiraat-data/narrator-profiles';
 import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
 import { useStrengthDegrees } from '@/hooks/useStrengthDegrees';
 import { useRuleOccurrences } from '@/hooks/useRuleOccurrences';
+import { useTextMetrics } from '@/hooks/useTextMetrics';
+import { parseAyahKey } from '@/data/quran';
 import type { ClassicLine, ClassicReaderChip } from '@/lib/tashjeer/classic-tashjeer';
 import type { VariantCategory } from '@/types';
 import type { WordBox } from '@/types/tashjeer';
@@ -69,6 +72,8 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
 
   const catalog = useTransmissionCatalog();
   const engine = useEngineSettings();
+  // قياس حقيقي بالخط المرسوم، فتقع الوصلات والتحديد على الحرف لا بجواره.
+  const metrics = useTextMetrics();
   const strengthDegrees = useStrengthDegrees();
   const occurrences = useRuleOccurrences();
 
@@ -87,12 +92,25 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     refreshDerivedBranches,
   ]);
 
-  const { ayah, layout, classic, viewBox } = useAyahTashjeer(
+  const { ayah, layout, classic, viewBox, window: readingWindow } = useAyahTashjeer(
     document,
     filter,
-    { fontSize },
-    { catalog, engine, strengthDegrees, occurrencesKey: occurrences.key }
+    { fontSize, singleLine: engine.singleLineText },
+    { catalog, engine, strengthDegrees, occurrencesKey: occurrences.key, metrics }
   );
+
+  // نهاية الآية الأولى حين تُوصل بالتالية: يُطبع عندها رقم الآية.
+  const ayahMarkers = useMemo(() => {
+    if (!readingWindow.isLinked) return [];
+    return [
+      {
+        position: readingWindow.firstAyahEndPosition,
+        ayahNumber: parseAyahKey(readingWindow.ayahKeys[0]).ayahNumber,
+      },
+    ];
+  }, [readingWindow]);
+
+  const focusSegment = document?.readingWindow?.focusSegment ?? null;
 
   // يشمل هذا القائمة المحلية والقواعد العامة المشتقة؛ لذلك يتفاعل النقر
   // مع موضع القاعدة العامة كما يتفاعل مع الاختلاف الذي أضيف يدويا.
@@ -104,20 +122,59 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
 
   // ==================== التفاعل ====================
 
+  /**
+   * تحويل بكسلات الشاشة إلى وحدات اللوحة.
+   *
+   * ضروري لا تجميلي: في وضع السطر الواحد قد يبلغ عرض اللوحة عشرات آلاف
+   * الوحدات في ألف بكسل، فلو حرّكنا اللوحة ببكسلات الفأرة مباشرة لتحرك
+   * المشهد بجزء من عشرين مما حرّكه المستعمل، فيبدو السحب معطلا.
+   */
+  const unitsPerPixel = useCallback(() => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return 1;
+    return viewBox.width / rect.width;
+  }, [viewBox.width]);
+
+  /**
+   * التكبير عند مؤشر الفأرة لا عند رأس اللوحة.
+   *
+   * التكبير من نقطة ثابتة يهرّب الموضع الذي ينظر إليه المحقق خارج الشاشة،
+   * فيضطر إلى السحب بعد كل تكبير. هنا تبقى النقطة التي تحت المؤشر مكانها.
+   */
   const handleWheel = useCallback(
     (event: WheelEvent<SVGSVGElement>) => {
       if (!event.ctrlKey && !event.metaKey) return;
       event.preventDefault();
-      setZoom(zoom * (event.deltaY > 0 ? 0.92 : 1.08));
+
+      const factor = event.deltaY > 0 ? 0.92 : 1.08;
+      const nextZoom = Math.min(6, Math.max(0.2, zoom * factor));
+      const rect = svgRef.current?.getBoundingClientRect();
+
+      if (rect) {
+        const scale = unitsPerPixel();
+        // إحداثيا المؤشر في فضاء اللوحة قبل التحويل.
+        const cursorX = viewBox.x + (event.clientX - rect.left) * scale;
+        const cursorY = viewBox.y + (event.clientY - rect.top) * scale;
+        setPan({
+          x: cursorX - (nextZoom * (cursorX - pan.x)) / zoom,
+          y: cursorY - (nextZoom * (cursorY - pan.y)) / zoom,
+        });
+      }
+
+      setZoom(nextZoom);
     },
-    [setZoom, zoom]
+    [pan.x, pan.y, setPan, setZoom, unitsPerPixel, viewBox.x, viewBox.y, zoom]
   );
 
   const handleMouseDown = useCallback(
     (event: ReactMouseEvent<SVGSVGElement>) => {
       const isMiddleButton = event.button === 1;
       const isEmptyArea = event.target === svgRef.current;
-      if (!isMiddleButton && !isEmptyArea) return;
+      // Alt + سحب: تحريك اللوحة من أي موضع، وهو أيسر في الآيات الطويلة التي
+      // تملأ الشاشة فلا يبقى فيها فراغ يُسحب منه.
+      const isAltDrag = event.altKey && event.button === 0;
+      if (!isMiddleButton && !isEmptyArea && !isAltDrag) return;
+      if (isAltDrag) event.preventDefault();
 
       panState.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
     },
@@ -127,12 +184,13 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
   const handleMouseMove = useCallback(
     (event: ReactMouseEvent<SVGSVGElement>) => {
       if (!panState.current) return;
+      const scale = unitsPerPixel();
       setPan({
-        x: panState.current.panX + (event.clientX - panState.current.x),
-        y: panState.current.panY + (event.clientY - panState.current.y),
+        x: panState.current.panX + (event.clientX - panState.current.x) * scale,
+        y: panState.current.panY + (event.clientY - panState.current.y) * scale,
       });
     },
-    [setPan]
+    [setPan, unitsPerPixel]
   );
 
   const endPan = useCallback(() => {
@@ -192,6 +250,20 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
       const nextVariantId = line.variantId === selectedVariantId ? null : line.variantId;
       selectVariant(nextVariantId);
       selectBranch(nextVariantId ? line.id : null);
+    },
+    [readOnly, selectBranch, selectVariant, selectedVariantId]
+  );
+
+  /**
+   * النقر على حكم داخل سطر مركّب: السطر يحمل أحكاما عدة، فيجب أن يفتح
+   * النقر موضع الحكم الذي تحته المؤشر لا أول أحكام السطر.
+   */
+  const handleEntryClick = useCallback(
+    (_line: ClassicLine, entry: { variantId: string }) => {
+      if (readOnly || !entry.variantId) return;
+      const nextVariantId = entry.variantId === selectedVariantId ? null : entry.variantId;
+      selectVariant(nextVariantId);
+      selectBranch(null);
     },
     [readOnly, selectBranch, selectVariant, selectedVariantId]
   );
@@ -285,6 +357,8 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
             engine={engine}
             markedPositions={markedPositions}
             markedCharacters={markedCharacters}
+            ayahMarkers={ayahMarkers}
+            focusSegment={focusSegment}
             coveredPositions={coveredPositions}
             coveredCharacterRanges={coveredCharacterRanges}
             characterMarkingActive={!readOnly && currentTool === 'mark' && markingMode === 'CHARACTERS'}
@@ -294,6 +368,7 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
             onWordClick={handleWordClick}
             onCharacterClick={handleCharacterClick}
             onLineClick={handleLineClick}
+            onEntryClick={handleEntryClick}
             onLineHoverStart={(line) => setHoveredLineId(line.id)}
             onLineHoverEnd={() => setHoveredLineId(null)}
             onReaderClick={setOpenReader}
@@ -451,7 +526,12 @@ function CanvasMessage({ text, tone = 'muted' }: { text: string; tone?: 'muted' 
   );
 }
 
-/** دليل رموز القراء: يربط كل رمز باسم راويه. */
+/**
+ * دليل الرموز: رموز الأئمة ورموز الرواة، وبيان أن الطريق يُذكر باسمه.
+ *
+ * هذه هي القاعدة التي يعمل بها المحرك في طرف السطر: يرتفع إلى رمز الإمام
+ * إذا اجتمع راوياه، وينزل إلى اسم الطريق إذا انفرد.
+ */
 function SymbolsLegend({
   catalog,
   onClose,
@@ -460,9 +540,9 @@ function SymbolsLegend({
   onClose: () => void;
 }) {
   return (
-    <div className="absolute bottom-14 right-3 z-10 w-60 rounded-xl border border-stone-200 bg-white/95 p-3 shadow-lg backdrop-blur">
+    <div className="absolute bottom-14 right-3 z-10 max-h-[70vh] w-72 overflow-auto rounded-xl border border-stone-200 bg-white/95 p-3 shadow-lg backdrop-blur">
       <div className="mb-2 flex items-center justify-between">
-        <h4 className="text-xs font-bold text-stone-800">رموز القراء</h4>
+        <h4 className="text-xs font-bold text-stone-800">دليل الرموز</h4>
         <button
           type="button"
           onClick={onClose}
@@ -472,11 +552,28 @@ function SymbolsLegend({
           ×
         </button>
       </div>
+
+      <h5 className="mb-1 text-[11px] font-semibold text-stone-700">رموز الأئمة</h5>
+      <ul className="grid grid-cols-2 gap-x-3 gap-y-1">
+        {getImamsWithSymbols(catalog).map((imam) => (
+          <li key={imam.id} className="flex items-center gap-1.5 text-[11px] text-stone-700">
+            <span
+              className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded bg-stone-800 px-0.5 text-[10px] font-bold text-white"
+              style={{ fontFamily: "'Amiri Quran', serif" }}
+            >
+              {imam.symbol || '—'}
+            </span>
+            <span className="truncate">{imam.name}</span>
+          </li>
+        ))}
+      </ul>
+
+      <h5 className="mb-1 mt-3 text-[11px] font-semibold text-stone-700">رموز الرواة</h5>
       <ul className="grid grid-cols-2 gap-x-3 gap-y-1">
         {getNarratorsByTayyibah(catalog).map((narrator) => (
           <li key={narrator.id} className="flex items-center gap-1.5 text-[11px] text-stone-700">
             <span
-              className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-emerald-600 text-[10px] font-bold text-white"
+              className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded bg-emerald-600 px-0.5 text-[10px] font-bold text-white"
               style={{ fontFamily: "'Amiri Quran', serif" }}
             >
               {narrator.symbol || '—'}
@@ -485,8 +582,11 @@ function SymbolsLegend({
           </li>
         ))}
       </ul>
+
       <p className="mt-2 border-t border-stone-100 pt-2 text-[10px] leading-relaxed text-stone-500">
-        رمز «—» للأصل (حفص عن عاصم = نص المصحف). تتكرر الرموز لقراء كل إمام على حدة.
+        القاعدة في طرف السطر: إذا اجتمع راويا الإمام على الوجه طُبع <strong>رمز الإمام</strong>،
+        وإذا انفرد راوٍ (أو اجتمع طريقاه) طُبع <strong>رمز الراوي</strong>، وإذا انفرد طريق واحد
+        ذُكر <strong>اسم الطريق</strong> — فالطرق لا رموز لها.
       </p>
     </div>
   );
