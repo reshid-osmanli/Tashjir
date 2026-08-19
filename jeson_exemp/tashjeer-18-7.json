@@ -1,0 +1,920 @@
+{
+  "format": "tashjeer-export",
+  "schemaVersion": 6,
+  "exportedAt": "2026-08-19T09:58:02.046Z",
+  "globalRules": [],
+  "strengthDegrees": {
+    "schemaVersion": 1,
+    "updatedAt": "2026-08-19T09:58:02.046Z",
+    "degrees": [
+      {
+        "id": "muqaddam",
+        "label": "مقدَّم",
+        "shortLabel": "مقدَّم",
+        "rank": 1,
+        "description": "الوجه الذي يُبدأ به في الأداء ويُقرأ به أولا عند التلقي.",
+        "color": "#047857",
+        "isPreferred": true
+      },
+      {
+        "id": "rajih",
+        "label": "راجح",
+        "shortLabel": "راجح",
+        "rank": 2,
+        "description": "وجه صحيح مرجَّح عند أهل الأداء، ويأتي بعد المقدَّم.",
+        "color": "#0e7490",
+        "isPreferred": false
+      },
+      {
+        "id": "jaiz",
+        "label": "جائز",
+        "shortLabel": "جائز",
+        "rank": 3,
+        "description": "وجه صحيح مقروء به من غير ترجيح.",
+        "color": "#a16207",
+        "isPreferred": false
+      },
+      {
+        "id": "muakhkhar",
+        "label": "مؤخَّر",
+        "shortLabel": "مؤخَّر",
+        "rank": 4,
+        "description": "وجه صحيح لكنه مؤخَّر في الأداء، يُقرأ به آخرا.",
+        "color": "#b45309",
+        "isPreferred": false
+      }
+    ]
+  },
+  "ruleOccurrences": [],
+  "occurrenceLog": [],
+  "ayahs": [
+    {
+      "ayahKey": 18007,
+      "surahNumber": 18,
+      "ayahNumber": 7,
+      "text": "إِنَّا جَعَلۡنَا مَا عَلَى ٱلۡأَرۡضِ زِينَةٗ لَّهَا لِنَبۡلُوَهُمۡ أَيُّهُمۡ أَحۡسَنُ عَمَلٗا",
+      "words": [
+        {
+          "id": 18007001,
+          "position": 1,
+          "text": "إِنَّا"
+        },
+        {
+          "id": 18007002,
+          "position": 2,
+          "text": "جَعَلۡنَا"
+        },
+        {
+          "id": 18007003,
+          "position": 3,
+          "text": "مَا"
+        },
+        {
+          "id": 18007004,
+          "position": 4,
+          "text": "عَلَى"
+        },
+        {
+          "id": 18007005,
+          "position": 5,
+          "text": "ٱلۡأَرۡضِ"
+        },
+        {
+          "id": 18007006,
+          "position": 6,
+          "text": "زِينَةٗ"
+        },
+        {
+          "id": 18007007,
+          "position": 7,
+          "text": "لَّهَا"
+        },
+        {
+          "id": 18007008,
+          "position": 8,
+          "text": "لِنَبۡلُوَهُمۡ"
+        },
+        {
+          "id": 18007009,
+          "position": 9,
+          "text": "أَيُّهُمۡ"
+        },
+        {
+          "id": 18007010,
+          "position": 10,
+          "text": "أَحۡسَنُ"
+        },
+        {
+          "id": 18007011,
+          "position": 11,
+          "text": "عَمَلٗا"
+        }
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "schemaVersion": 6,
+      "ayahKey": 18007,
+      "surahNumber": 18,
+      "ayahNumber": 7,
+      "variants": [
+        {
+          "id": "v-18007-1-mszwlyzs",
+          "category": "TAJWEED",
+          "title": "إِنَّا جَعَلۡنَا مَا عَلَى ٱلۡأَرۡضِ زِينَةٗ لَّهَا لِنَبۡلُوَهُمۡ أَيُّهُمۡ أَحۡسَنُ عَمَلٗا",
+          "startPosition": 1,
+          "endPosition": 11,
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-18007-1-mszwlyzs-base",
+              "text": "إِنَّا جَعَلۡنَا مَا عَلَى ٱلۡأَرۡضِ زِينَةٗ لَّهَا لِنَبۡلُوَهُمۡ أَيُّهُمۡ أَحۡسَنُ عَمَلٗا",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-18007-1-mszwlyzs-alt-mszwm4pl",
+              "text": "إِنَّا جَعَلۡنَا مَا عَلَى ٱلۡأَرۡضِ زِينَةٗ لَّهَا لِنَبۡلُوَهُمۡ أَيُّهُمۡ أَحۡسَنُ عَمَلٗا",
+              "label": "",
+              "scope": {
+                "kind": "ALL_EXCEPT",
+                "narratorIds": [
+                  "narrator-warsh",
+                  "narrator-al-bazzi",
+                  "narrator-qunbul",
+                  "narrator-ibn-wardan",
+                  "narrator-ibn-jammaz"
+                ]
+              }
+            }
+          ],
+          "ayahKey": 18007,
+          "orderRank": 1,
+          "targetKind": "WORDS"
+        },
+        {
+          "id": "v-18007-8-mszwp9up",
+          "category": "USUL",
+          "title": "مۡ أَيُّهُمۡ أَ",
+          "startPosition": 8,
+          "endPosition": 10,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 8,
+              "characterIndex": 7
+            },
+            "end": {
+              "position": 10,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-18007-8-mszwp9up-base",
+              "text": "مۡ أَيُّهُمۡ أَ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-18007-8-mszwp9up-alt-mszwpgpt",
+              "text": "مۡ أَيُّهُمۡ أَ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "NARRATORS",
+                "narratorIds": [
+                  "narrator-qalun",
+                  "narrator-al-bazzi",
+                  "narrator-qunbul",
+                  "narrator-ibn-wardan",
+                  "narrator-ibn-jammaz"
+                ]
+              },
+              "ruleLabel": "صلة ",
+              "strengthDegreeId": "muqaddam"
+            }
+          ],
+          "ayahKey": 18007,
+          "orderRank": 2
+        },
+        {
+          "id": "v-18007-8-mszwqtru",
+          "category": "USUL",
+          "title": "مۡ أَيُّهُمۡ أَ",
+          "startPosition": 8,
+          "endPosition": 10,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 8,
+              "characterIndex": 7
+            },
+            "end": {
+              "position": 10,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-18007-8-mszwqtru-base",
+              "text": "مۡ أَيُّهُمۡ أَ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            }
+          ],
+          "ayahKey": 18007,
+          "orderRank": 3
+        },
+        {
+          "id": "v-18007-8-mszwr4c9",
+          "category": "USUL",
+          "title": "مۡ أَيُّهُمۡ أَ",
+          "startPosition": 8,
+          "endPosition": 10,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 8,
+              "characterIndex": 7
+            },
+            "end": {
+              "position": 10,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-18007-8-mszwr4c9-base",
+              "text": "مۡ أَيُّهُمۡ أَ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-18007-8-mszwr4c9-alt-mszwr8he",
+              "text": "مۡ أَيُّهُمۡ أَ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "NARRATORS",
+                "narratorIds": []
+              },
+              "ruleLabel": "صلة 2"
+            }
+          ],
+          "ayahKey": 18007,
+          "orderRank": 3
+        },
+        {
+          "id": "v-18007-5-mszwtqei",
+          "category": "USUL",
+          "title": "أَرۡضِ زِينَةٗ لَّهَا لِنَبۡلُوَهُمۡ أَيُّهُمۡ أَ",
+          "startPosition": 5,
+          "endPosition": 10,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 5,
+              "characterIndex": 3
+            },
+            "end": {
+              "position": 10,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-18007-5-mszwtqei-base",
+              "text": "أَرۡضِ زِينَةٗ لَّهَا لِنَبۡلُوَهُمۡ أَيُّهُمۡ أَ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-18007-5-mszwtqei-alt-mszwu4r6",
+              "text": "أَرۡضِ زِينَةٗ لَّهَا لِنَبۡلُوَهُمۡ أَيُّهُمۡ أَ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "PATHS",
+                "pathIds": [
+                  "path-warsh-al-asbahani"
+                ]
+              },
+              "ruleLabel": "نقل , صلة , صلة "
+            }
+          ],
+          "ayahKey": 18007,
+          "orderRank": 5
+        },
+        {
+          "id": "v-18007-5-mszwv8o3",
+          "category": "USUL",
+          "title": "أَرۡضِ زِينَةٗ لَّهَا لِنَبۡلُوَهُمۡ أَيُّهُمۡ أَ",
+          "startPosition": 5,
+          "endPosition": 10,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 5,
+              "characterIndex": 3
+            },
+            "end": {
+              "position": 10,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-18007-5-mszwv8o3-base",
+              "text": "أَرۡضِ زِينَةٗ لَّهَا لِنَبۡلُوَهُمۡ أَيُّهُمۡ أَ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-18007-5-mszwv8o3-alt-mszwva8a",
+              "text": "أَرۡضِ زِينَةٗ لَّهَا لِنَبۡلُوَهُمۡ أَيُّهُمۡ أَ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "PATHS",
+                "pathIds": [
+                  "path-warsh-al-asbahani"
+                ]
+              },
+              "ruleLabel": "نقل ، صلة 2 ، صلة 2 "
+            }
+          ],
+          "ayahKey": 18007,
+          "orderRank": 6
+        },
+        {
+          "id": "v-18007-5-mszwwajv",
+          "category": "USUL",
+          "title": "أَرۡضِ زِينَةٗ لَّهَا لِنَبۡلُوَهُمۡ أَيُّهُمۡ أَ",
+          "startPosition": 5,
+          "endPosition": 10,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 5,
+              "characterIndex": 3
+            },
+            "end": {
+              "position": 10,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-18007-5-mszwwajv-base",
+              "text": "أَرۡضِ زِينَةٗ لَّهَا لِنَبۡلُوَهُمۡ أَيُّهُمۡ أَ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-18007-5-mszwwajv-alt-mszwwbkz",
+              "text": "أَرۡضِ زِينَةٗ لَّهَا لِنَبۡلُوَهُمۡ أَيُّهُمۡ أَ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "PATHS",
+                "pathIds": [
+                  "path-warsh-al-azraq"
+                ]
+              },
+              "ruleLabel": "نقل ، صلة 5 ، صلة 5 "
+            }
+          ],
+          "ayahKey": 18007,
+          "orderRank": 7
+        },
+        {
+          "id": "v-18007-5-mszwygck",
+          "category": "USUL",
+          "title": "لۡأَرۡضِ زِينَةٗ لَّهَا لِنَبۡلُوَهُمۡ أَيُّهُمۡ أَ",
+          "startPosition": 5,
+          "endPosition": 10,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 5,
+              "characterIndex": 2
+            },
+            "end": {
+              "position": 10,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-18007-5-mszwygck-base",
+              "text": "لۡأَرۡضِ زِينَةٗ لَّهَا لِنَبۡلُوَهُمۡ أَيُّهُمۡ أَ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-18007-5-mszwygck-alt-mszwyho4",
+              "text": "لۡأَرۡضِ زِينَةٗ لَّهَا لِنَبۡلُوَهُمۡ أَيُّهُمۡ أَ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "NARRATORS",
+                "narratorIds": [
+                  "narrator-ibn-dhakwan",
+                  "narrator-hafs",
+                  "narrator-khalaf-hamzah",
+                  "narrator-khallad",
+                  "narrator-idris"
+                ]
+              },
+              "ruleLabel": "سكت ، سكت ، سكت ",
+              "isBase": true
+            },
+            {
+              "id": "v-18007-5-mszwygck-alt-mszwzotw",
+              "text": "لۡأَرۡضِ زِينَةٗ لَّهَا لِنَبۡلُوَهُمۡ أَيُّهُمۡ أَ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "NARRATORS",
+                "narratorIds": [
+                  "narrator-ibn-dhakwan",
+                  "narrator-hafs",
+                  "narrator-khalaf-hamzah",
+                  "narrator-khallad",
+                  "narrator-idris"
+                ]
+              }
+            }
+          ],
+          "ayahKey": 18007,
+          "orderRank": 8
+        },
+        {
+          "id": "v-18007-5-mszwsf3m",
+          "category": "USUL",
+          "title": "أَ",
+          "startPosition": 5,
+          "endPosition": 5,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 5,
+              "characterIndex": 3
+            },
+            "end": {
+              "position": 5,
+              "characterIndex": 3
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-18007-5-mszwsf3m-base",
+              "text": "أَ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-18007-5-mszwsf3m-alt-mszwsize",
+              "text": "أَ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "PATHS",
+                "pathIds": [
+                  "path-warsh-al-asbahani"
+                ]
+              },
+              "ruleLabel": "نقل "
+            }
+          ],
+          "ayahKey": 18007,
+          "orderRank": 4
+        }
+      ],
+      "branches": [
+        {
+          "id": "v-18007-1-mszwlyzs::v-18007-1-mszwlyzs-alt-mszwm4pl",
+          "variantId": "v-18007-1-mszwlyzs",
+          "alternativeId": "v-18007-1-mszwlyzs-alt-mszwm4pl",
+          "category": "TAJWEED",
+          "nodes": [
+            {
+              "id": "v-18007-1-mszwlyzs-w1",
+              "wordId": 18007001,
+              "position": 1,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-1-mszwlyzs-w2",
+              "wordId": 18007002,
+              "position": 2,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-1-mszwlyzs-w3",
+              "wordId": 18007003,
+              "position": 3,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-1-mszwlyzs-w4",
+              "wordId": 18007004,
+              "position": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-1-mszwlyzs-w5",
+              "wordId": 18007005,
+              "position": 5,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-1-mszwlyzs-w6",
+              "wordId": 18007006,
+              "position": 6,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-1-mszwlyzs-w7",
+              "wordId": 18007007,
+              "position": 7,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-1-mszwlyzs-w8",
+              "wordId": 18007008,
+              "position": 8,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-1-mszwlyzs-w9",
+              "wordId": 18007009,
+              "position": 9,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-1-mszwlyzs-w10",
+              "wordId": 18007010,
+              "position": 10,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-1-mszwlyzs-w11",
+              "wordId": 18007011,
+              "position": 11,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 0,
+          "side": "BOTTOM",
+          "label": "الجميع إلا ورش، البزي، قنبل، ابن وردان وابن جماز",
+          "color": "#0891b2",
+          "isHidden": false
+        },
+        {
+          "id": "v-18007-8-mszwp9up::v-18007-8-mszwp9up-alt-mszwpgpt",
+          "variantId": "v-18007-8-mszwp9up",
+          "alternativeId": "v-18007-8-mszwp9up-alt-mszwpgpt",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-18007-8-mszwp9up-w8",
+              "wordId": 18007008,
+              "position": 8,
+              "characterStart": 7,
+              "characterEnd": 7,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-8-mszwp9up-w9",
+              "wordId": 18007009,
+              "position": 9,
+              "characterStart": 1,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-8-mszwp9up-w10",
+              "wordId": 18007010,
+              "position": 10,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 1,
+          "side": "BOTTOM",
+          "label": "وجه جديد — قالون والبزي و3 آخرين",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-18007-5-mszwtqei::v-18007-5-mszwtqei-alt-mszwu4r6",
+          "variantId": "v-18007-5-mszwtqei",
+          "alternativeId": "v-18007-5-mszwtqei-alt-mszwu4r6",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-18007-5-mszwtqei-w5",
+              "wordId": 18007005,
+              "position": 5,
+              "characterStart": 3,
+              "characterEnd": 5,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwtqei-w6",
+              "wordId": 18007006,
+              "position": 6,
+              "characterStart": 1,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwtqei-w7",
+              "wordId": 18007007,
+              "position": 7,
+              "characterStart": 1,
+              "characterEnd": 3,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwtqei-w8",
+              "wordId": 18007008,
+              "position": 8,
+              "characterStart": 1,
+              "characterEnd": 7,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwtqei-w9",
+              "wordId": 18007009,
+              "position": 9,
+              "characterStart": 1,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwtqei-w10",
+              "wordId": 18007010,
+              "position": 10,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 2,
+          "side": "BOTTOM",
+          "label": "وجه جديد — الأصبهاني عن ورش",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-18007-5-mszwv8o3::v-18007-5-mszwv8o3-alt-mszwva8a",
+          "variantId": "v-18007-5-mszwv8o3",
+          "alternativeId": "v-18007-5-mszwv8o3-alt-mszwva8a",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-18007-5-mszwv8o3-w5",
+              "wordId": 18007005,
+              "position": 5,
+              "characterStart": 3,
+              "characterEnd": 5,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwv8o3-w6",
+              "wordId": 18007006,
+              "position": 6,
+              "characterStart": 1,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwv8o3-w7",
+              "wordId": 18007007,
+              "position": 7,
+              "characterStart": 1,
+              "characterEnd": 3,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwv8o3-w8",
+              "wordId": 18007008,
+              "position": 8,
+              "characterStart": 1,
+              "characterEnd": 7,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwv8o3-w9",
+              "wordId": 18007009,
+              "position": 9,
+              "characterStart": 1,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwv8o3-w10",
+              "wordId": 18007010,
+              "position": 10,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 3,
+          "side": "BOTTOM",
+          "label": "وجه جديد — الأصبهاني عن ورش",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-18007-5-mszwwajv::v-18007-5-mszwwajv-alt-mszwwbkz",
+          "variantId": "v-18007-5-mszwwajv",
+          "alternativeId": "v-18007-5-mszwwajv-alt-mszwwbkz",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-18007-5-mszwwajv-w5",
+              "wordId": 18007005,
+              "position": 5,
+              "characterStart": 3,
+              "characterEnd": 5,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwwajv-w6",
+              "wordId": 18007006,
+              "position": 6,
+              "characterStart": 1,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwwajv-w7",
+              "wordId": 18007007,
+              "position": 7,
+              "characterStart": 1,
+              "characterEnd": 3,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwwajv-w8",
+              "wordId": 18007008,
+              "position": 8,
+              "characterStart": 1,
+              "characterEnd": 7,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwwajv-w9",
+              "wordId": 18007009,
+              "position": 9,
+              "characterStart": 1,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwwajv-w10",
+              "wordId": 18007010,
+              "position": 10,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 4,
+          "side": "BOTTOM",
+          "label": "وجه جديد — الأزرق عن ورش",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-18007-5-mszwygck::v-18007-5-mszwygck-alt-mszwzotw",
+          "variantId": "v-18007-5-mszwygck",
+          "alternativeId": "v-18007-5-mszwygck-alt-mszwzotw",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-18007-5-mszwygck-w5",
+              "wordId": 18007005,
+              "position": 5,
+              "characterStart": 2,
+              "characterEnd": 5,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwygck-w6",
+              "wordId": 18007006,
+              "position": 6,
+              "characterStart": 1,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwygck-w7",
+              "wordId": 18007007,
+              "position": 7,
+              "characterStart": 1,
+              "characterEnd": 3,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwygck-w8",
+              "wordId": 18007008,
+              "position": 8,
+              "characterStart": 1,
+              "characterEnd": 7,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwygck-w9",
+              "wordId": 18007009,
+              "position": 9,
+              "characterStart": 1,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-18007-5-mszwygck-w10",
+              "wordId": 18007010,
+              "position": 10,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 5,
+          "side": "BOTTOM",
+          "label": "وجه جديد — ابن ذكوان وحفص و3 آخرين",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-18007-5-mszwsf3m::v-18007-5-mszwsf3m-alt-mszwsize",
+          "variantId": "v-18007-5-mszwsf3m",
+          "alternativeId": "v-18007-5-mszwsf3m-alt-mszwsize",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-18007-5-mszwsf3m-w5",
+              "wordId": 18007005,
+              "position": 5,
+              "characterStart": 3,
+              "characterEnd": 3,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 6,
+          "side": "BOTTOM",
+          "label": "وجه جديد — الأصبهاني عن ورش",
+          "color": "#16a34a",
+          "isHidden": false
+        }
+      ],
+      "manualLines": [],
+      "boundaries": [],
+      "layout": {
+        "forcedLineBreakAfter": [],
+        "lineOffsets": {}
+      },
+      "meta": {
+        "createdAt": "2026-08-19T09:40:15.191Z",
+        "updatedAt": "2026-08-19T09:57:48.551Z",
+        "author": "محرر محلي",
+        "status": "DRAFT"
+      }
+    }
+  ]
+}

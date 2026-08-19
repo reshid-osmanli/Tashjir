@@ -1,0 +1,2186 @@
+{
+  "format": "tashjeer-export",
+  "schemaVersion": 6,
+  "exportedAt": "2026-08-19T07:06:04.809Z",
+  "globalRules": [],
+  "strengthDegrees": {
+    "schemaVersion": 1,
+    "updatedAt": "2026-08-19T07:06:04.809Z",
+    "degrees": [
+      {
+        "id": "muqaddam",
+        "label": "مقدَّم",
+        "shortLabel": "مقدَّم",
+        "rank": 1,
+        "description": "الوجه الذي يُبدأ به في الأداء ويُقرأ به أولا عند التلقي.",
+        "color": "#047857",
+        "isPreferred": true
+      },
+      {
+        "id": "rajih",
+        "label": "راجح",
+        "shortLabel": "راجح",
+        "rank": 2,
+        "description": "وجه صحيح مرجَّح عند أهل الأداء، ويأتي بعد المقدَّم.",
+        "color": "#0e7490",
+        "isPreferred": false
+      },
+      {
+        "id": "jaiz",
+        "label": "جائز",
+        "shortLabel": "جائز",
+        "rank": 3,
+        "description": "وجه صحيح مقروء به من غير ترجيح.",
+        "color": "#a16207",
+        "isPreferred": false
+      },
+      {
+        "id": "muakhkhar",
+        "label": "مؤخَّر",
+        "shortLabel": "مؤخَّر",
+        "rank": 4,
+        "description": "وجه صحيح لكنه مؤخَّر في الأداء، يُقرأ به آخرا.",
+        "color": "#b45309",
+        "isPreferred": false
+      }
+    ]
+  },
+  "ruleOccurrences": [],
+  "occurrenceLog": [],
+  "ayahs": [
+    {
+      "ayahKey": 2037,
+      "surahNumber": 2,
+      "ayahNumber": 37,
+      "text": "فَتَلَقَّىٰٓ ءَادَمُ مِن رَّبِّهِۦ كَلِمَٰتٖ فَتَابَ عَلَيۡهِۚ إِنَّهُۥ هُوَ ٱلتَّوَّابُ ٱلرَّحِيمُ",
+      "words": [
+        {
+          "id": 2037001,
+          "position": 1,
+          "text": "فَتَلَقَّىٰٓ"
+        },
+        {
+          "id": 2037002,
+          "position": 2,
+          "text": "ءَادَمُ"
+        },
+        {
+          "id": 2037003,
+          "position": 3,
+          "text": "مِن"
+        },
+        {
+          "id": 2037004,
+          "position": 4,
+          "text": "رَّبِّهِۦ"
+        },
+        {
+          "id": 2037005,
+          "position": 5,
+          "text": "كَلِمَٰتٖ"
+        },
+        {
+          "id": 2037006,
+          "position": 6,
+          "text": "فَتَابَ"
+        },
+        {
+          "id": 2037007,
+          "position": 7,
+          "text": "عَلَيۡهِۚ"
+        },
+        {
+          "id": 2037008,
+          "position": 8,
+          "text": "إِنَّهُۥ"
+        },
+        {
+          "id": 2037009,
+          "position": 9,
+          "text": "هُوَ"
+        },
+        {
+          "id": 2037010,
+          "position": 10,
+          "text": "ٱلتَّوَّابُ"
+        },
+        {
+          "id": 2037011,
+          "position": 11,
+          "text": "ٱلرَّحِيمُ"
+        }
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "schemaVersion": 6,
+      "ayahKey": 2037,
+      "surahNumber": 2,
+      "ayahNumber": 37,
+      "variants": [
+        {
+          "id": "v-2037-2-mszn6pg8",
+          "category": "FARSH",
+          "title": "مُ مِن رَّبِّهِۦ كَلِمَٰتٖ فَتَابَ عَلَيۡهِۚ إِنَّهُۥ هُ",
+          "startPosition": 2,
+          "endPosition": 9,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 2,
+              "characterIndex": 4
+            },
+            "end": {
+              "position": 9,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-2-mszn6pg8-base",
+              "text": "مُ مِن رَّبِّهِۦ كَلِمَٰتٖ فَتَابَ عَلَيۡهِۚ إِنَّهُۥ هُ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 6
+        },
+        {
+          "id": "v-2037-2-mszn75pj",
+          "category": "USUL",
+          "title": "مُ مِن رَّبِّهِۦ كَلِمَٰتٖ فَتَابَ عَلَيۡهِۚ إِنَّهُۥ هُ",
+          "startPosition": 2,
+          "endPosition": 9,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 2,
+              "characterIndex": 4
+            },
+            "end": {
+              "position": 9,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-2-mszn75pj-base",
+              "text": "مُ مِن رَّبِّهِۦ كَلِمَٰتٖ فَتَابَ عَلَيۡهِۚ إِنَّهُۥ هُ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-2-mszn75pj-alt-mszn7e9z",
+              "text": "مُ مِن رَّبِّهِۦ كَلِمَٰتٖ فَتَابَ عَلَيۡهِۚ إِنَّهُۥ هُ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "IMAMS",
+                "imamIds": [
+                  "imam-abu-amr",
+                  "imam-yaqub"
+                ]
+              },
+              "ruleLabel": "إدغام-----------------------------------------------------------------------إدغام"
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 5
+        },
+        {
+          "id": "v-2037-2-mszntyrv",
+          "category": "USUL",
+          "title": "مُ مِن رَّبِّهِۦ كَلِمَٰتٖ فَتَابَ عَلَيۡهِۚ إِنَّهُۥ هُ",
+          "startPosition": 2,
+          "endPosition": 9,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 2,
+              "characterIndex": 4
+            },
+            "end": {
+              "position": 9,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-2-mszntyrv-base",
+              "text": "مُ مِن رَّبِّهِۦ كَلِمَٰتٖ فَتَابَ عَلَيۡهِۚ إِنَّهُۥ هُ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-2-mszntyrv-alt-mszntzsr",
+              "text": "مُ مِن رَّبِّهِۦ كَلِمَٰتٖ فَتَابَ عَلَيۡهِۚ إِنَّهُۥ هُ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "IMAMS",
+                "imamIds": [
+                  "imam-yaqub"
+                ]
+              },
+              "ruleLabel": "إدغام-----------------------------------------------------------------------إدغام",
+              "strengthDegreeId": "jaiz"
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 9
+        },
+        {
+          "id": "v-2037-2-mszmuesd",
+          "category": "FARSH",
+          "title": "ءَادَمُ مِن رَّبِّهِۦ كَلِمَٰتٖ",
+          "startPosition": 2,
+          "endPosition": 5,
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-2-mszmuesd-base",
+              "text": "ءَادَمُ مِن رَّبِّهِۦ كَلِمَٰتٖ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-2-mszmuesd-alt-mszmujel",
+              "text": "ءَادَمُ مِن رَّبِّهِۦ كَلِمَٰتٖ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "IMAMS",
+                "imamIds": [
+                  "imam-ibn-kathir"
+                ]
+              },
+              "ruleLabel": "ءَادَمَ مِن رَّبِّهِۦ كَلِمَٰتٌ"
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 3,
+          "targetKind": "WORDS"
+        },
+        {
+          "id": "v-2037-3-mszmmvj8",
+          "category": "USUL",
+          "title": "ن رَّ",
+          "startPosition": 3,
+          "endPosition": 4,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 3,
+              "characterIndex": 2
+            },
+            "end": {
+              "position": 4,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-3-mszmmvj8-base",
+              "text": "ن رَّ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-3-mszmmvj8-alt-mszmny1o",
+              "text": "ن رَّ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "PATHS",
+                "pathIds": [
+                  "path-qalun-abu-nashit",
+                  "path-qalun-al-halwani",
+                  "path-warsh-al-asbahani",
+                  "path-duri-abu-amr-abu-al-zaraa",
+                  "path-duri-abu-amr-abu-tahir",
+                  "path-susi-abu-imran",
+                  "path-susi-abu-shuaib",
+                  "path-hafs-ubayd",
+                  "path-hafs-amr",
+                  "path-ibn-wardan-ibn-hammad",
+                  "path-ibn-wardan-al-fadl",
+                  "path-ibn-jammaz-ibn-shanabudh",
+                  "path-ibn-jammaz-al-rabi",
+                  "path-rawh-al-zubayr",
+                  "path-rawh-ibn-wahb",
+                  "path-ruways-abu-al-tayyib",
+                  "path-ruways-ibn-shanabudh"
+                ]
+              },
+              "ruleLabel": "ادغام مع الغنة "
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 2
+        },
+        {
+          "id": "v-2037-3-mszmzc53",
+          "category": "USUL",
+          "title": "ن رَّ",
+          "startPosition": 3,
+          "endPosition": 4,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 3,
+              "characterIndex": 2
+            },
+            "end": {
+              "position": 4,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-3-mszmzc53-base",
+              "text": "ن رَّ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-3-mszmzc53-alt-mszmzvly",
+              "text": "ن رَّ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "IMAMS",
+                "imamIds": [
+                  "imam-ibn-kathir"
+                ]
+              },
+              "ruleLabel": "إدغام مع الغنة ",
+              "strengthDegreeId": "rajih"
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 4
+        },
+        {
+          "id": "v-2037-3-msznkq4y",
+          "category": "USUL",
+          "title": "ن رَّ",
+          "startPosition": 3,
+          "endPosition": 4,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 3,
+              "characterIndex": 2
+            },
+            "end": {
+              "position": 4,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-3-msznkq4y-base",
+              "text": "ن رَّ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-3-msznkq4y-alt-msznkw8q",
+              "text": "ن رَّ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "PATHS",
+                "pathIds": [
+                  "path-duri-abu-amr-abu-al-zaraa",
+                  "path-susi-abu-imran",
+                  "path-hafs-ubayd",
+                  "path-rawh-ibn-wahb",
+                  "path-ruways-ibn-shanabudh",
+                  "path-qalun-abu-nashit",
+                  "path-duri-abu-amr-abu-tahir",
+                  "path-susi-abu-shuaib",
+                  "path-hafs-amr",
+                  "path-rawh-al-zubayr",
+                  "path-ruways-abu-al-tayyib",
+                  "path-qalun-al-halwani",
+                  "path-warsh-al-asbahani"
+                ]
+              },
+              "ruleLabel": "إدغام مع الغنة ",
+              "strengthDegreeId": "rajih"
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 8
+        },
+        {
+          "id": "v-2037-3-mszoxd1n",
+          "category": "USUL",
+          "title": "ن رَّ",
+          "startPosition": 3,
+          "endPosition": 4,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 3,
+              "characterIndex": 2
+            },
+            "end": {
+              "position": 4,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-3-mszoxd1n-base",
+              "text": "ن رَّ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-3-mszoxd1n-alt-mszoxjub",
+              "text": "ن رَّ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "PATHS",
+                "pathIds": [
+                  "path-warsh-al-azraq"
+                ]
+              },
+              "ruleLabel": "إدغام مع الغنة ",
+              "strengthDegreeId": "rajih"
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 11
+        },
+        {
+          "id": "v-2037-3-mszp41ul",
+          "category": "USUL",
+          "title": "ن رَّ",
+          "startPosition": 3,
+          "endPosition": 4,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 3,
+              "characterIndex": 2
+            },
+            "end": {
+              "position": 4,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-3-mszp41ul-base",
+              "text": "ن رَّ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-3-mszp41ul-alt-mszp479p",
+              "text": "ن رَّ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "PATHS",
+                "pathIds": [
+                  "path-warsh-al-azraq"
+                ]
+              },
+              "ruleLabel": "إدغام مع الغنة ",
+              "strengthDegreeId": "rajih"
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 14
+        },
+        {
+          "id": "v-2037-3-mszpnot6",
+          "category": "USUL",
+          "title": "ن رَّ",
+          "startPosition": 3,
+          "endPosition": 4,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 3,
+              "characterIndex": 2
+            },
+            "end": {
+              "position": 4,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-3-mszpnot6-base",
+              "text": "ن رَّ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-3-mszpnot6-alt-mszpnqbl",
+              "text": "ن رَّ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "PATHS",
+                "pathIds": [
+                  "path-warsh-al-azraq"
+                ]
+              },
+              "ruleLabel": "إدغام مع الغنة "
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 18
+        },
+        {
+          "id": "v-2037-3-mszqca3k",
+          "category": "USUL",
+          "title": "ن رَّ",
+          "startPosition": 3,
+          "endPosition": 4,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 3,
+              "characterIndex": 2
+            },
+            "end": {
+              "position": 4,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-3-mszqca3k-base",
+              "text": "ن رَّ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-3-mszqca3k-alt-mszqcbgx",
+              "text": "ن رَّ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "NARRATORS",
+                "narratorIds": [
+                  "narrator-hisham",
+                  "narrator-ibn-dhakwan",
+                  "narrator-hafs"
+                ]
+              },
+              "ruleLabel": "إدغام مع الغنة ",
+              "strengthDegreeId": "rajih"
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 20
+        },
+        {
+          "id": "v-2037-3-mszqj7s3",
+          "category": "USUL",
+          "title": "ن رَّ",
+          "startPosition": 3,
+          "endPosition": 4,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 3,
+              "characterIndex": 2
+            },
+            "end": {
+              "position": 4,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-3-mszqj7s3-base",
+              "text": "ن رَّ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-3-mszqj7s3-alt-mszqj94r",
+              "text": "ن رَّ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "NARRATORS",
+                "narratorIds": [
+                  "narrator-hafs"
+                ]
+              },
+              "ruleLabel": "إدغام مع الغنة"
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 23
+        },
+        {
+          "id": "v-2037-2-mszp012b",
+          "category": "USUL",
+          "title": "ءَا",
+          "startPosition": 2,
+          "endPosition": 2,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 2,
+              "characterIndex": 1
+            },
+            "end": {
+              "position": 2,
+              "characterIndex": 2
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-2-mszp012b-base",
+              "text": "ءَا",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-2-mszp012b-alt-mszp030b",
+              "text": "ءَا",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "PATHS",
+                "pathIds": [
+                  "path-warsh-al-azraq"
+                ]
+              },
+              "ruleLabel": "توسط",
+              "strengthDegreeId": "rajih"
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 12
+        },
+        {
+          "id": "v-2037-2-mszp1xys",
+          "category": "USUL",
+          "title": "ءَا",
+          "startPosition": 2,
+          "endPosition": 2,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 2,
+              "characterIndex": 1
+            },
+            "end": {
+              "position": 2,
+              "characterIndex": 2
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-2-mszp1xys-base",
+              "text": "ءَا",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-2-mszp1xys-alt-mszp2kqc",
+              "text": "ءَا",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "PATHS",
+                "pathIds": [
+                  "path-warsh-al-azraq"
+                ]
+              },
+              "ruleLabel": "طول ",
+              "strengthDegreeId": "jaiz"
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 13
+        },
+        {
+          "id": "v-2037-2-mszpk8qo",
+          "category": "USUL",
+          "title": "ءَا",
+          "startPosition": 2,
+          "endPosition": 2,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 2,
+              "characterIndex": 1
+            },
+            "end": {
+              "position": 2,
+              "characterIndex": 2
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-2-mszpk8qo-base",
+              "text": "ءَا",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-2-mszpk8qo-alt-mszpkb60",
+              "text": "ءَا",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "PATHS",
+                "pathIds": [
+                  "path-warsh-al-azraq"
+                ]
+              },
+              "ruleLabel": "توسط"
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 16
+        },
+        {
+          "id": "v-2037-2-mszpkx21",
+          "category": "USUL",
+          "title": "ءَا",
+          "startPosition": 2,
+          "endPosition": 2,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 2,
+              "characterIndex": 1
+            },
+            "end": {
+              "position": 2,
+              "characterIndex": 2
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-2-mszpkx21-base",
+              "text": "ءَا",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-2-mszpkx21-alt-mszpkyxt",
+              "text": "ءَا",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "PATHS",
+                "pathIds": [
+                  "path-warsh-al-azraq"
+                ]
+              },
+              "ruleLabel": "طول"
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 17
+        },
+        {
+          "id": "v-2037-1-msznzb7h",
+          "category": "MADUD",
+          "title": "قَّىٰٓ ءَا",
+          "startPosition": 1,
+          "endPosition": 2,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 1,
+              "characterIndex": 4
+            },
+            "end": {
+              "position": 2,
+              "characterIndex": 2
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-1-msznzb7h-base",
+              "text": "قَّىٰٓ ءَا",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-1-msznzb7h-alt-msznzcyd",
+              "text": "قَّىٰٓ ءَا",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "PATHS",
+                "pathIds": [
+                  "path-warsh-al-azraq"
+                ]
+              },
+              "ruleLabel": "5",
+              "strengthDegreeId": "muqaddam"
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 10
+        },
+        {
+          "id": "v-2037-1-mszmfnua",
+          "category": "MADUD",
+          "title": "ىٰٓ ءَ",
+          "startPosition": 1,
+          "endPosition": 2,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 1,
+              "characterIndex": 5
+            },
+            "end": {
+              "position": 2,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-1-mszmfnua-base",
+              "text": "ىٰٓ ءَ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-1-mszmfnua-alt-mszmgtbu",
+              "text": "ىٰٓ ءَ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "PATHS",
+                "pathIds": [
+                  "path-qalun-abu-nashit",
+                  "path-qalun-al-halwani",
+                  "path-warsh-al-asbahani",
+                  "path-duri-abu-amr-abu-al-zaraa",
+                  "path-duri-abu-amr-abu-tahir",
+                  "path-hafs-ubayd",
+                  "path-hafs-amr",
+                  "path-ibn-wardan-ibn-hammad",
+                  "path-ibn-wardan-al-fadl",
+                  "path-ibn-jammaz-ibn-shanabudh",
+                  "path-ibn-jammaz-al-rabi",
+                  "path-ruways-ibn-shanabudh",
+                  "path-ruways-abu-al-tayyib",
+                  "path-rawh-ibn-wahb",
+                  "path-rawh-al-zubayr"
+                ]
+              },
+              "ruleLabel": "1",
+              "strengthDegreeId": "muqaddam"
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 1
+        },
+        {
+          "id": "v-2037-1-msznfvi9",
+          "category": "MADUD",
+          "title": "ىٰٓ ءَ",
+          "startPosition": 1,
+          "endPosition": 2,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 1,
+              "characterIndex": 5
+            },
+            "end": {
+              "position": 2,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-1-msznfvi9-base",
+              "text": "ىٰٓ ءَ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-1-msznfvi9-alt-mszng3b5",
+              "text": "ىٰٓ ءَ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "PATHS",
+                "pathIds": [
+                  "path-duri-abu-amr-abu-al-zaraa",
+                  "path-susi-abu-imran",
+                  "path-hafs-ubayd",
+                  "path-rawh-ibn-wahb",
+                  "path-ruways-ibn-shanabudh",
+                  "path-qalun-abu-nashit",
+                  "path-duri-abu-amr-abu-tahir",
+                  "path-susi-abu-shuaib",
+                  "path-hafs-amr",
+                  "path-rawh-al-zubayr",
+                  "path-ruways-abu-al-tayyib",
+                  "path-qalun-al-halwani",
+                  "path-warsh-al-asbahani"
+                ]
+              },
+              "ruleLabel": "2",
+              "strengthDegreeId": "muqaddam"
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 7
+        },
+        {
+          "id": "v-2037-1-mszqahtk",
+          "category": "MADUD",
+          "title": "ىٰٓ ءَ",
+          "startPosition": 1,
+          "endPosition": 2,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 1,
+              "characterIndex": 5
+            },
+            "end": {
+              "position": 2,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-1-mszqahtk-base",
+              "text": "ىٰٓ ءَ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-1-mszqahtk-alt-mszqakfk",
+              "text": "ىٰٓ ءَ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "NARRATORS",
+                "narratorIds": [
+                  "narrator-hisham",
+                  "narrator-ibn-dhakwan",
+                  "narrator-hafs"
+                ]
+              },
+              "ruleLabel": "3",
+              "strengthDegreeId": "muqaddam"
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 19
+        },
+        {
+          "id": "v-2037-1-mszqfnrm",
+          "category": "MADUD",
+          "title": "ىٰٓ ءَ",
+          "startPosition": 1,
+          "endPosition": 2,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 1,
+              "characterIndex": 5
+            },
+            "end": {
+              "position": 2,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-1-mszqfnrm-base",
+              "text": "ىٰٓ ءَ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-1-mszqfnrm-alt-mszqfpzt",
+              "text": "ىٰٓ ءَ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "IMAMS",
+                "imamIds": [
+                  "imam-asim"
+                ]
+              },
+              "ruleLabel": "4",
+              "strengthDegreeId": "muqaddam"
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 22
+        },
+        {
+          "id": "v-2037-1-mszqrkr1",
+          "category": "MADUD",
+          "title": "ىٰٓ ءَ",
+          "startPosition": 1,
+          "endPosition": 2,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 1,
+              "characterIndex": 5
+            },
+            "end": {
+              "position": 2,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-1-mszqrkr1-base",
+              "text": "ىٰٓ ءَ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-1-mszqrkr1-alt-mszqro4s",
+              "text": "ىٰٓ ءَ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "IMAMS",
+                "imamIds": [
+                  "imam-hamzah"
+                ]
+              },
+              "ruleLabel": "5"
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 24
+        },
+        {
+          "id": "v-2037-1-mszqt7px",
+          "category": "USUL",
+          "title": "ىٰٓ ءَ",
+          "startPosition": 1,
+          "endPosition": 2,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 1,
+              "characterIndex": 5
+            },
+            "end": {
+              "position": 2,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-1-mszqt7px-base",
+              "text": "ىٰٓ ءَ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-1-mszqt7px-alt-mszqtao5",
+              "text": "ىٰٓ ءَ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "IMAMS",
+                "imamIds": [
+                  "imam-hamzah"
+                ]
+              },
+              "ruleLabel": "سكت "
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 27
+        },
+        {
+          "id": "v-2037-1-mszqybs7",
+          "category": "MADUD",
+          "title": "ىٰٓ ءَ",
+          "startPosition": 1,
+          "endPosition": 2,
+          "targetKind": "CHARACTERS",
+          "characterRange": {
+            "start": {
+              "position": 1,
+              "characterIndex": 5
+            },
+            "end": {
+              "position": 2,
+              "characterIndex": 1
+            }
+          },
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-1-mszqybs7-base",
+              "text": "ىٰٓ ءَ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-1-mszqybs7-alt-mszqye7r",
+              "text": "ىٰٓ ءَ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "IMAMS",
+                "imamIds": [
+                  "imam-al-kisai",
+                  "imam-khalaf"
+                ]
+              },
+              "ruleLabel": "3"
+            }
+          ],
+          "ayahKey": 2037
+        },
+        {
+          "id": "v-2037-1-mszpdjaf",
+          "category": "USUL",
+          "title": "فَتَلَقَّىٰٓ",
+          "startPosition": 1,
+          "endPosition": 1,
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-1-mszpdjaf-base",
+              "text": "فَتَلَقَّىٰٓ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-1-mszpdjaf-alt-mszpdu0v",
+              "text": "فَتَلَقَّىٰٓ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "PATHS",
+                "pathIds": [
+                  "path-warsh-al-azraq"
+                ]
+              },
+              "ruleLabel": "تقليل "
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 15,
+          "targetKind": "WORDS"
+        },
+        {
+          "id": "v-2037-1-mszqqt9a",
+          "category": "MADUD",
+          "title": "فَتَلَقَّىٰٓ",
+          "startPosition": 1,
+          "endPosition": 1,
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-1-mszqqt9a-base",
+              "text": "فَتَلَقَّىٰٓ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-1-mszqqt9a-alt-mszqqz4d",
+              "text": "فَتَلَقَّىٰٓ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "NARRATORS",
+                "narratorIds": []
+              },
+              "ruleLabel": "إمالة "
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 26,
+          "targetKind": "WORDS"
+        },
+        {
+          "id": "v-2037-1-mszqs5m5",
+          "category": "USUL",
+          "title": "فَتَلَقَّىٰٓ",
+          "startPosition": 1,
+          "endPosition": 1,
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-1-mszqs5m5-base",
+              "text": "فَتَلَقَّىٰٓ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-1-mszqs5m5-alt-mszqs798",
+              "text": "فَتَلَقَّىٰٓ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "IMAMS",
+                "imamIds": [
+                  "imam-hamzah"
+                ]
+              },
+              "ruleLabel": "إمالة "
+            },
+            {
+              "id": "v-2037-1-mszqs5m5-alt-mszqsswm",
+              "text": "فَتَلَقَّىٰٓ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "NARRATORS",
+                "narratorIds": []
+              }
+            }
+          ],
+          "ayahKey": 2037,
+          "orderRank": 25,
+          "targetKind": "WORDS"
+        },
+        {
+          "id": "v-2037-1-mszqz2kf",
+          "category": "USUL",
+          "title": "فَتَلَقَّىٰٓ",
+          "startPosition": 1,
+          "endPosition": 1,
+          "status": "DRAFT",
+          "alternatives": [
+            {
+              "id": "v-2037-1-mszqz2kf-base",
+              "text": "فَتَلَقَّىٰٓ",
+              "label": "وجه المصحف",
+              "isBase": true,
+              "scope": {
+                "kind": "ALL"
+              }
+            },
+            {
+              "id": "v-2037-1-mszqz2kf-alt-mszqz4lr",
+              "text": "فَتَلَقَّىٰٓ",
+              "label": "وجه جديد",
+              "scope": {
+                "kind": "IMAMS",
+                "imamIds": [
+                  "imam-al-kisai",
+                  "imam-khalaf"
+                ]
+              },
+              "ruleLabel": "إمالة"
+            }
+          ],
+          "ayahKey": 2037,
+          "targetKind": "WORDS"
+        }
+      ],
+      "branches": [
+        {
+          "id": "v-2037-2-mszn75pj::v-2037-2-mszn75pj-alt-mszn7e9z",
+          "variantId": "v-2037-2-mszn75pj",
+          "alternativeId": "v-2037-2-mszn75pj-alt-mszn7e9z",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-2037-2-mszn75pj-w2",
+              "wordId": 2037002,
+              "position": 2,
+              "characterStart": 4,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-2-mszn75pj-w3",
+              "wordId": 2037003,
+              "position": 3,
+              "characterStart": 1,
+              "characterEnd": 2,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-2-mszn75pj-w4",
+              "wordId": 2037004,
+              "position": 4,
+              "characterStart": 1,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-2-mszn75pj-w5",
+              "wordId": 2037005,
+              "position": 5,
+              "characterStart": 1,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-2-mszn75pj-w6",
+              "wordId": 2037006,
+              "position": 6,
+              "characterStart": 1,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-2-mszn75pj-w7",
+              "wordId": 2037007,
+              "position": 7,
+              "characterStart": 1,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-2-mszn75pj-w8",
+              "wordId": 2037008,
+              "position": 8,
+              "characterStart": 1,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-2-mszn75pj-w9",
+              "wordId": 2037009,
+              "position": 9,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 0,
+          "side": "BOTTOM",
+          "label": "وجه جديد — أبو عمرو ويعقوب",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-2-mszntyrv::v-2037-2-mszntyrv-alt-mszntzsr",
+          "variantId": "v-2037-2-mszntyrv",
+          "alternativeId": "v-2037-2-mszntyrv-alt-mszntzsr",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-2037-2-mszntyrv-w2",
+              "wordId": 2037002,
+              "position": 2,
+              "characterStart": 4,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-2-mszntyrv-w3",
+              "wordId": 2037003,
+              "position": 3,
+              "characterStart": 1,
+              "characterEnd": 2,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-2-mszntyrv-w4",
+              "wordId": 2037004,
+              "position": 4,
+              "characterStart": 1,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-2-mszntyrv-w5",
+              "wordId": 2037005,
+              "position": 5,
+              "characterStart": 1,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-2-mszntyrv-w6",
+              "wordId": 2037006,
+              "position": 6,
+              "characterStart": 1,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-2-mszntyrv-w7",
+              "wordId": 2037007,
+              "position": 7,
+              "characterStart": 1,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-2-mszntyrv-w8",
+              "wordId": 2037008,
+              "position": 8,
+              "characterStart": 1,
+              "characterEnd": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-2-mszntyrv-w9",
+              "wordId": 2037009,
+              "position": 9,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 1,
+          "side": "BOTTOM",
+          "label": "وجه جديد — يعقوب بكماله",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-2-mszmuesd::v-2037-2-mszmuesd-alt-mszmujel",
+          "variantId": "v-2037-2-mszmuesd",
+          "alternativeId": "v-2037-2-mszmuesd-alt-mszmujel",
+          "category": "FARSH",
+          "nodes": [
+            {
+              "id": "v-2037-2-mszmuesd-w2",
+              "wordId": 2037002,
+              "position": 2,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-2-mszmuesd-w3",
+              "wordId": 2037003,
+              "position": 3,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-2-mszmuesd-w4",
+              "wordId": 2037004,
+              "position": 4,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-2-mszmuesd-w5",
+              "wordId": 2037005,
+              "position": 5,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 2,
+          "side": "BOTTOM",
+          "label": "وجه جديد — ابن كثير بكماله",
+          "color": "#2563eb",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-3-mszmmvj8::v-2037-3-mszmmvj8-alt-mszmny1o",
+          "variantId": "v-2037-3-mszmmvj8",
+          "alternativeId": "v-2037-3-mszmmvj8-alt-mszmny1o",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-2037-3-mszmmvj8-w3",
+              "wordId": 2037003,
+              "position": 3,
+              "characterStart": 2,
+              "characterEnd": 2,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-3-mszmmvj8-w4",
+              "wordId": 2037004,
+              "position": 4,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 3,
+          "side": "BOTTOM",
+          "label": "وجه جديد — أبو نشيط عن قالون، الحلواني عن قالون، الأصبهاني عن ورش، أبو الزعراء عن الدوري، أبو طاهر عن الدوري، أبو عمران عن السوسي، أبو شعيب عن السوسي، عبيد عن حفص، عمرو عن حفص، ابن حماد عن ابن وردان، الفضل عن ابن وردان، ابن شنبوذ عن ابن جماز، أبو الربيع عن ابن جماز، الزبير عن روح، ابن وهب عن روح، أبو الطيب عن رويس وابن شنبوذ عن رويس",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-3-mszmzc53::v-2037-3-mszmzc53-alt-mszmzvly",
+          "variantId": "v-2037-3-mszmzc53",
+          "alternativeId": "v-2037-3-mszmzc53-alt-mszmzvly",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-2037-3-mszmzc53-w3",
+              "wordId": 2037003,
+              "position": 3,
+              "characterStart": 2,
+              "characterEnd": 2,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-3-mszmzc53-w4",
+              "wordId": 2037004,
+              "position": 4,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 4,
+          "side": "BOTTOM",
+          "label": "وجه جديد — ابن كثير بكماله",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-3-msznkq4y::v-2037-3-msznkq4y-alt-msznkw8q",
+          "variantId": "v-2037-3-msznkq4y",
+          "alternativeId": "v-2037-3-msznkq4y-alt-msznkw8q",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-2037-3-msznkq4y-w3",
+              "wordId": 2037003,
+              "position": 3,
+              "characterStart": 2,
+              "characterEnd": 2,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-3-msznkq4y-w4",
+              "wordId": 2037004,
+              "position": 4,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 5,
+          "side": "BOTTOM",
+          "label": "وجه جديد — أبو الزعراء عن الدوري، أبو عمران عن السوسي، عبيد عن حفص، ابن وهب عن روح، ابن شنبوذ عن رويس، أبو نشيط عن قالون، أبو طاهر عن الدوري، أبو شعيب عن السوسي، عمرو عن حفص، الزبير عن روح، أبو الطيب عن رويس، الحلواني عن قالون والأصبهاني عن ورش",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-3-mszoxd1n::v-2037-3-mszoxd1n-alt-mszoxjub",
+          "variantId": "v-2037-3-mszoxd1n",
+          "alternativeId": "v-2037-3-mszoxd1n-alt-mszoxjub",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-2037-3-mszoxd1n-w3",
+              "wordId": 2037003,
+              "position": 3,
+              "characterStart": 2,
+              "characterEnd": 2,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-3-mszoxd1n-w4",
+              "wordId": 2037004,
+              "position": 4,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 6,
+          "side": "BOTTOM",
+          "label": "وجه جديد — الأزرق عن ورش",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-3-mszp41ul::v-2037-3-mszp41ul-alt-mszp479p",
+          "variantId": "v-2037-3-mszp41ul",
+          "alternativeId": "v-2037-3-mszp41ul-alt-mszp479p",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-2037-3-mszp41ul-w3",
+              "wordId": 2037003,
+              "position": 3,
+              "characterStart": 2,
+              "characterEnd": 2,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-3-mszp41ul-w4",
+              "wordId": 2037004,
+              "position": 4,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 7,
+          "side": "BOTTOM",
+          "label": "وجه جديد — الأزرق عن ورش",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-3-mszpnot6::v-2037-3-mszpnot6-alt-mszpnqbl",
+          "variantId": "v-2037-3-mszpnot6",
+          "alternativeId": "v-2037-3-mszpnot6-alt-mszpnqbl",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-2037-3-mszpnot6-w3",
+              "wordId": 2037003,
+              "position": 3,
+              "characterStart": 2,
+              "characterEnd": 2,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-3-mszpnot6-w4",
+              "wordId": 2037004,
+              "position": 4,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 8,
+          "side": "BOTTOM",
+          "label": "وجه جديد — الأزرق عن ورش",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-3-mszqca3k::v-2037-3-mszqca3k-alt-mszqcbgx",
+          "variantId": "v-2037-3-mszqca3k",
+          "alternativeId": "v-2037-3-mszqca3k-alt-mszqcbgx",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-2037-3-mszqca3k-w3",
+              "wordId": 2037003,
+              "position": 3,
+              "characterStart": 2,
+              "characterEnd": 2,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-3-mszqca3k-w4",
+              "wordId": 2037004,
+              "position": 4,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 9,
+          "side": "BOTTOM",
+          "label": "وجه جديد — هشام وابن ذكوان و1 آخرين",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-3-mszqj7s3::v-2037-3-mszqj7s3-alt-mszqj94r",
+          "variantId": "v-2037-3-mszqj7s3",
+          "alternativeId": "v-2037-3-mszqj7s3-alt-mszqj94r",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-2037-3-mszqj7s3-w3",
+              "wordId": 2037003,
+              "position": 3,
+              "characterStart": 2,
+              "characterEnd": 2,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-3-mszqj7s3-w4",
+              "wordId": 2037004,
+              "position": 4,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 10,
+          "side": "BOTTOM",
+          "label": "وجه جديد — حفص",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-1-mszmfnua::v-2037-1-mszmfnua-alt-mszmgtbu",
+          "variantId": "v-2037-1-mszmfnua",
+          "alternativeId": "v-2037-1-mszmfnua-alt-mszmgtbu",
+          "category": "MADUD",
+          "nodes": [
+            {
+              "id": "v-2037-1-mszmfnua-w1",
+              "wordId": 2037001,
+              "position": 1,
+              "characterStart": 5,
+              "characterEnd": 5,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-1-mszmfnua-w2",
+              "wordId": 2037002,
+              "position": 2,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 11,
+          "side": "BOTTOM",
+          "label": "وجه جديد — أبو نشيط عن قالون، الحلواني عن قالون، الأصبهاني عن ورش، أبو الزعراء عن الدوري، أبو طاهر عن الدوري، عبيد عن حفص، عمرو عن حفص، ابن حماد عن ابن وردان، الفضل عن ابن وردان، ابن شنبوذ عن ابن جماز، أبو الربيع عن ابن جماز، ابن شنبوذ عن رويس، أبو الطيب عن رويس، ابن وهب عن روح والزبير عن روح",
+          "color": "#ea580c",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-1-msznfvi9::v-2037-1-msznfvi9-alt-mszng3b5",
+          "variantId": "v-2037-1-msznfvi9",
+          "alternativeId": "v-2037-1-msznfvi9-alt-mszng3b5",
+          "category": "MADUD",
+          "nodes": [
+            {
+              "id": "v-2037-1-msznfvi9-w1",
+              "wordId": 2037001,
+              "position": 1,
+              "characterStart": 5,
+              "characterEnd": 5,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-1-msznfvi9-w2",
+              "wordId": 2037002,
+              "position": 2,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 12,
+          "side": "BOTTOM",
+          "label": "وجه جديد — أبو الزعراء عن الدوري، أبو عمران عن السوسي، عبيد عن حفص، ابن وهب عن روح، ابن شنبوذ عن رويس، أبو نشيط عن قالون، أبو طاهر عن الدوري، أبو شعيب عن السوسي، عمرو عن حفص، الزبير عن روح، أبو الطيب عن رويس، الحلواني عن قالون والأصبهاني عن ورش",
+          "color": "#ea580c",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-1-msznzb7h::v-2037-1-msznzb7h-alt-msznzcyd",
+          "variantId": "v-2037-1-msznzb7h",
+          "alternativeId": "v-2037-1-msznzb7h-alt-msznzcyd",
+          "category": "MADUD",
+          "nodes": [
+            {
+              "id": "v-2037-1-msznzb7h-w1",
+              "wordId": 2037001,
+              "position": 1,
+              "characterStart": 4,
+              "characterEnd": 5,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-1-msznzb7h-w2",
+              "wordId": 2037002,
+              "position": 2,
+              "characterStart": 1,
+              "characterEnd": 2,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 13,
+          "side": "BOTTOM",
+          "label": "وجه جديد — الأزرق عن ورش",
+          "color": "#ea580c",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-1-mszqahtk::v-2037-1-mszqahtk-alt-mszqakfk",
+          "variantId": "v-2037-1-mszqahtk",
+          "alternativeId": "v-2037-1-mszqahtk-alt-mszqakfk",
+          "category": "MADUD",
+          "nodes": [
+            {
+              "id": "v-2037-1-mszqahtk-w1",
+              "wordId": 2037001,
+              "position": 1,
+              "characterStart": 5,
+              "characterEnd": 5,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-1-mszqahtk-w2",
+              "wordId": 2037002,
+              "position": 2,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 14,
+          "side": "BOTTOM",
+          "label": "وجه جديد — هشام وابن ذكوان و1 آخرين",
+          "color": "#ea580c",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-1-mszqfnrm::v-2037-1-mszqfnrm-alt-mszqfpzt",
+          "variantId": "v-2037-1-mszqfnrm",
+          "alternativeId": "v-2037-1-mszqfnrm-alt-mszqfpzt",
+          "category": "MADUD",
+          "nodes": [
+            {
+              "id": "v-2037-1-mszqfnrm-w1",
+              "wordId": 2037001,
+              "position": 1,
+              "characterStart": 5,
+              "characterEnd": 5,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-1-mszqfnrm-w2",
+              "wordId": 2037002,
+              "position": 2,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 15,
+          "side": "BOTTOM",
+          "label": "وجه جديد — عاصم بكماله",
+          "color": "#ea580c",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-1-mszqrkr1::v-2037-1-mszqrkr1-alt-mszqro4s",
+          "variantId": "v-2037-1-mszqrkr1",
+          "alternativeId": "v-2037-1-mszqrkr1-alt-mszqro4s",
+          "category": "MADUD",
+          "nodes": [
+            {
+              "id": "v-2037-1-mszqrkr1-w1",
+              "wordId": 2037001,
+              "position": 1,
+              "characterStart": 5,
+              "characterEnd": 5,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-1-mszqrkr1-w2",
+              "wordId": 2037002,
+              "position": 2,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 16,
+          "side": "BOTTOM",
+          "label": "وجه جديد — حمزة بكماله",
+          "color": "#ea580c",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-1-mszqybs7::v-2037-1-mszqybs7-alt-mszqye7r",
+          "variantId": "v-2037-1-mszqybs7",
+          "alternativeId": "v-2037-1-mszqybs7-alt-mszqye7r",
+          "category": "MADUD",
+          "nodes": [
+            {
+              "id": "v-2037-1-mszqybs7-w1",
+              "wordId": 2037001,
+              "position": 1,
+              "characterStart": 5,
+              "characterEnd": 5,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-1-mszqybs7-w2",
+              "wordId": 2037002,
+              "position": 2,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 17,
+          "side": "BOTTOM",
+          "label": "وجه جديد — الكسائي وخلف",
+          "color": "#ea580c",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-2-mszp012b::v-2037-2-mszp012b-alt-mszp030b",
+          "variantId": "v-2037-2-mszp012b",
+          "alternativeId": "v-2037-2-mszp012b-alt-mszp030b",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-2037-2-mszp012b-w2",
+              "wordId": 2037002,
+              "position": 2,
+              "characterStart": 1,
+              "characterEnd": 2,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 18,
+          "side": "BOTTOM",
+          "label": "وجه جديد — الأزرق عن ورش",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-2-mszp1xys::v-2037-2-mszp1xys-alt-mszp2kqc",
+          "variantId": "v-2037-2-mszp1xys",
+          "alternativeId": "v-2037-2-mszp1xys-alt-mszp2kqc",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-2037-2-mszp1xys-w2",
+              "wordId": 2037002,
+              "position": 2,
+              "characterStart": 1,
+              "characterEnd": 2,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 19,
+          "side": "BOTTOM",
+          "label": "وجه جديد — الأزرق عن ورش",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-2-mszpk8qo::v-2037-2-mszpk8qo-alt-mszpkb60",
+          "variantId": "v-2037-2-mszpk8qo",
+          "alternativeId": "v-2037-2-mszpk8qo-alt-mszpkb60",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-2037-2-mszpk8qo-w2",
+              "wordId": 2037002,
+              "position": 2,
+              "characterStart": 1,
+              "characterEnd": 2,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 20,
+          "side": "BOTTOM",
+          "label": "وجه جديد — الأزرق عن ورش",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-2-mszpkx21::v-2037-2-mszpkx21-alt-mszpkyxt",
+          "variantId": "v-2037-2-mszpkx21",
+          "alternativeId": "v-2037-2-mszpkx21-alt-mszpkyxt",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-2037-2-mszpkx21-w2",
+              "wordId": 2037002,
+              "position": 2,
+              "characterStart": 1,
+              "characterEnd": 2,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 21,
+          "side": "BOTTOM",
+          "label": "وجه جديد — الأزرق عن ورش",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-1-mszqt7px::v-2037-1-mszqt7px-alt-mszqtao5",
+          "variantId": "v-2037-1-mszqt7px",
+          "alternativeId": "v-2037-1-mszqt7px-alt-mszqtao5",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-2037-1-mszqt7px-w1",
+              "wordId": 2037001,
+              "position": 1,
+              "characterStart": 5,
+              "characterEnd": 5,
+              "anchor": "BOTTOM"
+            },
+            {
+              "id": "v-2037-1-mszqt7px-w2",
+              "wordId": 2037002,
+              "position": 2,
+              "characterStart": 1,
+              "characterEnd": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 22,
+          "side": "BOTTOM",
+          "label": "وجه جديد — حمزة بكماله",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-1-mszpdjaf::v-2037-1-mszpdjaf-alt-mszpdu0v",
+          "variantId": "v-2037-1-mszpdjaf",
+          "alternativeId": "v-2037-1-mszpdjaf-alt-mszpdu0v",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-2037-1-mszpdjaf-w1",
+              "wordId": 2037001,
+              "position": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 23,
+          "side": "BOTTOM",
+          "label": "وجه جديد — الأزرق عن ورش",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-1-mszqs5m5::v-2037-1-mszqs5m5-alt-mszqs798",
+          "variantId": "v-2037-1-mszqs5m5",
+          "alternativeId": "v-2037-1-mszqs5m5-alt-mszqs798",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-2037-1-mszqs5m5-w1",
+              "wordId": 2037001,
+              "position": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 24,
+          "side": "BOTTOM",
+          "label": "وجه جديد — حمزة بكماله",
+          "color": "#16a34a",
+          "isHidden": false
+        },
+        {
+          "id": "v-2037-1-mszqz2kf::v-2037-1-mszqz2kf-alt-mszqz4lr",
+          "variantId": "v-2037-1-mszqz2kf",
+          "alternativeId": "v-2037-1-mszqz2kf-alt-mszqz4lr",
+          "category": "USUL",
+          "nodes": [
+            {
+              "id": "v-2037-1-mszqz2kf-w1",
+              "wordId": 2037001,
+              "position": 1,
+              "anchor": "BOTTOM"
+            }
+          ],
+          "lane": 25,
+          "side": "BOTTOM",
+          "label": "وجه جديد — الكسائي وخلف",
+          "color": "#16a34a",
+          "isHidden": false
+        }
+      ],
+      "manualLines": [],
+      "boundaries": [],
+      "layout": {
+        "forcedLineBreakAfter": [],
+        "lineOffsets": {
+          "0": -10
+        }
+      },
+      "meta": {
+        "createdAt": "2026-08-19T04:56:39.833Z",
+        "updatedAt": "2026-08-19T04:56:39.833Z",
+        "author": "محرر محلي",
+        "status": "DRAFT"
+      }
+    }
+  ]
+}
