@@ -50,11 +50,17 @@ describe('اختصار البطاقات', () => {
     expect(chips[0].narratorIds).toEqual(['narrator-qalun', 'narrator-warsh']);
   });
 
-  it('يبقي الراوي المنفرد ببطاقة راوٍ', () => {
+  it('يبقي الراوي المنفرد ببطاقة راوٍ ويطبع اسمه', () => {
     const chips = resolveReaderChips({ kind: 'NARRATORS', narratorIds: ['narrator-qalun'] });
 
     expect(chips).toHaveLength(1);
-    expect(chips[0]).toMatchObject({ kind: 'NARRATOR', id: 'narrator-qalun', symbol: 'ب' });
+    expect(chips[0]).toMatchObject({
+      kind: 'NARRATOR',
+      id: 'narrator-qalun',
+      symbol: 'ب',
+      name: 'قالون',
+      text: 'ب',
+    });
   });
 
   it('يحفظ رمز الطريق إن وضعه المشرف، ويبقى النص اسم الطريق', () => {

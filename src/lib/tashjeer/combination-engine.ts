@@ -38,7 +38,7 @@ import {
 import { allNarratorIds, resolveScope } from './scope';
 import { pathsOfNarrator, type ReadingUnit } from './reader-symbols';
 import { narratorTayyibahOrder } from './symbols';
-import { exclusiveLocusKey } from './loci';
+import { exclusiveGroupKeys } from './loci';
 
 /** اختيار وجه في موضع من مواضع الآية. */
 export interface CombinationPick {
@@ -105,6 +105,7 @@ export function buildReadingCombinations(
     // (مد ٢ ومد ٤ مسجّلان اختلافا مستقلا) فأوجه متنافية لموضع واحد.
     const buckets = new Map<string, CombinationPick[]>();
     const bucketOrder: string[] = [];
+    const groupKeys = exclusiveGroupKeys(orderedVariants);
 
     for (const variant of orderedVariants) {
       const applicable = variant.alternatives
@@ -123,7 +124,7 @@ export function buildReadingCombinations(
 
       if (applicable.length === 0) continue;
 
-      const key = exclusiveLocusKey(variant);
+      const key = groupKeys.get(variant.id) ?? variant.id;
       const existing = buckets.get(key);
       const picks = applicable.map((alternative) => ({ variant, alternative }));
       if (existing) {

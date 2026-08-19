@@ -309,8 +309,18 @@ export function VariantsPanel() {
                 onClick={handleCreateVariant}
                 className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
               >
-                إنشاء الاختلاف في الآية
+                اختلاف واحد بمواضع منفصلة
               </button>
+              {draftLoci.length > 1 && (
+                <button
+                  type="button"
+                  onClick={handleCreatePerLocus}
+                  className="rounded-md border border-emerald-600 bg-white px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-50"
+                  title="كل كلمة أو حرف اختلاف مستقل: مد هنا وفرش هناك. يجمعها المحرك في سطر الراوي."
+                >
+                  اختلاف مستقل لكل موضع
+                </button>
+              )}
               {markingMode === 'CHARACTERS' && markedCharacterRange && (
                 <button
                   type="button"

@@ -967,7 +967,11 @@ function ScopeSelectionSummary({ scope }: { scope: ReadingScope }) {
       <span className="text-[10px] font-semibold text-emerald-900">سيظهر في طرف السطر:</span>
       {chips.map((chip) => {
         const text =
-          chip.kind === 'PATH' ? chip.name : chip.kind === 'IMAM' ? chip.symbol || chip.name : chip.name;
+          chip.kind === 'PATH'
+            ? chip.name
+            : chip.kind === 'IMAM'
+              ? chip.symbol || chip.name
+              : chip.name;
         const hint =
           chip.kind === 'PATH'
             ? 'طريق منفرد: يُذكر اسمه'

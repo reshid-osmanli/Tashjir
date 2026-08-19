@@ -743,16 +743,21 @@ function layoutReaderChips(
 /**
  * نص البطاقة حسب القاعدة:
  *   إمام اجتمع راوياه → رمز الإمام.
- *   راوٍ انفرد أو اجتمع طريقاه → رمز الراوي إن وُجد وإلا اسمه.
- *   طريق انفرد → اسم الطريق دائما (والرمز إن وُضع لا يغني عن الاسم).
+ *   راوٍ انفرد → اسم الراوي (لا رمزه وحده).
+ *   اجتمع طريقاه → رمز الراوي.
+ *   طريق انفرد → اسم الطريق دائما.
  */
 function chipDisplayText(
   reader: ClassicReaderChip,
   symbolDisplay: ClassicLine['symbolDisplay']
 ): string {
-  if (reader.kind === 'PATH') {
-    if (symbolDisplay === 'SYMBOLS') return reader.name;
-    if (reader.symbol.trim()) return `${reader.symbol} ${reader.name}`.trim();
+  if (reader.kind === 'PATH') return reader.name;
+
+  if (reader.kind === 'NARRATOR') {
+    if (symbolDisplay === 'SYMBOLS') return reader.symbol.trim() || reader.name;
+    if (symbolDisplay === 'BOTH' && reader.symbol.trim()) {
+      return `${reader.symbol} ${reader.name}`.trim();
+    }
     return reader.name;
   }
 
