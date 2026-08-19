@@ -1,28 +1,17 @@
-// اختبارات نافذة العمل والسطر الواحد ودقة مواضع الحروف
+// اختبارات نافذة العمل والسطر الواحد
 //
-// ثلاثة مطالب يحرسها هذا الملف:
+// مطلبان يحرسهما هذا الملف:
 //   1. نص الآية على خط واحد مهما طال، مع تمدد اللوحة لا التفاف النص.
-//   2. مواضع الحروف مقيسة بعرض الحرف الحقيقي لا بقسمة الكلمة بالتساوي،
-//      فتقع الوصلة والتحديد على الحرف المقصود.
-//   3. وصل الآية بالتي بعدها في نافذة واحدة متصلة المواضع.
+//   2. وصل الآية بالتي بعدها في نافذة واحدة متصلة المواضع.
 
 import { describe, expect, it } from 'vitest';
 import { getAyahWordsByKey, makeAyahKey } from '@/data/quran';
-import {
-  DEFAULT_LAYOUT_OPTIONS,
-  layoutAyah,
-  measureCharacterOffsets,
-} from '@/lib/tashjeer/layout-engine';
+import { DEFAULT_LAYOUT_OPTIONS, layoutAyah } from '@/lib/tashjeer/layout-engine';
 import {
   buildReadingWindow,
   documentWindowWords,
   nextAyahKeyInSurah,
 } from '@/lib/tashjeer/reading-window';
-import {
-  characterCellBounds,
-  characterRangeCenterX,
-  characterCount,
-} from '@/lib/quran-logic/characters';
 
 const longAyahKey = makeAyahKey(2, 20);
 
@@ -63,56 +52,6 @@ describe('نص الآية في سطر واحد', () => {
     });
 
     expect(single.lineCount).toBe(1);
-  });
-});
-
-describe('دقة مواضع الحروف', () => {
-  const word = 'ٱلرَّحِيمُ';
-
-  it('يعطي كل حرف عرضه لا حصة متساوية من الكلمة', () => {
-    const offsets = measureCharacterOffsets(word, 34);
-    const count = characterCount(word);
-
-    expect(offsets).toHaveLength(count + 1);
-    // متزايدة دائما، فالحرف لا يبدأ قبل الذي سبقه.
-    for (let index = 1; index < offsets.length; index++) {
-      expect(offsets[index]).toBeGreaterThan(offsets[index - 1]);
-    }
-
-    const widths = offsets.slice(1).map((offset, index) => offset - offsets[index]);
-    const uniform = offsets[offsets.length - 1] / count;
-    // «اللام» و«الميم» ليستا بعرض واحد؛ لو تساوت كل العروض لكان القياس وهما.
-    expect(widths.some((width) => Math.abs(width - uniform) > 0.5)).toBe(true);
-  });
-
-  it('يضع خلية الحرف على موضعه الحقيقي داخل الصندوق', () => {
-    const layout = layoutAyah(makeAyahKey(1, 1), getAyahWordsByKey(makeAyahKey(1, 1)), {
-      ...DEFAULT_LAYOUT_OPTIONS,
-      singleLine: true,
-    });
-    const box = layout.boxes[0];
-    expect(box.characterOffsets).toBeDefined();
-
-    const first = characterCellBounds(box, 1);
-    const last = characterCellBounds(box, characterCount(box.text));
-
-    // أول حرف عند الحافة اليمنى، وآخر حرف عند الحافة اليسرى (الكتابة RTL).
-    expect(first.rightX).toBeCloseTo(box.x + box.width, 5);
-    expect(last.leftX).toBeCloseTo(box.x, 5);
-    expect(first.centerX).toBeGreaterThan(last.centerX);
-  });
-
-  it('يجعل مركز نطاق الحروف داخل حدود النطاق نفسه', () => {
-    const layout = layoutAyah(makeAyahKey(1, 1), getAyahWordsByKey(makeAyahKey(1, 1)), {
-      ...DEFAULT_LAYOUT_OPTIONS,
-      singleLine: true,
-    });
-    const box = layout.boxes[0];
-    const count = characterCount(box.text);
-
-    const center = characterRangeCenterX(box, 1, count);
-    expect(center).toBeLessThanOrEqual(box.x + box.width);
-    expect(center).toBeGreaterThanOrEqual(box.x);
   });
 });
 

@@ -15,7 +15,6 @@ import { getAyahByKey, type MushafAyah, type MushafWord } from '@/data/quran';
 import {
   DEFAULT_LAYOUT_OPTIONS,
   layoutAyah,
-  type TextMetricsProvider,
 } from '@/lib/tashjeer/layout-engine';
 import { buildReadingWindow, type ReadingWindow } from '@/lib/tashjeer/reading-window';
 import {
@@ -54,11 +53,6 @@ export interface AyahTashjeerRuntime {
    * فيعاد اشتقاق الاختلافات دون انتظار إعادة تحميل المستند.
    */
   occurrencesKey?: string;
-  /**
-   * مقياس نص حقيقي من المتصفح. غيابه يعيد القياس النموذجي الحتمي، وهو ما
-   * يعمل به الخادم والاختبارات.
-   */
-  metrics?: TextMetricsProvider;
 }
 
 export interface AyahTashjeerResult {
@@ -121,8 +115,8 @@ export function useAyahTashjeer(
   const words = window.words;
 
   const layout = useMemo(
-    () => layoutAyah(ayahKey, words, layoutOptions, runtime.metrics),
-    [ayahKey, words, layoutOptions, runtime.metrics]
+    () => layoutAyah(ayahKey, words, layoutOptions),
+    [ayahKey, words, layoutOptions]
   );
 
   const runtimeKey = JSON.stringify({
