@@ -40,7 +40,7 @@ export const DEFAULT_LAYOUT_OPTIONS: LayoutOptions = {
  * القيم مستخرجة من متوسط نسب خط أميري القرآني، ومضبوطة يدويا
  * للحروف ذات العرض الشاذ (السين، الشين، الصاد، الميم...).
  */
-const LETTER_WIDTH_RATIO: Record<string, number> = {
+export const LETTER_WIDTH_RATIO: Record<string, number> = {
   ا: 0.26, أ: 0.26, إ: 0.26, آ: 0.3, ٱ: 0.26,
   ب: 0.5, ت: 0.5, ث: 0.5, ن: 0.5, ي: 0.55, ى: 0.55, ئ: 0.5,
   ج: 0.52, ح: 0.52, خ: 0.52,
@@ -56,13 +56,13 @@ const LETTER_WIDTH_RATIO: Record<string, number> = {
 };
 
 /** عرض افتراضي لأي حرف غير مذكور أعلاه. */
-const DEFAULT_LETTER_RATIO = 0.48;
+export const DEFAULT_LETTER_RATIO = 0.48;
 
 /**
  * علامات لا تشغل عرضا أفقيا لأنها تُرسم فوق الحرف أو تحته:
  * الحركات، والتنوين، والسكون، والشدة، وعلامات الوقف، والألف الخنجرية.
  */
-const ZERO_WIDTH_PATTERN = /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/;
+export const ZERO_WIDTH_PATTERN = /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/;
 
 /** علامات تُرسم فوق الحرف وترفع أعلى صندوق الكلمة. */
 const ABOVE_MARK_PATTERN = /[\u064B\u064C\u064E\u064F\u0651\u0652\u0653\u0654\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EB\u06EC]/;

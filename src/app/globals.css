@@ -350,3 +350,15 @@
 svg text {
   user-select: none;
 }
+
+/* خلية حرف في وضع التعليم: ظل أوضح وأوسع قليلا من الحرف، مع تمييز عند التمرير. */
+svg rect.char-hit {
+  transition: fill 0.12s ease, fill-opacity 0.12s ease, stroke 0.12s ease;
+}
+
+svg rect.char-hit:hover {
+  fill: #fbbf24;
+  fill-opacity: 0.62;
+  stroke: #b45309;
+  stroke-width: 1.5;
+}

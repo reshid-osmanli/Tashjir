@@ -499,7 +499,7 @@ function CanvasLegend({ characterMarkingActive = false }: { characterMarkingActi
   return (
     <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg border border-stone-200 bg-white/90 px-3 py-2 text-xs text-stone-600 shadow-sm backdrop-blur">
       {characterMarkingActive && (
-        <p className="mb-1.5 font-medium text-amber-800">وضع الحروف: انقر خلايا الحروف لتحديد البداية والنهاية.</p>
+        <p className="mb-1.5 font-medium text-amber-800">وضع الحروف: انقر الحرف نفسه — كل خلية حرف واحد فقط.</p>
       )}
       <div className="flex flex-wrap items-center gap-3">
         {categories.map((category) => (

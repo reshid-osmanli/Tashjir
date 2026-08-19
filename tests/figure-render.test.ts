@@ -169,6 +169,29 @@ describe('رسم السطر المركّب', () => {
     expect(markup).toContain('data-emphases="2"');
   });
 
+  it('يرسم خلية نقر مستقلة لكل حرف عند تفعيل تعليم الحروف', () => {
+    const { classic } = render();
+    const markup = renderToStaticMarkup(
+      createElement(TashjeerFigure, {
+        layout,
+        classic,
+        viewBox: { x: -150, y: 0, width: layout.canvasWidth + 240, height: 800 },
+        fontSize: 34,
+        showLabels: true,
+        boundaries: [],
+        baseNarratorName: 'حفص',
+        engine: DEFAULT_ENGINE_SETTINGS,
+        characterMarkingActive: true,
+      })
+    );
+
+    const firstWord = layout.boxes[0];
+    const letterCount = firstWord.text.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]/g, '').length;
+    expect(markup).toContain('data-character-index="1"');
+    expect(markup).toContain(`data-character-index="${letterCount}"`);
+    expect(markup).toContain('class="char-hit"');
+  });
+
   it('يظلّل المقطع المشجَّر ويخفّت ما خرج عنه', () => {
     const { markup } = render();
     expect(markup).toContain('المقطع المشجَّر');
