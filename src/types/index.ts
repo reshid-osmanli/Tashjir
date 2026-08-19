@@ -106,6 +106,13 @@ export interface TransmissionPath {
   order: number;
   depth: number;
   isCanonical: boolean;
+  /**
+   * رمز اختياري للطريق يُحرَّر من لوحة التحكم.
+   *
+   * عند انفراد الطريق بالوجه يُذكر **اسمه** لا رمزه. الرمز يُحفظ ليظهر في
+   * الدليل والبطاقات، ولا يغني عن الاسم على السطر.
+   */
+  symbol?: string;
   sourceRef?: string;
   notes?: string;
   narrator?: Narrator;

@@ -21,11 +21,14 @@ import { characterCount } from '@/lib/quran-logic/characters';
 import { pruneStrengthMap } from '@/lib/tashjeer/strength-degrees';
 import { StrengthDegreePicker } from './StrengthDegreePicker';
 import type { VariantCategory } from '@/types';
+import { resolveReaderChips } from '@/lib/tashjeer/reader-symbols';
+import { boundsOfLoci, describeLoci, lociOfVariant } from '@/lib/tashjeer/loci';
 import type {
   EvidenceSource,
   ReadingScope,
   Variant,
   VariantAlternative,
+  VariantLocus,
   VerificationStatus,
 } from '@/types/tashjeer';
 
@@ -87,8 +90,7 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
           <div>
             <h2 className="text-base font-bold text-stone-900">تحرير الاختلاف</h2>
             <p className="text-xs text-stone-500">
-              الكلمات {variant.startPosition}
-              {variant.endPosition !== variant.startPosition ? `–${variant.endPosition}` : ''}
+              المواضع: {describeLoci(lociOfVariant(variant))}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -208,6 +210,7 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
           </section>
 
           <TargetEditor variant={variant} onUpdate={(patch) => updateVariant(variant.id, patch)} />
+          <LociEditor variant={variant} onUpdate={(patch) => updateVariant(variant.id, patch)} />
 
           {/* الأوجه */}
           <section className="mt-6">
@@ -420,6 +423,127 @@ function TargetEditor({
           </p>
         </div>
       )}
+    </section>
+  );
+}
+
+// ==================== المواضع المنفصلة ====================
+
+/**
+ * يحرر مواضع الاختلاف المتباعدة: صلة في كلمتين تُحفظ موضعين، لا مدى يملأ
+ * ما بينهما. إضافة موضع أو حذفه يحدّث start/end تلقائيا.
+ */
+function LociEditor({
+  variant,
+  onUpdate,
+}: {
+  variant: Variant;
+  onUpdate: (patch: Partial<Variant>) => void;
+}) {
+  const loci = lociOfVariant(variant);
+
+  const commit = (next: VariantLocus[]) => {
+    const bounds = boundsOfLoci(next);
+    onUpdate({
+      loci: next.length > 1 ? next : next.length === 1 ? undefined : [],
+      startPosition: bounds.startPosition,
+      endPosition: bounds.endPosition,
+      characterRange: next.length === 1 ? next[0].characterRange : variant.characterRange,
+      targetKind: next.some((locus) => locus.characterRange) ? 'CHARACTERS' : variant.targetKind,
+    });
+  };
+
+  const splitIntoWords = () => {
+    const positions: VariantLocus[] = [];
+    for (const locus of loci) {
+      for (let position = locus.startPosition; position <= locus.endPosition; position++) {
+        positions.push({ startPosition: position, endPosition: position });
+      }
+    }
+    commit(positions);
+  };
+
+  return (
+    <section className="mt-4 rounded-md border border-amber-200 bg-amber-50/40 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-xs font-bold text-amber-950">مواضع منفصلة على السطر نفسه</h3>
+          <p className="mt-0.5 text-[11px] text-amber-900/75">
+            كل موضع علامة مستقلة. لا يُرسم خط غليظ بين كلمتين متباعدتين.
+          </p>
+        </div>
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={splitIntoWords}
+            className="rounded border border-amber-300 bg-white px-2 py-1 text-[10px] text-amber-900 hover:bg-amber-100"
+          >
+            فصل الكلمات
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              commit([
+                ...loci,
+                {
+                  startPosition: variant.endPosition,
+                  endPosition: variant.endPosition,
+                },
+              ])
+            }
+            className="rounded border border-amber-300 bg-white px-2 py-1 text-[10px] text-amber-900 hover:bg-amber-100"
+          >
+            + موضع
+          </button>
+        </div>
+      </div>
+
+      <ul className="mt-2 space-y-1.5">
+        {loci.map((locus, index) => (
+          <li key={`${locus.startPosition}-${locus.endPosition}-${index}`} className="grid grid-cols-[1fr_1fr_auto] gap-1.5">
+            <label className="text-[10px] text-stone-600">
+              من
+              <input
+                type="number"
+                min={1}
+                value={locus.startPosition}
+                onChange={(event) => {
+                  const startPosition = Math.max(1, Number(event.target.value));
+                  commit(
+                    loci.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, startPosition, endPosition: Math.max(startPosition, item.endPosition) }
+                        : item
+                    )
+                  );
+                }}
+                className="input mt-0.5 h-7 text-xs"
+              />
+            </label>
+            <label className="text-[10px] text-stone-600">
+              إلى
+              <input
+                type="number"
+                min={locus.startPosition}
+                value={locus.endPosition}
+                onChange={(event) => {
+                  const endPosition = Math.max(locus.startPosition, Number(event.target.value));
+                  commit(loci.map((item, itemIndex) => (itemIndex === index ? { ...item, endPosition } : item)));
+                }}
+                className="input mt-0.5 h-7 text-xs"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={loci.length <= 1}
+              onClick={() => commit(loci.filter((_, itemIndex) => itemIndex !== index))}
+              className="self-end rounded border border-red-200 px-2 py-1 text-[10px] text-red-700 disabled:opacity-30"
+            >
+              حذف
+            </button>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -712,7 +836,7 @@ export function ScopePicker({
             const imamNarrators = catalog.narrators.filter((narrator) => narrator.imamId === imam.id);
             const allSelected = imamNarrators.every((narrator) => selected.has(narrator.id));
             const color = getImamColor(imam.id);
-            const imamSymbols = imamNarrators.map((n) => getNarratorSymbol(n.id, catalog)).filter(Boolean).join('');
+            const imamSymbol = imam.symbol?.trim() || '';
 
             return (
               <div key={imam.id} className="space-y-1">
@@ -723,11 +847,12 @@ export function ScopePicker({
                     allSelected ? 'text-white' : 'text-stone-700 hover:bg-stone-100'
                   }`}
                   style={{ backgroundColor: allSelected ? color : '#f5f5f4' }}
+                  title={allSelected ? 'راويان مجتمعان: يظهر رمز الإمام' : 'اختيار الراويين يظهر رمز الإمام'}
                 >
                   {imam.name}
-                  {imamSymbols && (
+                  {imamSymbol && (
                     <span className="ms-1 opacity-80" style={{ fontFamily: "'Amiri Quran', serif" }}>
-                      {imamSymbols}
+                      {imamSymbol}
                     </span>
                   )}
                 </button>
@@ -811,11 +936,58 @@ export function ScopePicker({
         </div>
       )}
 
+      <ScopeSelectionSummary scope={scope} />
+
       <p className="mt-1.5 text-[11px] text-stone-600">
         النطاق المختصر: <span className="font-medium text-stone-800">{describeScope(scope, { catalog })}</span>{' '}
         ({pickerMode === 'paths' ? selectedPathIds.size : selected.size} من{' '}
         {pickerMode === 'paths' ? catalog.paths.length : catalog.narrators.length})
       </p>
+    </div>
+  );
+}
+
+/**
+ * بطاقة الاختيار: طريق واحد → اسمه، طريقان → رمز الراوي،
+ * راوٍ واحد → اسمه، راويان → رمز الإمام.
+ */
+function ScopeSelectionSummary({ scope }: { scope: ReadingScope }) {
+  const catalog = useTransmissionCatalog();
+  const chips = resolveReaderChips(scope, catalog);
+  if (chips.length === 0) {
+    return (
+      <p className="mt-2 rounded border border-dashed border-stone-200 px-2 py-1.5 text-[11px] text-stone-500">
+        لم يُختر قارئ بعد. اختر طريقا ليظهر اسمه، أو راويين ليظهر رمز الإمام.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-md border border-emerald-100 bg-emerald-50/50 px-2 py-1.5">
+      <span className="text-[10px] font-semibold text-emerald-900">سيظهر في طرف السطر:</span>
+      {chips.map((chip) => {
+        const text =
+          chip.kind === 'PATH' ? chip.name : chip.kind === 'IMAM' ? chip.symbol || chip.name : chip.name;
+        const hint =
+          chip.kind === 'PATH'
+            ? 'طريق منفرد: يُذكر اسمه'
+            : chip.kind === 'IMAM'
+              ? 'اجتمع الراويان: رمز الإمام'
+              : 'راوٍ منفرد: يُذكر اسمه';
+        return (
+          <span
+            key={`${chip.kind}-${chip.id}`}
+            title={hint}
+            className="inline-flex items-center gap-1 rounded bg-white px-1.5 py-0.5 text-[11px] font-bold text-emerald-900"
+            style={{ fontFamily: "'Amiri Quran', serif" }}
+          >
+            <span className="text-[9px] font-medium text-stone-500">
+              {chip.kind === 'IMAM' ? 'إمام' : chip.kind === 'PATH' ? 'طريق' : 'راوٍ'}
+            </span>
+            {text}
+          </span>
+        );
+      })}
     </div>
   );
 }

@@ -19,14 +19,15 @@ import { describeScope, resolveScope } from '@/lib/tashjeer/scope';
 import { VariantEditor } from './VariantEditor';
 import { GlobalRuleBuilder, type GlobalRuleSeed } from './GlobalRuleBuilder';
 import { RulesIndexDialog } from './RulesIndexDialog';
-import { rangeFromCharacterAnchors, textForCharacterRange } from '@/lib/quran-logic/characters';
+import { characterCount, rangeFromCharacterAnchors, textForCharacterRange } from '@/lib/quran-logic/characters';
 import { listGlobalRules, type GlobalRule } from '@/lib/storage/global-rules-store';
 import { findGlobalRuleMatchesInAyah } from '@/lib/quran-logic/global-rule-engine';
 import { deletedOccurrenceIds, occurrenceIdFor } from '@/lib/storage/rule-occurrences-store';
 import { useRuleOccurrences } from '@/hooks/useRuleOccurrences';
 import { RuleOccurrenceReview } from './RuleOccurrenceReview';
 import type { VariantCategory } from '@/types';
-import type { Variant } from '@/types/tashjeer';
+import type { Variant, VariantLocus } from '@/types/tashjeer';
+import { boundsOfLoci, buildLociFromMarks, describeLoci, lociOfVariant } from '@/lib/tashjeer/loci';
 
 export function VariantsPanel() {
   const {
@@ -68,17 +69,32 @@ export function VariantsPanel() {
     [markedCharacters]
   );
 
-  const markedText = useMemo(() => {
-    if (markingMode === 'CHARACTERS' && markedCharacterRange) {
-      return textForCharacterRange(words, markedCharacterRange);
-    }
-    return markedPositions
-      .map((position) => words.find((word) => word.position === position)?.text ?? '')
-      .join(' ');
-  }, [markedCharacterRange, markedPositions, markingMode, words]);
+  const draftLoci = useMemo(() => {
+    const wordLengths = new Map(words.map((word) => [word.position, characterCount(word.text)]));
+    return buildLociFromMarks({
+      mode: markingMode,
+      positions: markedPositions,
+      characters: markedCharacters,
+      wordLengths,
+    });
+  }, [markingMode, markedCharacters, markedPositions, words]);
 
-  const hasMarks =
-    markingMode === 'CHARACTERS' ? markedCharacterRange !== null : markedPositions.length > 0;
+  const markedText = useMemo(() => {
+    if (draftLoci.length === 0) return '';
+    return draftLoci
+      .map((locus) =>
+        locus.characterRange
+          ? textForCharacterRange(words, locus.characterRange)
+          : words
+              .filter((word) => word.position >= locus.startPosition && word.position <= locus.endPosition)
+              .map((word) => word.text)
+              .join(' ')
+      )
+      .filter(Boolean)
+      .join('  ·  ');
+  }, [draftLoci, words]);
+
+  const hasMarks = draftLoci.length > 0;
 
   const activeGlobalRules = useMemo(() => {
     if (!document) return [];
@@ -100,39 +116,39 @@ export function VariantsPanel() {
 
   const editingVariant = document.variants.find((variant) => variant.id === editingVariantId);
 
-  /** ينشئ اختلافا جديدا من الكلمات المعلّمة، بوجه أساس واحد جاهز للتحرير. */
-  const handleCreateVariant = () => {
-    if (!hasMarks) return;
+  const createVariantFromLoci = (loci: VariantLocus[], openEditor: boolean) => {
+    if (loci.length === 0 || !document) return;
 
-    const characterRange = markingMode === 'CHARACTERS' ? markedCharacterRange : null;
-    const start = characterRange
-      ? characterRange.start.position
-      : Math.min(...markedPositions);
-    const end = characterRange
-      ? characterRange.end.position
-      : Math.max(...markedPositions);
-    const baseText = characterRange
-      ? textForCharacterRange(words, characterRange)
-      : words
-          .filter((word) => word.position >= start && word.position <= end)
-          .map((word) => word.text)
-          .join(' ');
+    const bounds = boundsOfLoci(loci);
+    const title = loci
+      .map((locus) =>
+        locus.characterRange
+          ? textForCharacterRange(words, locus.characterRange)
+          : words
+              .filter((word) => word.position >= locus.startPosition && word.position <= locus.endPosition)
+              .map((word) => word.text)
+              .join(' ')
+      )
+      .filter(Boolean)
+      .join('  ·  ');
 
-    const id = `v-${document.ayahKey}-${start}-${Date.now().toString(36)}`;
+    const id = `v-${document.ayahKey}-${bounds.startPosition}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const isCharacters = loci.some((locus) => Boolean(locus.characterRange));
 
     addVariant({
       id,
       category: draftCategory,
-      title: baseText,
-      startPosition: start,
-      endPosition: end,
-      targetKind: characterRange ? 'CHARACTERS' : 'WORDS',
-      characterRange: characterRange ?? undefined,
+      title: title || 'اختلاف',
+      startPosition: bounds.startPosition,
+      endPosition: bounds.endPosition,
+      targetKind: isCharacters ? 'CHARACTERS' : 'WORDS',
+      characterRange: loci.length === 1 ? loci[0].characterRange : undefined,
+      loci: loci.length > 1 ? loci : undefined,
       status: 'DRAFT',
       alternatives: [
         {
           id: `${id}-base`,
-          text: baseText,
+          text: title || 'وجه المصحف',
           label: 'وجه المصحف',
           isBase: true,
           scope: { kind: 'ALL' },
@@ -140,8 +156,22 @@ export function VariantsPanel() {
       ],
     });
 
-    selectVariant(id);
-    setEditingVariantId(id);
+    if (openEditor) {
+      selectVariant(id);
+      setEditingVariantId(id);
+    }
+  };
+
+  /** اختلاف واحد: المواضع المتباعدة تبقى منفصلة على السطر نفسه. */
+  const handleCreateVariant = () => {
+    createVariantFromLoci(draftLoci, true);
+  };
+
+  /** اختلاف مستقل لكل موضع، يجمعها المحرك في سطر الراوي إن اتفق النطاق. */
+  const handleCreatePerLocus = () => {
+    draftLoci.forEach((locus, index) => {
+      createVariantFromLoci([locus], index === 0);
+    });
   };
 
   return (
@@ -167,8 +197,8 @@ export function VariantsPanel() {
 
       {/* إرشاد منهجي مختصر: كل موضع اختلاف مستقل، والمحرك هو الذي يجمع. */}
       <p className="border-b border-stone-100 bg-emerald-50/60 px-4 py-2 text-[11px] leading-relaxed text-emerald-950">
-        أنشئ لكل موضع اختلافا مستقلا ولو كان في الآية نفسها. يجمع المحرك أحكام الراوي الواحد في
-        سطر واحد — مدٌّ هنا وفرشٌ هناك وإدغام في موضع ثالث — ويولّد سطرا لكل تركيب إن تعددت أوجهه.
+        علّم الكلمات أو الحروف المتباعدة: كل موضع علامة مستقلة على السطر نفسه، بلا خط يملأ ما
+        بينهما. سجّل المد والفرش والأصول اختلافا اختلافا؛ يجمعها المحرك في سطر الراوي ويضرب أوجهه.
       </p>
 
       {/* القواعد العامة المطبقة على هذه الآية، مع بقائها محفوظة مرة واحدة فقط. */}
@@ -239,8 +269,8 @@ export function VariantsPanel() {
         {!hasMarks ? (
           <p className="mt-1.5 text-xs leading-relaxed text-stone-500">
             {markingMode === 'CHARACTERS'
-              ? 'فعّل أداة التعليم (M) ثم انقر على خلايا الحروف؛ احرص على تحديد بداية المدى ونهايته.'
-              : 'فعّل أداة التعليم (M) ثم انقر على الكلمات التي يقع فيها الاختلاف.'}
+              ? 'فعّل أداة التعليم (M) ثم انقر كل حرف في خليته. المتصل يصير موضعا واحدا، والمتباعد مواضع منفصلة.'
+              : 'فعّل أداة التعليم (M) ثم انقر الكلمات. المتباعدة تُحفظ مواضع منفصلة، لا مدى يملأ ما بينها.'}
           </p>
         ) : (
           <div className="mt-2 space-y-2">
@@ -252,9 +282,7 @@ export function VariantsPanel() {
                 {markedText}
               </p>
               <p className="mt-1 text-[11px] text-stone-500">
-                {markedCharacterRange
-                  ? `الحروف: كلمة ${toArabicDigits(markedCharacterRange.start.position)} / حرف ${toArabicDigits(markedCharacterRange.start.characterIndex)} إلى كلمة ${toArabicDigits(markedCharacterRange.end.position)} / حرف ${toArabicDigits(markedCharacterRange.end.characterIndex)}`
-                  : `الكلمات ${Math.min(...markedPositions)}–${Math.max(...markedPositions)}`}
+                {toArabicDigits(draftLoci.length)} موضعا منفصلا: {toArabicDigits(describeLoci(draftLoci))}
               </p>
             </div>
 
@@ -487,10 +515,7 @@ function VariantRow({
             {variant.title}
           </p>
           <p className="mt-0.5 text-[11px] text-stone-500">
-            {variant.targetKind === 'CHARACTERS' && variant.characterRange
-              ? `حروف: ${toArabicDigits(variant.characterRange.start.position)}/${toArabicDigits(variant.characterRange.start.characterIndex)} إلى ${toArabicDigits(variant.characterRange.end.position)}/${toArabicDigits(variant.characterRange.end.characterIndex)}`
-              : `الكلمات ${toArabicDigits(variant.startPosition)}${variant.endPosition !== variant.startPosition ? `–${toArabicDigits(variant.endPosition)}` : ''}`}{' '}
-            — {drawnAlternatives.length} وجها مرسوما
+            {toArabicDigits(describeLoci(lociOfVariant(variant)))} — {toArabicDigits(drawnAlternatives.length)} وجها مرسوما
           </p>
         </button>
 

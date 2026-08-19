@@ -149,6 +149,18 @@ export interface CharacterRange {
   end: CharacterAnchor;
 }
 
+/**
+ * موضع اختلاف واحد داخل الآية: كلمة أو مدى كلمات، أو حروف داخلها.
+ *
+ * الاختلاف الواحد قد يجمع مواضع متباعدة (صلة في كلمتين) دون أن يملأ ما
+ * بينهما بخط. غياب القائمة يعني الاعتماد على start/end التقليدي.
+ */
+export interface VariantLocus {
+  startPosition: number;
+  endPosition: number;
+  characterRange?: CharacterRange;
+}
+
 // ==================== قواعد المصحف العامة ====================
 
 /**
@@ -400,6 +412,13 @@ export interface Variant {
   targetKind?: VariantTargetKind;
   /** البداية والنهاية الدقيقتان عند تحديد الحروف. */
   characterRange?: CharacterRange;
+  /**
+   * المواضع الفعلية للاختلاف إن تعددت وتباعدت.
+   *
+   * إن غابت فالمحرك يستعمل start/end (وcharacterRange) كما في الملفات القديمة.
+   * إن وُجدت رُسمت علامة على كل موضع وحده، بلا خط غليظ يملأ الفجوة.
+   */
+  loci?: VariantLocus[];
   /** الأوجه، ويجب أن يكون فيها وجه واحد على الأقل غير وجه الأساس */
   alternatives: VariantAlternative[];
   /** حالة التوثيق: البيانات الأولية مسودة حتى يعتمدها مختص */

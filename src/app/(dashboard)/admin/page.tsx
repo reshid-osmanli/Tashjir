@@ -286,7 +286,10 @@ function TransmissionManager({
                                 {paths.map((path) => (
                                   <li key={path.id} className="flex items-center justify-between gap-2 rounded border border-stone-100 bg-stone-50 px-2 py-1.5">
                                     <span className="min-w-0">
-                                      <span className="block truncate text-[11px] font-medium text-stone-800">{path.shortName}</span>
+                                      <span className="block truncate text-[11px] font-medium text-stone-800">
+                                        {path.symbol ? `${path.symbol} · ` : ''}
+                                        {path.shortName}
+                                      </span>
                                       <span className="block truncate text-[10px] text-stone-500">{path.code}</span>
                                     </span>
                                     <span className="flex shrink-0 gap-1">
@@ -476,6 +479,7 @@ function PathForm({
   const [fullName, setFullName] = useState(value?.fullName ?? '');
   const [code, setCode] = useState(value?.code ?? '');
   const [order, setOrder] = useState(value?.order ?? 1);
+  const [symbol, setSymbol] = useState(value?.symbol ?? '');
   const [canonical, setCanonical] = useState(value?.isCanonical ?? false);
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -489,6 +493,7 @@ function PathForm({
       order: Math.max(1, Number(order) || 1),
       depth: value?.depth ?? 1,
       isCanonical: canonical,
+      symbol: symbol.trim(),
       sourceRef: value?.sourceRef,
       notes: value?.notes,
     };
@@ -504,10 +509,15 @@ function PathForm({
     </SelectInput>
     <TextInput label="الاسم المختصر" value={shortName} onChange={setShortName} placeholder="ورش / الأزرق" required />
     <TextInput label="الاسم الكامل" value={fullName} onChange={setFullName} placeholder="طريق الأزرق عن ورش..." />
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid grid-cols-3 gap-2">
+      <TextInput label="رمز الطريق" value={symbol} onChange={setSymbol} placeholder="أز" />
       <TextInput label="الرمز/الكود" value={code} onChange={setCode} placeholder="warsh-azraq" />
       <TextInput label="الترتيب" value={String(order)} onChange={(next) => setOrder(Number(next))} type="number" required />
     </div>
+    <p className="text-[11px] leading-relaxed text-stone-500">
+      إن انفرد الطريق بالوجه يُطبع <strong>اسمه</strong> على السطر («الأزرق»). الرمز اختياري يظهر في الدليل
+      والبطاقات. وإذا اجتمع طريقاه طُبع رمز الراوي.
+    </p>
     <label className="flex items-center gap-2 text-xs text-stone-700">
       <input type="checkbox" checked={canonical} onChange={(event) => setCanonical(event.target.checked)} className="accent-emerald-600" />
       طريق معتمد في الكتالوج

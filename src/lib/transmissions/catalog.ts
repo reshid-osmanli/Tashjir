@@ -95,6 +95,7 @@ export function normalizeTransmissionCatalog(
       shortName: path.shortName || path.fullName || path.id,
       fullName: path.fullName || path.shortName || path.id,
       isCanonical: path.isCanonical ?? false,
+      symbol: typeof path.symbol === 'string' ? path.symbol.trim() : '',
     }))
     .sort((a, b) => a.order - b.order || a.shortName.localeCompare(b.shortName, 'ar'));
 

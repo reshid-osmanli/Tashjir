@@ -6,6 +6,11 @@
 // واجهة المحرر هو ما يراه المحقق فعلا عند النقر، لا حركة منفصلة بلا حرف.
 
 import type { CharacterAnchor, CharacterRange } from '@/types/tashjeer';
+import {
+  DEFAULT_LETTER_RATIO,
+  LETTER_WIDTH_RATIO,
+  ZERO_WIDTH_PATTERN,
+} from '@/lib/tashjeer/layout-engine';
 
 /** مجموعة حرف مرئي: حرف أساسي ومعه التشكيل/علامات الضبط التابعة له. */
 export interface QuranCharacter {
@@ -121,11 +126,56 @@ export function characterRangeCenterX(
   start: number,
   end = start
 ): number {
-  const count = Math.max(characterCount(box.text), 1);
-  const safeStart = Math.min(Math.max(start, 1), count);
-  const safeEnd = Math.min(Math.max(end, safeStart), count);
-  // لأن الكلمة RTL: الحرف الأول عند الطرف الأيمن. مركز النطاق هو متوسط
-  // مراكز خلاياه من اليمين إلى اليسار.
-  const averageIndex = (safeStart + safeEnd) / 2;
-  return box.x + box.width - ((averageIndex - 0.5) / count) * box.width;
+  const cells = characterHitBoxes(box);
+  if (cells.length === 0) return box.x + box.width / 2;
+  const safeStart = Math.min(Math.max(start, 1), cells.length);
+  const safeEnd = Math.min(Math.max(end, safeStart), cells.length);
+  const slice = cells.slice(safeStart - 1, safeEnd);
+  return slice.reduce((sum, cell) => sum + cell.centerX, 0) / slice.length;
+}
+
+/** خلية نقر لحرف مرئي واحد داخل صندوق كلمة RTL. */
+export interface CharacterHitBox {
+  index: number;
+  text: string;
+  x: number;
+  width: number;
+  centerX: number;
+}
+
+/**
+ * يقسم صندوق الكلمة إلى خلايا نقر: خلية لكل حرف مرئي مع تشكيله.
+ * العرض يتبع نسب حروف المحرك لا القسمة المتساوية، فالنقر يصيب الحرف المرئي.
+ */
+export function characterHitBoxes(box: { x: number; width: number; text: string }): CharacterHitBox[] {
+  const characters = splitQuranCharacters(box.text);
+  if (characters.length === 0) return [];
+
+  const rawWidths = characters.map((character) => visibleLetterWidth(character.text));
+  const total = rawWidths.reduce((sum, width) => sum + width, 0);
+  const scale = total > 0 ? box.width / total : 1;
+
+  let cursor = box.x + box.width;
+  return characters.map((character, arrayIndex) => {
+    const width = Math.max(rawWidths[arrayIndex] * scale, 0.5);
+    const x = cursor - width;
+    cursor = x;
+    return {
+      index: character.index,
+      text: character.text,
+      x,
+      width,
+      centerX: x + width / 2,
+    };
+  });
+}
+
+/** عرض تقريبي للحرف المرئي. الحركات بلا عرض، والألف تبقى قابلة للنقر. */
+export function visibleLetterWidth(glyph: string): number {
+  let ratio = 0;
+  for (const char of glyph) {
+    if (ZERO_WIDTH_PATTERN.test(char)) continue;
+    ratio += LETTER_WIDTH_RATIO[char] ?? DEFAULT_LETTER_RATIO;
+  }
+  return Math.max(ratio, 0.22);
 }

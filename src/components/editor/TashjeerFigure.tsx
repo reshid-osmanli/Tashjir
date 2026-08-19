@@ -21,7 +21,7 @@ import type {
   WordBox,
 } from '@/types/tashjeer';
 import {
-  splitQuranCharacters,
+  characterHitBoxes,
   isCharacterInRange,
 } from '@/lib/quran-logic/characters';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
@@ -201,23 +201,26 @@ function WordShape({
   onClick: () => void;
   onCharacterClick: (characterIndex: number) => void;
 }) {
-  const characters = splitQuranCharacters(box.text);
+  const cells = characterHitBoxes(box);
   const markedIndexes = new Set(markedCharacters.map((anchor) => anchor.characterIndex));
   const hasCharacterCoverage = coveredCharacterRanges.some((range) =>
     range.start.position <= box.position && range.end.position >= box.position
   );
-  const highlight = isMarked
-    ? '#fde68a'
-    : isSelected
-      ? '#bbf7d0'
-      : isCovered && !hasCharacterCoverage
-        ? '#f1f5f9'
-        : 'transparent';
-  const cellWidth = characters.length > 0 ? box.width / characters.length : box.width;
+  const highlight = characterMarkingActive
+    ? 'transparent'
+    : isMarked
+      ? '#fde68a'
+      : isSelected
+        ? '#bbf7d0'
+        : isCovered && !hasCharacterCoverage
+          ? '#f1f5f9'
+          : 'transparent';
+  const hitPadX = 2.2;
+  const hitPadY = 10;
 
   return (
     <g
-      onClick={onClick}
+      onClick={characterMarkingActive ? undefined : onClick}
       style={{ cursor: 'pointer' }}
       data-word-id={box.wordId}
       opacity={isOutsideFocus ? 0.32 : 1}
@@ -229,49 +232,57 @@ function WordShape({
         height={box.height + 8}
         rx={6}
         fill={highlight}
-        stroke={isMarked || isSelected ? '#0f766e' : 'transparent'}
+        stroke={!characterMarkingActive && (isMarked || isSelected) ? '#0f766e' : 'transparent'}
         strokeWidth={1.2}
+        pointerEvents={characterMarkingActive ? 'none' : 'auto'}
       />
 
-      {/* لا نفصل النص إلى عناصر SVG مستقلة، لأن ذلك يكسر وصل الحروف العربية.
-          الخلايا الشفافة هنا هي طبقة تفاعل فقط، مرتبة RTL، وكل خلية تمثل
-          حرفا مرئيا واحدا مع تشكيله. */}
       {(characterMarkingActive || hasCharacterCoverage || markedIndexes.size > 0) &&
-        characters.map((character, arrayIndex) => {
-          const characterIndex = character.index;
-          const x = box.x + box.width - (arrayIndex + 1) * cellWidth;
-          const isMarkedCharacter = markedIndexes.has(characterIndex);
+        cells.map((cell) => {
+          const isMarkedCharacter = markedIndexes.has(cell.index);
           const isCoveredCharacter = coveredCharacterRanges.some((range) =>
-            isCharacterInRange({ position: box.position, characterIndex }, range)
+            isCharacterInRange({ position: box.position, characterIndex: cell.index }, range)
           );
 
           return (
-            <rect
-              key={`${box.wordId}-char-${characterIndex}`}
-              x={x}
-              y={box.topY - 2}
-              width={cellWidth}
-              height={box.height + 4}
-              rx={3}
-              fill={isMarkedCharacter ? '#fbbf24' : isCoveredCharacter ? '#cbd5e1' : 'transparent'}
-              fillOpacity={isMarkedCharacter ? 0.46 : isCoveredCharacter ? 0.36 : 1}
-              stroke={
-                characterMarkingActive
-                  ? isMarkedCharacter
-                    ? '#b45309'
-                    : '#94a3b8'
-                  : 'transparent'
-              }
-              strokeWidth={characterMarkingActive ? 0.55 : 0}
-              onClick={(event) => {
-                if (!characterMarkingActive) return;
-                event.stopPropagation();
-                onCharacterClick(characterIndex);
-              }}
-              data-character-index={characterIndex}
-            >
-              <title>{`الحرف ${characterIndex}: ${character.text}`}</title>
-            </rect>
+            <g key={`${box.wordId}-char-${cell.index}`} data-character-index={cell.index}>
+              <rect
+                className={characterMarkingActive ? 'char-hit' : undefined}
+                x={cell.x - hitPadX}
+                y={box.topY - hitPadY}
+                width={cell.width + hitPadX * 2}
+                height={box.height + hitPadY * 2}
+                rx={4}
+                fill={isMarkedCharacter ? '#f59e0b' : isCoveredCharacter ? '#94a3b8' : '#f8fafc'}
+                fillOpacity={isMarkedCharacter ? 0.42 : isCoveredCharacter ? 0.28 : characterMarkingActive ? 0.55 : 0}
+                stroke={
+                  characterMarkingActive ? (isMarkedCharacter ? '#b45309' : '#64748b') : 'transparent'
+                }
+                strokeWidth={characterMarkingActive ? (isMarkedCharacter ? 1.4 : 0.85) : 0}
+                style={{ cursor: characterMarkingActive ? 'pointer' : 'inherit' }}
+                onClick={(event) => {
+                  if (!characterMarkingActive) return;
+                  event.stopPropagation();
+                  onCharacterClick(cell.index);
+                }}
+              >
+                <title>{`الحرف ${toArabicDigits(cell.index)}: ${cell.text}`}</title>
+              </rect>
+              {characterMarkingActive && (
+                <text
+                  x={cell.centerX}
+                  y={box.bottomY + 13}
+                  textAnchor="middle"
+                  fontSize={9}
+                  fill={isMarkedCharacter ? '#92400e' : '#57534e'}
+                  fontFamily="system-ui, sans-serif"
+                  pointerEvents="none"
+                  style={{ userSelect: 'none', fontWeight: 700 }}
+                >
+                  {toArabicDigits(cell.index)}
+                </text>
+              )}
+            </g>
           );
         })}
 
@@ -495,83 +506,92 @@ function ClassicEntryShape({
   const color = entry.color;
   const madd = typeof entry.maddHarakat === 'number' ? toArabicDigits(entry.maddHarakat) : '';
   const ruleText = madd ? `${entry.ruleLabel} ${madd}` : entry.ruleLabel;
+  const emphases =
+    entry.emphases && entry.emphases.length > 0
+      ? entry.emphases
+      : [
+          {
+            startX: entry.emphasisStartX,
+            endX: entry.emphasisEndX,
+            labelX: entry.labelX,
+            marks: entry.marks,
+          },
+        ];
 
   return (
     <g
       data-entry-variant={entry.variantId}
       data-entry-alternative={entry.alternativeId}
+      data-emphases={emphases.length}
       onClick={
         onClick
           ? (event) => {
-              // النقر على الحكم يفتح موضعه هو، لا أول مواضع السطر.
               event.stopPropagation();
               onClick();
             }
           : undefined
       }
     >
-      {/* مدى الحكم مغلّظا فوق السطر الممتد: الخط يمتد مع الآية فيبيّن
-          الموافقة، والغليظ يحصر موضع هذا الحكم وحده. */}
-      <line
-        x1={entry.emphasisStartX}
-        y1={rowY}
-        x2={entry.emphasisEndX}
-        y2={rowY}
-        stroke={color}
-        strokeWidth={strokeWidth + 2.2}
-        strokeLinecap="round"
-        opacity={opacity}
-      />
-
-      {/* الوصلة الرأسية إلى موضع الحكم، على جزأين حتى لا تخترق النص:
-            1. شارة قصيرة تحت الكلمة تعيّن موضعها بدقة.
-            2. وصلة في الفراغ الذي بين كتلة النص والسطر. */}
-      {entry.marks.map((mark) => (
-        <g key={`c-${entry.alternativeId}-${mark.wordId}`}>
+      {emphases.map((emphasis, emphasisIndex) => (
+        <g key={`emphasis-${entry.alternativeId}-${emphasisIndex}`}>
           <line
-            x1={mark.x}
-            y1={mark.bottomY + 2}
-            x2={mark.x}
-            y2={mark.bottomY + 10}
-            stroke={color}
-            strokeWidth={1.2}
-            opacity={0.75}
-          />
-          <line
-            x1={mark.x}
-            y1={textBottom + 6}
-            x2={mark.x}
+            x1={emphasis.startX}
+            y1={rowY}
+            x2={emphasis.endX}
             y2={rowY}
             stroke={color}
-            strokeWidth={1}
-            strokeDasharray="2 2"
-            opacity={0.5}
+            strokeWidth={strokeWidth + 2.2}
+            strokeLinecap="round"
+            opacity={opacity}
           />
-          <circle
-            cx={mark.x}
-            cy={rowY}
-            r={isSelected ? 3.4 : 2.6}
-            fill={color}
-            stroke="#ffffff"
-            strokeWidth={1}
-          />
+
+          {emphasis.marks.map((mark) => (
+            <g key={`c-${entry.alternativeId}-${mark.wordId}-${mark.position}`}>
+              <line
+                x1={mark.x}
+                y1={mark.bottomY + 2}
+                x2={mark.x}
+                y2={mark.bottomY + 10}
+                stroke={color}
+                strokeWidth={1.2}
+                opacity={0.75}
+              />
+              <line
+                x1={mark.x}
+                y1={textBottom + 6}
+                x2={mark.x}
+                y2={rowY}
+                stroke={color}
+                strokeWidth={1}
+                strokeDasharray="2 2"
+                opacity={0.5}
+              />
+              <circle
+                cx={mark.x}
+                cy={rowY}
+                r={isSelected ? 3.4 : 2.6}
+                fill={color}
+                stroke="#ffffff"
+                strokeWidth={1}
+              />
+            </g>
+          ))}
+
+          {showRule && (
+            <text
+              x={emphasis.labelX}
+              y={rowY - 6}
+              textAnchor="middle"
+              fontSize={ruleFontSize}
+              fontFamily="'Amiri Quran', 'Amiri', serif"
+              fill={color}
+              style={{ direction: 'rtl', userSelect: 'none', fontWeight: 700 }}
+            >
+              {showMadd ? ruleText : entry.ruleLabel}
+            </text>
+          )}
         </g>
       ))}
-
-      {/* اسم الحكم فوق السطر عند موضعه تماما، ومعه مقدار المد بالعربية */}
-      {showRule && (
-        <text
-          x={entry.labelX}
-          y={rowY - 6}
-          textAnchor="middle"
-          fontSize={ruleFontSize}
-          fontFamily="'Amiri Quran', 'Amiri', serif"
-          fill={color}
-          style={{ direction: 'rtl', userSelect: 'none', fontWeight: 700 }}
-        >
-          {showMadd ? ruleText : entry.ruleLabel}
-        </text>
-      )}
 
       <title>{`${entry.ruleLabel} — ${entry.categoryLabel}${
         typeof entry.maddHarakat === 'number' ? ` — ${toArabicDigits(entry.maddHarakat)} حركات` : ''
@@ -693,24 +713,16 @@ function layoutReaderChips(
     return [{ key: 'name', text, x: rightX - width / 2, width, reader: readers[0] }];
   }
 
-  const withSymbols = readers.filter((reader) => reader.symbol.trim().length > 0);
-
-  // لا رمز لأحد (حالة حفص وحده مثلا): نطبع الاسم حتى لا يبقى السطر مجهولا.
-  if (withSymbols.length === 0) {
-    const text = readers[0]?.name ?? fallbackName;
-    if (!text) return [];
-    const width = measure(text);
-    return [{ key: 'name', text, x: rightX - width / 2, width, reader: readers[0] }];
-  }
-
   const chips: PlacedChip[] = [];
   let cursor = rightX;
 
-  for (const reader of withSymbols) {
-    const width = measure(reader.symbol);
+  for (const reader of readers) {
+    const text = chipDisplayText(reader, symbolDisplay);
+    if (!text) continue;
+    const width = measure(text);
     chips.push({
-      key: reader.narratorId,
-      text: reader.symbol,
+      key: `${reader.kind}-${reader.id}`,
+      text,
       x: cursor - width / 2,
       width,
       reader,
@@ -718,7 +730,38 @@ function layoutReaderChips(
     cursor -= width + gap;
   }
 
+  if (chips.length === 0) {
+    const text = fallbackName;
+    if (!text) return [];
+    const width = measure(text);
+    return [{ key: 'name', text, x: rightX - width / 2, width, reader: readers[0] }];
+  }
+
   return chips;
+}
+
+/**
+ * نص البطاقة حسب القاعدة:
+ *   إمام اجتمع راوياه → رمز الإمام.
+ *   راوٍ انفرد أو اجتمع طريقاه → رمز الراوي إن وُجد وإلا اسمه.
+ *   طريق انفرد → اسم الطريق دائما (والرمز إن وُضع لا يغني عن الاسم).
+ */
+function chipDisplayText(
+  reader: ClassicReaderChip,
+  symbolDisplay: ClassicLine['symbolDisplay']
+): string {
+  if (reader.kind === 'PATH') {
+    if (symbolDisplay === 'SYMBOLS') return reader.name;
+    if (reader.symbol.trim()) return `${reader.symbol} ${reader.name}`.trim();
+    return reader.name;
+  }
+
+  if (symbolDisplay === 'NAMES') return reader.name;
+  if (symbolDisplay === 'BOTH') {
+    return reader.symbol.trim() ? `${reader.symbol} ${reader.name}`.trim() : reader.name;
+  }
+
+  return reader.symbol.trim() || reader.name;
 }
 
 function lineTitle(line: ClassicLine): string {

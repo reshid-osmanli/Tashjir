@@ -16,7 +16,7 @@ import { formatPercent, toArabicDigits } from '@/lib/utils/arabic-numbers';
 import type { VariantCategory } from '@/types';
 
 /** مستويات تكبير جاهزة، حتى لا يضطر المحقق إلى نقر «+» عشر مرات. */
-const ZOOM_PRESETS = [0.5, 0.75, 1, 1.5, 2, 3];
+const ZOOM_PRESETS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
 
 interface EditorToolbarProps {
   fontSize: number;

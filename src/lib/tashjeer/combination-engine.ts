@@ -38,6 +38,7 @@ import {
 import { allNarratorIds, resolveScope } from './scope';
 import { pathsOfNarrator, type ReadingUnit } from './reader-symbols';
 import { narratorTayyibahOrder } from './symbols';
+import { exclusiveLocusKey } from './loci';
 
 /** اختيار وجه في موضع من مواضع الآية. */
 export interface CombinationPick {
@@ -100,8 +101,10 @@ export function buildReadingCombinations(
   const drafts = new Map<string, Draft>();
 
   for (const unit of units) {
-    const choices: VariantAlternative[][] = [];
-    const chosenVariants: Variant[] = [];
+    // المواضع المستقلة تُضرب. أما اختلافان في الموضع نفسه والفئة نفسها
+    // (مد ٢ ومد ٤ مسجّلان اختلافا مستقلا) فأوجه متنافية لموضع واحد.
+    const buckets = new Map<string, CombinationPick[]>();
+    const bucketOrder: string[] = [];
 
     for (const variant of orderedVariants) {
       const applicable = variant.alternatives
@@ -119,19 +122,39 @@ export function buildReadingCombinations(
         );
 
       if (applicable.length === 0) continue;
-      chosenVariants.push(variant);
-      choices.push(applicable);
+
+      const key = exclusiveLocusKey(variant);
+      const existing = buckets.get(key);
+      const picks = applicable.map((alternative) => ({ variant, alternative }));
+      if (existing) {
+        existing.push(...picks);
+      } else {
+        buckets.set(key, picks);
+        bucketOrder.push(key);
+      }
     }
+
+    const choices = bucketOrder.map((key) => {
+      const picks = buckets.get(key) ?? [];
+      return [...picks].sort((first, second) =>
+        compareAlternativesForUnit(
+          first.variant,
+          first.alternative,
+          second.alternative,
+          unit,
+          engine,
+          catalog,
+          strengthDegrees
+        )
+      );
+    });
 
     if (choices.length === 0) continue;
 
     const combos = enumerateCombinations(choices, maxPerUnit);
 
     combos.forEach((combo, rank) => {
-      const picks = combo.map((alternative, index) => ({
-        variant: chosenVariants[index],
-        alternative,
-      }));
+      const picks = combo;
       const id = picks.map((pick) => `${pick.variant.id}:${pick.alternative.id}`).join('|');
 
       const draft = drafts.get(id) ?? { picks, units: [], ranks: new Map<string, number>() };

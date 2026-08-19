@@ -269,7 +269,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         compareVariants
       ),
     }));
-    set({ markedPositions: [] });
+    set({ markedPositions: [], markedCharacters: [] });
   },
 
   updateVariant: (variantId, patch) => {
@@ -589,9 +589,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   // ==================== العرض ====================
 
-  setZoom: (zoom) => set({ zoom: clamp(zoom, 0.4, 3) }),
-  zoomIn: () => set((state) => ({ zoom: clamp(state.zoom * 1.15, 0.4, 3) })),
-  zoomOut: () => set((state) => ({ zoom: clamp(state.zoom / 1.15, 0.4, 3) })),
+  setZoom: (zoom) => set({ zoom: clamp(zoom, 0.2, 6) }),
+  zoomIn: () => set((state) => ({ zoom: clamp(state.zoom * 1.2, 0.2, 6) })),
+  zoomOut: () => set((state) => ({ zoom: clamp(state.zoom / 1.2, 0.2, 6) })),
   setPan: (pan) => set({ pan }),
   resetView: () => set({ zoom: 1, pan: { x: 0, y: 0 } }),
 
