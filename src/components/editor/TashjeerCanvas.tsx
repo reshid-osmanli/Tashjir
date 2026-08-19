@@ -27,7 +27,6 @@ import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
 import { useStrengthDegrees } from '@/hooks/useStrengthDegrees';
 import { useRuleOccurrences } from '@/hooks/useRuleOccurrences';
-import { useTextMetrics } from '@/hooks/useTextMetrics';
 import { parseAyahKey } from '@/data/quran';
 import type { ClassicLine, ClassicReaderChip } from '@/lib/tashjeer/classic-tashjeer';
 import type { VariantCategory } from '@/types';
@@ -72,8 +71,6 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
 
   const catalog = useTransmissionCatalog();
   const engine = useEngineSettings();
-  // قياس حقيقي بالخط المرسوم، فتقع الوصلات والتحديد على الحرف لا بجواره.
-  const metrics = useTextMetrics();
   const strengthDegrees = useStrengthDegrees();
   const occurrences = useRuleOccurrences();
 
@@ -96,7 +93,7 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     document,
     filter,
     { fontSize, singleLine: engine.singleLineText },
-    { catalog, engine, strengthDegrees, occurrencesKey: occurrences.key, metrics }
+    { catalog, engine, strengthDegrees, occurrencesKey: occurrences.key }
   );
 
   // نهاية الآية الأولى حين تُوصل بالتالية: يُطبع عندها رقم الآية.

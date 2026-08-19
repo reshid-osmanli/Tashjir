@@ -21,7 +21,6 @@ import type {
   WordBox,
 } from '@/types/tashjeer';
 import {
-  characterCellBounds,
   splitQuranCharacters,
   isCharacterInRange,
 } from '@/lib/quran-logic/characters';
@@ -214,6 +213,7 @@ function WordShape({
       : isCovered && !hasCharacterCoverage
         ? '#f1f5f9'
         : 'transparent';
+  const cellWidth = characters.length > 0 ? box.width / characters.length : box.width;
 
   return (
     <g
@@ -237,11 +237,9 @@ function WordShape({
           الخلايا الشفافة هنا هي طبقة تفاعل فقط، مرتبة RTL، وكل خلية تمثل
           حرفا مرئيا واحدا مع تشكيله. */}
       {(characterMarkingActive || hasCharacterCoverage || markedIndexes.size > 0) &&
-        characters.map((character) => {
+        characters.map((character, arrayIndex) => {
           const characterIndex = character.index;
-          // حدود الخلية من القياس الحقيقي للحروف، لا من قسمة الكلمة بالتساوي:
-          // «الألف» ثلث عرض «السين»، فالقسمة المتساوية تضع علامة حرف على غيره.
-          const cell = characterCellBounds(box, characterIndex);
+          const x = box.x + box.width - (arrayIndex + 1) * cellWidth;
           const isMarkedCharacter = markedIndexes.has(characterIndex);
           const isCoveredCharacter = coveredCharacterRanges.some((range) =>
             isCharacterInRange({ position: box.position, characterIndex }, range)
@@ -250,9 +248,9 @@ function WordShape({
           return (
             <rect
               key={`${box.wordId}-char-${characterIndex}`}
-              x={cell.leftX}
+              x={x}
               y={box.topY - 2}
-              width={Math.max(cell.width, 0.5)}
+              width={cellWidth}
               height={box.height + 4}
               rx={3}
               fill={isMarkedCharacter ? '#fbbf24' : isCoveredCharacter ? '#cbd5e1' : 'transparent'}

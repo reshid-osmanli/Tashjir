@@ -14,7 +14,6 @@
 
 import type { AyahLayout, LayoutOptions, WordBox } from '@/types/tashjeer';
 import type { MushafWord } from '@/data/quran';
-import { splitQuranCharacters } from '@/lib/quran-logic/characters';
 
 // ==================== الإعدادات الافتراضية ====================
 
@@ -33,25 +32,6 @@ export const DEFAULT_LAYOUT_OPTIONS: LayoutOptions = {
   laneHeight: 34,
   laneGap: 28,
 };
-
-/**
- * مقياس نص خارجي، يزوّده المتصفح عند توفره.
- *
- * القياس النموذجي أدناه حتمي ويكفي للخادم والاختبارات، لكنه تقريب: النسب
- * مأخوذة من متوسط خط أميري. وفي الشاشة يُرسم النص بالخط الحقيقي، فيختلف
- * الموضع قليلا، وهو ما كان يجعل الخطوط المنقّطة تقع بجوار الحرف لا عليه.
- * فإن مرّرت الواجهة مقياسا حقيقيا (Canvas measureText بالخط نفسه) صار موضع
- * كل حرف مطابقا لما يراه المحقق.
- */
-export interface TextMetricsProvider {
-  /** عرض الكلمة كاملة. */
-  measureWord(text: string, fontSize: number): number;
-  /**
-   * حدود الحروف المرئية مقيسة من حافة الكلمة اليمنى، طولها عدد الحروف + ١.
-   * غيابها يعني الاكتفاء بالقياس النموذجي.
-   */
-  measureCharacterOffsets?(text: string, fontSize: number): number[];
-}
 
 // ==================== قياس النص ====================
 
@@ -129,42 +109,6 @@ export function measureWordExtents(
   return { ascent, descent };
 }
 
-/**
- * حدود الحروف المرئية داخل الكلمة، مقيسة من حافتها اليمنى.
- *
- * الحرف هنا هو الحرف الأساسي مع تشكيله التابع، كما يراه المحقق حين ينقر،
- * والحركة لا تزيد عرضا لأنها تُرسم فوق الحرف أو تحته.
- */
-export function measureCharacterOffsets(
-  text: string,
-  fontSize: number,
-  metrics?: TextMetricsProvider
-): number[] {
-  const external = metrics?.measureCharacterOffsets?.(text, fontSize);
-  if (external && external.length === splitQuranCharacters(text).length + 1) return external;
-
-  const characters = splitQuranCharacters(text);
-  const widths = characters.map((character) => {
-    let ratio = 0;
-    for (const codePoint of character.text) {
-      if (ZERO_WIDTH_PATTERN.test(codePoint)) continue;
-      ratio += LETTER_WIDTH_RATIO[codePoint] ?? DEFAULT_LETTER_RATIO;
-    }
-    return ratio * fontSize;
-  });
-
-  const total = widths.reduce((sum, width) => sum + width, 0);
-  const wordWidth = Math.max(total, fontSize * 0.4);
-  // تسوية: مجموع الحروف يجب أن يساوي عرض الكلمة تماما، وإلا انزاح آخر حرف.
-  const scale = total > 0 ? wordWidth / total : 1;
-
-  const offsets: number[] = [0];
-  for (const width of widths) {
-    offsets.push(offsets[offsets.length - 1] + width * scale);
-  }
-  return offsets;
-}
-
 // ==================== تخطيط الآية ====================
 
 /**
@@ -180,19 +124,15 @@ export function measureCharacterOffsets(
 export function layoutAyah(
   ayahKey: number,
   words: MushafWord[],
-  options: Partial<LayoutOptions> = {},
-  metrics?: TextMetricsProvider
+  options: Partial<LayoutOptions> = {}
 ): AyahLayout {
   const config: LayoutOptions = { ...DEFAULT_LAYOUT_OPTIONS, ...options };
   const boxes: WordBox[] = [];
 
-  const measure = (text: string) =>
-    metrics?.measureWord(text, config.fontSize) ?? measureWordWidth(text, config.fontSize);
-
   // في وضع «السطر الواحد» يتمدد عرض اللوحة حتى تسع الآية كلها بلا التفاف.
   const singleLine = config.singleLine ?? false;
   const contentWidth = words.reduce(
-    (sum, word, index) => sum + measure(word.text) + (index > 0 ? config.wordGap : 0),
+    (sum, word, index) => sum + measureWordWidth(word.text, config.fontSize) + (index > 0 ? config.wordGap : 0),
     0
   );
   const canvasWidth = singleLine
@@ -210,7 +150,7 @@ export function layoutAyah(
   );
 
   for (const word of words) {
-    const width = measure(word.text);
+    const width = measureWordWidth(word.text, config.fontSize);
     const { ascent, descent } = measureWordExtents(word.text, config.fontSize);
 
     // التفاف: إن لم تعد الكلمة تتسع في السطر الحالي ننتقل لسطر جديد.
@@ -239,10 +179,6 @@ export function layoutAyah(
       baselineY,
       topY: baselineY - ascent,
       bottomY: baselineY + descent,
-      characterOffsets: scaleOffsets(
-        measureCharacterOffsets(word.text, config.fontSize, metrics),
-        width
-      ),
     });
 
     cursorX = x - config.wordGap;
@@ -265,14 +201,6 @@ export function layoutAyah(
     textHeight: (lineIndex + 1) * config.lineHeight,
     canvasWidth,
   };
-}
-
-/** يعيد ضبط حدود الحروف لتنتهي عند عرض الكلمة المقيس تماما. */
-function scaleOffsets(offsets: number[], width: number): number[] {
-  const total = offsets[offsets.length - 1] ?? 0;
-  if (total <= 0) return offsets;
-  const scale = width / total;
-  return offsets.map((offset) => offset * scale);
 }
 
 // ==================== حساب المسارات ====================
