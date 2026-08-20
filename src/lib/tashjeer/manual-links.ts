@@ -322,3 +322,17 @@ export function shiftLineInOrder(lineIds: string[], lineId: string, delta: numbe
 export function orderSnapshotOf(lines: ClassicLine[]): string[] {
   return lines.map((line) => line.id);
 }
+
+/**
+ * يدمج ترتيبا يدويا محفوظا بأسطر المحرك الحالية.
+ *
+ * الأسطر المذكورة تبقى بترتيبها، وما استجد من المحرك يُلحق في آخرها، وما
+ * حُذف من العرض يُسقط. بهذا لا يضيع ترتيب صف عند تغيّر معرّفات الأسطر.
+ */
+export function coalesceLineOrder(saved: string[] | undefined, engine: string[]): string[] {
+  if (!saved || saved.length === 0) return [...engine];
+  const engineSet = new Set(engine);
+  const listed = saved.filter((id) => engineSet.has(id));
+  const listedSet = new Set(listed);
+  return [...listed, ...engine.filter((id) => !listedSet.has(id))];
+}

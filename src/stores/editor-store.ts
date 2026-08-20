@@ -36,10 +36,11 @@ import { parseAyahKey } from '@/data/quran';
 import { documentWindowWords } from '@/lib/tashjeer/reading-window';
 import { layoutAyah } from '@/lib/tashjeer/layout-engine';
 import { generateBranches } from '@/lib/tashjeer/branch-engine';
-import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
+import { getEffectiveVariants, matchFromDerivedVariant } from '@/lib/quran-logic/global-rule-engine';
 import { readTransmissionCatalog } from '@/lib/transmissions/catalog';
 import { readEngineSettings } from '@/lib/tashjeer/engine-settings';
 import { moveLineToIndex } from '@/lib/tashjeer/manual-links';
+import { setOccurrenceOrderRank } from '@/lib/storage/rule-occurrences-store';
 import {
   appendEditLog,
   createDocument,
@@ -125,6 +126,11 @@ interface EditorState {
   deleteAlternative: (variantId: string, alternativeId: string) => void;
   /** يثبّت رتبة الموضع في ترتيب المرور، أو يزيلها بتمرير null. */
   setVariantOrderRank: (variantId: string, rank: number | null) => void;
+  /**
+   * يثبّت رقم ترتيب السطر لأي اختلاف ظاهر: المحفوظ في الآية، أو المشتق من
+   * قاعدة عامة (تخصيص موضعي يسبق رتبة القاعدة). هذا هو مدخل لوحة الخصائص.
+   */
+  setEffectiveOrderRank: (variantId: string, rank: number | null) => void;
   /** ينقل وجها داخل موضعه صعودا أو نزولا، فيثبّت ترتيب أوجه الموضع. */
   moveAlternative: (variantId: string, alternativeId: string, delta: number) => void;
   /** يعيد ترتيب أوجه الموضع إلى قاعدة المحرك. */
@@ -471,6 +477,40 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         document
       );
     });
+  },
+
+  setEffectiveOrderRank: (variantId, rank) => {
+    const document = get().document;
+    if (!document) return;
+
+    const local = document.variants.find((variant) => variant.id === variantId);
+    if (local) {
+      get().setVariantOrderRank(variantId, rank);
+      return;
+    }
+
+    const derived = getEffectiveVariants(document).find((variant) => variant.id === variantId);
+    if (!derived?.globalRuleId) return;
+    const match = matchFromDerivedVariant(derived);
+    if (!match) return;
+
+    setOccurrenceOrderRank(derived.globalRuleId, match, rank);
+    mutate(
+      set,
+      get,
+      (current) => ({ ...current }),
+      {
+        action: 'تعديل ترتيب موضع قاعدة',
+        targetType: 'RULE',
+        targetId: variantId,
+        category: derived.category,
+        summary:
+          rank === null
+            ? `إلغاء ترتيب السطر اليدوي للموضع «${derived.title}»`
+            : `تعديل رقم ترتيب السطر للموضع «${derived.title}» إلى ${rank}`,
+        changes: [{ field: 'orderRank', before: derived.orderRank, after: rank ?? undefined }],
+      }
+    );
   },
 
   moveAlternative: (variantId, alternativeId, delta) => {

@@ -15,6 +15,7 @@
 
 import type { VariantCategory } from '@/types';
 import type { DocumentEditEntry, Variant, VerificationStatus } from '@/types/tashjeer';
+import { findGlobalRuleMatches, getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
 import { loadDocument, listDocuments } from './document-store';
 import { listGlobalRules } from './global-rules-store';
 import { listOccurrenceOverrides } from './rule-occurrences-store';
@@ -60,28 +61,131 @@ export interface TrackingSummary {
 export interface TrackingFilters {
   category?: VariantCategory | 'ALL';
   source?: TrackingSource | 'MODIFIED' | 'ALL';
+  /**
+   * عند اختيار فئة (المدود، الفرش...) يفحص القواعد العامة المطابقة ويضيف
+   * مواضعها. الحد يمنع تجميد الواجهة إن أصابت القاعدة آلاف المواضع.
+   */
+  scanGlobalMatches?: boolean;
+  matchLimit?: number;
 }
 
-/** يقرأ كل مواضع التتبع من المستندات المخزنة. */
+/** أقصى عدد مواضع مشتقة تُدرج لكل قاعدة عند المسح. */
+const DEFAULT_MATCH_LIMIT = 80;
+
+/** يقرأ كل مواضع التتبع من المستندات المخزنة والقواعد العامة. */
 export function readTrackingRows(filters: TrackingFilters = {}): TrackingRow[] {
-  const rulesById = new Map(listGlobalRules().map((rule) => [rule.id, rule]));
+  const rules = listGlobalRules();
+  const rulesById = new Map(rules.map((rule) => [rule.id, rule]));
   const rows: TrackingRow[] = [];
+  const seen = new Set<string>();
+
+  const push = (row: TrackingRow) => {
+    if (seen.has(row.id)) return;
+    seen.add(row.id);
+    rows.push(row);
+  };
 
   for (const entry of listDocuments()) {
     const document = loadDocument(entry.ayahKey);
     if (!document) continue;
 
     const log = document.editLog ?? [];
-    const editsByTarget = new Map<string, DocumentEditEntry[]>();
-    for (const logEntry of log) {
-      const key = `${logEntry.targetType}:${logEntry.targetId}`;
-      const existing = editsByTarget.get(key) ?? [];
-      existing.push(logEntry);
-      editsByTarget.set(key, existing);
+    const editsByTarget = indexEdits(log);
+
+    for (const variant of getEffectiveVariants(document)) {
+      push(rowForVariant(variant, document.ayahKey, editsByTarget, rulesById));
     }
 
-    for (const variant of document.variants) {
-      rows.push(rowForVariant(variant, document.ayahKey, editsByTarget, rulesById));
+    for (const logEntry of log) {
+      if (
+        logEntry.targetType === 'VARIANT' ||
+        logEntry.targetType === 'ALTERNATIVE' ||
+        logEntry.targetType === 'RULE'
+      ) {
+        continue;
+      }
+      push(rowForEdit(logEntry, document.ayahKey));
+    }
+  }
+
+  for (const override of listOccurrenceOverrides()) {
+    const rule = rulesById.get(override.ruleId);
+    if (!rule) continue;
+    const id = `${override.ayahKey}:${override.id}`;
+    if (seen.has(id)) continue;
+    push({
+      id,
+      ayahKey: override.ayahKey,
+      surahNumber: Math.floor(override.ayahKey / 1000),
+      ayahNumber: override.ayahKey % 1000,
+      variantId: override.id,
+      title: `${rule.title}${override.matchedText ? ` · ${override.matchedText}` : ''}`,
+      category: rule.category,
+      source: 'ENGINE',
+      manuallyModified: true,
+      status: override.state === 'DELETED' ? 'REJECTED' : rule.status,
+      lastEditedAt: override.updatedAt,
+      edits: [
+        {
+          at: override.updatedAt,
+          action:
+            override.state === 'DELETED'
+              ? 'حذف موضعي'
+              : typeof override.orderRank === 'number'
+                ? 'تعديل ترتيب السطر'
+                : 'تعديل موضع قاعدة',
+          summary: override.reason ?? 'تصحيح يدوي لموضع القاعدة العامة',
+          actor: 'محرر محلي',
+          changes: [
+            ...(typeof override.orderRank === 'number'
+              ? [{ field: 'orderRank', after: override.orderRank }]
+              : []),
+            ...(override.strengthDegreeId
+              ? [{ field: 'strengthDegreeId', after: override.strengthDegreeId }]
+              : []),
+          ],
+        },
+      ],
+      globalRuleId: rule.id,
+      globalRuleTitle: rule.title,
+      orderRank: override.orderRank ?? rule.orderRank,
+    });
+  }
+
+  const category = filters.category && filters.category !== 'ALL' ? filters.category : undefined;
+  if (filters.scanGlobalMatches && category) {
+    const limit = filters.matchLimit ?? DEFAULT_MATCH_LIMIT;
+    for (const rule of rules) {
+      if (!rule.isActive || !rule.pattern || rule.category !== category) continue;
+      const matches = findGlobalRuleMatches(rule, { limit });
+      for (const match of matches) {
+        const ayahKey = match.ayahKey ?? 0;
+        const variantId = [
+          'global',
+          rule.id,
+          ayahKey,
+          match.startPosition,
+          match.endPosition,
+          match.characterRange.start.characterIndex,
+          match.characterRange.end.characterIndex,
+        ].join(':');
+        push({
+          id: `${ayahKey}:${variantId}`,
+          ayahKey,
+          surahNumber: Math.floor(ayahKey / 1000),
+          ayahNumber: ayahKey % 1000,
+          variantId,
+          title: `${rule.title} · ${match.matchedText}`,
+          category: rule.category,
+          source: 'ENGINE',
+          manuallyModified: false,
+          status: rule.status,
+          edits: [],
+          globalRuleId: rule.id,
+          globalRuleTitle: rule.title,
+          orderRank: rule.orderRank,
+        });
+      }
     }
   }
 
@@ -99,6 +203,42 @@ export function readTrackingRows(filters: TrackingFilters = {}): TrackingRow[] {
     );
 }
 
+function indexEdits(log: DocumentEditEntry[]): Map<string, DocumentEditEntry[]> {
+  const editsByTarget = new Map<string, DocumentEditEntry[]>();
+  for (const logEntry of log) {
+    const key = `${logEntry.targetType}:${logEntry.targetId}`;
+    const existing = editsByTarget.get(key) ?? [];
+    existing.push(logEntry);
+    editsByTarget.set(key, existing);
+  }
+  return editsByTarget;
+}
+
+function rowForEdit(entry: DocumentEditEntry, ayahKey: number): TrackingRow {
+  return {
+    id: `edit:${entry.id}`,
+    ayahKey,
+    surahNumber: Math.floor(ayahKey / 1000),
+    ayahNumber: ayahKey % 1000,
+    variantId: entry.targetId,
+    title: entry.summary,
+    category: entry.category ?? 'FARSH',
+    source: 'EDITOR',
+    manuallyModified: true,
+    status: 'DRAFT',
+    lastEditedAt: entry.at,
+    edits: [
+      {
+        at: entry.at,
+        action: entry.action,
+        summary: entry.summary,
+        changes: entry.changes,
+        actor: entry.actor,
+      },
+    ],
+  };
+}
+
 function rowForVariant(
   variant: Variant,
   ayahKey: number,
@@ -109,13 +249,11 @@ function rowForVariant(
   const alternativeEdits = variant.alternatives.flatMap(
     (alternative) => editsByTarget.get(`ALTERNATIVE:${alternative.id}`) ?? []
   );
-  const edits = [...variantEdits, ...alternativeEdits].sort((first, second) =>
+  const ruleEdits = editsByTarget.get(`RULE:${variant.id}`) ?? [];
+  const edits = [...variantEdits, ...alternativeEdits, ...ruleEdits].sort((first, second) =>
     first.at.localeCompare(second.at)
   );
 
-  // المصدر: الاختلافات المشتقة من القواعد العامة يجدها المحرك، وما أنشأه
-  // المحرر يوسم EDITOR عند الإنشاء. ما عدّله المحرر يبقى على مصدره الأول مع
-  // وسم «معدل يدويا».
   const source: TrackingSource = variant.origin === 'EDITOR' ? 'EDITOR' : 'ENGINE';
 
   return {

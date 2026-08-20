@@ -116,6 +116,22 @@ describe('إجراءات التصحيح اليدوي', () => {
     expect(useEditorStore.getState().document!.lineOrder).toEqual([]);
   });
 
+  it('تثبيت رقم ترتيب السطر من الخصائص يسجَّل في الاختلاف وفي السجل', async () => {
+    const useEditorStore = await loadStore();
+    useEditorStore.getState().openAyah(AYAH_KEY);
+
+    const variantId = useEditorStore.getState().document!.variants[0]!.id;
+    useEditorStore.getState().setEffectiveOrderRank(variantId, 3);
+
+    const document = useEditorStore.getState().document!;
+    const variant = document.variants.find((item) => item.id === variantId);
+    expect(variant?.orderRank).toBe(3);
+    expect(document.editLog?.some((entry) => entry.action === 'تعديل ترتيب الموضع')).toBe(true);
+
+    useEditorStore.getState().setEffectiveOrderRank(variantId, null);
+    expect(useEditorStore.getState().document!.variants.find((item) => item.id === variantId)?.orderRank).toBeUndefined();
+  });
+
   it('إضافة اختلاف من المحرر توسم EDITOR وتسجَّل للتتبع', async () => {
     const useEditorStore = await loadStore();
     useEditorStore.getState().openAyah(AYAH_KEY);

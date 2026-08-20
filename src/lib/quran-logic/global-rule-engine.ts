@@ -621,6 +621,23 @@ export function getEffectiveVariants(document: TashjeerDocument): Variant[] {
   return [...document.variants, ...derived];
 }
 
+/**
+ * يعيد بناء مطابقة القاعدة من اختلاف مشتق، لتعديل رتبة موضعه من الخصائص
+ * دون المرور بشاشة تتبّع المواضع.
+ */
+export function matchFromDerivedVariant(variant: Variant): GlobalRuleMatch | null {
+  if (!variant.isGlobalDerived || !variant.globalRuleId || !variant.characterRange) return null;
+  const separator = variant.title.indexOf(' · ');
+  return {
+    ruleId: variant.globalRuleId,
+    ayahKey: variant.ayahKey,
+    startPosition: variant.startPosition,
+    endPosition: variant.endPosition,
+    characterRange: variant.characterRange,
+    matchedText: separator === -1 ? variant.title : variant.title.slice(separator + 3),
+  };
+}
+
 /** يحول نتيجة المطابقة إلى اختلاف مشتق يفهمه محرك التشجير الحالي. */
 export function variantFromGlobalMatch(
   rule: GlobalRule,

@@ -73,12 +73,8 @@ export default function EditorPage() {
   }, [document, openAyah, requestedAyahKey, requestedVariantId]);
 
   useEffect(() => {
-    if (
-      document?.ayahKey === requestedAyahKey &&
-      requestedVariantId &&
-      requestedVariantId !== selectedVariantId &&
-      document.variants.some((variant) => variant.id === requestedVariantId)
-    ) {
+    // يشمل الاختلافات المحفوظة والمشتقة من القواعد العامة (معرّفها global:...).
+    if (document?.ayahKey === requestedAyahKey && requestedVariantId && requestedVariantId !== selectedVariantId) {
       selectVariant(requestedVariantId);
     }
   }, [document, requestedAyahKey, requestedVariantId, selectVariant, selectedVariantId]);

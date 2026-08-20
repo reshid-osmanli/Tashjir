@@ -368,20 +368,22 @@ export function GlobalRuleBuilder({
             <Field label="حركات المد (اختياري)">
               <input type="number" min={0} max={6} value={maddHarakat} onChange={(event) => setMaddHarakat(event.target.value)} className="input" placeholder="٢، ٤، ٥، ٦" />
             </Field>
-            <Field label="رقم ترتيب السطر (اختياري)">
+            <div className="md:col-span-2 rounded-md border border-emerald-300 bg-emerald-50/70 p-3">
+              <p className="text-xs font-semibold text-emerald-950">رقم ترتيب السطر</p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-emerald-900/80">
+                حدّد رتبة أسطر هذه القاعدة في التشجير عند إنشائها. يمكن تعديل الرقم لاحقا من خصائص
+                القاعدة في المحرر، والقواعد المتأثرة تُزاح تلقائيا.
+              </p>
               <input
                 type="number"
                 min={1}
                 value={orderRank}
                 onChange={(event) => setOrderRank(event.target.value)}
-                className="input"
-                placeholder="أصغر رقم يعلو في التشجير"
+                className="input mt-2 max-w-[12rem]"
+                placeholder="بلا ترتيب يدوي"
+                aria-label="رقم ترتيب السطر"
               />
-              <span className="mt-1 block text-[10px] leading-relaxed text-stone-500">
-                رتبة أسطر القاعدة في التشجير. تعديله لاحقا ممكن من خصائص القاعدة، والقواعد
-                المتأثرة تُعاد ترقيمها تلقائيا.
-              </span>
-            </Field>
+            </div>
             <Field label="حالة التوثيق">
               <select value={status} onChange={(event) => setStatus(event.target.value as VerificationStatus)} className="input">
                 {STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}

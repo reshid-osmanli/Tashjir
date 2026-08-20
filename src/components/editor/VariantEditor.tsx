@@ -20,6 +20,7 @@ import { documentWindowWords } from '@/lib/tashjeer/reading-window';
 import { characterCount } from '@/lib/quran-logic/characters';
 import { pruneStrengthMap } from '@/lib/tashjeer/strength-degrees';
 import { StrengthDegreePicker } from './StrengthDegreePicker';
+import { OrderRankControl } from './OrderRankControl';
 import type { VariantCategory } from '@/types';
 import { resolveReaderChips } from '@/lib/tashjeer/reader-symbols';
 import { boundsOfLoci, describeLoci, lociOfVariant } from '@/lib/tashjeer/loci';
@@ -57,7 +58,8 @@ const SOURCE_OPTIONS: Array<{ value: EvidenceSource; label: string }> = [
 ];
 
 export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorProps) {
-  const { updateVariant, addAlternative, updateAlternative, deleteAlternative } = useEditorStore();
+  const { updateVariant, addAlternative, updateAlternative, deleteAlternative, setEffectiveOrderRank } =
+    useEditorStore();
   const catalog = useTransmissionCatalog();
   const [activeAlternativeId, setActiveAlternativeId] = useState<string | null>(
     variant.alternatives.find((alternative) => !alternative.isBase)?.id ?? null
@@ -171,6 +173,14 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
                 className="input"
               />
             </Field>
+
+            <div className="md:col-span-2">
+              <OrderRankControl
+                value={variant.orderRank}
+                onChange={(rank) => setEffectiveOrderRank(variant.id, rank)}
+                hint="رتبة هذا الاختلاف في أسطر التشجير. الأصغر يعلو، والمتأثرون يُزاحون تلقائيا."
+              />
+            </div>
 
             <Field label="الحالة">
               <select

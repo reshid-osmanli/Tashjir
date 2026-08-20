@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
@@ -29,8 +29,13 @@ import {
   TextLayoutControls,
 } from './RecitationControls';
 import { RelationsPanel } from './RelationsPanel';
+import { OrderRankControl } from './OrderRankControl';
+import { coalesceLineOrder, orderSnapshotOf, shiftLineInOrder } from '@/lib/tashjeer/manual-links';
+import { listGlobalRules } from '@/lib/storage/global-rules-store';
+import { faceEndpointKey } from '@/types/tashjeer';
 import type { VariantCategory } from '@/types';
-import type { VerificationStatus } from '@/types/tashjeer';
+import type { TashjeerLinkRelation, VerificationStatus } from '@/types/tashjeer';
+import type { ClassicLine, ClassicTashjeer } from '@/lib/tashjeer/classic-tashjeer';
 
 const STATUS_OPTIONS: Array<{ value: VerificationStatus; label: string }> = [
   { value: 'DRAFT', label: 'مسودة' },
@@ -53,12 +58,17 @@ export function PropertiesPanel() {
     setBranchLane,
     setBranchRowOffset,
     resetBranchPosition,
+    setEffectiveOrderRank,
+    moveLineInOrder,
+    setLineOrder,
+    resetLineOrder,
+    addLink,
   } = useEditorStore();
 
   const catalog = useTransmissionCatalog();
   const engine = useEngineSettings();
   const strengthDegrees = useStrengthDegrees();
-  const { stats } = useAyahTashjeer(document, filter, {}, { catalog, engine, strengthDegrees });
+  const { stats, classic } = useAyahTashjeer(document, filter, {}, { catalog, engine, strengthDegrees });
 
   const selectedWord = useMemo(
     () => (selectedWordId ? getWordById(selectedWordId) : undefined),
@@ -71,6 +81,9 @@ export function PropertiesPanel() {
   );
   const selectedVariant = effectiveVariants.find((variant) => variant.id === selectedVariantId);
   const selectedBranch = document?.branches.find((branch) => branch.id === selectedBranchId);
+  const selectedLine =
+    classic.lines.find((line) => line.id === selectedBranchId) ??
+    classic.lines.find((line) => line.variantId === selectedVariantId);
 
   if (!document) return null;
 
@@ -141,9 +154,9 @@ export function PropertiesPanel() {
         </Section>
       )}
 
-      {/* الاختلاف المحدد */}
+      {/* خصائص القاعدة: رقم ترتيب السطر قابل للتحرير دائما، بما فيه المشتق من قاعدة عامة */}
       {selectedVariant && (
-        <Section title="الاختلاف المحدد">
+        <Section title="خصائص القاعدة">
           <div className="flex items-start justify-between gap-2">
             <span className="text-sm font-medium text-stone-900">{selectedVariant.title}</span>
             <StatusBadge status={selectedVariant.status} />
@@ -159,14 +172,25 @@ export function PropertiesPanel() {
                   : 'المحرك (بيانات أساسية)'
             }
           />
-          {typeof selectedVariant.orderRank === 'number' && (
-            <Row label="رقم ترتيب السطر" value={toArabicDigits(selectedVariant.orderRank)} />
-          )}
           {selectedVariant.isGlobalDerived && (
-            <p className="mb-1 rounded bg-violet-50 px-2 py-1 text-[11px] text-violet-800">
-              مشتق من قاعدة عامة في المصحف — لا يُعدَّل من قائمة اختلافات هذه الآية.
+            <p className="mb-2 rounded bg-violet-50 px-2 py-1 text-[11px] text-violet-800">
+              مشتق من قاعدة عامة — ترتيب السطر هنا تخصيص لهذا الموضع وحده.
             </p>
           )}
+
+          <div className="my-2">
+            <OrderRankControl
+              value={selectedVariant.orderRank}
+              inherited={
+                selectedVariant.isGlobalDerived && selectedVariant.globalRuleId
+                  ? listGlobalRules().find((rule) => rule.id === selectedVariant.globalRuleId)?.orderRank
+                  : undefined
+              }
+              onChange={(rank) => setEffectiveOrderRank(selectedVariant.id, rank)}
+              hint="الأصغر يعلو في التشجير. تغيير الرقم يُحفظ في JSON ويظهر في التتبع."
+            />
+          </div>
+
           <Row
             label={selectedVariant.targetKind === 'CHARACTERS' ? 'مدى الحروف' : 'المدى'}
             value={
@@ -183,12 +207,54 @@ export function PropertiesPanel() {
           {selectedVariant.sourceRef && (
             <p className="mt-1 text-[11px] text-stone-500">المرجع: {selectedVariant.sourceRef}</p>
           )}
+
+          <FaceComposeQuick
+            selectedVariant={selectedVariant}
+            variants={effectiveVariants}
+            onCompose={(from, to, relation) =>
+              addLink({
+                kind: 'FACE_TO_FACE',
+                relation,
+                from: { type: 'FACE', id: from },
+                to: { type: 'FACE', id: to },
+              })
+            }
+          />
         </Section>
       )}
 
-      {/* الخط المحدد وأدلته */}
+      {/* السطر المحدد: رقم ترتيبه قابل للتغيير مباشرة دون إعادة تشغيل المحرك */}
+      {selectedLine && (
+        <Section title="السطر المحدد">
+          <Row label="البطاقة" value={selectedLine.label} />
+          <Row label="الحكم" value={selectedLine.ruleLabel} />
+          <Row label="الفئة" value={CATEGORY_LABELS[selectedLine.category]} />
+          <SelectedLineOrder
+            line={selectedLine}
+            classic={classic}
+            savedOrder={document?.lineOrder ?? []}
+            onMove={(base, lineId, target) => moveLineInOrder(base, lineId, target)}
+            onShift={(base, lineId, delta) => setLineOrder(shiftLineInOrder(base, lineId, delta))}
+            onReset={resetLineOrder}
+          />
+          <LineComposeQuick
+            line={selectedLine}
+            lines={classic.lines}
+            onCompose={(from, to, relation) =>
+              addLink({
+                kind: 'LINE_TO_LINE',
+                relation,
+                from: { type: 'LINE', id: from },
+                to: { type: 'LINE', id: to },
+              })
+            }
+          />
+        </Section>
+      )}
+
+      {/* الخط المحدد وأدلته (مسار المحرك القديم إن وُجد) */}
       {selectedBranch && (
-        <Section title="الخط المحدد">
+        <Section title="موضع الخط الهندسي">
           <Row label="الفئة" value={CATEGORY_LABELS[selectedBranch.category]} />
           <Row label="المسار" value={selectedBranch.lane + 1} />
           <Row label="الجهة" value={selectedBranch.side === 'TOP' ? 'أعلى النص' : 'أسفل النص'} />
@@ -341,6 +407,215 @@ function sourceLabel(source: string): string {
     OTHER: 'مصدر آخر',
   };
   return labels[source] ?? source;
+}
+
+// ==================== ترتيب السطر المحدد ====================
+
+function SelectedLineOrder({
+  line,
+  classic,
+  savedOrder,
+  onMove,
+  onShift,
+  onReset,
+}: {
+  line: ClassicLine;
+  classic: ClassicTashjeer;
+  savedOrder: string[];
+  onMove: (base: string[], lineId: string, target: number) => void;
+  onShift: (base: string[], lineId: string, delta: number) => void;
+  onReset: () => void;
+}) {
+  const engineOrder = orderSnapshotOf(classic.lines);
+  const hasManual = savedOrder.length > 0;
+  const base = coalesceLineOrder(hasManual ? savedOrder : undefined, engineOrder);
+  const current = Math.max(1, base.indexOf(line.id) + 1 || classic.lines.findIndex((item) => item.id === line.id) + 1);
+
+  return (
+    <div className="mt-2 rounded-md border border-cyan-200 bg-cyan-50/50 p-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold text-cyan-950">رقم ترتيب الصف</p>
+        {hasManual && (
+          <button type="button" onClick={onReset} className="text-[10px] text-cyan-800 hover:underline">
+            عودة لترتيب المحرك
+          </button>
+        )}
+      </div>
+      <div className="mt-1.5 flex items-center gap-1.5">
+        <input
+          type="number"
+          min={1}
+          max={classic.lines.length}
+          value={current}
+          onChange={(event) => {
+            const target = Number(event.target.value);
+            if (!Number.isFinite(target)) return;
+            onMove(base, line.id, target);
+          }}
+          className="h-7 w-14 rounded border border-cyan-300 bg-white px-1 text-center text-[11px] tabular-nums"
+          aria-label="رقم ترتيب الصف"
+        />
+        <button
+          type="button"
+          onClick={() => onShift(base, line.id, -1)}
+          className="rounded border border-cyan-300 bg-white px-2 py-0.5 text-xs text-cyan-800"
+          title="أعلى"
+        >
+          ↑
+        </button>
+        <button
+          type="button"
+          onClick={() => onShift(base, line.id, 1)}
+          className="rounded border border-cyan-300 bg-white px-2 py-0.5 text-xs text-cyan-800"
+          title="أسفل"
+        >
+          ↓
+        </button>
+        <span className="text-[10px] text-cyan-900/70">من {toArabicDigits(classic.lines.length)}</span>
+      </div>
+      <p className="mt-1 text-[10px] leading-relaxed text-cyan-900/75">
+        تغيير الرقم ينقل الصف ويُزيح المتأثرين تلقائيا، بلا إعادة تشغيل المحرك وبلا تلف العلاقات.
+      </p>
+    </div>
+  );
+}
+
+function FaceComposeQuick({
+  selectedVariant,
+  variants,
+  onCompose,
+}: {
+  selectedVariant: import('@/types/tashjeer').Variant;
+  variants: import('@/types/tashjeer').Variant[];
+  onCompose: (from: string, to: string, relation: TashjeerLinkRelation) => void;
+}) {
+  const [target, setTarget] = useState('');
+  const [relation, setRelation] = useState<TashjeerLinkRelation>('MERGE');
+  const faces = variants.flatMap((variant) =>
+    variant.alternatives
+      .filter((alternative) => !alternative.isBase)
+      .map((alternative) => ({
+        key: faceEndpointKey(variant.id, alternative.id),
+        label: `${variant.title} — ${alternative.label}`,
+      }))
+  );
+  const own = selectedVariant.alternatives.filter((alternative) => !alternative.isBase);
+  if (own.length === 0 || faces.length < 2) return null;
+
+  const from = faceEndpointKey(selectedVariant.id, own[0].id);
+
+  return (
+    <div className="mt-3 rounded-md border border-violet-200 bg-violet-50/40 p-2">
+      <p className="text-[11px] font-semibold text-violet-950">وجه مركّب يدويا</p>
+      <p className="mt-0.5 text-[10px] leading-relaxed text-violet-900/75">
+        اربط هذا الوجه بوجه آخر — ولو كان من قارئ مختلف. القرار قرار المحقق لا افتراض المحرك.
+      </p>
+      <select
+        value={target}
+        onChange={(event) => setTarget(event.target.value)}
+        className="input mt-1.5 h-7 py-0 text-[11px]"
+      >
+        <option value="">— الوجه المرتبط به —</option>
+        {faces
+          .filter((face) => face.key !== from)
+          .map((face) => (
+            <option key={face.key} value={face.key}>
+              {face.label}
+            </option>
+          ))}
+      </select>
+      <div className="mt-1.5 flex gap-1">
+        <button
+          type="button"
+          onClick={() => setRelation('MERGE')}
+          className={`flex-1 rounded border px-2 py-1 text-[10px] ${relation === 'MERGE' ? 'border-violet-600 bg-violet-600 text-white' : 'border-violet-200 text-violet-800'}`}
+        >
+          دمج في سطر
+        </button>
+        <button
+          type="button"
+          onClick={() => setRelation('REFERENCE')}
+          className={`flex-1 rounded border px-2 py-1 text-[10px] ${relation === 'REFERENCE' ? 'border-violet-600 bg-violet-600 text-white' : 'border-violet-200 text-violet-800'}`}
+        >
+          ربط مرجعي
+        </button>
+      </div>
+      <button
+        type="button"
+        disabled={!target}
+        onClick={() => {
+          if (!target) return;
+          onCompose(from, target, relation);
+          setTarget('');
+        }}
+        className="mt-1.5 w-full rounded bg-violet-700 px-2 py-1.5 text-[11px] font-medium text-white hover:bg-violet-800 disabled:opacity-40"
+      >
+        إنشاء العلاقة
+      </button>
+    </div>
+  );
+}
+
+function LineComposeQuick({
+  line,
+  lines,
+  onCompose,
+}: {
+  line: ClassicLine;
+  lines: ClassicLine[];
+  onCompose: (from: string, to: string, relation: TashjeerLinkRelation) => void;
+}) {
+  const [target, setTarget] = useState('');
+  const [relation, setRelation] = useState<TashjeerLinkRelation>('MERGE');
+  if (lines.length < 2) return null;
+
+  return (
+    <div className="mt-2 rounded-md border border-violet-200 bg-violet-50/40 p-2">
+      <p className="text-[11px] font-semibold text-violet-950">ربط هذا السطر بسطر آخر</p>
+      <select
+        value={target}
+        onChange={(event) => setTarget(event.target.value)}
+        className="input mt-1.5 h-7 py-0 text-[11px]"
+      >
+        <option value="">— السطر المدمج به —</option>
+        {lines
+          .filter((item) => item.id !== line.id)
+          .map((item, index) => (
+            <option key={item.id} value={item.id}>
+              {toArabicDigits(index + 1)}. {item.label} · {item.ruleLabel.slice(0, 28)}
+            </option>
+          ))}
+      </select>
+      <div className="mt-1.5 flex gap-1">
+        <button
+          type="button"
+          onClick={() => setRelation('MERGE')}
+          className={`flex-1 rounded border px-2 py-1 text-[10px] ${relation === 'MERGE' ? 'border-violet-600 bg-violet-600 text-white' : 'border-violet-200 text-violet-800'}`}
+        >
+          دمج
+        </button>
+        <button
+          type="button"
+          onClick={() => setRelation('REFERENCE')}
+          className={`flex-1 rounded border px-2 py-1 text-[10px] ${relation === 'REFERENCE' ? 'border-violet-600 bg-violet-600 text-white' : 'border-violet-200 text-violet-800'}`}
+        >
+          مرجعي
+        </button>
+      </div>
+      <button
+        type="button"
+        disabled={!target}
+        onClick={() => {
+          if (!target) return;
+          onCompose(line.id, target, relation);
+          setTarget('');
+        }}
+        className="mt-1.5 w-full rounded bg-violet-700 px-2 py-1.5 text-[11px] font-medium text-white hover:bg-violet-800 disabled:opacity-40"
+      >
+        ربط السطرين
+      </button>
+    </div>
+  );
 }
 
 // ==================== موضع السطر ====================

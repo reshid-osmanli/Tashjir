@@ -49,9 +49,14 @@ export default function TrackingPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
-    setRows(readTrackingRows());
+    setRows(
+      readTrackingRows({
+        category,
+        scanGlobalMatches: category !== 'ALL',
+      })
+    );
     setOverrides(readOccurrenceOverrideSummary());
-  }, []);
+  }, [category]);
 
   const visible = useMemo(
     () =>
