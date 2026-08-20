@@ -129,7 +129,9 @@ export function occurrenceStats(ruleId: string): {
   return {
     deleted: overrides.filter((item) => item.state === 'DELETED').length,
     confirmed: overrides.filter((item) => item.state === 'CONFIRMED').length,
-    edited: overrides.filter((item) => item.strengthDegreeId || item.strengthByNarrator).length,
+    edited: overrides.filter(
+      (item) => item.strengthDegreeId || item.strengthByNarrator || typeof item.orderRank === 'number'
+    ).length,
   };
 }
 

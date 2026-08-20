@@ -189,6 +189,17 @@ describe('التتبع', () => {
     expect(byCategory.every((row) => row.category === document.variants[0]?.category)).toBe(true);
   });
 
+  it('matchFromDerivedVariant يعيد بناء المطابقة لتعديل الرتبة من الخصائص', async () => {
+    const { rules, engine } = await loadModules();
+    const saved = rules.saveGlobalRule(makeRule({ id: 'r-match' }));
+    const variant = engine.variantFromGlobalMatch(saved, makeMatch(3));
+    const rebuilt = engine.matchFromDerivedVariant(variant);
+    expect(rebuilt).not.toBeNull();
+    expect(rebuilt?.ruleId).toBe('r-match');
+    expect(rebuilt?.startPosition).toBe(3);
+    expect(rebuilt?.characterRange.start.characterIndex).toBe(0);
+  });
+
   it('الملخص يحصي المصادر والمعدَّل', async () => {
     const { documents, tracking } = await loadModules();
     const document = documents.createDocument(AYAH_KEY);

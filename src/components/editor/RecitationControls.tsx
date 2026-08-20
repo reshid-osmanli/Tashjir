@@ -8,6 +8,8 @@ import { layoutAyah } from '@/lib/tashjeer/layout-engine';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
 import { useEditorStore } from '@/stores/editor-store';
+import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
+import { OrderRankControl } from './OrderRankControl';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { buildReadingPlan } from '@/lib/tashjeer/reading-plan';
 import { normalizeScope, resolveScope } from '@/lib/tashjeer/scope';
@@ -583,16 +585,16 @@ export function TashjeerOrderControls() {
     document,
     selectedVariantId,
     selectVariant,
-    setVariantOrderRank,
+    setEffectiveOrderRank,
     moveAlternative,
     resetAlternativeOrder,
   } = useEditorStore();
 
   const ordered = useMemo(() => {
     if (!document) return [];
-    // نعرض المواضع بالترتيب الذي يرسمه المحرك فعلا، لا بترتيب الإدخال،
-    // حتى يرى المحقق أثر قراره مباشرة.
-    return [...document.variants].sort((first, second) => {
+    // نعرض المواضع الظاهرة كلها — بما فيها المشتقة من القواعد العامة —
+    // بالترتيب الذي يرسمه المحرك فعلا.
+    return [...getEffectiveVariants(document)].sort((first, second) => {
       const firstRank = first.orderRank;
       const secondRank = second.orderRank;
       if (typeof firstRank === 'number' && typeof secondRank === 'number' && firstRank !== secondRank) {
@@ -655,32 +657,17 @@ export function TashjeerOrderControls() {
                   </span>
                 </div>
 
-                <div className="mt-1.5 flex items-center gap-1.5">
-                  <label className="flex items-center gap-1 text-[10px] text-stone-600">
-                    رتبة يدوية
-                    <input
-                      type="number"
-                      min={1}
-                      value={variant.orderRank ?? ''}
-                      onChange={(event) =>
-                        setVariantOrderRank(
-                          variant.id,
-                          event.target.value === '' ? null : Number(event.target.value)
-                        )
-                      }
-                      placeholder="آلي"
-                      className="h-5 w-14 rounded border border-stone-300 px-1 text-[10px]"
-                    />
-                  </label>
-                  {typeof variant.orderRank === 'number' && (
-                    <button
-                      type="button"
-                      onClick={() => setVariantOrderRank(variant.id, null)}
-                      className="text-[10px] text-stone-500 hover:underline"
-                    >
-                      إلغاء التثبيت
-                    </button>
-                  )}
+                <div className="mt-1.5">
+                  <OrderRankControl
+                    value={variant.orderRank}
+                    onChange={(rank) => setEffectiveOrderRank(variant.id, rank)}
+                    compact
+                    hint={
+                      variant.isGlobalDerived
+                        ? 'تخصيص لهذا الموضع من القاعدة العامة.'
+                        : undefined
+                    }
+                  />
                 </div>
 
                 {sequence.length > 1 && (

@@ -14,7 +14,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { loadDocument } from '@/lib/storage/document-store';
+import { resolveAyahDocument } from '@/lib/tashjeer/ayah-tashjeer-source';
 import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
@@ -46,10 +46,11 @@ export function AyahTashjeerView({
   const [open, setOpen] = useState(defaultOpen);
   const [document, setDocument] = useState<TashjeerDocument | null>(null);
 
-  // قراءة المستند بعد التركيب: التخزين المحلي غير متاح وقت التصيير الأولي،
-  // والقراءة في effect تضمن توافق الماء بين الخادم والمتصفح.
+  // قراءة المستند بعد التركيب: التخزين المحلي غير متاح وقت التصيير الأولي.
+  // إن لم يُحفظ مستند للآية وكان لها قاعدة عامة مطابقة، يُشتق مستند عرض
+  // من القاعدة نفسها — فلا يحتاج المستخدم فتح المحرر لرؤية التشجير.
   useEffect(() => {
-    setDocument(loadDocument(ayahKey));
+    setDocument(resolveAyahDocument(ayahKey));
   }, [ayahKey]);
 
   const catalog = useTransmissionCatalog();

@@ -23,22 +23,29 @@ import {
   searchSurahs,
 } from '@/data/quran';
 import { exportAyahDocument, listDocuments } from '@/lib/storage/document-store';
+import { surahAyahsWithTashjeer } from '@/lib/tashjeer/ayah-tashjeer-source';
+import { listGlobalRules } from '@/lib/storage/global-rules-store';
 import { AyahTashjeerView } from '@/components/quran/AyahTashjeerView';
 
 export default function QuranPage() {
   const [surahNumber, setSurahNumber] = useState(1);
   const [query, setQuery] = useState('');
   const [savedKeys, setSavedKeys] = useState<Set<number>>(new Set());
+  const [tashjeerKeys, setTashjeerKeys] = useState<Set<number>>(new Set());
   const [showTashjeer, setShowTashjeer] = useState(true);
 
   useEffect(() => {
     setSavedKeys(new Set(listDocuments().map((entry) => entry.ayahKey)));
+    // يشمل المستندات المحفوظة ومواضع القواعد العامة النشطة في هذه السورة.
+    setTashjeerKeys(surahAyahsWithTashjeer(surahNumber));
   }, [surahNumber]);
 
   const surah = getSurahOrFirst(surahNumber);
   const ayahs = useMemo(() => getSurahAyahs(surahNumber), [surahNumber]);
   const filteredSurahs = useMemo(() => searchSurahs(query), [query]);
   const savedInSurah = ayahs.filter((ayah) => savedKeys.has(ayah.key)).length;
+  const tashjeerInSurah = ayahs.filter((ayah) => tashjeerKeys.has(ayah.key)).length;
+  const globalRulesCount = listGlobalRules().filter((rule) => rule.isActive && rule.pattern).length;
 
   const exportAyahJson = (ayahKey: number, surah: number, ayah: number) => {
     const blob = new Blob([exportAyahDocument(ayahKey)], { type: 'application/json;charset=utf-8' });
@@ -109,7 +116,12 @@ export default function QuranPage() {
               <p className="text-xs text-stone-500">
                 {surah.revelationType === 'MECCAN' ? 'مكية' : 'مدنية'} · {surah.ayahsCount} آية ·
                 تبدأ قرب الصفحة {surah.page}
-                {savedInSurah > 0 ? ` · آيات مشجَّرة محفوظة: ${savedInSurah.toLocaleString('ar')}` : ''}
+                {tashjeerInSurah > 0
+                  ? ` · آيات مشجَّرة: ${tashjeerInSurah.toLocaleString('ar')}${
+                      savedInSurah > 0 ? ` (${savedInSurah.toLocaleString('ar')} محفوظة)` : ''
+                    }`
+                  : ''}
+                {globalRulesCount > 0 ? ` · قواعد عامة نشطة: ${globalRulesCount.toLocaleString('ar')}` : ''}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -134,6 +146,7 @@ export default function QuranPage() {
           <ol className="space-y-3">
             {ayahs.map((ayah) => {
               const isSaved = savedKeys.has(ayah.key);
+              const hasTashjeer = tashjeerKeys.has(ayah.key);
 
               return (
                 <li
@@ -145,9 +158,17 @@ export default function QuranPage() {
                       className={`mt-1.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] tabular-nums ${
                         isSaved
                           ? 'bg-emerald-600 text-white'
-                          : 'bg-stone-200 text-stone-600'
+                          : hasTashjeer
+                            ? 'bg-violet-600 text-white'
+                            : 'bg-stone-200 text-stone-600'
                       }`}
-                      title={isSaved ? 'لهذه الآية تشجير محفوظ' : undefined}
+                      title={
+                        isSaved
+                          ? 'لهذه الآية تشجير محفوظ'
+                          : hasTashjeer
+                            ? 'تشجير مشتق من قاعدة عامة'
+                            : undefined
+                      }
                     >
                       {ayah.ayahNumber}
                     </span>
@@ -160,8 +181,8 @@ export default function QuranPage() {
                         {ayah.text}
                       </p>
 
-                      {/* التشجير النهائي المحفوظ من المحرر، بلا فتح المحرر. */}
-                      {isSaved && showTashjeer && <AyahTashjeerView ayahKey={ayah.key} />}
+                      {/* التشجير النهائي: المستند المحفوظ أو المشتق من القواعد العامة. */}
+                      {hasTashjeer && showTashjeer && <AyahTashjeerView ayahKey={ayah.key} />}
                     </div>
 
                     <div className="mt-1.5 flex shrink-0 gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">

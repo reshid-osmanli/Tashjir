@@ -382,6 +382,7 @@ export function VariantsPanel() {
                           sourceRef: variant.sourceRef,
                           strengthDegreeId: first?.strengthDegreeId,
                           strengthByNarrator: first?.strengthByNarrator,
+                          orderRank: variant.orderRank,
                         });
                         setShowGlobalBuilder(true);
                       }
@@ -419,6 +420,7 @@ export function VariantsPanel() {
                     sourceRef: editingVariant.sourceRef,
                     strengthDegreeId: first?.strengthDegreeId,
                     strengthByNarrator: first?.strengthByNarrator,
+                    orderRank: editingVariant.orderRank,
                   });
                   setShowGlobalBuilder(true);
                 }

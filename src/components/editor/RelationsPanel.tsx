@@ -23,7 +23,7 @@ import { useEngineSettings } from '@/hooks/useEngineSettings';
 import { useStrengthDegrees } from '@/hooks/useStrengthDegrees';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor } from '@/lib/tashjeer/color-system';
-import { shiftLineInOrder, orderSnapshotOf } from '@/lib/tashjeer/manual-links';
+import { shiftLineInOrder, orderSnapshotOf, coalesceLineOrder } from '@/lib/tashjeer/manual-links';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import type { VariantCategory } from '@/types';
 import type {
@@ -463,13 +463,17 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
   const moveLineInOrder = useEditorStore((state) => state.moveLineInOrder);
   const resetLineOrder = useEditorStore((state) => state.resetLineOrder);
 
-  // الترتيب الجاري: ما حفظه المستند إن وجد، وإلا ترتيب المحرك الحالي.
-  const savedOrder = document?.lineOrder ?? [];
+  // الترتيب الجاري: ما حفظه المستند إن وجد، مكمَّلا بأسطر المحرك الحالية.
+  const savedOrder = document?.lineOrder;
   const engineOrder = useMemo(() => orderSnapshotOf(classic.lines), [classic.lines]);
-  const hasManualOrder = savedOrder.length > 0;
+  const hasManualOrder = (savedOrder?.length ?? 0) > 0;
+  const workingOrder = useMemo(
+    () => coalesceLineOrder(hasManualOrder ? savedOrder : undefined, engineOrder),
+    [hasManualOrder, savedOrder, engineOrder]
+  );
 
   const orderForIndex = (lineId: string): number => {
-    const index = (hasManualOrder ? savedOrder : engineOrder).indexOf(lineId);
+    const index = workingOrder.indexOf(lineId);
     return index === -1 ? engineOrder.indexOf(lineId) + 1 : index + 1;
   };
 
@@ -519,8 +523,7 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
                 onChange={(event) => {
                   const target = Number(event.target.value);
                   if (!Number.isFinite(target)) return;
-                  const base = hasManualOrder ? savedOrder : engineOrder;
-                  moveLineInOrder(base, line.id, target);
+                  moveLineInOrder(workingOrder, line.id, target);
                 }}
                 className="h-6 w-11 shrink-0 rounded border border-stone-300 bg-white px-1 text-center text-[11px] tabular-nums"
                 aria-label={`ترتيب السطر ${line.label}`}
@@ -528,8 +531,7 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
               <button
                 type="button"
                 onClick={() => {
-                  const base = hasManualOrder ? savedOrder : engineOrder;
-                  setLineOrder(shiftLineInOrder(base, line.id, -1));
+                  setLineOrder(shiftLineInOrder(workingOrder, line.id, -1));
                 }}
                 className="rounded border border-stone-200 px-1.5 text-[10px] text-stone-600 hover:bg-stone-50"
                 title="أعلى"
@@ -539,8 +541,7 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
               <button
                 type="button"
                 onClick={() => {
-                  const base = hasManualOrder ? savedOrder : engineOrder;
-                  setLineOrder(shiftLineInOrder(base, line.id, 1));
+                  setLineOrder(shiftLineInOrder(workingOrder, line.id, 1));
                 }}
                 className="rounded border border-stone-200 px-1.5 text-[10px] text-stone-600 hover:bg-stone-50"
                 title="أسفل"

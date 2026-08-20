@@ -13,6 +13,7 @@ import { layoutAyah, DEFAULT_LAYOUT_OPTIONS } from '@/lib/tashjeer/layout-engine
 import { generateClassicTashjeer } from '@/lib/tashjeer/classic-tashjeer';
 import {
   applyManualLinks,
+  coalesceLineOrder,
   moveLineToIndex,
   shiftLineInOrder,
   sortLinesByManualOrder,
@@ -229,6 +230,12 @@ describe('الترتيب اليدوي للأسطر', () => {
     expect(shiftLineInOrder(ids, 'c', 1)).toEqual(['a', 'b', 'd', 'c', 'e']);
     // لا يتجاوز الحدود.
     expect(shiftLineInOrder(ids, 'a', -1)).toEqual(ids);
+  });
+
+  it('coalesceLineOrder يحافظ على الترتيب المحفوظ ويلحق الأسطر الجديدة', () => {
+    expect(coalesceLineOrder(undefined, ['a', 'b', 'c'])).toEqual(['a', 'b', 'c']);
+    expect(coalesceLineOrder(['c', 'a'], ['a', 'b', 'c'])).toEqual(['c', 'a', 'b']);
+    expect(coalesceLineOrder(['x', 'b', 'a'], ['a', 'b', 'c'])).toEqual(['b', 'a', 'c']);
   });
 
   it('generateClassicTashjeer يحترم الترتيب اليدوي وروابط الدمج معا', () => {
