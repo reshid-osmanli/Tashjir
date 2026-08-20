@@ -42,6 +42,7 @@ export function GlobalRuleMetaEditor({
   const [category, setCategory] = useState<VariantCategory>(rule.category);
   const [scope, setScope] = useState<ReadingScope>(rule.scope);
   const [ruleLabel, setRuleLabel] = useState(rule.ruleLabel ?? '');
+  const [lineOrder, setLineOrder] = useState(rule.lineOrder?.toString() ?? '');
   const [maddHarakat, setMaddHarakat] = useState(rule.maddHarakat?.toString() ?? '');
   const [description, setDescription] = useState(rule.description ?? '');
   const [sourceRef, setSourceRef] = useState(rule.sourceRef ?? '');
@@ -69,6 +70,7 @@ export function GlobalRuleMetaEditor({
       category,
       scope,
       ruleLabel: ruleLabel.trim() || undefined,
+      lineOrder: lineOrder === '' ? undefined : Math.max(1, Math.round(Number(lineOrder))),
       maddHarakat: maddHarakat === '' ? undefined : Number(maddHarakat),
       description: description.trim() || undefined,
       sourceRef: sourceRef.trim() || undefined,
@@ -119,6 +121,9 @@ export function GlobalRuleMetaEditor({
           </Field>
           <Field label="اسم الحكم المختصر">
             <input value={ruleLabel} onChange={(event) => setRuleLabel(event.target.value)} className="input" placeholder="مثال: إخفاء" />
+          </Field>
+          <Field label="رقم ترتيب السطر (يدوي)">
+            <input type="number" min={1} value={lineOrder} onChange={(event) => setLineOrder(event.target.value)} className="input" placeholder="آلي" />
           </Field>
           <Field label="حركات المد (اختياري)">
             <input type="number" min={0} max={6} value={maddHarakat} onChange={(event) => setMaddHarakat(event.target.value)} className="input" placeholder="٤ أو ٥ أو ٦" />

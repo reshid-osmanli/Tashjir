@@ -46,7 +46,7 @@ import { parseAyahKey } from '@/data/quran';
  * v5: القواعد العامة النمطية تُحفظ في الحزمة.
  * v6: درجات قوة الوجه لكل راوٍ، واستثناءات مواضع القواعد وسجلّها.
  */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 // نحتفظ بمفاتيح v2 كي تُقرأ مستندات المستخدمين القديمة ثم تُرقّى عند الحفظ.
 const DOC_PREFIX = 'tashjeer:doc:v2:';
@@ -89,6 +89,8 @@ export function createDocument(ayahKey: number, author = 'محرر محلي'): T
     boundaries: [],
     layout: { forcedLineBreakAfter: [], lineOffsets: {} },
     readingWindow: { linkNextAyah: false, focusSegment: null },
+    relations: [],
+    changeLog: [],
     meta: {
       createdAt: now,
       updatedAt: now,
@@ -388,6 +390,8 @@ function migrateDocument(document: TashjeerDocument): TashjeerDocument {
       linkNextAyah: document.readingWindow?.linkNextAyah === true,
       focusSegment: normalizeFocusSegmentValue(document.readingWindow?.focusSegment),
     },
+    relations: Array.isArray(document.relations) ? document.relations : [],
+    changeLog: Array.isArray(document.changeLog) ? document.changeLog.slice(-300) : [],
     meta,
   };
 }

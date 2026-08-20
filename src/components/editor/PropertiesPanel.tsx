@@ -24,6 +24,7 @@ import { describeScope, getFullNarratorName, resolveScope } from '@/lib/tashjeer
 import { StatusBadge } from './VariantsPanel';
 import {
   ManualLinesControls,
+  RelationshipControls,
   RecitationControls,
   TashjeerOrderControls,
   TextLayoutControls,
@@ -253,6 +254,7 @@ export function PropertiesPanel() {
       <TextLayoutControls />
       <RecitationControls />
       <ManualLinesControls />
+      <RelationshipControls />
     </aside>
   );
 }

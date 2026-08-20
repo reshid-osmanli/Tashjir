@@ -7,6 +7,7 @@ const navItems = [
   { href: '/variants', icon: '⌕', label: 'فهرس الاختلافات' },
   { href: '/qiraat', icon: 'ع', label: 'القراءات' },
   { href: '/review', icon: '✓', label: 'المراجعة' },
+  { href: '/tracking', icon: '↗', label: 'التتبع' },
   { href: '/readers', icon: 'ر', label: 'القراء' },
   { href: '/statistics', icon: '#', label: 'الإحصاءات' },
   { href: '/admin', icon: '⌘', label: 'لوحة التحكم' },

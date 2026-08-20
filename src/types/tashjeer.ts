@@ -574,6 +574,39 @@ export interface ReadingWindowSettings {
 }
 
 /** سطر يدوي دلالي، للحالات التي يحتاج فيها المحقق إلى إضافة سطر مستقل. */
+/** جزء محدد من سطر؛ مرجعه ثابت حتى يمكن ربطه بقاعدة أو سطر آخر بلا نسخ للسطر. */
+export interface LineSegment {
+  id: string;
+  lineId: string;
+  startPosition: number;
+  endPosition: number;
+  characterRange?: CharacterRange;
+  ruleId?: string;
+  label?: string;
+}
+
+/** علاقة حرّة يصنعها المحرر، بين وجهين أو سطرين أو جزء وقاعدة. */
+export interface EditorRelation {
+  id: string;
+  kind: 'COMPOSITE_FACE' | 'LINE_LINK' | 'SEGMENT_RULE';
+  source: { ayahKey: number; lineId?: string; branchId?: string; alternativeId?: string; segmentId?: string };
+  target: { ayahKey: number; lineId?: string; branchId?: string; alternativeId?: string; ruleId?: string };
+  label?: string;
+  createdAt: string;
+}
+
+/** سجل قابل للمراجعة يبيّن ما اقترحه المحرك وما غيّره المحرر. */
+export interface ChangeRecord {
+  id: string;
+  at: string;
+  source: 'ENGINE' | 'EDITOR' | 'IMPORT';
+  action: string;
+  entityType: 'variant' | 'branch' | 'line' | 'segment' | 'relation' | 'document';
+  entityId: string;
+  before?: unknown;
+  after?: unknown;
+}
+
 export interface ManualTashjeerLine {
   id: string;
   title: string;
@@ -588,6 +621,8 @@ export interface ManualTashjeerLine {
   scope?: ReadingScope;
   /** نص مختصر يُطبع على السطر. */
   label?: string;
+  /** الأجزاء القابلة لإعادة الاستخدام والربط داخل السطر. */
+  segments?: LineSegment[];
   isHidden?: boolean;
 }
 
@@ -687,6 +722,10 @@ export interface TashjeerDocument {
   layout: DocumentLayoutSettings;
   /** وصل الآية بالتالية، والمقطع المشجَّر وحده. */
   readingWindow?: ReadingWindowSettings;
+  /** علاقات يعرّفها المحرر، مستقلة عن افتراضات المحرك والقارئ. */
+  relations: EditorRelation[];
+  /** تاريخ التعديلات القابل للتدقيق والتصدير. */
+  changeLog: ChangeRecord[];
   meta: DocumentMeta;
 }
 

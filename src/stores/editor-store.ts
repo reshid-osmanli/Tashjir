@@ -20,6 +20,8 @@ import type {
   ManualTashjeerLine,
   RecitationBoundary,
   CharacterAnchor,
+  EditorRelation,
+  LineSegment,
   TashjeerBranch,
   TashjeerDocument,
   Variant,
@@ -134,6 +136,10 @@ interface EditorState {
   addManualLine: (line: ManualTashjeerLine) => void;
   updateManualLine: (lineId: string, patch: Partial<ManualTashjeerLine>) => void;
   deleteManualLine: (lineId: string) => void;
+  addLineSegment: (lineId: string, segment: LineSegment) => void;
+  deleteLineSegment: (lineId: string, segmentId: string) => void;
+  addRelation: (relation: EditorRelation) => void;
+  deleteRelation: (relationId: string) => void;
 
   // ---------- الوقف والابتداء وتخطيط النص ----------
   addBoundary: (boundary: RecitationBoundary) => void;
@@ -403,24 +409,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   moveBranchLane: (branchId, delta) => {
-    mutate(set, get, (document) => ({
-      ...document,
-      branches: document.branches.map((branch) =>
-        branch.id === branchId
-          ? { ...branch, lane: Math.max(0, branch.lane + delta), isManual: true }
-          : branch
-      ),
-    }));
+    mutate(set, get, (document) => {
+      const branch = document.branches.find((item) => item.id === branchId);
+      return { ...document, branches: branch ? insertBranchAtLane(document.branches, branchId, Math.max(0, branch.lane + delta)) : document.branches };
+    });
   },
 
   setBranchLane: (branchId, lane) => {
     mutate(set, get, (document) => ({
       ...document,
-      branches: document.branches.map((branch) =>
-        branch.id === branchId
-          ? { ...branch, lane: Math.max(0, Math.round(lane)), isManual: true }
-          : branch
-      ),
+      // إدخال السطر في الموضع المطلوب يزحزح الأسطر المتأثرة في الجهة نفسها؛
+      // فلا تتراكب المسارات ولا تنكسر علاقاتها بالمعرّف.
+      branches: insertBranchAtLane(document.branches, branchId, Math.max(0, Math.round(lane))),
     }));
   },
 
@@ -466,7 +466,31 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     mutate(set, get, (document) => ({
       ...document,
       manualLines: document.manualLines.filter((line) => line.id !== lineId),
+      relations: document.relations.filter((relation) => relation.source.lineId !== lineId && relation.target.lineId !== lineId),
     }));
+  },
+
+  addLineSegment: (lineId, segment) => {
+    mutate(set, get, (document) => withChange({
+      ...document,
+      manualLines: document.manualLines.map((line) => line.id === lineId ? { ...line, segments: [...(line.segments ?? []), segment] } : line),
+    }, 'إضافة جزء من سطر', 'segment', segment.id, undefined, segment));
+  },
+
+  deleteLineSegment: (lineId, segmentId) => {
+    mutate(set, get, (document) => withChange({
+      ...document,
+      manualLines: document.manualLines.map((line) => line.id === lineId ? { ...line, segments: (line.segments ?? []).filter((item) => item.id !== segmentId) } : line),
+      relations: document.relations.filter((relation) => relation.source.segmentId !== segmentId),
+    }, 'حذف جزء من سطر', 'segment', segmentId));
+  },
+
+  addRelation: (relation) => {
+    mutate(set, get, (document) => withChange({ ...document, relations: [...document.relations, relation] }, 'إنشاء علاقة يدوية', 'relation', relation.id, undefined, relation));
+  },
+
+  deleteRelation: (relationId) => {
+    mutate(set, get, (document) => withChange({ ...document, relations: document.relations.filter((item) => item.id !== relationId) }, 'حذف علاقة يدوية', 'relation', relationId));
   },
 
   // ==================== الوقف والابتداء وتخطيط النص ====================
@@ -734,6 +758,27 @@ function compareVariants(a: Variant, b: Variant): number {
   if (a.endPosition !== b.endPosition) return b.endPosition - a.endPosition;
   if (a.startPosition !== b.startPosition) return b.startPosition - a.startPosition;
   return a.title.localeCompare(b.title, 'ar');
+}
+
+function insertBranchAtLane(branches: TashjeerBranch[], branchId: string, lane: number): TashjeerBranch[] {
+  const target = branches.find((branch) => branch.id === branchId);
+  if (!target) return branches;
+  const siblings = branches.filter((branch) => branch.side === target.side && branch.id !== branchId).sort((a, b) => a.lane - b.lane);
+  const ordered = [...siblings.slice(0, lane), target, ...siblings.slice(lane)];
+  const laneById = new Map(ordered.map((branch, index) => [branch.id, index]));
+  return branches.map((branch) => laneById.has(branch.id) ? { ...branch, lane: laneById.get(branch.id)!, isManual: true } : branch);
+}
+
+function withChange(
+  document: TashjeerDocument,
+  action: string,
+  entityType: 'variant' | 'branch' | 'line' | 'segment' | 'relation' | 'document',
+  entityId: string,
+  before?: unknown,
+  after?: unknown
+): TashjeerDocument {
+  const record = { id: `change-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, at: new Date().toISOString(), source: 'EDITOR' as const, action, entityType, entityId, before, after };
+  return { ...document, changeLog: [...document.changeLog, record].slice(-300) };
 }
 
 function pushHistory(past: TashjeerDocument[], document: TashjeerDocument): TashjeerDocument[] {

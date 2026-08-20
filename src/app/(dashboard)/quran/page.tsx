@@ -16,15 +16,19 @@ import {
   getSurahOrFirst,
   searchSurahs,
 } from '@/data/quran';
-import { exportAyahDocument, listDocuments } from '@/lib/storage/document-store';
+import { exportAyahDocument, listDocuments, loadDocument } from '@/lib/storage/document-store';
+import type { TashjeerDocument } from '@/types/tashjeer';
 
 export default function QuranPage() {
   const [surahNumber, setSurahNumber] = useState(1);
   const [query, setQuery] = useState('');
   const [savedKeys, setSavedKeys] = useState<Set<number>>(new Set());
+  const [documents, setDocuments] = useState<Record<number, TashjeerDocument>>({});
 
   useEffect(() => {
-    setSavedKeys(new Set(listDocuments().map((entry) => entry.ayahKey)));
+    const entries = listDocuments();
+    setSavedKeys(new Set(entries.map((entry) => entry.ayahKey)));
+    setDocuments(Object.fromEntries(entries.map((entry) => [entry.ayahKey, loadDocument(entry.ayahKey)]).filter((item): item is [number, TashjeerDocument] => item[1] !== null)));
   }, []);
 
   const surah = getSurahOrFirst(surahNumber);
@@ -152,6 +156,7 @@ export default function QuranPage() {
                       </button>
                     </div>
                   </div>
+                  {documents[ayah.key] && <SavedTree document={documents[ayah.key]} />}
                 </li>
               );
             })}
@@ -160,4 +165,14 @@ export default function QuranPage() {
       </div>
     </div>
   );
+}
+
+function SavedTree({ document }: { document: TashjeerDocument }) {
+  const branches = [...document.branches].filter((branch) => !branch.isHidden).sort((a, b) => a.lane - b.lane);
+  return <div className="mr-9 mt-2 border-r-2 border-emerald-200 pr-3">
+    <p className="text-[10px] font-semibold text-emerald-800">التشجير المحفوظ — الترتيب النهائي</p>
+    <ol className="mt-1 space-y-1">{branches.map((branch) => <li key={branch.id} className="flex gap-2 text-xs"><span className="text-emerald-600">└─ {branch.lane + 1}</span><span>{branch.label}</span><span className="text-stone-400">كلمات {branch.nodes.map((node) => node.position).join('، ')}</span></li>)}</ol>
+    {document.manualLines.map((line) => <p key={line.id} className="mt-1 text-xs text-indigo-800">└─ {line.title}: {line.startPosition}–{line.endPosition}{line.segments?.length ? ` · ${line.segments.length} أجزاء` : ''}</p>)}
+    {document.relations.length > 0 && <p className="mt-1 text-[10px] text-indigo-700">⤷ {document.relations.length} علاقات/أوجه مركبة محفوظة</p>}
+  </div>;
 }

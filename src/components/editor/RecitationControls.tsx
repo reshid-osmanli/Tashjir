@@ -393,6 +393,8 @@ export function ManualLinesControls() {
     addManualLine,
     updateManualLine,
     deleteManualLine,
+    addLineSegment,
+    deleteLineSegment,
   } = useEditorStore();
   const [title, setTitle] = useState('سطر إرشادي');
   const [category, setCategory] = useState<VariantCategory>('WAQF');
@@ -561,6 +563,10 @@ export function ManualLinesControls() {
                   />
                 </label>
               </div>
+              <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px]">
+                <button type="button" onClick={() => addLineSegment(line.id, { id: `segment-${Date.now().toString(36)}`, lineId: line.id, startPosition: line.startPosition, endPosition: line.endPosition, label: 'جزء يدوي' })} className="text-indigo-700 hover:underline">+ حفظ المدى كجزء قابل للربط</button>
+                {(line.segments ?? []).map((segment) => <span key={segment.id} className="rounded bg-indigo-50 px-1 text-indigo-800">{segment.startPosition}–{segment.endPosition} <button onClick={() => deleteLineSegment(line.id, segment.id)} className="text-red-700">×</button></span>)}
+              </div>
             </li>
           ))}
         </ul>
@@ -577,6 +583,39 @@ export function ManualLinesControls() {
  * الموضع وترتيب أوجهه داخل هذه الآية وحدها، فيُحفظ قراره مع المستند
  * ويدخل في ملف التصدير ولا يضيع عند إعادة التوليد.
  */
+/** روابط مركبة حرّة: لا تفترض قارئا مشتركا ولا تعيد تشغيل المحرك. */
+export function RelationshipControls() {
+  const { document, selectedBranchId, addRelation, deleteRelation } = useEditorStore();
+  const [target, setTarget] = useState('');
+  const [kind, setKind] = useState<'COMPOSITE_FACE' | 'LINE_LINK'>('COMPOSITE_FACE');
+  if (!document) return null;
+  const add = () => {
+    const targetBranch = document.branches.find((branch) => branch.id === target);
+    const sourceBranch = document.branches.find((branch) => branch.id === selectedBranchId);
+    if (!sourceBranch || !targetBranch || sourceBranch.id === targetBranch.id) return;
+    addRelation({
+      id: `relation-${Date.now().toString(36)}`,
+      kind,
+      source: { ayahKey: document.ayahKey, branchId: sourceBranch.id, alternativeId: sourceBranch.alternativeId },
+      target: { ayahKey: document.ayahKey, branchId: targetBranch.id, alternativeId: targetBranch.alternativeId },
+      createdAt: new Date().toISOString(),
+    });
+    setTarget('');
+  };
+  return <Section title="العلاقات والأوجه المركبة">
+    <p className="mb-2 text-[10px] leading-relaxed text-stone-500">اختر سطرا من اللوحة ثم اربطه بأي وجه آخر. العلاقة حرة ولا تتقيد بالقارئ.</p>
+    <select value={kind} onChange={(e) => setKind(e.target.value as 'COMPOSITE_FACE' | 'LINE_LINK')} className="input h-7 text-[10px]">
+      <option value="COMPOSITE_FACE">وجه مركب</option><option value="LINE_LINK">ربط/دمج منطقي للسطر</option>
+    </select>
+    <select value={target} onChange={(e) => setTarget(e.target.value)} className="input mt-1 h-7 text-[10px]">
+      <option value="">اختر الوجه المرتبط</option>
+      {document.branches.filter((b) => b.id !== selectedBranchId).map((b) => <option key={b.id} value={b.id}>{b.label} — سطر {b.lane + 1}</option>)}
+    </select>
+    <button type="button" disabled={!selectedBranchId || !target} onClick={add} className="mt-1 w-full rounded bg-indigo-700 px-2 py-1 text-[10px] text-white disabled:opacity-40">إنشاء العلاقة</button>
+    <ul className="mt-2 space-y-1">{document.relations.map((relation) => <li key={relation.id} className="flex items-center gap-1 rounded bg-indigo-50 p-1 text-[10px] text-indigo-900"><span className="flex-1">{relation.kind === 'COMPOSITE_FACE' ? 'وجه مركب' : relation.kind === 'LINE_LINK' ? 'ربط أسطر' : 'جزء ← قاعدة'}</span><button onClick={() => deleteRelation(relation.id)} className="text-red-700">حذف</button></li>)}</ul>
+  </Section>;
+}
+
 export function TashjeerOrderControls() {
   const catalog = useTransmissionCatalog();
   const {
