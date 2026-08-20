@@ -2,7 +2,13 @@
 // مشروع التشجير - نظام القراءات العشر
 //
 // عرض المصحف كاملا (114 سورة / 6236 آية) بالنص العثماني.
-// كل آية قابلة للفتح مباشرة في المحرر، ويظهر عليها مؤشر إن كان لها عمل محفوظ.
+//
+// بعد تطوير مرحلة «المحرر يصحّح المحرك»: كل آية لها عمل محفوظ يظهر تشجيرها
+// النهائي مباشرة هنا — نفس خط الرسم الذي يستعمله المحرر (الروابط اليدوية،
+// الأوجه المركبة، الأجزاء، الترتيب اليدوي كلها ظاهرة) — فلا حاجة لفتح
+// المحرر لمجرد رؤية النتيجة:
+//
+//   المحرر → حفظ البيانات → /quran ⇒ نتائج متطابقة.
 
 'use client';
 
@@ -17,19 +23,22 @@ import {
   searchSurahs,
 } from '@/data/quran';
 import { exportAyahDocument, listDocuments } from '@/lib/storage/document-store';
+import { AyahTashjeerView } from '@/components/quran/AyahTashjeerView';
 
 export default function QuranPage() {
   const [surahNumber, setSurahNumber] = useState(1);
   const [query, setQuery] = useState('');
   const [savedKeys, setSavedKeys] = useState<Set<number>>(new Set());
+  const [showTashjeer, setShowTashjeer] = useState(true);
 
   useEffect(() => {
     setSavedKeys(new Set(listDocuments().map((entry) => entry.ayahKey)));
-  }, []);
+  }, [surahNumber]);
 
   const surah = getSurahOrFirst(surahNumber);
   const ayahs = useMemo(() => getSurahAyahs(surahNumber), [surahNumber]);
   const filteredSurahs = useMemo(() => searchSurahs(query), [query]);
+  const savedInSurah = ayahs.filter((ayah) => savedKeys.has(ayah.key)).length;
 
   const exportAyahJson = (ayahKey: number, surah: number, ayah: number) => {
     const blob = new Blob([exportAyahDocument(ayahKey)], { type: 'application/json;charset=utf-8' });
@@ -100,11 +109,26 @@ export default function QuranPage() {
               <p className="text-xs text-stone-500">
                 {surah.revelationType === 'MECCAN' ? 'مكية' : 'مدنية'} · {surah.ayahsCount} آية ·
                 تبدأ قرب الصفحة {surah.page}
+                {savedInSurah > 0 ? ` · آيات مشجَّرة محفوظة: ${savedInSurah.toLocaleString('ar')}` : ''}
               </p>
             </div>
-            <span className="text-[11px] text-stone-400">
-              {surah.transliteration}
-            </span>
+            <div className="flex items-center gap-2">
+              {savedInSurah > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowTashjeer((value) => !value)}
+                  className={`rounded-md border px-3 py-1.5 text-[11px] transition-colors ${
+                    showTashjeer
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                      : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50'
+                  }`}
+                  title="عرض التشجير المحفوظ تحت الآيات مباشرة"
+                >
+                  {showTashjeer ? 'إخفاء التشجير' : 'إظهار التشجير'}
+                </button>
+              )}
+              <span className="text-[11px] text-stone-400">{surah.transliteration}</span>
+            </div>
           </div>
 
           <ol className="space-y-3">
@@ -128,12 +152,17 @@ export default function QuranPage() {
                       {ayah.ayahNumber}
                     </span>
 
-                    <p
-                      className="flex-1 text-2xl leading-[2.4] text-stone-900"
-                      style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }}
-                    >
-                      {ayah.text}
-                    </p>
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className="text-2xl leading-[2.4] text-stone-900"
+                        style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }}
+                      >
+                        {ayah.text}
+                      </p>
+
+                      {/* التشجير النهائي المحفوظ من المحرر، بلا فتح المحرر. */}
+                      {isSaved && showTashjeer && <AyahTashjeerView ayahKey={ayah.key} />}
+                    </div>
 
                     <div className="mt-1.5 flex shrink-0 gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
                       <Link

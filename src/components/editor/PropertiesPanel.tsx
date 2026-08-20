@@ -28,6 +28,7 @@ import {
   TashjeerOrderControls,
   TextLayoutControls,
 } from './RecitationControls';
+import { RelationsPanel } from './RelationsPanel';
 import type { VariantCategory } from '@/types';
 import type { VerificationStatus } from '@/types/tashjeer';
 
@@ -148,6 +149,19 @@ export function PropertiesPanel() {
             <StatusBadge status={selectedVariant.status} />
           </div>
           <Row label="الفئة" value={CATEGORY_LABELS[selectedVariant.category]} />
+          <Row
+            label="المصدر"
+            value={
+              selectedVariant.isGlobalDerived
+                ? 'المحرك (قاعدة عامة)'
+                : selectedVariant.origin === 'EDITOR'
+                  ? 'المحرر (إضافة يدوية)'
+                  : 'المحرك (بيانات أساسية)'
+            }
+          />
+          {typeof selectedVariant.orderRank === 'number' && (
+            <Row label="رقم ترتيب السطر" value={toArabicDigits(selectedVariant.orderRank)} />
+          )}
           {selectedVariant.isGlobalDerived && (
             <p className="mb-1 rounded bg-violet-50 px-2 py-1 text-[11px] text-violet-800">
               مشتق من قاعدة عامة في المصحف — لا يُعدَّل من قائمة اختلافات هذه الآية.
@@ -253,6 +267,7 @@ export function PropertiesPanel() {
       <TextLayoutControls />
       <RecitationControls />
       <ManualLinesControls />
+      <RelationsPanel />
     </aside>
   );
 }

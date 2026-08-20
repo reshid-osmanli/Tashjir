@@ -509,14 +509,24 @@ function VariantRow({
       <div className="px-4 py-3">
         <button type="button" onClick={onSelect} className="w-full text-start">
           <div className="flex items-start justify-between gap-2">
-            <span
-              className="rounded px-1.5 py-0.5 text-[10px] font-medium"
-              style={{
-                backgroundColor: getCategorySoftColor(variant.category),
-                color: getCategoryColor(variant.category),
-              }}
-            >
-              {CATEGORY_LABELS[variant.category]}
+            <span className="flex flex-wrap items-center gap-1">
+              <span
+                className="rounded px-1.5 py-0.5 text-[10px] font-medium"
+                style={{
+                  backgroundColor: getCategorySoftColor(variant.category),
+                  color: getCategoryColor(variant.category),
+                }}
+              >
+                {CATEGORY_LABELS[variant.category]}
+              </span>
+              {variant.origin === 'EDITOR' && (
+                <span
+                  className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-800"
+                  title="أضافه المحرر يدويا — يظهر في التتبع ضمن «ما أضافه المحرر»"
+                >
+                  من المحرر
+                </span>
+              )}
             </span>
             <StatusBadge status={variant.status} />
           </div>

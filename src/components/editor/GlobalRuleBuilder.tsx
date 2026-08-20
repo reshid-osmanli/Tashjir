@@ -22,6 +22,7 @@ import {
 import {
   createGlobalRuleId,
   saveGlobalRule,
+  setGlobalRuleOrderRank,
   type GlobalRule,
 } from '@/lib/storage/global-rules-store';
 import {
@@ -63,6 +64,7 @@ export interface GlobalRuleSeed {
   sourceRef?: string;
   strengthDegreeId?: string;
   strengthByNarrator?: ReaderStrengthMap;
+  orderRank?: number;
 }
 
 interface GlobalRuleBuilderProps {
@@ -123,6 +125,9 @@ export function GlobalRuleBuilder({
   const [scope, setScope] = useState<ReadingScope>(seed?.scope ?? { kind: 'ALL' });
   const [ruleLabel, setRuleLabel] = useState(seed?.ruleLabel ?? '');
   const [maddHarakat, setMaddHarakat] = useState(seed?.maddHarakat?.toString() ?? '');
+  const [orderRank, setOrderRank] = useState(
+    typeof seed?.orderRank === 'number' ? seed.orderRank.toString() : ''
+  );
   const [description, setDescription] = useState(seed?.description ?? '');
   const [sourceRef, setSourceRef] = useState(seed?.sourceRef ?? '');
   const [status, setStatus] = useState<VerificationStatus>('DRAFT');
@@ -241,10 +246,13 @@ export function GlobalRuleBuilder({
       strengthByNarrator: pruneStrengthMap(strengthByNarrator, resolveScope(scope, catalog)),
       description: description.trim() || undefined,
       sourceRef: sourceRef.trim() || undefined,
+      orderRank: orderRank === '' ? undefined : Math.max(1, Math.round(Number(orderRank))),
       evidences: [],
       status,
       isActive,
     });
+    // ضبط الرتبة عبر المضبّط الرسمي يعيد ترقيم القواعد المتأثرة تلقائيا.
+    if (saved.orderRank) setGlobalRuleOrderRank(saved.id, saved.orderRank);
     onSaved(saved, matches.length);
   };
 
@@ -359,6 +367,20 @@ export function GlobalRuleBuilder({
             </Field>
             <Field label="حركات المد (اختياري)">
               <input type="number" min={0} max={6} value={maddHarakat} onChange={(event) => setMaddHarakat(event.target.value)} className="input" placeholder="٢، ٤، ٥، ٦" />
+            </Field>
+            <Field label="رقم ترتيب السطر (اختياري)">
+              <input
+                type="number"
+                min={1}
+                value={orderRank}
+                onChange={(event) => setOrderRank(event.target.value)}
+                className="input"
+                placeholder="أصغر رقم يعلو في التشجير"
+              />
+              <span className="mt-1 block text-[10px] leading-relaxed text-stone-500">
+                رتبة أسطر القاعدة في التشجير. تعديله لاحقا ممكن من خصائص القاعدة، والقواعد
+                المتأثرة تُعاد ترقيمها تلقائيا.
+              </span>
             </Field>
             <Field label="حالة التوثيق">
               <select value={status} onChange={(event) => setStatus(event.target.value as VerificationStatus)} className="input">

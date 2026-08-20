@@ -43,9 +43,11 @@ import type { VariantCategory } from '@/types';
 import type {
   AyahLayout,
   LayoutOptions,
+  LineSegment,
   ManualTashjeerLine,
   RecitationBoundary,
   TashjeerBranch,
+  TashjeerLink,
   Variant,
   VariantAlternative,
   ViewFilter,
@@ -81,9 +83,10 @@ import {
   compareAlternatives,
   compareVariantsForReading,
 } from './ordering';
-import { characterBoundsForWord, characterRangeCenterX } from '@/lib/quran-logic/characters';
 import { getCategoryColor } from './color-system';
-import { lociOfVariant, positionsOfVariant } from './loci';
+import { positionsOfVariant } from './loci';
+import { marksForWordRange as marksForRange, marksForVariant } from './line-marks';
+import { applyManualLinks, sortLinesByManualOrder } from './manual-links';
 
 // ==================== الإعدادات ====================
 
@@ -115,6 +118,15 @@ export interface ClassicTashjeerOptions {
    * إلا ما وقع داخل هذا المدى من الكلمات، وتُحصر أطراف الأسطر فيه.
    */
   focusSegment?: { startPosition: number; endPosition: number } | null;
+  /**
+   * روابط المحرر اليدوية: دمج الأوجه والأسطر وربط الأجزاء. تصحيح نتيجة
+   * المحرك هنا لا بإعادة تشغيله.
+   */
+  links?: TashjeerLink[];
+  /** أجزاء الأسطر التي أنشأها المحرر (Line→Segment→Rule). */
+  segments?: LineSegment[];
+  /** ترتيب أسطر يدوي يسبق ترتيب المحرك. */
+  lineOrder?: string[];
 }
 
 // ==================== النواتج ====================
@@ -303,6 +315,13 @@ export interface ClassicLine {
   rowOffset?: number;
   /** هل اختار المحرر موضع السطر بدلا من التوزيع الآلي؟ */
   isManual?: boolean;
+  /**
+   * روابط المحرر المطبَّقة على هذا السطر: دمج وجه بوجه، أو سطر بسطر، أو
+   * جزء مرتبط به. معرّفات الروابط من مستند الآية.
+   */
+  linkIds?: string[];
+  /** الأسطر التي دُمجت في هذا السطر بروابط المحرر اليدوية. */
+  mergedFrom?: string[];
   /** الإحداثي الرأسي للخط بعد الحساب. */
   rowY: number;
   /** طرفا السطر الأفقيان بعد تطبيق إعداد الامتداد. */
@@ -345,6 +364,12 @@ export interface ClassicTashjeer {
   agreement: ClassicAgreementLine | null;
   /** خطة ترتيب الأداء التي استخدمها المحرك، للشرح والمراجعة. */
   readingPlan: ReadingPlan;
+  /**
+   * الروابط اليدوية التي طُبّقت فعلا على هذا الناتج: المدمجة والمرجعية.
+   * تفيد لوحة العلاقات والتتبع في معرفة أي روابط فاعلة وأيها معلّق لعدم
+   * وجود طرفه الظاهر في العرض الحالي (تصفية أو حذف).
+   */
+  appliedLinkIds: { merge: string[]; reference: string[] };
 }
 
 // ==================== التوليد ====================
@@ -475,6 +500,23 @@ export function generateClassicTashjeer(
     line.segmentIndex = readingSegmentIndex(anchor, readingPlan);
   }
 
+  // مرحلة تصحيح المحرر: روابط الدمج والربط تعاد بعد نتيجة المحرك، ثم
+  // الترتيب اليدوي للأسطر يسبق توزيع المسارات. هكذا يصحّح المحقق ترتيب
+  // صف أو دمج سطرين دون إعادة تشغيل المحرك ودون فقد الروابط.
+  let appliedLinkIds = { merge: [] as string[], reference: [] as string[] };
+  if ((runtime.links ?? []).length > 0 || (runtime.segments ?? []).length > 0) {
+    const applied = applyManualLinks(lines, layout, runtime.links ?? [], runtime.segments ?? []);
+    lines.length = 0;
+    lines.push(...applied.lines);
+    appliedLinkIds = { merge: applied.appliedMergeIds, reference: applied.appliedReferenceIds };
+  }
+
+  const ordered = sortLinesByManualOrder(lines, runtime.lineOrder);
+  if (ordered !== lines) {
+    lines.length = 0;
+    lines.push(...ordered);
+  }
+
   assignClassicLanes(lines);
 
   // 3. الحساب الهندسي. كل الأسطر تنزل تحت النص واحدا تلو الآخر.
@@ -534,6 +576,7 @@ export function generateClassicTashjeer(
       ? null
       : buildAgreementLine(firstRowY, textLeftX, textRightX, catalog),
     readingPlan,
+    appliedLinkIds,
   };
 }
 
@@ -1135,55 +1178,6 @@ function manualToLine(
     guideEndX: 0,
     marks,
   };
-}
-
-function marksForVariant(variant: Variant, layout: AyahLayout): ClassicMark[] {
-  const marks: ClassicMark[] = [];
-  for (const locus of lociOfVariant(variant)) {
-    marks.push(
-      ...marksForRange(
-        locus.startPosition,
-        locus.endPosition,
-        layout,
-        locus.characterRange
-      )
-    );
-  }
-
-  const seen = new Set<string>();
-  return marks.filter((mark) => {
-    const key = `${mark.position}:${mark.characterStart ?? ''}:${mark.characterEnd ?? ''}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-function marksForRange(
-  startPosition: number,
-  endPosition: number,
-  layout: AyahLayout,
-  characterRange?: import('@/types/tashjeer').CharacterRange
-): ClassicMark[] {
-  const marks: ClassicMark[] = [];
-  for (let position = startPosition; position <= endPosition; position++) {
-    const box = layout.boxByPosition.get(position);
-    if (!box) continue;
-    const bounds = characterBoundsForWord(characterRange, position, box.text);
-    marks.push({
-      wordId: box.wordId,
-      position,
-      x: bounds
-        ? characterRangeCenterX(box, bounds.start, bounds.end)
-        : box.centerX,
-      characterStart: bounds?.start,
-      characterEnd: bounds?.end,
-      topY: box.topY,
-      bottomY: box.bottomY,
-      baselineY: box.baselineY,
-    });
-  }
-  return marks;
 }
 
 function displayReaders(

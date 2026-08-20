@@ -16,7 +16,7 @@ import { describeGlobalPattern } from '@/lib/quran-logic/global-rule-engine';
 import { resolveScope } from '@/lib/tashjeer/scope';
 import { pruneStrengthMap } from '@/lib/tashjeer/strength-degrees';
 import { readTransmissionCatalog } from '@/lib/transmissions/catalog';
-import { saveGlobalRule, type GlobalRule } from '@/lib/storage/global-rules-store';
+import { saveGlobalRule, setGlobalRuleOrderRank, listGlobalRules, type GlobalRule } from '@/lib/storage/global-rules-store';
 import { ScopePicker } from './VariantEditor';
 import { StrengthDegreePicker } from './StrengthDegreePicker';
 import type { VariantCategory } from '@/types';
@@ -43,6 +43,13 @@ export function GlobalRuleMetaEditor({
   const [scope, setScope] = useState<ReadingScope>(rule.scope);
   const [ruleLabel, setRuleLabel] = useState(rule.ruleLabel ?? '');
   const [maddHarakat, setMaddHarakat] = useState(rule.maddHarakat?.toString() ?? '');
+  const [orderRank, setOrderRank] = useState(
+    typeof rule.orderRank === 'number' ? rule.orderRank.toString() : ''
+  );
+  /** عدد القواعد المرقّمة، ليعرف المحقق أين تقع رتبته بين الرتب. */
+  const rankedRulesCount = listGlobalRules().filter(
+    (item) => typeof item.orderRank === 'number'
+  ).length;
   const [description, setDescription] = useState(rule.description ?? '');
   const [sourceRef, setSourceRef] = useState(rule.sourceRef ?? '');
   const [status, setStatus] = useState<VerificationStatus>(rule.status);
@@ -78,6 +85,9 @@ export function GlobalRuleMetaEditor({
       status,
       isActive,
     });
+    // ترتيب السطر يضبط بالمضبّط المخصص له: إدراج بإزاحة المتأثرين تلقائيا.
+    const wantedRank = orderRank === '' ? null : Math.max(1, Math.round(Number(orderRank)));
+    setGlobalRuleOrderRank(saved.id, wantedRank);
     onSaved(saved);
   };
 
@@ -122,6 +132,33 @@ export function GlobalRuleMetaEditor({
           </Field>
           <Field label="حركات المد (اختياري)">
             <input type="number" min={0} max={6} value={maddHarakat} onChange={(event) => setMaddHarakat(event.target.value)} className="input" placeholder="٤ أو ٥ أو ٦" />
+          </Field>
+          <Field label="رقم ترتيب السطر">
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                value={orderRank}
+                onChange={(event) => setOrderRank(event.target.value)}
+                className="input"
+                placeholder="بلا ترتيب يدوي"
+              />
+              {orderRank !== '' && (
+                <button
+                  type="button"
+                  onClick={() => setOrderRank('')}
+                  className="shrink-0 rounded border border-stone-300 px-2 py-1.5 text-[10px] text-stone-600 hover:bg-stone-50"
+                  title="إلغاء الترتيب اليدوي والعودة إلى قاعدة المحرك"
+                >
+                  إلغاء الترتيب
+                </button>
+              )}
+            </div>
+            <span className="mt-1 block text-[10px] leading-relaxed text-stone-500">
+              رتبة يدوية لأسطر هذه القاعدة في التشجير (الأصغر يعلو). القواعد المرقّمة حاليا:
+              {' '}{rankedRulesCount}. عند الحفظ تُعاد ترقيمة المتأثرين تلقائيا، ويمكن
+              تخصيص موضع بعينه من شاشة تتبّع المواضع.
+            </span>
           </Field>
           <Field label="الحالة">
             <select value={status} onChange={(event) => setStatus(event.target.value as VerificationStatus)} className="input">

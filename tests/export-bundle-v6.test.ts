@@ -89,18 +89,89 @@ async function seedWorkspace() {
 }
 
 describe('صيغة الملف', () => {
-  it('يصدّر بالإصدار السادس ويحمل الحقول الجديدة كلها', async () => {
+  it('يصدّر بالإصدار السابع ويحمل الحقول الجديدة كلها', async () => {
     await seedWorkspace();
     const { documents } = await loadModules();
 
     const bundle = JSON.parse(documents.exportDocuments());
 
     expect(bundle.format).toBe('tashjeer-export');
-    expect(bundle.schemaVersion).toBe(6);
+    expect(bundle.schemaVersion).toBe(7);
     expect(bundle.globalRules).toHaveLength(1);
     expect(bundle.strengthDegrees.degrees).toHaveLength(5);
     expect(bundle.ruleOccurrences).toHaveLength(2);
     expect(bundle.occurrenceLog.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('يحمل روابط المحرر وأجزاءه وترتيبه اليدوي وسجل تعديلاته (v7)', async () => {
+    await seedWorkspace();
+    const { documents } = await loadModules();
+
+    const document = documents.loadDocument(AYAH_KEY);
+    expect(document).not.toBeNull();
+    if (!document) return;
+
+    const withManual = documents.appendEditLog(
+      {
+        ...document,
+        lineOrder: ['combo::a', 'combo::b'],
+        links: [
+          {
+            id: 'link-1',
+            ayahKey: AYAH_KEY,
+            kind: 'FACE_TO_FACE',
+            relation: 'MERGE',
+            from: { type: 'FACE', id: 'v1::a1' },
+            to: { type: 'FACE', id: 'v2::a2' },
+            origin: 'EDITOR',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+        segments: [
+          {
+            id: 'segment-1',
+            ayahKey: AYAH_KEY,
+            title: 'جزء اختبار',
+            startPosition: 2,
+            endPosition: 3,
+            origin: 'EDITOR',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      },
+      documents.makeEditEntry({
+        action: 'ترتيب الأسطر يدويا',
+        targetType: 'LINE_ORDER',
+        targetId: String(AYAH_KEY),
+        summary: 'تثبيت ترتيب سطرين يدويا',
+      })
+    );
+    documents.saveDocument(withManual);
+
+    const bundle = JSON.parse(documents.exportAyahDocument(AYAH_KEY));
+    const exported = bundle.documents[0];
+
+    expect(exported.lineOrder).toEqual(['combo::a', 'combo::b']);
+    expect(exported.links).toHaveLength(1);
+    expect(exported.links[0].kind).toBe('FACE_TO_FACE');
+    expect(exported.links[0].origin).toBe('EDITOR');
+    expect(exported.segments).toHaveLength(1);
+    expect(exported.editLog.length).toBeGreaterThanOrEqual(1);
+    expect(exported.editLog[0].origin).toBe('EDITOR');
+
+    // الاستيراد على جهاز نظيف يحفظ هذه الحقول كما هي.
+    vi.unstubAllGlobals();
+    vi.resetModules();
+    vi.stubGlobal('window', { localStorage: new MemoryStorage() });
+    const fresh = await loadModules();
+    fresh.documents.importDocuments(JSON.stringify(bundle), true);
+    const restored = fresh.documents.loadDocument(AYAH_KEY);
+    expect(restored?.lineOrder).toEqual(['combo::a', 'combo::b']);
+    expect(restored?.links).toHaveLength(1);
+    expect(restored?.segments).toHaveLength(1);
+    expect((restored?.editLog ?? []).length).toBeGreaterThanOrEqual(1);
   });
 
   it('يحمل السلّم والاستثناءات حتى في تصدير آية واحدة', async () => {
