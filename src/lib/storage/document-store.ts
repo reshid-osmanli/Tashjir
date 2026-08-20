@@ -14,9 +14,13 @@
 // إصدار الصيغة داخل المستند (schemaVersion) يسمح بالترقية التدريجية.
 
 import type {
+  DocumentEditEntry,
+  DocumentEditTargetType,
   DocumentMeta,
   TashjeerBranch,
   TashjeerDocument,
+  TashjeerLink,
+  LineSegment,
   Variant,
   VerificationStatus,
 } from '@/types/tashjeer';
@@ -45,8 +49,10 @@ import { parseAyahKey } from '@/data/quran';
  *
  * v5: القواعد العامة النمطية تُحفظ في الحزمة.
  * v6: درجات قوة الوجه لكل راوٍ، واستثناءات مواضع القواعد وسجلّها.
+ * v7: التحكم اليدوي الكامل: روابط الأوجه والأسطر، أجزاء الأسطر، ترتيب
+ *     الأسطر اليدوي، وسجل تعديلات المحرر (المصدر: محرك/محرر).
  */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 // نحتفظ بمفاتيح v2 كي تُقرأ مستندات المستخدمين القديمة ثم تُرقّى عند الحفظ.
 const DOC_PREFIX = 'tashjeer:doc:v2:';
@@ -88,6 +94,10 @@ export function createDocument(ayahKey: number, author = 'محرر محلي'): T
     manualLines: [],
     boundaries: [],
     layout: { forcedLineBreakAfter: [], lineOffsets: {} },
+    lineOrder: [],
+    links: [],
+    segments: [],
+    editLog: [],
     readingWindow: { linkNextAyah: false, focusSegment: null },
     meta: {
       createdAt: now,
@@ -384,6 +394,12 @@ function migrateDocument(document: TashjeerDocument): TashjeerDocument {
           ? document.layout.lineOffsets
           : {},
     },
+    // v7: حقول التحكم اليدوي. المستندات القديمة تبدأ فارغة الجيوب: لا روابط
+    // ولا ترتيبا يدويا، فيعمل المحرك كما كان ثم يضيف المحرر تصحيحاته.
+    lineOrder: sanitizeIdList(document.lineOrder),
+    links: (Array.isArray(document.links) ? document.links : []).filter(isValidLink),
+    segments: (Array.isArray(document.segments) ? document.segments : []).filter(isValidSegment),
+    editLog: (Array.isArray(document.editLog) ? document.editLog : []).filter(isValidEditEntry),
     readingWindow: {
       linkNextAyah: document.readingWindow?.linkNextAyah === true,
       focusSegment: normalizeFocusSegmentValue(document.readingWindow?.focusSegment),
@@ -463,6 +479,94 @@ function cloneVariants(variants: Variant[]): Variant[] {
 /** نسخة عميقة من قائمة خطوط، تُستخدم عند إعادة التوليد. */
 export function cloneBranches(branches: TashjeerBranch[]): TashjeerBranch[] {
   return JSON.parse(JSON.stringify(branches)) as TashjeerBranch[];
+}
+
+// ==================== سجل التعديلات والروابط (v7) ====================
+
+/** أقصى عدد أسطر في سجل التعديل، حفاظا على حد التخزين المحلي. */
+export const MAX_EDIT_LOG = 500;
+
+/** يبني سطر سجل تعديل جاهزا للإلحاق بالمستند. */
+export function makeEditEntry(entry: {
+  action: string;
+  targetType: DocumentEditTargetType;
+  targetId: string;
+  summary: string;
+  category?: Variant['category'];
+  changes?: DocumentEditEntry['changes'];
+  actor?: string;
+  origin?: 'ENGINE' | 'EDITOR';
+}): DocumentEditEntry {
+  return {
+    id: `edit-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    at: new Date().toISOString(),
+    actor: entry.actor ?? 'محرر محلي',
+    action: entry.action,
+    targetType: entry.targetType,
+    targetId: entry.targetId,
+    category: entry.category,
+    summary: entry.summary,
+    changes: entry.changes,
+    origin: entry.origin ?? 'EDITOR',
+  };
+}
+
+/** يضيف سطر سجل إلى مستند مع الاحتفاظ بالحد الأقصى (الأحدث آخرا). */
+export function appendEditLog(
+  document: TashjeerDocument,
+  entry: DocumentEditEntry
+): TashjeerDocument {
+  const log = [...(document.editLog ?? []), entry].slice(-MAX_EDIT_LOG);
+  return { ...document, editLog: log };
+}
+
+/** قائمة معرّفات نظيفة بلا تكرار ولا فراغات. */
+function sanitizeIdList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (typeof item === 'string' && item.trim() && !seen.has(item)) seen.add(item);
+  }
+  return [...seen];
+}
+
+function isValidLink(value: unknown): value is TashjeerLink {
+  if (!value || typeof value !== 'object') return false;
+  const link = value as TashjeerLink;
+  return (
+    typeof link.id === 'string' &&
+    typeof link.ayahKey === 'number' &&
+    typeof link.kind === 'string' &&
+    typeof link.relation === 'string' &&
+    Boolean(link.from) &&
+    typeof link.from.id === 'string' &&
+    Boolean(link.to) &&
+    typeof link.to.id === 'string'
+  );
+}
+
+function isValidSegment(value: unknown): value is LineSegment {
+  if (!value || typeof value !== 'object') return false;
+  const segment = value as LineSegment;
+  return (
+    typeof segment.id === 'string' &&
+    typeof segment.ayahKey === 'number' &&
+    typeof segment.startPosition === 'number' &&
+    typeof segment.endPosition === 'number' &&
+    segment.endPosition >= segment.startPosition &&
+    segment.startPosition >= 1
+  );
+}
+
+function isValidEditEntry(value: unknown): value is DocumentEditEntry {
+  if (!value || typeof value !== 'object') return false;
+  const entry = value as DocumentEditEntry;
+  return (
+    typeof entry.id === 'string' &&
+    typeof entry.at === 'string' &&
+    typeof entry.summary === 'string' &&
+    typeof entry.targetType === 'string'
+  );
 }
 
 function isBrowser(): boolean {

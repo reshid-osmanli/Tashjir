@@ -640,6 +640,10 @@ export function variantFromGlobalMatch(
     status: rule.status,
     isGlobalDerived: true,
     globalRuleId: rule.id,
+    // المحرك مصدر هذا الموضع؛ التصحيح اليدوي يظهر في سجل التعديل والتتبع.
+    origin: 'ENGINE',
+    // رتبة ترتيب السطر: تخصيص الموضع يسبق رتبة القاعدة العامة.
+    orderRank: override?.orderRank ?? rule.orderRank,
     description: rule.description,
     sourceRef: rule.sourceRef,
     alternatives: [

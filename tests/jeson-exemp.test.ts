@@ -62,7 +62,7 @@ describe('مثال البقرة ٣٧', () => {
     });
 
     expect(lines.length).toBeGreaterThan(0);
-    const first = lines[0];
+    const first = lines[0] as typeof lines[0] & { leadOrder?: number };
     expect(first.leadOrder === undefined || first.narratorIds.includes('narrator-qalun') || first.readers.length > 0).toBe(
       true
     );

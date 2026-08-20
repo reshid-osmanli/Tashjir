@@ -466,6 +466,31 @@ function ClassicLineShape({
         </text>
       )}
 
+      {/* وسم الأسطر المصحَّحة يدويا: دمج أوجه أو ربط أجزاء أنشأها المحرر.
+          علامة بنفسجية صغيرة في الطرف الأيسر فوق رموز القراء. */}
+      {(line.linkIds?.length ?? 0) > 0 && (
+        <g>
+          <circle
+            cx={line.guideStartX - 12}
+            cy={line.rowY - 13}
+            r={7.5}
+            fill="#f5f3ff"
+            stroke="#8b5cf6"
+            strokeWidth={0.9}
+          />
+          <text
+            x={line.guideStartX - 12}
+            y={line.rowY - 9.5}
+            textAnchor="middle"
+            fontSize={10}
+            fill="#6d28d9"
+            style={{ userSelect: 'none', fontWeight: 700 }}
+          >
+            ↔
+          </text>
+        </g>
+      )}
+
       <title>{lineTitle(line)}</title>
     </g>
   );
@@ -779,7 +804,12 @@ function lineTitle(line: ClassicLine): string {
     })
     .join('\n');
 
-  return `القراء: ${readers}\nأحكام هذا السطر:\n${rules}`;
+  const linkNote =
+    (line.linkIds?.length ?? 0) > 0
+      ? `\n⟵ سطر مصحَّح يدويا: ${toArabicDigits(line.linkIds?.length ?? 0)} علاقة من المحرر`
+      : '';
+
+  return `القراء: ${readers}\nأحكام هذا السطر:\n${rules}${linkNote}`;
 }
 
 // ==================== عناصر مساعدة ====================

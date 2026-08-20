@@ -20,8 +20,13 @@ import type {
   ManualTashjeerLine,
   RecitationBoundary,
   CharacterAnchor,
+  LinkEndpoint,
   TashjeerBranch,
   TashjeerDocument,
+  TashjeerLink,
+  TashjeerLinkKind,
+  TashjeerLinkRelation,
+  LineSegment,
   Variant,
   VariantAlternative,
   VerificationStatus,
@@ -34,9 +39,12 @@ import { generateBranches } from '@/lib/tashjeer/branch-engine';
 import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
 import { readTransmissionCatalog } from '@/lib/transmissions/catalog';
 import { readEngineSettings } from '@/lib/tashjeer/engine-settings';
+import { moveLineToIndex } from '@/lib/tashjeer/manual-links';
 import {
+  appendEditLog,
   createDocument,
   loadOrCreateDocument,
+  makeEditEntry,
   saveDocument,
 } from '@/lib/storage/document-store';
 
@@ -134,6 +142,34 @@ interface EditorState {
   addManualLine: (line: ManualTashjeerLine) => void;
   updateManualLine: (lineId: string, patch: Partial<ManualTashjeerLine>) => void;
   deleteManualLine: (lineId: string) => void;
+
+  // ---------- الروابط والأجزاء والترتيب اليدوي (تصحيح المحرك) ----------
+  /** ينشئ علاقة يدوية بين عنصرين: وجهين، سطرين، أو جزء وسطر/قاعدة. */
+  addLink: (link: {
+    kind: TashjeerLinkKind;
+    relation: TashjeerLinkRelation;
+    from: LinkEndpoint;
+    to: LinkEndpoint;
+    notes?: string;
+  }) => void;
+  updateLink: (linkId: string, patch: Partial<Pick<TashjeerLink, 'relation' | 'notes' | 'from' | 'to'>>) => void;
+  deleteLink: (linkId: string) => void;
+  /** ينشئ جزءا من سطر: مدى كلمات/حروف له روابطه وقواعده الخاصة. */
+  addSegment: (segment: {
+    title: string;
+    startPosition: number;
+    endPosition: number;
+    characterRange?: LineSegment['characterRange'];
+    notes?: string;
+  }) => LineSegment | undefined;
+  updateSegment: (segmentId: string, patch: Partial<Pick<LineSegment, 'title' | 'startPosition' | 'endPosition' | 'notes'>>) => void;
+  deleteSegment: (segmentId: string) => void;
+  /** يثبّت ترتيب أسطر العرض يدويا (لقطة كاملة بترتيب المحرر). */
+  setLineOrder: (order: string[]) => void;
+  /** ينقل سطرا إلى موضع جديد بإزاحة المتأثرين، انطلاقا من لقطة الترتيب الحالية. */
+  moveLineInOrder: (currentLineIds: string[], lineId: string, targetIndex: number) => void;
+  /** يعيد الترتيب إلى قاعدة المحرك. */
+  resetLineOrder: () => void;
 
   // ---------- الوقف والابتداء وتخطيط النص ----------
   addBoundary: (boundary: RecitationBoundary) => void;
@@ -263,58 +299,134 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   // ==================== الاختلافات ====================
 
   addVariant: (variant) => {
-    mutate(set, get, (document) => ({
-      ...document,
-      variants: [...document.variants, { ...variant, ayahKey: document.ayahKey }].sort(
-        compareVariants
-      ),
-    }));
+    mutate(
+      set,
+      get,
+      (document) => ({
+        ...document,
+        variants: [
+          ...document.variants,
+          { ...variant, ayahKey: document.ayahKey, origin: 'EDITOR' as const },
+        ].sort(compareVariants),
+      }),
+      {
+        action: 'إضافة اختلاف',
+        targetType: 'VARIANT',
+        targetId: variant.id,
+        category: variant.category,
+        summary: `أضاف المحرر اختلاف «${variant.title}» (${variant.startPosition}–${variant.endPosition})`,
+      }
+    );
     set({ markedPositions: [], markedCharacters: [] });
   },
 
   updateVariant: (variantId, patch) => {
-    mutate(set, get, (document) => ({
-      ...document,
-      variants: document.variants
-        .map((variant) => (variant.id === variantId ? { ...variant, ...patch } : variant))
-        .sort(compareVariants),
-    }));
+    mutate(set, get, (document) => {
+      const before = document.variants.find((variant) => variant.id === variantId);
+      return withLoggedEdit(
+        {
+          ...document,
+          variants: document.variants
+            .map((variant) => (variant.id === variantId ? { ...variant, ...patch } : variant))
+            .sort(compareVariants),
+        },
+        {
+          action: 'تعديل اختلاف',
+          targetType: 'VARIANT',
+          targetId: variantId,
+          category: before?.category,
+          summary: `تعديل «${before?.title ?? variantId}»: ${Object.keys(patch).join('، ')}`,
+          changes: Object.entries(patch).map(([field, after]) => ({
+            field,
+            before: before ? (before as unknown as Record<string, unknown>)[field] : undefined,
+            after,
+          })),
+        },
+        document
+      );
+    });
   },
 
   deleteVariant: (variantId) => {
-    mutate(set, get, (document) => ({
-      ...document,
-      variants: document.variants.filter((variant) => variant.id !== variantId),
-      // الخطوط التابعة للاختلاف المحذوف تُزال معه.
-      branches: document.branches.filter((branch) => branch.variantId !== variantId),
-    }));
+    mutate(set, get, (document) => {
+      const before = document.variants.find((variant) => variant.id === variantId);
+      return withLoggedEdit(
+        {
+          ...document,
+          variants: document.variants.filter((variant) => variant.id !== variantId),
+          // الخطوط التابعة للاختلاف المحذوف تُزال معه، وكذلك روابطه.
+          branches: document.branches.filter((branch) => branch.variantId !== variantId),
+          links: pruneLinksForVariant(document.links ?? [], variantId),
+        },
+        {
+          action: 'حذف اختلاف',
+          targetType: 'VARIANT',
+          targetId: variantId,
+          category: before?.category,
+          summary: `حذف المحرر اختلاف «${before?.title ?? variantId}»`,
+        },
+        document
+      );
+    });
     set({ selectedVariantId: null });
   },
 
   addAlternative: (variantId, alternative) => {
-    mutate(set, get, (document) => ({
-      ...document,
-      variants: document.variants.map((variant) =>
-        variant.id === variantId
-          ? { ...variant, alternatives: [...variant.alternatives, alternative] }
-          : variant
-      ),
-    }));
+    mutate(set, get, (document) => {
+      const owner = document.variants.find((variant) => variant.id === variantId);
+      return withLoggedEdit(
+        {
+          ...document,
+          variants: document.variants.map((variant) =>
+            variant.id === variantId
+              ? { ...variant, alternatives: [...variant.alternatives, alternative] }
+              : variant
+          ),
+        },
+        {
+          action: 'إضافة وجه',
+          targetType: 'ALTERNATIVE',
+          targetId: alternative.id,
+          category: owner?.category,
+          summary: `أضاف المحرر وجها («${alternative.label}») إلى «${owner?.title ?? variantId}»`,
+        },
+        document
+      );
+    });
   },
 
   updateAlternative: (variantId, alternativeId, patch) => {
-    mutate(set, get, (document) => ({
-      ...document,
-      variants: document.variants.map((variant) => {
-        if (variant.id !== variantId) return variant;
-        return {
-          ...variant,
-          alternatives: variant.alternatives.map((alternative) =>
-            alternative.id === alternativeId ? { ...alternative, ...patch } : alternative
-          ),
-        };
-      }),
-    }));
+    mutate(set, get, (document) => {
+      const owner = document.variants.find((variant) => variant.id === variantId);
+      const before = owner?.alternatives.find((item) => item.id === alternativeId);
+      return withLoggedEdit(
+        {
+          ...document,
+          variants: document.variants.map((variant) => {
+            if (variant.id !== variantId) return variant;
+            return {
+              ...variant,
+              alternatives: variant.alternatives.map((alternative) =>
+                alternative.id === alternativeId ? { ...alternative, ...patch } : alternative
+              ),
+            };
+          }),
+        },
+        {
+          action: 'تعديل وجه',
+          targetType: 'ALTERNATIVE',
+          targetId: alternativeId,
+          category: owner?.category,
+          summary: `تعديل الوجه «${before?.label ?? alternativeId}»: ${Object.keys(patch).join('، ')}`,
+          changes: Object.entries(patch).map(([field, after]) => ({
+            field,
+            before: before ? (before as unknown as Record<string, unknown>)[field] : undefined,
+            after,
+          })),
+        },
+        document
+      );
+    });
   },
 
   deleteAlternative: (variantId, alternativeId) => {
@@ -334,14 +446,31 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   setVariantOrderRank: (variantId, rank) => {
-    mutate(set, get, (document) => ({
-      ...document,
-      variants: document.variants.map((variant) =>
-        variant.id === variantId
-          ? { ...variant, orderRank: rank === null ? undefined : Math.max(1, Math.round(rank)) }
-          : variant
-      ),
-    }));
+    mutate(set, get, (document) => {
+      const before = document.variants.find((variant) => variant.id === variantId);
+      return withLoggedEdit(
+        {
+          ...document,
+          variants: document.variants.map((variant) =>
+            variant.id === variantId
+              ? { ...variant, orderRank: rank === null ? undefined : Math.max(1, Math.round(rank)) }
+              : variant
+          ),
+        },
+        {
+          action: 'تعديل ترتيب الموضع',
+          targetType: 'VARIANT',
+          targetId: variantId,
+          category: before?.category,
+          summary:
+            rank === null
+              ? `إلغاء الرتبة اليدوية للموضع «${before?.title ?? variantId}»`
+              : `تعديل رقم ترتيب السطر للموضع «${before?.title ?? variantId}» إلى ${rank}`,
+          changes: [{ field: 'orderRank', before: before?.orderRank, after: rank ?? undefined }],
+        },
+        document
+      );
+    });
   },
 
   moveAlternative: (variantId, alternativeId, delta) => {
@@ -467,6 +596,201 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ...document,
       manualLines: document.manualLines.filter((line) => line.id !== lineId),
     }));
+  },
+
+  // ==================== الروابط والأجزاء والترتيب اليدوي ====================
+
+  addLink: ({ kind, relation, from, to, notes }) => {
+    mutate(set, get, (document) => {
+      const id = `link-${document.ayahKey}-${Date.now().toString(36)}-${Math.random()
+        .toString(36)
+        .slice(2, 6)}`;
+      const now = new Date().toISOString();
+      const link: TashjeerLink = {
+        id,
+        ayahKey: document.ayahKey,
+        kind,
+        relation,
+        from,
+        to,
+        notes: notes?.trim() || undefined,
+        origin: 'EDITOR',
+        createdAt: now,
+        updatedAt: now,
+      };
+      return withLoggedEdit(
+        { ...document, links: [...(document.links ?? []), link] },
+        {
+          action: 'إنشاء علاقة',
+          targetType: linkTargetTypeOf(kind),
+          targetId: id,
+          summary: `${relation === 'MERGE' ? 'دمج' : 'ربط'} ${describeEndpoint(from)} مع ${describeEndpoint(to)}`,
+        },
+        document
+      );
+    });
+  },
+
+  updateLink: (linkId, patch) => {
+    mutate(set, get, (document) => {
+      const before = (document.links ?? []).find((link) => link.id === linkId);
+      return withLoggedEdit(
+        {
+          ...document,
+          links: (document.links ?? []).map((link) =>
+            link.id === linkId ? { ...link, ...patch, updatedAt: new Date().toISOString() } : link
+          ),
+        },
+        {
+          action: 'تعديل علاقة',
+          targetType: linkTargetTypeOf(before?.kind ?? 'LINE_TO_LINE'),
+          targetId: linkId,
+          summary: `تعديل العلاقة ${before ? `(${before.kind} ${before.relation})` : linkId}`,
+          changes: Object.entries(patch).map(([field, after]) => ({
+            field,
+            before: before ? (before as unknown as Record<string, unknown>)[field] : undefined,
+            after,
+          })),
+        },
+        document
+      );
+    });
+  },
+
+  deleteLink: (linkId) => {
+    mutate(set, get, (document) => {
+      const before = (document.links ?? []).find((link) => link.id === linkId);
+      return withLoggedEdit(
+        {
+          ...document,
+          links: (document.links ?? []).filter((link) => link.id !== linkId),
+        },
+        {
+          action: 'حذف علاقة',
+          targetType: linkTargetTypeOf(before?.kind ?? 'LINE_TO_LINE'),
+          targetId: linkId,
+          summary: `حذف العلاقة بين ${describeEndpoint(before?.from)} و${describeEndpoint(before?.to)}`,
+        },
+        document
+      );
+    });
+  },
+
+  addSegment: ({ title, startPosition, endPosition, characterRange, notes }) => {
+    const document = get().document;
+    if (!document) return undefined;
+
+    const segment: LineSegment = {
+      id: `segment-${document.ayahKey}-${Date.now().toString(36)}-${Math.random()
+        .toString(36)
+        .slice(2, 6)}`,
+      ayahKey: document.ayahKey,
+      title: title.trim() || 'جزء من سطر',
+      startPosition,
+      endPosition,
+      characterRange,
+      notes: notes?.trim() || undefined,
+      origin: 'EDITOR',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    mutate(
+      set,
+      get,
+      (current) => ({
+        ...current,
+        segments: [...(current.segments ?? []), segment],
+      }),
+      {
+        action: 'إنشاء جزء',
+        targetType: 'SEGMENT',
+        targetId: segment.id,
+        summary: `إنشاء جزء «${segment.title}» (${segment.startPosition}–${segment.endPosition})`,
+      }
+    );
+
+    return segment;
+  },
+
+  updateSegment: (segmentId, patch) => {
+    mutate(set, get, (document) => {
+      const before = (document.segments ?? []).find((segment) => segment.id === segmentId);
+      return withLoggedEdit(
+        {
+          ...document,
+          segments: (document.segments ?? []).map((segment) =>
+            segment.id === segmentId
+              ? { ...segment, ...patch, updatedAt: new Date().toISOString() }
+              : segment
+          ),
+        },
+        {
+          action: 'تعديل جزء',
+          targetType: 'SEGMENT',
+          targetId: segmentId,
+          summary: `تعديل الجزء «${before?.title ?? segmentId}»: ${Object.keys(patch).join('، ')}`,
+          changes: Object.entries(patch).map(([field, after]) => ({
+            field,
+            before: before ? (before as unknown as Record<string, unknown>)[field] : undefined,
+            after,
+          })),
+        },
+        document
+      );
+    });
+  },
+
+  deleteSegment: (segmentId) => {
+    mutate(set, get, (document) => {
+      const before = (document.segments ?? []).find((segment) => segment.id === segmentId);
+      return withLoggedEdit(
+        {
+          ...document,
+          segments: (document.segments ?? []).filter((segment) => segment.id !== segmentId),
+          // روابط الجزء المحذوف تُزال معه، فلا تبقى روابط معلقة.
+          links: (document.links ?? []).filter(
+            (link) => link.from.id !== segmentId && link.to.id !== segmentId
+          ),
+        },
+        {
+          action: 'حذف جزء',
+          targetType: 'SEGMENT',
+          targetId: segmentId,
+          summary: `حذف الجزء «${before?.title ?? segmentId}» وروابطه`,
+        },
+        document
+      );
+    });
+  },
+
+  setLineOrder: (order) => {
+    mutate(set, get, (document) => {
+      const before = document.lineOrder ?? [];
+      if (arraysEqual(before, order)) return document;
+      return withLoggedEdit(
+        { ...document, lineOrder: [...order] },
+        {
+          action: 'ترتيب الأسطر يدويا',
+          targetType: 'LINE_ORDER',
+          targetId: String(document.ayahKey),
+          summary:
+            order.length === 0
+              ? 'إعادة الترتيب إلى قاعدة المحرك'
+              : `تثبيت ترتيب ${order.length} سطرا يدويا`,
+          changes: [{ field: 'lineOrder', before, after: [...order] }],
+        },
+        document
+      );
+    });
+  },
+
+  moveLineInOrder: (currentLineIds, lineId, targetIndex) => {
+    get().setLineOrder(moveLineToIndex(currentLineIds, lineId, targetIndex));
+  },
+
+  resetLineOrder: () => {
+    get().setLineOrder([]);
   },
 
   // ==================== الوقف والابتداء وتخطيط النص ====================
@@ -661,21 +985,36 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
 // ==================== دوال داخلية ====================
 
+/** وصف تعديل يُسجَّل في سجل المستند لأغراض التتبع. */
+interface EditDescriptor {
+  action: string;
+  targetType: import('@/types/tashjeer').DocumentEditTargetType;
+  targetId: string;
+  summary: string;
+  category?: VariantCategory;
+  changes?: import('@/types/tashjeer').DocumentEditChange[];
+}
+
 /**
  * يطبّق تعديلا على المستند مع تسجيل لقطة تراجع وإعادة توليد الخطوط.
  *
  * @param updater دالة تُرجع النسخة الجديدة من المستند
+ * @param edit وصف التعديل لسجل التتبع، اختياري لتعديلات العرض الصرفة
  */
 function mutate(
   set: (partial: Partial<EditorState>) => void,
   get: () => EditorState,
-  updater: (document: TashjeerDocument) => TashjeerDocument
+  updater: (document: TashjeerDocument) => TashjeerDocument,
+  edit?: EditDescriptor
 ): void {
   const state = get();
   const current = state.document;
   if (!current) return;
 
-  const next = withRegeneratedBranches(updater(current));
+  const updated = updater(current);
+  const next = withRegeneratedBranches(
+    edit ? withLoggedEdit(updated, edit, current) : updated
+  );
 
   set({
     past: pushHistory(state.past, current),
@@ -683,6 +1022,27 @@ function mutate(
     document: next,
     isDirty: true,
   });
+}
+
+/** يلحق سطر سجل تعديل بالمستند إن كان التعديل حقيقيا (تغيرت بياناته). */
+function withLoggedEdit(
+  next: TashjeerDocument,
+  edit: EditDescriptor,
+  before: TashjeerDocument
+): TashjeerDocument {
+  if (next === before) return next;
+  return appendEditLog(
+    next,
+    makeEditEntry({
+      actor: next.meta.author,
+      action: edit.action,
+      targetType: edit.targetType,
+      targetId: edit.targetId,
+      category: edit.category,
+      summary: edit.summary,
+      changes: edit.changes,
+    })
+  );
 }
 
 /** يعيد توليد الخطوط مع الحفاظ على التعديلات اليدوية. */
@@ -738,6 +1098,46 @@ function compareVariants(a: Variant, b: Variant): number {
 
 function pushHistory(past: TashjeerDocument[], document: TashjeerDocument): TashjeerDocument[] {
   return [...past, document].slice(-MAX_HISTORY);
+}
+
+/** نوع هدف الرابط في سجل التعديل بحسب نوع العلاقة. */
+function linkTargetTypeOf(
+  kind: import('@/types/tashjeer').TashjeerLinkKind
+): import('@/types/tashjeer').DocumentEditTargetType {
+  if (kind === 'FACE_TO_FACE') return 'FACE_LINK';
+  if (kind === 'LINE_TO_LINE') return 'LINE_LINK';
+  return 'SEGMENT';
+}
+
+/** وصف طرف العلاقة في صياغة عربية مفهومة للسجل والتتبع. */
+function describeEndpoint(endpoint?: import('@/types/tashjeer').LinkEndpoint): string {
+  if (!endpoint) return 'غير محدد';
+  const labels: Record<string, string> = {
+    FACE: 'وجه',
+    LINE: 'سطر',
+    SEGMENT: 'جزء',
+    RULE: 'قاعدة',
+  };
+  return `${labels[endpoint.type] ?? endpoint.type} (${shortenId(endpoint.id)})`;
+}
+
+function shortenId(id: string): string {
+  return id.length > 40 ? `${id.slice(0, 37)}…` : id;
+}
+
+/** يزيل روابط وجه اختفى اختلافه، فلا تبقى علاقات تشير إلى معدوم. */
+function pruneLinksForVariant(links: TashjeerLink[], variantId: string): TashjeerLink[] {
+  return links.filter((link) => {
+    if (link.from.type === 'FACE' && link.from.id.startsWith(`${variantId}::`)) return false;
+    if (link.to.type === 'FACE' && link.to.id.startsWith(`${variantId}::`)) return false;
+    if (link.from.type === 'RULE' && link.from.id === variantId) return false;
+    if (link.to.type === 'RULE' && link.to.id === variantId) return false;
+    return true;
+  });
+}
+
+function arraysEqual(first: string[], second: string[]): boolean {
+  return first.length === second.length && first.every((item, index) => item === second[index]);
 }
 
 function clamp(value: number, min: number, max: number): number {

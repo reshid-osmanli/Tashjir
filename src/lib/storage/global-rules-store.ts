@@ -31,7 +31,12 @@ export interface GlobalRule {
    * القواعد القديمة التي لا تحمل نمطا تبقى وصفية فقط. */
   pattern?: GlobalRulePattern;
   /**
-   * درجة قوة الوجه العامة (معرّف من سلّم الدرجات القابل للتحرير).
+   * رقم ترتيب السطر للقاعدة: رتبة افتراضية تأخذها مواضع القاعدة في ترتيب
+   * أسطر التشجير، يحددها المحرر يدويا عند الإنشاء ويمكن تعديلها لاحقا.
+   * الأصغر يعلو. تخصيص الموضع الواحد (occurrence override) يسبق هذه الرتبة.
+   */
+  orderRank?: number;
+  /** درجة قوة الوجه العامة (معرّف من سلّم الدرجات القابل للتحرير).
    * أعلى الدرجات رتبةً هي «الوجه المقدَّم» بعد دمج المفهومين.
    */
   strengthDegreeId?: string;
@@ -80,6 +85,58 @@ export function saveGlobalRule(rule: Omit<GlobalRule, 'createdAt' | 'updatedAt'>
 export function deleteGlobalRule(id: string): void {
   writeRules(readRules().filter((rule) => rule.id !== id));
   clearRuleOccurrences(id);
+}
+
+/**
+ * يثبّت رقم ترتيب السطر لقاعدة عامة، ويعيد ترقيم رتب بقية القواعد تلقائيا.
+ *
+ * الإدراج لا الاستبدال: قاعدة تأخذ رتبة مشغولة تزيح صاحبتها ومن بعدها
+ * رتبة واحدة، فلا يقع تعادل ولا تتسرب فجوات في الترقيم. تمرير null يحرر
+ * القاعدة من الترتيب اليدوي فتعتمد قاعدة المحرك.
+ */
+export function setGlobalRuleOrderRank(ruleId: string, rank: number | null): void {
+  const rules = readRules();
+  const target = rules.find((rule) => rule.id === ruleId);
+  if (!target) return;
+
+  if (rank === null || !Number.isFinite(rank)) {
+    target.orderRank = undefined;
+    writeRules(compactRuleRanks(rules));
+    return;
+  }
+
+  const wanted = Math.max(1, Math.round(rank));
+  const ranked = rules
+    .filter((rule) => rule.id !== ruleId && typeof rule.orderRank === 'number')
+    .sort((first, second) => (first.orderRank ?? 0) - (second.orderRank ?? 0));
+
+  // حجز خانة الرتبة المطلوبة للقاعدة، وإزاحة كل من يقع بعدها رتبة واحدة.
+  let cursor = 1;
+  for (const rule of ranked) {
+    if (cursor === wanted) cursor += 1;
+    rule.orderRank = cursor;
+    cursor += 1;
+  }
+  target.orderRank = Math.min(wanted, cursor);
+
+  writeRules(rules);
+}
+
+/**
+ * يعيد ترقيم رتب القواعد المرقّمة ١، ٢، ٣... بلا فجوات ولا تعادل.
+ *
+ * المدخلات غير المرقّمة تبقى بلا رتبة (تعتمد ترتيب المحرك).
+ */
+export function compactRuleRanks(rules: GlobalRule[]): GlobalRule[] {
+  const ranked = rules.filter((rule) => typeof rule.orderRank === 'number');
+  const unranked = rules.filter((rule) => typeof rule.orderRank !== 'number');
+
+  const next = [...ranked].sort((first, second) => (first.orderRank ?? 0) - (second.orderRank ?? 0));
+  next.forEach((rule, index) => {
+    rule.orderRank = index + 1;
+  });
+
+  return [...next, ...unranked].map(normalizeRule);
 }
 
 /** يحفظ مجموعة قواعد مستوردة مع دمجها بالمعرّف. */

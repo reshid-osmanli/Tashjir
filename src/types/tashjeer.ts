@@ -432,6 +432,11 @@ export interface Variant {
   /** مصدر الاستقاء العام للاختلاف */
   sourceRef?: string;
   /**
+   * مصدر هذا الاختلاف: المحرك/البيانات الأساسية (ENGINE) أو إضافة يدوية من
+   * المحرر (EDITOR). أساس نظام التتبع: ماذا وجد المحرك وماذا أضاف المحرر.
+   */
+  origin?: EditOrigin;
+  /**
    * رتبة الموضع في ترتيب المرور، يحددها المحقق يدويا لهذه الآية.
    * الأصغر يُعالج أولا فيأخذ السطر الأعلى. غيابه يعني اعتماد قاعدة المحرك.
    */
@@ -530,6 +535,130 @@ export interface LayoutOptions {
 export interface DocumentLayoutSettings extends Partial<LayoutOptions> {
   forcedLineBreakAfter: number[];
   lineOffsets: Record<number, number>;
+}
+
+// ==================== الروابط والأجزاء (التحكم اليدوي) ====================
+//
+// هذه البنية هي قلب مرحلة «المحرر يصحّح المحرك»:
+//
+//   الروابط (TashjeerLink): علاقة ينشئها المحرر يدويا بين عنصرين من عناصر
+//   التشجير: وجه مع وجه (الوجه المركب)، سطر مع سطر (الدمج المنطقي)، أو جزء
+//   مع سطر/قاعدة. لا تفترض الروابط شيئا عن القارئ ولا عن نتيجة المحرك؛
+//   قرار المحقق هو مصدر الحقيقة، والمحرك يحترمه ويعرضه.
+//
+//   الأجزاء (LineSegment): مدى كلمات أو حروف داخل الآية يُعزل جزءا مستقلا
+//   ثم يُربط بقاعدة في سطر آخر، فيتحقق نموذج:
+//     Line → Segment → Rule
+//   بدل Line → Rule وحدها. هكذا يغطي السطر كلمات موزعة دون نسخ السطر ولا
+//   إنشاء سطر جديد كامل لكل قاعدة إضافية.
+//
+//   سجل التعديل (DocumentEditEntry): كل عملية يدوية من المحرر تسجَّل هنا
+//   بقيمة الحقول قبل التعديل وبعده، فيعرف نظام التتبع لاحقا: ماذا اقترح
+//   المحرك، وماذا صحّح المحرر، وما الفرق بينهما.
+
+/** من أنشأ العنصر أو التعديل: المحرك الآلي أم المحرر يدويا. */
+export type EditOrigin = 'ENGINE' | 'EDITOR';
+
+/** نوع طرف العلاقة. */
+export type LinkEndpointType = 'FACE' | 'LINE' | 'SEGMENT' | 'RULE';
+
+/**
+ * طرف علاقة.
+ *
+ * FACE    → «variantId::alternativeId»
+ * LINE    → معرّف سطر العرض (combo::... أو variant::alt أو manual::...)
+ * SEGMENT → معرّف جزء من مستند الآية
+ * RULE    → معرّف اختلاف (variantId) أو قاعدة عامة (globalRuleId)
+ */
+export interface LinkEndpoint {
+  type: LinkEndpointType;
+  id: string;
+}
+
+/** أنواع العلاقات التي ينشئها المحرر. */
+export type TashjeerLinkKind =
+  /** وجه مركب: هذا الوجه مرتبط/متفق مع وجه آخر */
+  | 'FACE_TO_FACE'
+  /** دمج سطر بسطر في تركيب واحد */
+  | 'LINE_TO_LINE'
+  /** ربط جزء من سطر بسطر آخر */
+  | 'SEGMENT_TO_LINE'
+  /** ربط جزء من سطر بقاعدة (اختبار أو قاعدة عامة) */
+  | 'SEGMENT_TO_RULE';
+
+/** أثر العلاقة في العرض. */
+export type TashjeerLinkRelation =
+  /** دمج: يظهر الطرفان في تركيب واحد (سطر واحد) */
+  | 'MERGE'
+  /** ربط مرجعي: تسجَّل العلاقة وتعرض دون تغيير شكل الأسطر */
+  | 'REFERENCE';
+
+/** علاقة يدوية موثقة بين عنصرين من عناصر تشجير الآية. */
+export interface TashjeerLink {
+  id: string;
+  ayahKey: number;
+  kind: TashjeerLinkKind;
+  relation: TashjeerLinkRelation;
+  from: LinkEndpoint;
+  to: LinkEndpoint;
+  notes?: string;
+  origin: EditOrigin;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** مفتاح وجه بصيغة «variantId::alternativeId» للاستعمال في الروابط. */
+export function faceEndpointKey(variantId: string, alternativeId: string): string {
+  return `${variantId}::${alternativeId}`;
+}
+
+/** جزء من سطر: مدى كلمات/حروف مستقل داخل الآية، له روابطه الخاصة. */
+export interface LineSegment {
+  id: string;
+  ayahKey: number;
+  title: string;
+  startPosition: number;
+  endPosition: number;
+  /** تحديد حروف داخل الكلمات إن كان الجزء حرفيا. */
+  characterRange?: CharacterRange;
+  notes?: string;
+  origin: EditOrigin;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** قيد واحد في سجل التعديل: حقل واحد تغيّرت قيمته. */
+export interface DocumentEditChange {
+  field: string;
+  before?: unknown;
+  after?: unknown;
+}
+
+/** نوع العنصر الذي استهدفه التعديل، لتصفية التتبع. */
+export type DocumentEditTargetType =
+  | 'VARIANT'
+  | 'ALTERNATIVE'
+  | 'RULE'
+  | 'FACE_LINK'
+  | 'LINE_LINK'
+  | 'SEGMENT'
+  | 'LINE_ORDER'
+  | 'DOCUMENT';
+
+/** سطر في سجل تعديلات المستند: تتبع كل عمل يدوي قام به المحرر. */
+export interface DocumentEditEntry {
+  id: string;
+  at: string;
+  actor: string;
+  action: string;
+  targetType: DocumentEditTargetType;
+  targetId: string;
+  /** فئة القاعدة/الاختلاف إن كانت معروفة، لتصفية التتبع (المدود، الفرش...). */
+  category?: VariantCategory;
+  summary: string;
+  changes?: DocumentEditChange[];
+  /** مصدر التعديل: المحرك أو المحرر. كل ما يسجَّل هنا يدوي ما لم يذكر خلافه. */
+  origin: EditOrigin;
 }
 
 // ==================== الوقف والابتداء ====================
@@ -685,6 +814,21 @@ export interface TashjeerDocument {
   boundaries: RecitationBoundary[];
   /** ضبط مواضع أسطر النص لهذه الآية. */
   layout: DocumentLayoutSettings;
+  /**
+   * ترتيب أسطر العرض يدويا: معرّفات الأسطر بالترتيب الذي يثبته المحرر.
+   * الأسطر غير المذكورة تبقى على ترتيب المحرك بعد المذكورة. تغيير رقم سطر
+   * واحد يُزحزح المتأثرين تلقائيا (إدخال لا استبدال) فلا يتعطل الترتيب.
+   */
+  lineOrder?: string[];
+  /** روابط المحرر اليدوية: الأوجه المركبة، دمج الأسطر، وربط الأجزاء. */
+  links?: TashjeerLink[];
+  /** أجزاء الأسطر: مدى كلمات/حروف لكل منها روابطه وقواعده الخاصة. */
+  segments?: LineSegment[];
+  /**
+   * سجل التعديلات اليدوية: كل تصحيح قام به المحرر مع القيم قبل/بعد،
+   * فيصبح الفرق بين نتيجة المحرك والنتيجة النهائية قابلا للمراجعة.
+   */
+  editLog?: DocumentEditEntry[];
   /** وصل الآية بالتالية، والمقطع المشجَّر وحده. */
   readingWindow?: ReadingWindowSettings;
   meta: DocumentMeta;

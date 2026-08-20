@@ -7,6 +7,7 @@
 
 'use client';
 
+import Link from 'next/link';
 import { useEditorStore, type EditorTool } from '@/stores/editor-store';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor } from '@/lib/tashjeer/color-system';
@@ -284,6 +285,13 @@ export function EditorToolbar({
         <ToolButton title="استيراد مستند من ملف JSON" onClick={onImport}>
           استيراد
         </ToolButton>
+        <Link
+          href="/tracking"
+          title="ماذا وجد المحرك وماذا صحّحت؟ — صفحة التتبع"
+          className="rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-stone-700 transition-colors hover:bg-stone-50"
+        >
+          التتبع
+        </Link>
         <ToolButton title="اختصارات لوحة المفاتيح" onClick={onShowShortcuts}>
           ؟
         </ToolButton>

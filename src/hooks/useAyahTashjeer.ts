@@ -152,6 +152,11 @@ export function useAyahTashjeer(
       branchOverrides: document?.branches ?? [],
       manualLines: document?.manualLines ?? [],
       focusSegment: document?.readingWindow?.focusSegment ?? null,
+      // تصحيحات المحرر اليدوية: الروابط والأجزاء والترتيب، تنطبق على العرض
+      // في المحرر وفي صفحة المصحف معا فتتطابق النتيجتان.
+      links: document?.links ?? [],
+      segments: document?.segments ?? [],
+      lineOrder: document?.lineOrder ?? [],
     };
     return generateClassicTashjeer(
       effectiveVariants,

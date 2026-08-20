@@ -20,6 +20,7 @@ import {
   listOccurrenceLog,
   occurrenceIdFor,
   restoreOccurrence,
+  setOccurrenceOrderRank,
   setOccurrenceStrength,
   type OccurrenceLogEntry,
   type RuleOccurrenceOverride,
@@ -181,6 +182,12 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
     occurrences.refresh();
   };
 
+  const handleOrderRank = (rank: number | null) => {
+    if (!current) return;
+    setOccurrenceOrderRank(rule.id, current.match, rank);
+    occurrences.refresh();
+  };
+
   const log = useMemo(() => {
     // المفتاح ضمن الاعتماديات ليُعاد قراءة السجل بعد كل حذف أو إرجاع.
     void occurrences.key;
@@ -285,6 +292,7 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
                     onRestore={handleRestore}
                     onConfirm={handleConfirm}
                     onStrengthChange={handleStrength}
+                    onOrderRankChange={handleOrderRank}
                     onOpenInEditor={onOpenInEditor}
                     rule={rule}
                     degreeLabel={
@@ -318,6 +326,7 @@ function OccurrenceCard({
   onRestore,
   onConfirm,
   onStrengthChange,
+  onOrderRankChange,
   onOpenInEditor,
   rule,
   degreeLabel,
@@ -336,6 +345,7 @@ function OccurrenceCard({
   onRestore: () => void;
   onConfirm: () => void;
   onStrengthChange: (next: { degreeId?: string; byNarrator?: ReaderStrengthMap }) => void;
+  onOrderRankChange: (rank: number | null) => void;
   onOpenInEditor?: (ayahKey: number) => void;
   rule: GlobalRule;
   degreeLabel?: string;
@@ -479,7 +489,93 @@ function OccurrenceCard({
           hint="هذه الدرجة تخص هذا الموضع وحده. تعديلها هنا لا يغيّر درجة القاعدة في بقية المصحف."
         />
       </div>
+
+      {/* رقم ترتيب السطر لهذا الموضع وحده — تصحيح موضعي لترتيب المحرك */}
+      <div className="border-t border-stone-200 px-4 py-3">
+        <OccurrenceOrderRankControl
+          overrideRank={override?.orderRank}
+          ruleRank={rule.orderRank}
+          onChange={onOrderRankChange}
+        />
+      </div>
     </article>
+  );
+}
+
+/** ضابط رتبة ترتيب السطر لموضع واحد: تخصيص يسبق رتبة القاعدة العامة. */
+function OccurrenceOrderRankControl({
+  overrideRank,
+  ruleRank,
+  onChange,
+}: {
+  overrideRank?: number;
+  ruleRank?: number;
+  onChange: (rank: number | null) => void;
+}) {
+  const effective = typeof overrideRank === 'number' ? overrideRank : ruleRank;
+  const [value, setValue] = useState(typeof effective === 'number' ? effective.toString() : '');
+
+  const apply = () => {
+    if (value === '') {
+      onChange(null);
+      return;
+    }
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return;
+    onChange(Math.max(1, Math.round(parsed)));
+  };
+
+  return (
+    <div className="rounded-md border border-emerald-200 bg-emerald-50/40 p-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold text-emerald-950">رقم ترتيب السطر في هذا الموضع</p>
+        <p className="text-[10px] text-emerald-900/70">
+          {typeof overrideRank === 'number'
+            ? 'تخصيص يدوي لهذا الموضع'
+            : typeof ruleRank === 'number'
+              ? `موروث من القاعدة (${ruleRank})`
+              : 'بلا ترتيب يدوي — قاعدة المحرك'}
+        </p>
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <input
+          type="number"
+          min={1}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          onBlur={apply}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') apply();
+          }}
+          className="h-8 w-24 rounded border border-stone-300 bg-white px-2 text-center text-xs"
+          placeholder="تلقائي"
+          aria-label="رقم ترتيب السطر"
+        />
+        <button
+          type="button"
+          onClick={apply}
+          className="rounded border border-emerald-300 bg-white px-2.5 py-1.5 text-[10px] font-medium text-emerald-800 hover:bg-emerald-50"
+        >
+          تثبيت الترتيب
+        </button>
+        {typeof overrideRank === 'number' && (
+          <button
+            type="button"
+            onClick={() => {
+              setValue('');
+              onChange(null);
+            }}
+            className="rounded border border-stone-300 bg-white px-2.5 py-1.5 text-[10px] text-stone-600 hover:bg-stone-50"
+          >
+            إلغاء التخصيص
+          </button>
+        )}
+      </div>
+      <p className="mt-1.5 text-[10px] leading-relaxed text-emerald-900/75">
+        تصحيح موضعي لأخطاء ترتيب المحرك: يُحدَّث هذا الموضع وحده دون إعادة تشغيل المحرك ودون
+        تغيير ترتيب بقية مواضع القاعدة.
+      </p>
+    </div>
   );
 }
 

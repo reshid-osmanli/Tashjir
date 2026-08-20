@@ -42,6 +42,11 @@ export interface RuleOccurrenceOverride {
   /** تخصيص درجة القوة لهذا الموضع وحده، إن خالف درجة القاعدة. */
   strengthDegreeId?: string;
   strengthByNarrator?: ReaderStrengthMap;
+  /**
+   * رتبة ترتيب السطر لهذا الموضع وحده، إن خالف رتبة القاعدة العامة.
+   * تصحيح موضعي لترتيب المحرك دون المساس بسائر مواضع القاعدة.
+   */
+  orderRank?: number;
   /** نص الموضع وقت التسجيل، ليقرأ المحقق السجل دون فتح الآية. */
   matchedText?: string;
   updatedAt: string;
@@ -136,12 +141,13 @@ export function deleteOccurrence(
   match: GlobalRuleMatch,
   reason?: string
 ): RuleOccurrenceOverride {
-  // الحذف لا يمحو تخصيص الدرجة: قد يرجع المحقق عن حذفه، فيجد تخصيصه كما تركه.
+  // الحذف لا يمحو التخصيصات: قد يرجع المحقق عن حذفه، فيجد تخصيصه كما تركه.
   const current = findOverride(occurrenceIdFor(ruleId, match));
   const override = upsertOverride({
     ...overrideBaseFrom(ruleId, match),
     strengthDegreeId: current?.strengthDegreeId,
     strengthByNarrator: current?.strengthByNarrator,
+    orderRank: current?.orderRank,
     state: 'DELETED',
     reason: reason?.trim() || undefined,
   });
@@ -156,7 +162,9 @@ export function restoreOccurrence(occurrenceId: string): void {
   if (!existing) return;
 
   // لا يُترك سطر بلا فائدة: إن لم يبق فيه تخصيص، حُذف السطر أصلا.
-  const stillUseful = Boolean(existing.strengthDegreeId || existing.strengthByNarrator);
+  const stillUseful = Boolean(
+    existing.strengthDegreeId || existing.strengthByNarrator || typeof existing.orderRank === 'number'
+  );
   const next: RuleOccurrenceOverride = {
     ...existing,
     state: 'APPLIED',
@@ -179,6 +187,7 @@ export function confirmOccurrence(ruleId: string, match: GlobalRuleMatch): RuleO
     ...overrideBaseFrom(ruleId, match),
     strengthDegreeId: current?.strengthDegreeId,
     strengthByNarrator: current?.strengthByNarrator,
+    orderRank: current?.orderRank,
     state: 'CONFIRMED',
   });
   appendLog(override, 'CONFIRM');
@@ -198,8 +207,38 @@ export function setOccurrenceStrength(
     reason: current?.reason,
     strengthDegreeId: strength.strengthDegreeId,
     strengthByNarrator: strength.strengthByNarrator,
+    orderRank: current?.orderRank,
   });
   appendLog(override, 'EDIT');
+  return override;
+}
+
+/**
+ * يثبّت رتبة ترتيب السطر لموضع واحد من مواضع القاعدة.
+ *
+ * تصحيح موضعي لأخطاء ترتيب المحرك: يُحدَّث الموضع المعني دون إعادة تشغيل
+ * المحرك ولا تعديل القاعدة في بقية المصحف.
+ */
+export function setOccurrenceOrderRank(
+  ruleId: string,
+  match: GlobalRuleMatch,
+  orderRank: number | null
+): RuleOccurrenceOverride {
+  const current = findOverride(occurrenceIdFor(ruleId, match));
+  const base = overrideBaseFrom(ruleId, match);
+  const override = upsertOverride({
+    ...base,
+    state: current?.state ?? 'APPLIED',
+    reason: current?.reason,
+    strengthDegreeId: current?.strengthDegreeId,
+    strengthByNarrator: current?.strengthByNarrator,
+    orderRank: orderRank === null ? undefined : Math.max(1, Math.round(orderRank)),
+  });
+  appendLog(
+    override,
+    'EDIT',
+    orderRank === null ? 'إلغاء ترتيب السطر اليدوي للموضع' : `تعديل ترتيب السطر إلى ${orderRank}`
+  );
   return override;
 }
 
