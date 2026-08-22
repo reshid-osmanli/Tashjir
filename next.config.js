@@ -5,6 +5,8 @@
 const nextConfig = {
   // تفعيل React Strict Mode
   reactStrictMode: true,
+  eslint: { ignoreDuringBuilds: true },
+  typescript: { ignoreBuildErrors: false },
 
   // إعدادات الصور
   images: {

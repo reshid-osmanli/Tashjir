@@ -200,7 +200,7 @@ export function chipsForUnits(units: ReadingUnit[], catalog?: TransmissionCatalo
       name: imam.name,
       symbol,
       text: symbol || imam.name,
-      order: Math.min(...imamNarrators.map((narrator) => narrator.legacyOrderInTayyibah ?? 999)),
+      order: Math.min(...imamNarrators.map((narrator) => narratorOrder(narrator.id, ctx))),
       narratorIds: imamNarrators.map((narrator) => narrator.id),
     });
 
@@ -216,7 +216,7 @@ export function chipsForUnits(units: ReadingUnit[], catalog?: TransmissionCatalo
       name: narrator?.name ?? narratorId,
       symbol,
       text: symbol || narrator?.name || narratorId,
-      order: narrator?.legacyOrderInTayyibah ?? 999,
+      order: narratorOrder(narratorId, ctx),
       narratorIds: [narratorId],
     });
   }
@@ -246,5 +246,10 @@ export function describeReaderChips(chips: ReaderChip[]): string {
 }
 
 function narratorOrder(narratorId: string, ctx: SymbolContext): number {
-  return ctx.narrators.find((narrator) => narrator.id === narratorId)?.legacyOrderInTayyibah ?? 999;
+  const narrator = ctx.narrators.find((item) => item.id === narratorId);
+  if (!narrator) return 999;
+  const imam = ctx.imams.find((item) => item.id === narrator.imamId);
+  const imamOrder = typeof imam?.order === 'number' ? imam.order : 99;
+  const ownOrder = typeof narrator.order === 'number' ? narrator.order : 99;
+  return imamOrder * 1000 + ownOrder;
 }

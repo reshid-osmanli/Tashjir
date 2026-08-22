@@ -32,21 +32,19 @@ export interface TrackingRow {
   variantId: string;
   title: string;
   category: VariantCategory;
-  /** من وجد هذا الموضع: المحرك أم المحرر. */
   source: TrackingSource;
-  /** هل عُدّل يدويا بعد أن اقترحه المحرك؟ */
   manuallyModified: boolean;
-  /** حالة التوثيق الحالية. */
   status: VerificationStatus;
-  /** آخر تعديل يدوي على هذا الموضع. */
   lastEditedAt?: string;
-  /** فروق التصحيح اليدوي: ملخصات قبل/بعد. */
   edits: Array<Pick<DocumentEditEntry, 'at' | 'action' | 'summary' | 'changes' | 'actor'>>;
-  /** موضع مشتق من قاعدة عامة (يرد اسمها للعرض). */
   globalRuleId?: string;
   globalRuleTitle?: string;
-  /** رتبة الترتيب اليدوية إن ثُبّتت. */
   orderRank?: number;
+  /** بيانات التصحيح النهائية: Engine + Editor + Final */
+  correction?: { engine?: string; editor?: string; final: string };
+  recitationMode?: string;
+  batchGroupId?: string;
+  isIndependent?: boolean;
 }
 
 /** إحصاءات التتبع حسب الفئة والمصدر. */
@@ -250,11 +248,9 @@ function rowForVariant(
     (alternative) => editsByTarget.get(`ALTERNATIVE:${alternative.id}`) ?? []
   );
   const ruleEdits = editsByTarget.get(`RULE:${variant.id}`) ?? [];
-  const edits = [...variantEdits, ...alternativeEdits, ...ruleEdits].sort((first, second) =>
-    first.at.localeCompare(second.at)
-  );
+  const edits = [...variantEdits, ...alternativeEdits, ...ruleEdits].sort((first, second) => first.at.localeCompare(second.at));
 
-  const source: TrackingSource = variant.origin === 'EDITOR' ? 'EDITOR' : 'ENGINE';
+  const source: TrackingSource = variant.source === 'EDITOR' || variant.origin === 'EDITOR' ? 'EDITOR' : 'ENGINE';
 
   return {
     id: `${ayahKey}:${variant.id}`,
@@ -265,21 +261,17 @@ function rowForVariant(
     title: variant.title,
     category: variant.category,
     source,
-    manuallyModified: edits.length > 0,
+    manuallyModified: edits.length > 0 || (variant as any).modifiedBy === 'EDITOR',
     status: variant.status,
-    lastEditedAt: edits[edits.length - 1]?.at,
-    edits: edits.map(({ at, action, summary, changes, actor }) => ({
-      at,
-      action,
-      summary,
-      changes,
-      actor,
-    })),
+    lastEditedAt: edits[edits.length - 1]?.at ?? (variant as any).editorModifiedAt,
+    edits: edits.map(({ at, action, summary, changes, actor }) => ({ at, action, summary, changes, actor })),
     globalRuleId: variant.globalRuleId,
-    globalRuleTitle: variant.globalRuleId
-      ? rulesById.get(variant.globalRuleId)?.title
-      : undefined,
+    globalRuleTitle: variant.globalRuleId ? rulesById.get(variant.globalRuleId)?.title : undefined,
     orderRank: variant.orderRank,
+    correction: (variant as any).correction ?? { final: variant.title, engine: (variant as any).engineSnapshot?.title, editor: variant.title },
+    recitationMode: (variant as any).recitationMode ?? (variant as any).waqfContext?.mode,
+    batchGroupId: (variant as any).batchGroupId,
+    isIndependent: (variant as any).isIndependent,
   };
 }
 
