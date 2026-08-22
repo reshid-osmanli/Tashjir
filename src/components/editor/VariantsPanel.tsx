@@ -8,7 +8,7 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 import { documentWindowWords } from '@/lib/tashjeer/reading-window';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
@@ -36,12 +36,16 @@ export function VariantsPanel() {
     markedCharacters,
     markingMode,
     selectedVariantId,
+    selectedAlternativeId,
     draftCategory,
     setDraftCategory,
     selectVariant,
+    selectAlternative,
     deleteVariant,
+    updateVariant,
     clearMarks,
     addVariant,
+    addVariantGroup,
     refreshDerivedBranches,
     openAyah,
   } = useEditorStore();
@@ -55,6 +59,12 @@ export function VariantsPanel() {
   const [globalBuilderRange, setGlobalBuilderRange] = useState<import('@/types/tashjeer').CharacterRange | null>(null);
   const [reviewingRule, setReviewingRule] = useState<GlobalRule | null>(null);
   const [showRulesIndex, setShowRulesIndex] = useState(false);
+  const [showBatchBuilder, setShowBatchBuilder] = useState(false);
+  const [batchCategories, setBatchCategories] = useState<VariantCategory[]>(['USUL', 'FARSH', 'MADUD']);
+  const listRef = useRef<HTMLDivElement>(null);
+  const selectedRowRef = useRef<HTMLLIElement>(null);
+  const [canScrollUp, setCanScrollUp] = useState(false);
+  const [canScrollDown, setCanScrollDown] = useState(false);
   // استثناءات المواضع كلها: تغيّرها يعيد حساب عدّادات هذه اللوحة فورا.
   const occurrences = useRuleOccurrences();
   const catalog = useTransmissionCatalog();
@@ -111,6 +121,27 @@ export function VariantsPanel() {
       })
       .filter((item) => item.matches.length > 0);
   }, [document, occurrences.key]);
+
+  useEffect(() => {
+    selectedRowRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [selectedVariantId]);
+
+  useEffect(() => {
+    const element = listRef.current;
+    if (!element) return;
+    const update = () => {
+      setCanScrollUp(element.scrollTop > 2);
+      setCanScrollDown(element.scrollTop + element.clientHeight < element.scrollHeight - 2);
+    };
+    update();
+    element.addEventListener('scroll', update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => {
+      element.removeEventListener('scroll', update);
+      observer.disconnect();
+    };
+  }, [document?.variants.length]);
 
   if (!document) return null;
 
@@ -174,8 +205,43 @@ export function VariantsPanel() {
     });
   };
 
+  /** إنشاء جماعي، لكن كل نوع يبقى كيانا مستقلا بمعرّفه ورتبته. */
+  const handleCreateBatch = () => {
+    if (draftLoci.length === 0 || batchCategories.length === 0) return;
+    const bounds = boundsOfLoci(draftLoci);
+    const baseText = markedText || 'وجه المصحف';
+    const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    addVariantGroup(
+      batchCategories.map((category, index) => {
+        const id = `v-${document.ayahKey}-${bounds.startPosition}-${stamp}-${index + 1}`;
+        return {
+          id,
+          category,
+          title: `${baseText} — ${CATEGORY_LABELS[category]}`,
+          startPosition: bounds.startPosition,
+          endPosition: bounds.endPosition,
+          targetKind: draftLoci.some((locus) => locus.characterRange) ? ('CHARACTERS' as const) : ('WORDS' as const),
+          characterRange: draftLoci.length === 1 ? draftLoci[0].characterRange : undefined,
+          loci: draftLoci.length > 1 ? draftLoci : undefined,
+          orderRank: index + 1,
+          status: 'DRAFT' as const,
+          alternatives: [
+            {
+              id: `${id}-base`,
+              text: baseText,
+              label: 'وجه المصحف',
+              isBase: true,
+              scope: { kind: 'ALL' as const },
+            },
+          ],
+        };
+      })
+    );
+    setShowBatchBuilder(false);
+  };
+
   return (
-    <aside className="flex h-full w-[340px] shrink-0 flex-col border-s border-stone-200 bg-white">
+    <aside className="flex h-full min-h-0 w-[340px] shrink-0 flex-col overflow-hidden border-s border-stone-200 bg-white">
       <header className="border-b border-stone-200 px-4 py-3">
         <div className="flex items-start justify-between gap-2">
           <div>
@@ -303,6 +369,48 @@ export function VariantsPanel() {
               ))}
             </div>
 
+            <button
+              type="button"
+              onClick={() => setShowBatchBuilder((value) => !value)}
+              className="w-full rounded-md border border-cyan-500 bg-cyan-50 px-3 py-1.5 text-xs font-bold text-cyan-950 hover:bg-cyan-100"
+            >
+              + إنشاء عدة اختلافات مستقلة دفعة واحدة
+            </button>
+            {showBatchBuilder && (
+              <div className="rounded-md border border-cyan-200 bg-white p-2">
+                <p className="text-[10px] leading-relaxed text-cyan-950">
+                  اختر الأنواع. ستنشأ بمعرّفات مستقلة ورتب متتابعة، ويمكن تحرير كل واحد وحذفه وربطه دون التأثير في غيره.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {(Object.keys(CATEGORY_LABELS) as VariantCategory[]).map((category) => (
+                    <label key={category} className="flex items-center gap-1 rounded border border-stone-200 px-1.5 py-1 text-[10px]">
+                      <input
+                        type="checkbox"
+                        checked={batchCategories.includes(category)}
+                        onChange={() =>
+                          setBatchCategories((current) =>
+                            current.includes(category)
+                              ? current.filter((item) => item !== category)
+                              : [...current, category]
+                          )
+                        }
+                        className="accent-cyan-700"
+                      />
+                      {CATEGORY_LABELS[category]}
+                    </label>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  disabled={batchCategories.length === 0}
+                  onClick={handleCreateBatch}
+                  className="mt-2 w-full rounded bg-cyan-700 px-2 py-1.5 text-[11px] font-medium text-white hover:bg-cyan-800 disabled:opacity-50"
+                >
+                  إنشاء {toArabicDigits(batchCategories.length)} اختلافات مستقلة
+                </button>
+              </div>
+            )}
+
             <div className="grid gap-2 sm:grid-cols-2">
               <button
                 type="button"
@@ -348,8 +456,24 @@ export function VariantsPanel() {
         )}
       </section>
 
-      {/* قائمة الاختلافات */}
-      <div className="flex-1 overflow-y-auto">
+      {/* قائمة الاختلافات: مساحة مستقلة لا تدفع اللوحة خارج الشاشة. */}
+      <div className="relative min-h-0 flex-1">
+        {canScrollUp && (
+          <button
+            type="button"
+            onClick={() => listRef.current?.scrollBy({ top: -320, behavior: 'smooth' })}
+            className="absolute start-1/2 top-1 z-20 -translate-x-1/2 rounded-full border border-stone-300 bg-white/95 px-4 py-0.5 text-xs shadow-md hover:bg-stone-50"
+            aria-label="الصعود في قائمة الاختلافات"
+          >
+            ↑
+          </button>
+        )}
+        <div
+          ref={listRef}
+          className="h-full overscroll-contain overflow-y-scroll scroll-smooth pb-10 pt-1 [scrollbar-gutter:stable] touch-pan-y"
+          tabIndex={0}
+          aria-label="قائمة الاختلافات القابلة للتمرير"
+        >
         {document.variants.length === 0 ? (
           <p className="px-4 py-6 text-center text-xs text-stone-500">
             لا توجد اختلافات مسجّلة في هذه الآية بعد.
@@ -362,7 +486,11 @@ export function VariantsPanel() {
                 variant={variant}
                 catalog={catalog}
                 isSelected={variant.id === selectedVariantId}
+                selectedAlternativeId={variant.id === selectedVariantId ? selectedAlternativeId : null}
+                rowRef={variant.id === selectedVariantId ? selectedRowRef : undefined}
                 onSelect={() => selectVariant(variant.id === selectedVariantId ? null : variant.id)}
+                onSelectAlternative={(alternativeId) => selectAlternative(variant.id, alternativeId)}
+                onRecitationModeChange={(recitationMode) => updateVariant(variant.id, { recitationMode })}
                 onEdit={() => setEditingVariantId(variant.id)}
                 onGeneralize={
                   variant.targetKind === 'CHARACTERS' && variant.characterRange
@@ -396,6 +524,17 @@ export function VariantsPanel() {
               />
             ))}
           </ul>
+        )}
+        </div>
+        {canScrollDown && (
+          <button
+            type="button"
+            onClick={() => listRef.current?.scrollBy({ top: 320, behavior: 'smooth' })}
+            className="absolute bottom-1 start-1/2 z-20 -translate-x-1/2 rounded-full border border-stone-300 bg-white/95 px-4 py-0.5 text-xs shadow-md hover:bg-stone-50"
+            aria-label="النزول في قائمة الاختلافات"
+          >
+            ↓
+          </button>
         )}
       </div>
 
@@ -490,7 +629,11 @@ function VariantRow({
   variant,
   catalog,
   isSelected,
+  selectedAlternativeId,
+  rowRef,
   onSelect,
+  onSelectAlternative,
+  onRecitationModeChange,
   onEdit,
   onGeneralize,
   onDelete,
@@ -498,7 +641,11 @@ function VariantRow({
   variant: Variant;
   catalog: import('@/lib/transmissions/catalog').TransmissionCatalog;
   isSelected: boolean;
+  selectedAlternativeId: string | null;
+  rowRef?: RefObject<HTMLLIElement | null>;
   onSelect: () => void;
+  onSelectAlternative: (alternativeId: string) => void;
+  onRecitationModeChange: (mode: Variant['recitationMode']) => void;
   onEdit: () => void;
   /** يحوّل هذا الاختلاف الحرفي إلى قاعدة عامة على المصحف كله. */
   onGeneralize?: () => void;
@@ -507,7 +654,7 @@ function VariantRow({
   const drawnAlternatives = variant.alternatives.filter((alternative) => !alternative.isBase);
 
   return (
-    <li className={isSelected ? 'bg-emerald-50/60' : ''}>
+    <li ref={rowRef} data-difference-id={variant.id} className={isSelected ? 'bg-emerald-50/60 ring-2 ring-inset ring-emerald-500' : ''}>
       <div className="px-4 py-3">
         <button type="button" onClick={onSelect} className="w-full text-start">
           <div className="flex items-start justify-between gap-2">
@@ -542,11 +689,40 @@ function VariantRow({
         </button>
 
         {isSelected && (
+          <>
+          <label className="mt-2 flex items-center justify-between gap-2 rounded border border-cyan-200 bg-cyan-50 px-2 py-1 text-[10px] text-cyan-950">
+            <span>سياق الأداء</span>
+            <select
+              value={variant.recitationMode ?? 'ALWAYS'}
+              onChange={(event) =>
+                onRecitationModeChange(
+                  event.target.value === 'ALWAYS'
+                    ? undefined
+                    : (event.target.value as NonNullable<Variant['recitationMode']>)
+                )
+              }
+              className="h-6 rounded border border-cyan-300 bg-white px-1 text-[10px]"
+            >
+              <option value="ALWAYS">وقفا ووصلا</option>
+              <option value="WAQF_ONLY">وقفا فقط</option>
+              <option value="WASL_ONLY">وصلا فقط</option>
+            </select>
+          </label>
           <ul className="mt-2 space-y-1.5">
             {variant.alternatives.map((alternative) => (
               <li
                 key={alternative.id}
-                className="rounded border border-stone-200 bg-white px-2 py-1.5"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelectAlternative(alternative.id);
+                }}
+                className={`cursor-pointer rounded border bg-white px-2 py-1.5 transition ${
+                  alternative.id === selectedAlternativeId
+                    ? 'border-cyan-600 ring-2 ring-cyan-200'
+                    : 'border-stone-200 hover:border-cyan-300'
+                }`}
+                data-face-id={alternative.id}
+                title="انقر لتحديد هذا الوجه؛ يمكن نسخه أو قصه ثم لصقه في اختلاف آخر"
               >
                 <div className="flex items-baseline justify-between gap-2">
                   <span
@@ -568,6 +744,7 @@ function VariantRow({
               </li>
             ))}
           </ul>
+          </>
         )}
 
         <div className="mt-2 flex flex-wrap gap-2">

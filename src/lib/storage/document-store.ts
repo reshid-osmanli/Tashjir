@@ -51,8 +51,9 @@ import { parseAyahKey } from '@/data/quran';
  * v6: درجات قوة الوجه لكل راوٍ، واستثناءات مواضع القواعد وسجلّها.
  * v7: التحكم اليدوي الكامل: روابط الأوجه والأسطر، أجزاء الأسطر، ترتيب
  *     الأسطر اليدوي، وسجل تعديلات المحرر (المصدر: محرك/محرر).
+ * v8: شروط الوقف/الوصل، منع الوصل، ولقطة نتيجة المحرك قبل التصحيح.
  */
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 // نحتفظ بمفاتيح v2 كي تُقرأ مستندات المستخدمين القديمة ثم تُرقّى عند الحفظ.
 const DOC_PREFIX = 'tashjeer:doc:v2:';
@@ -422,6 +423,10 @@ function normalizeFocusSegmentValue(
 
 /** يطبع موضع الحروف القديم/المستورد إلى نطاق صالح أو يعيده إلى كلمات بأمان. */
 function migrateVariant(variant: Variant, ayahKey: number): Variant {
+  const recitationMode =
+    variant.recitationMode === 'WAQF_ONLY' || variant.recitationMode === 'WASL_ONLY'
+      ? variant.recitationMode
+      : undefined;
   const loci = Array.isArray(variant.loci)
     ? variant.loci.map(normalizeLocus).filter((locus) => locus.endPosition >= locus.startPosition)
     : undefined;
@@ -450,6 +455,7 @@ function migrateVariant(variant: Variant, ayahKey: number): Variant {
         return {
           ...variant,
           ayahKey,
+          recitationMode,
           startPosition: start.position,
           endPosition: end.position,
           targetKind: 'CHARACTERS',
@@ -468,8 +474,8 @@ function migrateVariant(variant: Variant, ayahKey: number): Variant {
   const { characterRange: _ignoredCharacterRange, targetKind, ...legacy } = variant;
   const withLoci = loci && loci.length > 1 ? { loci } : {};
   return targetKind === 'WORDS'
-    ? { ...legacy, ayahKey, startPosition, endPosition, targetKind: 'WORDS', ...withLoci }
-    : { ...legacy, ayahKey, startPosition, endPosition, ...withLoci };
+    ? { ...legacy, ayahKey, recitationMode, startPosition, endPosition, targetKind: 'WORDS', ...withLoci }
+    : { ...legacy, ayahKey, recitationMode, startPosition, endPosition, ...withLoci };
 }
 
 function cloneVariants(variants: Variant[]): Variant[] {

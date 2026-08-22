@@ -5,7 +5,7 @@
 // إلى أولها. مواضع الوقف والابتداء تقسم الآية إلى مقاطع واضحة، ولا يقترح
 // المحرك وقفا علميا من تلقاء نفسه: يعرض فقط ما أثبته المحقق.
 
-import type { RecitationBoundary } from '@/types/tashjeer';
+import type { RecitationBoundary, RecitationMode, Variant } from '@/types/tashjeer';
 import type { TraversalOrder } from './engine-settings';
 
 export interface ReadingSegment {
@@ -25,6 +25,8 @@ export interface ReadingPlan {
   positions: number[];
   /** هل اختار المحرر وصل رأس الآية بما بعدها؟ */
   connectsToNextAyah: boolean;
+  /** المواضع التي منع المحقق الوصل بعدها صراحة. */
+  forbiddenWaslAfter: number[];
 }
 
 /**
@@ -39,11 +41,12 @@ export function buildReadingPlan(
   traversal: TraversalOrder = 'END_TO_START'
 ): ReadingPlan {
   if (wordsCount <= 0) {
-    return { traversal, segments: [], positions: [], connectsToNextAyah: false };
+    return { traversal, segments: [], positions: [], connectsToNextAyah: false, forbiddenWaslAfter: [] };
   }
 
   const breakAfter = new Set<number>();
   const waqfAfter = new Set<number>();
+  const forbiddenWaslAfter = new Set<number>();
   let connectsToNextAyah = false;
 
   for (const boundary of boundaries) {
@@ -60,10 +63,16 @@ export function buildReadingPlan(
       breakAfter.add(boundary.position - 1);
     }
 
+    if (boundary.kind === 'NO_WASL') {
+      breakAfter.add(boundary.position);
+      forbiddenWaslAfter.add(boundary.position);
+    }
+
     if (
       boundary.kind === 'WASL' &&
       boundary.position === wordsCount &&
-      boundary.connectsToNextAyah
+      boundary.connectsToNextAyah &&
+      !boundaries.some((item) => item.kind === 'NO_WASL' && item.position === wordsCount)
     ) {
       connectsToNextAyah = true;
     }
@@ -97,7 +106,35 @@ export function buildReadingPlan(
     return result;
   });
 
-  return { traversal, segments, positions, connectsToNextAyah };
+  return {
+    traversal,
+    segments,
+    positions,
+    connectsToNextAyah,
+    forbiddenWaslAfter: [...forbiddenWaslAfter].sort((a, b) => a - b),
+  };
+}
+
+/** هل يوجد وقف فعلي بعد الموضع في الخطة الحالية؟ */
+export function isWaqfAt(position: number, boundaries: RecitationBoundary[]): boolean {
+  return boundaries.some(
+    (boundary) =>
+      boundary.position === position && (boundary.kind === 'WAQF' || boundary.kind === 'NO_WASL')
+  );
+}
+
+/**
+ * يطبّق شرط الوقف/الوصل على الاختلاف دون مسح بياناته. الاختلاف المشروط
+ * يبقى في الفهرس والتتبع، لكنه لا يدخل النتيجة النهائية إلا في سياقه.
+ */
+export function variantAppliesToRecitation(
+  variant: Pick<Variant, 'recitationMode' | 'endPosition'>,
+  boundaries: RecitationBoundary[]
+): boolean {
+  const mode: RecitationMode = variant.recitationMode ?? 'ALWAYS';
+  if (mode === 'ALWAYS') return true;
+  const stopped = isWaqfAt(variant.endPosition, boundaries);
+  return mode === 'WAQF_ONLY' ? stopped : !stopped;
 }
 
 /**
