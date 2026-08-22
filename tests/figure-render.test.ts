@@ -192,9 +192,11 @@ describe('رسم السطر المركّب', () => {
     expect(markup).toContain('class="char-hit"');
   });
 
-  it('يظلّل المقطع المشجَّر ويخفّت ما خرج عنه', () => {
+  it('يعرض نص المقطع المشجَّر وحده ويخفي ما خرج عنه', () => {
     const { markup } = render();
     expect(markup).toContain('المقطع المشجَّر');
-    expect(markup).toContain('opacity="0.32"');
+    expect(markup).not.toContain('opacity="0.32"');
+    expect(markup).toContain(`data-word-id="${layout.boxes[0].wordId}"`);
+    expect(markup).not.toContain(`data-word-id="${layout.boxes.at(-1)!.wordId}"`);
   });
 });

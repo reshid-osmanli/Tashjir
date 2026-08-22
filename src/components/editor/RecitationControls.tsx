@@ -24,6 +24,7 @@ const BOUNDARY_LABELS: Record<RecitationBoundaryKind, string> = {
   WAQF: 'وقف بعد الكلمة',
   IBTIDA: 'ابتداء من الكلمة',
   WASL: 'وصل بعد الكلمة',
+  NO_WASL: 'منع الوصل بعد الكلمة',
 };
 
 /**
@@ -94,7 +95,7 @@ export function RecitationControls() {
           <p className="text-[11px] font-medium text-violet-900">
             الكلمة المحددة: {selectedPosition} — {words[selectedPosition - 1]?.text}
           </p>
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-4 gap-1">
             {(Object.keys(BOUNDARY_LABELS) as RecitationBoundaryKind[]).map((option) => (
               <button
                 key={option}
@@ -106,7 +107,7 @@ export function RecitationControls() {
                     : 'border-violet-200 bg-white text-violet-800 hover:bg-violet-100'
                 }`}
               >
-                {option === 'WAQF' ? 'وقف' : option === 'IBTIDA' ? 'ابتداء' : 'وصل'}
+                {option === 'WAQF' ? 'وقف' : option === 'IBTIDA' ? 'ابتداء' : option === 'WASL' ? 'وصل' : 'ممنوع'}
               </button>
             ))}
           </div>
@@ -175,6 +176,7 @@ export function RecitationControls() {
                   <option value="WAQF">وقف</option>
                   <option value="IBTIDA">ابتداء</option>
                   <option value="WASL">وصل</option>
+                  <option value="NO_WASL">ممنوع الوصل</option>
                 </select>
                 <span className="text-[10px] text-stone-600">عند الكلمة {boundary.position}</span>
                 <button
@@ -225,7 +227,7 @@ export function RecitationControls() {
       <div className="mt-3 space-y-1.5">
         <p className="text-[10px] font-semibold text-stone-700">تشجير مقطع وحده</p>
         <p className="text-[10px] leading-relaxed text-stone-500">
-          الوقف يقسم النافذة مقاطع. اختر مقطعا ليقتصر التشجير عليه، ويبقى ما عداه ظاهرا مخفَّتا.
+          الوقف يقسم النافذة مقاطع. اختر مقطعا ليظهر نصه وتشجيره وحدهما دون بقية النافذة.
         </p>
         <div className="flex flex-wrap gap-1">
           {plan.segments.map((segment) => {
@@ -289,15 +291,22 @@ export function RecitationControls() {
               <input
                 type="checkbox"
                 checked={readingWindow.isLinked}
+                disabled={plan.forbiddenWaslAfter.includes(readingWindow.firstAyahEndPosition)}
                 onChange={(event) => setLinkNextAyah(event.target.checked)}
-                className="accent-sky-700"
+                className="accent-sky-700 disabled:cursor-not-allowed"
               />
               ضمّ الآية {toArabicDigits(parseAyahKey(nextKey).ayahNumber)} إلى نافذة العمل
             </label>
-            <p className="mt-1 text-[10px] leading-relaxed text-sky-800">
-              عند الوصل تتسلسل مواضع الكلمات عبر الآيتين، فيمكن تحديد حكم يبدأ في آخر الأولى
-              وينتهي في أول الثانية، ويشجّره المحرك سطرا واحدا.
-            </p>
+            {plan.forbiddenWaslAfter.includes(readingWindow.firstAyahEndPosition) ? (
+              <p className="mt-1 rounded bg-red-50 px-1.5 py-1 text-[10px] text-red-800">
+                الوصل ممنوع بعلامة المحقق عند نهاية الآية. احذف العلامة أو غيّرها قبل ضم الآية التالية.
+              </p>
+            ) : (
+              <p className="mt-1 text-[10px] leading-relaxed text-sky-800">
+                عند الوصل تتسلسل مواضع الكلمات عبر الآيتين، فيمكن تحديد حكم يبدأ في آخر الأولى
+                وينتهي في أول الثانية، ويشجّره المحرك سطرا واحدا.
+              </p>
+            )}
           </>
         ) : (
           <p className="mt-1 text-[10px] text-sky-800">هذه آخر آية في السورة، فلا وصل بعدها.</p>

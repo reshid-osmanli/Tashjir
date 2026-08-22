@@ -32,6 +32,8 @@ export default function EditorPage() {
     variantId: null as string | null,
   });
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
+  const [revealedEdge, setRevealedEdge] = useState<'top' | 'start' | 'end' | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -145,32 +147,72 @@ export default function EditorPage() {
 
   return (
     <div className="-m-4 flex h-[calc(100dvh-73px)] flex-col overflow-hidden bg-stone-100 md:-m-6">
-      <EditorToolbar
-        fontSize={fontSize}
-        onFontSizeChange={setFontSize}
-        onExport={handleExport}
-        onImport={handleImportClick}
-        onShowShortcuts={() => setShowShortcuts(true)}
-      />
+      {(!focusMode || revealedEdge === 'top') && (
+        <div
+          className={focusMode ? 'absolute inset-x-0 top-0 z-40 shadow-xl' : ''}
+          onMouseLeave={() => focusMode && setRevealedEdge(null)}
+        >
+          <EditorToolbar
+            fontSize={fontSize}
+            onFontSizeChange={setFontSize}
+            onExport={handleExport}
+            onImport={handleImportClick}
+            onShowShortcuts={() => setShowShortcuts(true)}
+          />
+          <AyahNavigator ayahKey={ayahKey} onNavigate={openAyah} />
+        </div>
+      )}
 
-      <AyahNavigator ayahKey={ayahKey} onNavigate={openAyah} />
-
-      <div className="flex min-h-0 flex-1">
-        {showPropertiesPanel && <PropertiesPanel />}
+      <div className="relative flex min-h-0 flex-1">
+        {showPropertiesPanel && (!focusMode || revealedEdge === 'start') && (
+          <div
+            className={focusMode ? 'absolute inset-y-0 start-0 z-30 shadow-2xl' : 'contents'}
+            onMouseLeave={() => focusMode && setRevealedEdge(null)}
+          >
+            <PropertiesPanel />
+          </div>
+        )}
 
         <main className="min-w-0 flex-1">
           <TashjeerCanvas fontSize={fontSize} />
         </main>
 
-        {showVariantsPanel && <VariantsPanel />}
+        {showVariantsPanel && (!focusMode || revealedEdge === 'end') && (
+          <div
+            className={focusMode ? 'absolute inset-y-0 end-0 z-30 shadow-2xl' : 'contents'}
+            onMouseLeave={() => focusMode && setRevealedEdge(null)}
+          >
+            <VariantsPanel />
+          </div>
+        )}
+
+        {focusMode && (
+          <>
+            <div className="absolute inset-x-16 top-0 z-20 h-2" onMouseEnter={() => setRevealedEdge('top')} />
+            <div className="absolute inset-y-10 start-0 z-20 w-2" onMouseEnter={() => setRevealedEdge('start')} />
+            <div className="absolute inset-y-10 end-0 z-20 w-2" onMouseEnter={() => setRevealedEdge('end')} />
+          </>
+        )}
       </div>
 
-      <StatusBar
+      {!focusMode && <StatusBar
         surahNumber={surahNumber}
         ayahNumber={ayahNumber}
         tool={currentTool}
         isDirty={isDirty}
-      />
+      />}
+
+      <button
+        type="button"
+        onClick={() => {
+          setFocusMode((value) => !value);
+          setRevealedEdge(null);
+        }}
+        className="fixed bottom-5 end-5 z-50 rounded-full border border-stone-300 bg-stone-900 px-3 py-2 text-[11px] font-medium text-white shadow-xl hover:bg-stone-700"
+        title="إخفاء الأشرطة واللوحات؛ حرّك المؤشر إلى حافة الشاشة لإظهارها مؤقتا"
+      >
+        {focusMode ? 'تثبيت الواجهة' : 'وضع التركيز'}
+      </button>
 
       {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
 

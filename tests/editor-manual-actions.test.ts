@@ -132,6 +132,45 @@ describe('إجراءات التصحيح اليدوي', () => {
     expect(useEditorStore.getState().document!.variants.find((item) => item.id === variantId)?.orderRank).toBeUndefined();
   });
 
+  it('ينسخ اختلافا كاملا بمعرّفات مستقلة ويمكن التراجع عن اللصق', async () => {
+    const useEditorStore = await loadStore();
+    useEditorStore.getState().openAyah(AYAH_KEY);
+    const original = useEditorStore.getState().document!.variants[0]!;
+    const before = useEditorStore.getState().document!.variants.length;
+
+    useEditorStore.getState().selectVariant(original.id);
+    useEditorStore.getState().copySelection();
+    useEditorStore.getState().pasteSelection();
+
+    const after = useEditorStore.getState().document!;
+    expect(after.variants).toHaveLength(before + 1);
+    const copy = after.variants.find((item) => item.id !== original.id && item.title.includes('نسخة'))!;
+    expect(copy.id).not.toBe(original.id);
+    expect(copy.alternatives.map((item) => item.id)).not.toEqual(original.alternatives.map((item) => item.id));
+    expect(copy.origin).toBe('EDITOR');
+
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().document!.variants).toHaveLength(before);
+  });
+
+  it('ينسخ وجها وحده إلى اختلاف آخر من خلال سياق التحديد الموحد', async () => {
+    const useEditorStore = await loadStore();
+    useEditorStore.getState().openAyah(AYAH_KEY);
+    const owner = useEditorStore.getState().document!.variants[0]!;
+    const face = owner.alternatives[0]!;
+    const before = owner.alternatives.length;
+
+    useEditorStore.getState().selectAlternative(owner.id, face.id);
+    expect(useEditorStore.getState().selection?.kind).toBe('FACE');
+    useEditorStore.getState().copySelection();
+    useEditorStore.getState().selectVariant(owner.id);
+    useEditorStore.getState().pasteSelection();
+
+    const updated = useEditorStore.getState().document!.variants.find((item) => item.id === owner.id)!;
+    expect(updated.alternatives).toHaveLength(before + 1);
+    expect(updated.alternatives.at(-1)!.id).not.toBe(face.id);
+  });
+
   it('إضافة اختلاف من المحرر توسم EDITOR وتسجَّل للتتبع', async () => {
     const useEditorStore = await loadStore();
     useEditorStore.getState().openAyah(AYAH_KEY);

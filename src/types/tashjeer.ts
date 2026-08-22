@@ -392,7 +392,16 @@ export interface GlobalMorphologyPattern {
 
 export type GlobalRulePattern = GlobalCharacterPattern | GlobalMorphologyPattern;
 
-/** اختلاف قرائي في موضع محدد من الآية. */
+/**
+ * سياق الأداء الذي يظهر فيه الاختلاف.
+ *
+ * ALWAYS     الحكم ثابت في الوقف والوصل.
+ * WAQF_ONLY  لا يظهر إلا عندما ينتهي مقطع القراءة عند موضعه.
+ * WASL_ONLY  لا يظهر إلا عند وصل الموضع بما بعده.
+ */
+export type RecitationMode = 'ALWAYS' | 'WAQF_ONLY' | 'WASL_ONLY';
+
+/** اختلاف قرائي مستقل في موضع محدد من الآية. */
 export interface Variant {
   id: string;
   /** معرّف الآية: surah * 1000 + ayah */
@@ -421,6 +430,20 @@ export interface Variant {
   loci?: VariantLocus[];
   /** الأوجه، ويجب أن يكون فيها وجه واحد على الأقل غير وجه الأساس */
   alternatives: VariantAlternative[];
+  /** شرط الأداء؛ غيابه يعني أن الاختلاف صالح في الوقف والوصل. */
+  recitationMode?: RecitationMode;
+  /**
+   * لقطة اقتراح المحرك قبل أي تصحيح يدوي. لا تُستبدل عند التحرير، وبذلك
+   * يظل Engine + Editor + Final قابلا للمقارنة في ملف JSON المرجعي.
+   */
+  engineSnapshot?: {
+    title: string;
+    category: VariantCategory;
+    alternatives: VariantAlternative[];
+    capturedAt: string;
+  };
+  /** وقت آخر تعديل يدوي لعنصر كان مصدره المحرك. */
+  editorModifiedAt?: string;
   /** حالة التوثيق: البيانات الأولية مسودة حتى يعتمدها مختص */
   status: VerificationStatus;
   /** هل هذا اختلاف مشتق مؤقتا من قاعدة عامة، وليس محفوظا في قائمة الآية؟ */
@@ -664,7 +687,7 @@ export interface DocumentEditEntry {
 // ==================== الوقف والابتداء ====================
 
 /** نوع العلامة التي يضبطها المحرر في مسار القراءة. */
-export type RecitationBoundaryKind = 'WAQF' | 'IBTIDA' | 'WASL';
+export type RecitationBoundaryKind = 'WAQF' | 'IBTIDA' | 'WASL' | 'NO_WASL';
 
 /**
  * علامة وقف أو ابتداء أو وصل داخل الآية.
@@ -672,6 +695,7 @@ export type RecitationBoundaryKind = 'WAQF' | 'IBTIDA' | 'WASL';
  * - WAQF: الوقف بعد الكلمة ذات `position`.
  * - IBTIDA: الابتداء قبل الكلمة ذات `position`.
  * - WASL: وصل بعد الكلمة؛ وعند آخر كلمة يمكن أن يصل بالآية التالية.
+ * - NO_WASL: حاجز علمي يمنع الوصل بعد الكلمة، داخل الآية أو عند نهايتها.
  */
 export interface RecitationBoundary {
   id: string;
@@ -832,6 +856,24 @@ export interface TashjeerDocument {
   /** وصل الآية بالتالية، والمقطع المشجَّر وحده. */
   readingWindow?: ReadingWindowSettings;
   meta: DocumentMeta;
+}
+
+// ==================== سياق التحديد الموحد ====================
+
+/** كل اللوحات والمحرر تتشارك هذا المرجع؛ لا تحتفظ أي لوحة بتحديد مستقل. */
+export type EditorSelectionKind = 'WORD' | 'LINE' | 'SEGMENT' | 'DIFFERENCE' | 'FACE' | 'RULE';
+
+export interface EditorSelection {
+  kind: EditorSelectionKind;
+  id: string;
+  /** معرّف الاختلاف الأب عند تحديد وجه أو سطر مشتق منه. */
+  differenceId?: string;
+  /** معرّف الوجه عند تحديد جزء دقيق من السطر. */
+  faceId?: string;
+  /** معرّف السطر البصري الثابت. */
+  lineId?: string;
+  /** موضع يساعد المحرر على كشف العنصر وتمريره إلى مجال الرؤية. */
+  position?: number;
 }
 
 // ==================== خيارات العرض ====================
