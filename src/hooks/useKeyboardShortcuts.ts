@@ -21,27 +21,21 @@ export interface ShortcutHint {
 /** قائمة الاختصارات المدعومة، مصدرها هذا الملف حتى لا يتفرق التوثيق. */
 export const SHORTCUT_HINTS: ShortcutHint[] = [
   { keys: 'V', description: 'أداة التحديد' },
-  { keys: 'M', description: 'أداة تعليم الكلمات أو الحروف' },
+  { keys: 'M', description: 'أداة تعليم الكلمات' },
   { keys: 'E', description: 'أداة المسح' },
   { keys: 'Ctrl + S', description: 'حفظ المستند' },
-  { keys: 'Ctrl + C', description: 'نسخ السطر أو الجزء أو الوجه المحدد (حتى جزء من السطر)' },
-  { keys: 'Ctrl + X', description: 'قص العنصر المحدد' },
-  { keys: 'Ctrl + V', description: 'لصق - ينشئ ID جديد وبيانات مستقلة' },
-  { keys: 'Ctrl + D', description: 'نسخ السطر المحدد' },
-  { keys: 'Ctrl + Z', description: 'تراجع عن النقل/الدمج/الحذف/التعميم' },
-  { keys: 'Ctrl + Shift + Z / Ctrl + Y', description: 'إعادة' },
-  { keys: 'Ctrl + = / +', description: 'تكبير' },
+  { keys: 'Ctrl + C / X / V', description: 'نسخ أو قص أو لصق الاختلاف/الوجه/الجزء المحدد' },
+  { keys: 'Ctrl + Z', description: 'تراجع' },
+  { keys: 'Ctrl + Shift + Z', description: 'إعادة' },
+  { keys: 'Ctrl + =', description: 'تكبير' },
   { keys: 'Ctrl + -', description: 'تصغير' },
   { keys: 'Ctrl + 0', description: 'ملء العرض وإعادة الضبط' },
   { keys: 'Ctrl + عجلة الفأرة', description: 'تكبير وتصغير عند المؤشر' },
   { keys: 'Alt + سحب', description: 'تحريك اللوحة من أي موضع' },
-  { keys: 'سحب السطر', description: 'إعادة ترتيب السطر بالسحب - تأكيد قبل النقل' },
-  { keys: 'Shift + سحب', description: 'دمج سطرين بالسحب - تأكيد قبل الدمج' },
-  { keys: 'Ctrl + نقر على وجه', description: 'تحديد عدة أوجه دفعة واحدة' },
-  { keys: 'G', description: 'إظهار الشبكة' },
+  { keys: 'G', description: 'إظهار الشبكة أو إخفاؤها' },
   { keys: 'L', description: 'إظهار بطاقات الأوجه' },
-  { keys: 'P', description: 'لوحة الخصائص - تظهر تفاصيل السطر والآية' },
-  { keys: 'B', description: 'لوحة الاختلافات - Scrollable احترافي' },
+  { keys: 'P', description: 'لوحة الخصائص' },
+  { keys: 'B', description: 'لوحة الاختلافات' },
   { keys: 'Esc', description: 'إلغاء التعليم والتحديد' },
 ];
 
@@ -78,10 +72,6 @@ export function useKeyboardShortcuts(enabled = true): void {
           case 'v':
             event.preventDefault();
             store.pasteSelection();
-            return;
-          case 'd':
-            event.preventDefault();
-            if (store.selectedVariantId) store.duplicateVariant(store.selectedVariantId);
             return;
           case 'z':
             event.preventDefault();

@@ -133,8 +133,6 @@ export function GlobalRuleBuilder({
   const [status, setStatus] = useState<VerificationStatus>('DRAFT');
   const [isActive, setIsActive] = useState(true);
   const [error, setError] = useState('');
-  const [multiEnabled, setMultiEnabled] = useState(false);
-  const [multiCategories, setMultiCategories] = useState<VariantCategory[]>([category]);
 
   /** كل كلمات القاعدة الصرفية يجب أن تحمل معيارا، وإلا طابقت كل شيء. */
   const morphologyHasCriteria = useMemo(
@@ -236,36 +234,6 @@ export function GlobalRuleBuilder({
       return;
     }
 
-    if (multiEnabled && multiCategories.length > 1) {
-      // إنشاء متعدد الأنواع: كل نوع قاعدة مستقلة بمعرّفه ورتبته
-      let lastSaved: GlobalRule | null = null;
-      let totalMatches = 0;
-      multiCategories.forEach((cat, idx) => {
-        const saved = saveGlobalRule({
-          id: createGlobalRuleId(),
-          title: `${title} — ${CATEGORY_LABELS[cat]}`,
-          category: cat,
-          scope,
-          ruleLabel: ruleLabel.trim() || undefined,
-          maddHarakat: maddHarakat === '' ? undefined : Number(maddHarakat),
-          pattern,
-          strengthDegreeId,
-          strengthByNarrator: pruneStrengthMap(strengthByNarrator, resolveScope(scope, catalog)),
-          description: description.trim() || undefined,
-          sourceRef: sourceRef.trim() || undefined,
-          orderRank: idx + 1,
-          evidences: [],
-          status,
-          isActive,
-        });
-        if (saved.orderRank) setGlobalRuleOrderRank(saved.id, saved.orderRank);
-        lastSaved = saved;
-        totalMatches += matches.length;
-      });
-      if (lastSaved) onSaved(lastSaved, totalMatches);
-      return;
-    }
-
     const saved = saveGlobalRule({
       id: createGlobalRuleId(),
       title,
@@ -283,6 +251,7 @@ export function GlobalRuleBuilder({
       status,
       isActive,
     });
+    // ضبط الرتبة عبر المضبّط الرسمي يعيد ترقيم القواعد المتأثرة تلقائيا.
     if (saved.orderRank) setGlobalRuleOrderRank(saved.id, saved.orderRank);
     onSaved(saved, matches.length);
   };
@@ -384,24 +353,12 @@ export function GlobalRuleBuilder({
             <MorphologySequenceEditor words={morphologyWords} onChange={setMorphologyWords} />
           )}
 
-          <section className="mt-4 rounded border border-cyan-200 bg-cyan-50 p-3">
-            <label className="flex items-center gap-2 text-[11px] font-bold text-cyan-900"><input type="checkbox" checked={multiEnabled} onChange={(e) => setMultiEnabled(e.target.checked)} className="accent-cyan-700" />تعميم متعدد الأنواع في عملية واحدة - كل نوع مستقل (تحقيق + أصول + فرش)</label>
-            {multiEnabled && (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {(Object.keys(CATEGORY_LABELS) as VariantCategory[]).map((cat) => (
-                  <label key={cat} className="flex items-center gap-1 rounded border border-stone-200 bg-white px-1.5 py-1 text-[10px]"><input type="checkbox" checked={multiCategories.includes(cat)} onChange={() => setMultiCategories((cur) => cur.includes(cat) ? cur.filter((i) => i !== cat) : [...cur, cat])} className="accent-cyan-700" />{CATEGORY_LABELS[cat]}</label>
-                ))}
-              </div>
-            )}
-            <p className="mt-1 text-[10px] leading-relaxed text-cyan-800">الإنشاء الجماعي شيء، واستقلال البيانات شيء آخر. كل نوع يحفظ بمعرّف مستقل ورتبة متتابعة.</p>
-          </section>
-
           <section className="mt-5 grid gap-3 md:grid-cols-2">
             <Field label="عنوان القاعدة">
               <input value={title} onChange={(event) => setTitle(event.target.value)} className="input" autoFocus placeholder="مثال: إخفاء النون الساكنة قبل حروف الإخفاء" />
             </Field>
             <Field label="الفئة">
-              <select value={category} onChange={(event) => { setCategory(event.target.value as VariantCategory); setMultiCategories([event.target.value as VariantCategory]); }} className="input" disabled={multiEnabled}>
+              <select value={category} onChange={(event) => setCategory(event.target.value as VariantCategory)} className="input">
                 {(Object.keys(CATEGORY_LABELS) as VariantCategory[]).map((value) => <option key={value} value={value}>{CATEGORY_LABELS[value]}</option>)}
               </select>
             </Field>

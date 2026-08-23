@@ -100,11 +100,12 @@ export function buildReadingCombinations(
 
   const drafts = new Map<string, Draft>();
 
-  const groupKeys = exclusiveGroupKeys(orderedVariants);
-
   for (const unit of units) {
+    // المواضع المستقلة تُضرب. أما اختلافان في الموضع نفسه والفئة نفسها
+    // (مد ٢ ومد ٤ مسجّلان اختلافا مستقلا) فأوجه متنافية لموضع واحد.
     const buckets = new Map<string, CombinationPick[]>();
     const bucketOrder: string[] = [];
+    const groupKeys = exclusiveGroupKeys(orderedVariants);
 
     for (const variant of orderedVariants) {
       const applicable = variant.alternatives
@@ -123,12 +124,7 @@ export function buildReadingCombinations(
 
       if (applicable.length === 0) continue;
 
-      // القاعدة الجديدة: كل اختلاف مستقل افتراضيا (isIndependent = true).
-      // إذا كان غير مستقل، فالتداخل في نفس الفئة يجعلهما متنافيين.
-      // هذا يحقق: Display Order ≠ Creation Order، واستقلال البيانات، ومنع الانفجار.
-      const isIndependent = (variant as any).isIndependent !== false;
-      const key = isIndependent ? variant.id : (groupKeys.get(variant.id) ?? variant.id);
-
+      const key = groupKeys.get(variant.id) ?? variant.id;
       const existing = buckets.get(key);
       const picks = applicable.map((alternative) => ({ variant, alternative }));
       if (existing) {

@@ -89,14 +89,14 @@ async function seedWorkspace() {
 }
 
 describe('صيغة الملف', () => {
-  it('يصدّر بالإصدار التاسع ويحمل الحقول الجديدة كلها', async () => {
+  it('يصدّر بالإصدار الثامن ويحمل الحقول الجديدة كلها', async () => {
     await seedWorkspace();
     const { documents } = await loadModules();
 
     const bundle = JSON.parse(documents.exportDocuments());
 
     expect(bundle.format).toBe('tashjeer-export');
-    expect(bundle.schemaVersion).toBe(9);
+    expect(bundle.schemaVersion).toBe(8);
     expect(bundle.globalRules).toHaveLength(1);
     expect(bundle.strengthDegrees.degrees).toHaveLength(5);
     expect(bundle.ruleOccurrences).toHaveLength(2);
