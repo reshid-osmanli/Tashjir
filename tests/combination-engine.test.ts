@@ -360,7 +360,7 @@ describe('تنافي المدى المتداخل لنفس الفئة', () => {
           scope: { kind: 'PATHS', pathIds: ['path-warsh-al-asbahani'] },
         },
       ],
-      { category: 'USUL', isIndependent: false } as any
+      { category: 'USUL' }
     );
     const silahNarrow = variant(
       'silah-narrow',
@@ -375,7 +375,7 @@ describe('تنافي المدى المتداخل لنفس الفئة', () => {
           scope: { kind: 'PATHS', pathIds: ['path-warsh-al-asbahani'] },
         },
       ],
-      { category: 'USUL', isIndependent: false } as any
+      { category: 'USUL' }
     );
 
     const { lines } = build([silahWide, silahNarrow]);

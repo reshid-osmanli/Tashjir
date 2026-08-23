@@ -52,11 +52,8 @@ import { parseAyahKey } from '@/data/quran';
  * v7: التحكم اليدوي الكامل: روابط الأوجه والأسطر، أجزاء الأسطر، ترتيب
  *     الأسطر اليدوي، وسجل تعديلات المحرر (المصدر: محرك/محرر).
  * v8: شروط الوقف/الوصل، منع الوصل، ولقطة نتيجة المحرك قبل التصحيح.
- * v9: بيئة احترافية: استقلال الاختلافات لنفس القارئ/الكلمة، مجموعات مستقلة،
- *     ترتيب صريح للقراء، وقفا فقط/وصلا فقط، منع وصل، وقف وابتداء احترافي،
- *     مصدر Engine/Editor/Final، ونظام تحديد موحد.
  */
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 8;
 
 // نحتفظ بمفاتيح v2 كي تُقرأ مستندات المستخدمين القديمة ثم تُرقّى عند الحفظ.
 const DOC_PREFIX = 'tashjeer:doc:v2:';
@@ -427,7 +424,9 @@ function normalizeFocusSegmentValue(
 /** يطبع موضع الحروف القديم/المستورد إلى نطاق صالح أو يعيده إلى كلمات بأمان. */
 function migrateVariant(variant: Variant, ayahKey: number): Variant {
   const recitationMode =
-    variant.recitationMode === 'WAQF_ONLY' || variant.recitationMode === 'WASL_ONLY' ? variant.recitationMode : undefined;
+    variant.recitationMode === 'WAQF_ONLY' || variant.recitationMode === 'WASL_ONLY'
+      ? variant.recitationMode
+      : undefined;
   const loci = Array.isArray(variant.loci)
     ? variant.loci.map(normalizeLocus).filter((locus) => locus.endPosition >= locus.startPosition)
     : undefined;
@@ -435,8 +434,6 @@ function migrateVariant(variant: Variant, ayahKey: number): Variant {
   const startPosition = Math.max(1, Math.round(locusBounds?.startPosition ?? variant.startPosition ?? 1));
   const endPosition = Math.max(startPosition, Math.round(locusBounds?.endPosition ?? variant.endPosition ?? startPosition));
   const candidate = variant.characterRange;
-
-  let migrated: Variant = variant as Variant;
 
   if (variant.targetKind === 'CHARACTERS' && candidate) {
     const words = getAyahWordsByKey(ayahKey);
@@ -450,11 +447,12 @@ function migrateVariant(variant: Variant, ayahKey: number): Variant {
       position: Math.min(endPosition, Math.round(candidate.end?.position ?? endPosition)),
       characterIndex: Math.max(1, Math.round(candidate.end?.characterIndex ?? 1)),
     };
+
     if (startText && endText && compareCharacterAnchors(start, end) <= 0) {
       const safeStart = Math.min(start.characterIndex, characterCount(startText));
       const safeEnd = Math.min(end.characterIndex, characterCount(endText));
       if (safeStart > 0 && safeEnd > 0) {
-        migrated = {
+        return {
           ...variant,
           ayahKey,
           recitationMode,
@@ -466,38 +464,18 @@ function migrateVariant(variant: Variant, ayahKey: number): Variant {
             end: { ...end, characterIndex: safeEnd },
           },
           loci: loci && loci.length > 1 ? loci : undefined,
-        } as Variant;
+        };
       }
     }
   }
 
-  if (migrated === variant) {
-    const { characterRange: _ignored, targetKind, ...legacy } = variant as any;
-    const withLoci = loci && loci.length > 1 ? { loci } : {};
-    migrated =
-      targetKind === 'WORDS'
-        ? ({ ...legacy, ayahKey, recitationMode, startPosition, endPosition, targetKind: 'WORDS', ...withLoci } as Variant)
-        : ({ ...legacy, ayahKey, recitationMode, startPosition, endPosition, ...withLoci } as Variant);
-  }
-
-  // v9 حقول جديدة - قيم افتراضية آمنة
-  // البذرة القديمة بلا origin تعتبر ENGINE، أما الجديد بلا origin من المحرر فيُعامل EDITOR عبر addVariant.
-  // هنا في الترقية، نحافظ على سلوك التتبع القديم: ما لا origin له = ENGINE.
-  const defaultOrigin = (migrated as any).origin ?? (migrated as any).source ?? (migrated.status === 'DRAFT' && (migrated as any).id?.startsWith('v-') ? 'ENGINE' : undefined);
-  return {
-    ...migrated,
-    source: (migrated as any).source ?? defaultOrigin ?? 'ENGINE',
-    origin: (migrated as any).origin ?? defaultOrigin ?? 'ENGINE',
-    isIndependent: (migrated as any).isIndependent ?? true,
-    batchGroupId: (migrated as any).batchGroupId,
-    subType: (migrated as any).subType,
-    waqfContext: (migrated as any).waqfContext ?? (recitationMode ? { mode: recitationMode } : undefined),
-    correction: (migrated as any).correction ?? {
-      final: migrated.title,
-      engine: (migrated as any).engineSnapshot?.title,
-      editor: (migrated as any).origin === 'EDITOR' ? migrated.title : undefined,
-    },
-  } as Variant;
+  // لا نضيف حقول WORDS إلى المستندات القديمة: غيابها هو القيمة المتوافقة
+  // تاريخيا، ويحافظ على ثبات ملف التصدير عند دورة استيراد/تصدير قديمة.
+  const { characterRange: _ignoredCharacterRange, targetKind, ...legacy } = variant;
+  const withLoci = loci && loci.length > 1 ? { loci } : {};
+  return targetKind === 'WORDS'
+    ? { ...legacy, ayahKey, recitationMode, startPosition, endPosition, targetKind: 'WORDS', ...withLoci }
+    : { ...legacy, ayahKey, recitationMode, startPosition, endPosition, ...withLoci };
 }
 
 function cloneVariants(variants: Variant[]): Variant[] {

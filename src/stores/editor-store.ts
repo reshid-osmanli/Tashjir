@@ -1,9 +1,18 @@
-// حالة المحرر - Editor Store v2 - بيئة احترافية للتحكم والقرار
+// حالة المحرر - Editor Store
 // مشروع التشجير - نظام القراءات العشر
 //
-// التصميم الموحد:
-//   Ayah → Line → Segment → Difference → Variant → Rule → Reader → Order → Relation → Source → Correction
-// كل العمليات مبنية على نفس النموذج ونفس Selection Context.
+// هذا المخزن يحمل حالة المحرر كاملة: المستند المفتوح، والتحديد، والعرض،
+// وتاريخ التراجع والإعادة.
+//
+// مبدأ التصميم:
+//   التراجع (Undo) يعمل على المستند نفسه، لا على حالة الواجهة.
+//   أي تعديل حقيقي (إضافة اختلاف، حذف وجه، تحريك خط) يُسجَّل لقطة كاملة
+//   للمستند قبل التعديل. أما تغيير التكبير أو فتح لوحة، فلا يُسجَّل،
+//   لأن المستخدم لا يتوقع أن يتراجع زر التراجع عن تكبير الشاشة.
+//
+// إعادة توليد الخطوط:
+//   بعد أي تعديل على الاختلافات، تُعاد الخطوط تلقائيا عبر recomputeBranches،
+//   مع الحفاظ على الخطوط التي عدّلها المستخدم يدويا (isManual).
 
 import { create } from 'zustand';
 import type { VariantCategory } from '@/types';
@@ -23,7 +32,6 @@ import type {
   VariantAlternative,
   VerificationStatus,
   ViewFilter,
-  WaqfContext,
 } from '@/types/tashjeer';
 import { parseAyahKey } from '@/data/quran';
 import { documentWindowWords } from '@/lib/tashjeer/reading-window';
@@ -42,12 +50,22 @@ import {
   saveDocument,
 } from '@/lib/storage/document-store';
 
+/** أدوات المحرر المتاحة في شريط الأدوات. */
+/** نمط التعليم داخل أداة التعليم: كلمة كاملة أو حرف مرئي مع تشكيله. */
 export type MarkingMode = 'WORDS' | 'CHARACTERS';
 
-export type EditorTool = 'select' | 'mark' | 'erase';
+export type EditorTool =
+  /** تحديد وتفحص */
+  | 'select'
+  /** تعليم كلمات لإنشاء اختلاف جديد */
+  | 'mark'
+  /** حذف عنصر بالنقر عليه */
+  | 'erase';
 
-const MAX_HISTORY = 80;
+/** الحد الأقصى للقطات التراجع، لتفادي استهلاك الذاكرة. */
+const MAX_HISTORY = 60;
 
+/** التصفية الافتراضية: كل الفئات ظاهرة. */
 const DEFAULT_FILTER: ViewFilter = {
   categories: ['USUL', 'FARSH', 'MADUD', 'HAMZ', 'WAQF', 'TAJWEED'],
   narratorIds: [],
@@ -57,81 +75,77 @@ const DEFAULT_FILTER: ViewFilter = {
   showAnchors: true,
 };
 
-type ClipboardContent =
-  | { kind: 'DIFFERENCE'; value: Variant }
-  | { kind: 'DIFFERENCES'; values: Variant[] }
-  | { kind: 'FACE'; value: VariantAlternative; parentId?: string }
-  | { kind: 'FACES'; values: Array<{ face: VariantAlternative; parentId: string }> }
-  | { kind: 'SEGMENT'; value: LineSegment }
-  | null;
-
 interface EditorState {
+  // ---------- المستند ----------
+  /** المستند المفتوح حاليا، أو null قبل التحميل */
   document: TashjeerDocument | null;
+  /** هل توجد تعديلات غير محفوظة */
   isDirty: boolean;
+  /** لقطات التراجع */
   past: TashjeerDocument[];
+  /** لقطات الإعادة */
   future: TashjeerDocument[];
 
+  // ---------- العرض ----------
   zoom: number;
   pan: { x: number; y: number };
   filter: ViewFilter;
   showPropertiesPanel: boolean;
   showVariantsPanel: boolean;
 
-  // التحديد والتعليم
+  // ---------- التحديد ----------
+  /** الكلمات المعلّمة استعدادا لإنشاء اختلاف */
   markedPositions: number[];
+  /** الحروف المعلّمة عند اختيار نمط الحروف. */
   markedCharacters: CharacterAnchor[];
+  /** هل ينشئ التعليم اختلاف كلمات أم اختلاف حروف. */
   markingMode: MarkingMode;
+  /** المصدر الوحيد للتحديد بين المحرر وكل اللوحات. */
   selection: EditorSelection | null;
   selectedWordId: number | null;
   selectedVariantId: string | null;
   selectedAlternativeId: string | null;
   selectedBranchId: string | null;
-  selectedFaceIds: string[];
-  multiSelectedVariantIds: string[];
-  clipboard: ClipboardContent;
+  clipboard: { kind: 'DIFFERENCE'; value: Variant } | { kind: 'FACE'; value: VariantAlternative } | { kind: 'SEGMENT'; value: LineSegment } | null;
   currentTool: EditorTool;
+  /** الفئة المستخدمة عند إنشاء اختلاف جديد */
   draftCategory: VariantCategory;
 
-  // أوضاع الواجهة
-  focusMode: boolean;
-  pinnedPanels: { properties: boolean; variants: boolean; toolbar: boolean };
-
+  // ---------- إجراءات المستند ----------
   openAyah: (ayahKey: number) => void;
   resetAyah: () => void;
   save: () => void;
   setDocumentStatus: (status: VerificationStatus) => void;
   replaceDocument: (document: TashjeerDocument) => void;
 
+  // ---------- إجراءات الاختلافات ----------
   addVariant: (variant: Omit<Variant, 'ayahKey'>) => void;
+  /** إنشاء عدة اختلافات مستقلة في معاملة واحدة ولقطة تراجع واحدة. */
   addVariantGroup: (variants: Array<Omit<Variant, 'ayahKey'>>) => void;
-  addVariantGroupWithRelations: (input: {
-    base: Omit<Variant, 'ayahKey'>;
-    related: Array<Omit<Variant, 'ayahKey'>>;
-    createLinks?: boolean;
-    batchGroupId?: string;
-  }) => void;
   updateVariant: (variantId: string, patch: Partial<Variant>) => void;
   deleteVariant: (variantId: string) => void;
-  duplicateVariant: (variantId: string) => void;
-  mergeVariants: (sourceId: string, targetId: string) => void;
-  moveVariant: (variantId: string, targetIndex: number) => void;
-
   addAlternative: (variantId: string, alternative: VariantAlternative) => void;
-  updateAlternative: (variantId: string, alternativeId: string, patch: Partial<VariantAlternative>) => void;
+  updateAlternative: (
+    variantId: string,
+    alternativeId: string,
+    patch: Partial<VariantAlternative>
+  ) => void;
   deleteAlternative: (variantId: string, alternativeId: string) => void;
-  duplicateAlternative: (variantId: string, alternativeId: string) => void;
+  /** يثبّت رتبة الموضع في ترتيب المرور، أو يزيلها بتمرير null. */
   setVariantOrderRank: (variantId: string, rank: number | null) => void;
+  /**
+   * يثبّت رقم ترتيب السطر لأي اختلاف ظاهر: المحفوظ في الآية، أو المشتق من
+   * قاعدة عامة (تخصيص موضعي يسبق رتبة القاعدة). هذا هو مدخل لوحة الخصائص.
+   */
   setEffectiveOrderRank: (variantId: string, rank: number | null) => void;
+  /** ينقل وجها داخل موضعه صعودا أو نزولا، فيثبّت ترتيب أوجه الموضع. */
   moveAlternative: (variantId: string, alternativeId: string, delta: number) => void;
+  /** يعيد ترتيب أوجه الموضع إلى قاعدة المحرك. */
   resetAlternativeOrder: (variantId: string) => void;
 
-  // تحديد دقيق للاختلاف/الوجه
-  toggleSelectedFace: (variantId: string, faceId: string) => void;
-  clearFaceSelection: () => void;
-  selectMultipleVariants: (ids: string[]) => void;
-  toggleMultiVariant: (id: string) => void;
-
+  // ---------- إجراءات الخطوط ----------
   regenerateBranches: () => void;
+  /** يعيد حساب الناتج المشتق بعد تغيير الكتالوج أو إعداد المحرك بلا سجل تراجع. */
   refreshDerivedBranches: () => void;
   toggleBranchVisibility: (branchId: string) => void;
   moveBranchLane: (branchId: string, delta: number) => void;
@@ -142,26 +156,46 @@ interface EditorState {
   updateManualLine: (lineId: string, patch: Partial<ManualTashjeerLine>) => void;
   deleteManualLine: (lineId: string) => void;
 
-  addLink: (link: { kind: TashjeerLinkKind; relation: TashjeerLinkRelation; from: LinkEndpoint; to: LinkEndpoint; notes?: string }) => void;
-  addLinkGroup: (links: Array<{ kind: TashjeerLinkKind; relation: TashjeerLinkRelation; from: LinkEndpoint; to: LinkEndpoint; notes?: string }>) => void;
+  // ---------- الروابط والأجزاء والترتيب اليدوي (تصحيح المحرك) ----------
+  /** ينشئ علاقة يدوية بين عنصرين: وجهين، سطرين، أو جزء وسطر/قاعدة. */
+  addLink: (link: {
+    kind: TashjeerLinkKind;
+    relation: TashjeerLinkRelation;
+    from: LinkEndpoint;
+    to: LinkEndpoint;
+    notes?: string;
+  }) => void;
   updateLink: (linkId: string, patch: Partial<Pick<TashjeerLink, 'relation' | 'notes' | 'from' | 'to'>>) => void;
   deleteLink: (linkId: string) => void;
-  addSegment: (segment: { title: string; startPosition: number; endPosition: number; characterRange?: LineSegment['characterRange']; notes?: string }) => LineSegment | undefined;
+  /** ينشئ جزءا من سطر: مدى كلمات/حروف له روابطه وقواعده الخاصة. */
+  addSegment: (segment: {
+    title: string;
+    startPosition: number;
+    endPosition: number;
+    characterRange?: LineSegment['characterRange'];
+    notes?: string;
+  }) => LineSegment | undefined;
   updateSegment: (segmentId: string, patch: Partial<Pick<LineSegment, 'title' | 'startPosition' | 'endPosition' | 'notes'>>) => void;
   deleteSegment: (segmentId: string) => void;
+  /** يثبّت ترتيب أسطر العرض يدويا (لقطة كاملة بترتيب المحرر). */
   setLineOrder: (order: string[]) => void;
+  /** ينقل سطرا إلى موضع جديد بإزاحة المتأثرين، انطلاقا من لقطة الترتيب الحالية. */
   moveLineInOrder: (currentLineIds: string[], lineId: string, targetIndex: number) => void;
+  /** يعيد الترتيب إلى قاعدة المحرك. */
   resetLineOrder: () => void;
 
+  // ---------- الوقف والابتداء وتخطيط النص ----------
   addBoundary: (boundary: RecitationBoundary) => void;
   updateBoundary: (boundaryId: string, patch: Partial<RecitationBoundary>) => void;
   deleteBoundary: (boundaryId: string) => void;
   toggleForcedLineBreak: (position: number) => void;
+  /** وصل الآية بالتي بعدها في نافذة عمل واحدة، أو فك الوصل. */
   setLinkNextAyah: (linked: boolean) => void;
+  /** حصر التشجير في مقطع محدد، أو إلغاء الحصر بتمرير null. */
   setFocusSegment: (segment: { startPosition: number; endPosition: number } | null) => void;
   setLineOffset: (lineIndex: number, offset: number) => void;
-  setWaqfContext: (variantId: string, context: WaqfContext | null) => void;
 
+  // ---------- إجراءات التحديد ----------
   toggleMarkedPosition: (position: number) => void;
   toggleMarkedCharacter: (anchor: CharacterAnchor) => void;
   clearMarks: () => void;
@@ -178,6 +212,7 @@ interface EditorState {
   setTool: (tool: EditorTool) => void;
   setDraftCategory: (category: VariantCategory) => void;
 
+  // ---------- إجراءات العرض ----------
   setZoom: (zoom: number) => void;
   zoomIn: () => void;
   zoomOut: () => void;
@@ -188,9 +223,8 @@ interface EditorState {
   toggleNarrator: (narratorId: string) => void;
   togglePropertiesPanel: () => void;
   toggleVariantsPanel: () => void;
-  setFocusMode: (value: boolean) => void;
-  setPinnedPanel: (panel: 'properties' | 'variants' | 'toolbar', pinned: boolean) => void;
 
+  // ---------- التراجع ----------
   undo: () => void;
   redo: () => void;
   canUndo: () => boolean;
@@ -217,17 +251,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   selectedVariantId: null,
   selectedAlternativeId: null,
   selectedBranchId: null,
-  selectedFaceIds: [],
-  multiSelectedVariantIds: [],
   clipboard: null,
   currentTool: 'select',
   draftCategory: 'FARSH',
-  focusMode: false,
-  pinnedPanels: { properties: true, variants: true, toolbar: true },
+
+  // ==================== المستند ====================
 
   openAyah: (ayahKey) => {
     const document = loadOrCreateDocument(ayahKey);
     const withBranches = withRegeneratedBranches(document);
+
     set({
       document: withBranches,
       isDirty: false,
@@ -240,14 +273,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       selectedVariantId: null,
       selectedAlternativeId: null,
       selectedBranchId: null,
-      selectedFaceIds: [],
-      multiSelectedVariantIds: [],
     });
   },
 
   resetAyah: () => {
     const current = get().document;
     if (!current) return;
+
     const fresh = withRegeneratedBranches(createDocument(current.ayahKey, current.meta.author));
     set((state) => ({
       past: pushHistory(state.past, current),
@@ -260,14 +292,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       selectedVariantId: null,
       selectedAlternativeId: null,
       selectedBranchId: null,
-      selectedFaceIds: [],
-      multiSelectedVariantIds: [],
     }));
   },
 
   save: () => {
     const current = get().document;
     if (!current) return;
+
+    // لا نعتمد على الخطوط المخزنة من جلسة سابقة أو من ملف مستورد؛ فهي ناتج
+    // مشتق من الاختلافات وقد تكون قديمة. إعادة بنائها هنا تجعل ما يُحفظ هو
+    // بالضبط ما سيظهر عند فتح الآية مرة أخرى.
     const normalized = withRegeneratedBranches(current);
     set({ document: saveDocument(normalized), isDirty: false });
   },
@@ -288,8 +322,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }));
   },
 
+  // ==================== الاختلافات ====================
+
   addVariant: (variant) => {
-    const batchId = (variant as any).batchGroupId;
     mutate(
       set,
       get,
@@ -297,19 +332,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ...document,
         variants: [
           ...document.variants,
-          {
-            ...variant,
-            ayahKey: document.ayahKey,
-            origin: 'EDITOR' as const,
-            source: 'EDITOR' as const,
-            isIndependent: true,
-            batchGroupId: batchId,
-            correction: {
-              final: variant.title,
-              engine: variant.engineSnapshot?.title,
-              editor: variant.title,
-            },
-          },
+          { ...variant, ayahKey: document.ayahKey, origin: 'EDITOR' as const },
         ].sort(compareVariants),
       }),
       {
@@ -325,7 +348,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   addVariantGroup: (variants) => {
     if (variants.length === 0) return;
-    const batchGroupId = `batch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
     mutate(
       set,
       get,
@@ -337,13 +359,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             ...variant,
             ayahKey: document.ayahKey,
             origin: 'EDITOR' as const,
-            source: 'EDITOR' as const,
-            isIndependent: true,
-            batchGroupId: (variant as any).batchGroupId ?? batchGroupId,
-            correction: {
-              final: variant.title,
-              editor: variant.title,
-            },
           })),
         ].sort(compareVariants),
       }),
@@ -351,79 +366,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         action: 'إنشاء مجموعة اختلافات',
         targetType: 'VARIANT',
         targetId: variants.map((item) => item.id).join(','),
-        summary: `أنشأ المحرر ${variants.length} اختلافات مستقلة في عملية واحدة (المجموعة ${batchGroupId})`,
-      }
-    );
-    set({ markedPositions: [], markedCharacters: [] });
-  },
-
-  addVariantGroupWithRelations: ({ base, related, createLinks = true, batchGroupId }) => {
-    const doc = get().document;
-    if (!doc) return;
-    const groupId = batchGroupId ?? `batch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const allVariants = [base, ...related].map((variant, index) => ({
-      ...variant,
-      ayahKey: doc.ayahKey,
-      origin: 'EDITOR' as const,
-      source: 'EDITOR' as const,
-      isIndependent: true,
-      batchGroupId: groupId,
-      orderRank: variant.orderRank ?? index + 1,
-      correction: { final: variant.title, editor: variant.title },
-    }));
-
-    mutate(
-      set,
-      get,
-      (document) => {
-        let nextDoc = {
-          ...document,
-          variants: [...document.variants, ...allVariants].sort(compareVariants),
-        };
-
-        if (createLinks && related.length > 0) {
-          const links: TashjeerLink[] = [];
-          const now = new Date().toISOString();
-          // ربط كل وجه في base بكل وجه في related إن وجدت، وإلا ربط الاختلافات نفسها كمرجع.
-          const baseFaceId = base.alternatives.find((a) => !a.isBase)?.id;
-          for (const rel of related) {
-            const relFaceId = rel.alternatives.find((a) => !a.isBase)?.id;
-            if (baseFaceId && relFaceId) {
-              links.push({
-                id: `link-${document.ayahKey}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`,
-                ayahKey: document.ayahKey,
-                kind: 'FACE_TO_FACE',
-                relation: 'MERGE',
-                from: { type: 'FACE', id: `${base.id}::${baseFaceId}` },
-                to: { type: 'FACE', id: `${rel.id}::${relFaceId}` },
-                origin: 'EDITOR',
-                createdAt: now,
-                updatedAt: now,
-              });
-            } else {
-              links.push({
-                id: `link-${document.ayahKey}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`,
-                ayahKey: document.ayahKey,
-                kind: 'LINE_TO_LINE',
-                relation: 'REFERENCE',
-                from: { type: 'RULE', id: base.id },
-                to: { type: 'RULE', id: rel.id },
-                origin: 'EDITOR',
-                createdAt: now,
-                updatedAt: now,
-              });
-            }
-          }
-          nextDoc = { ...nextDoc, links: [...(nextDoc.links ?? []), ...links] };
-        }
-
-        return nextDoc;
-      },
-      {
-        action: 'إنشاء مجموعة اختلافات مترابطة',
-        targetType: 'VARIANT',
-        targetId: groupId,
-        summary: `أنشأ المحرر مجموعة ${allVariants.length} اختلافات مستقلة مترابطة (${groupId})`,
+        summary: `أنشأ المحرر ${variants.length} اختلافات مستقلة في عملية واحدة`,
       }
     );
     set({ markedPositions: [], markedCharacters: [] });
@@ -447,18 +390,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
                       capturedAt: new Date().toISOString(),
                     }
                   : variant.engineSnapshot;
-              const correction = {
-                engine: engineSnapshot?.title ?? variant.correction?.engine,
-                editor: (patch.title as string) ?? variant.correction?.editor ?? variant.title,
-                final: (patch.title as string) ?? variant.title,
-              };
               return {
                 ...variant,
                 ...patch,
                 engineSnapshot,
                 editorModifiedAt: variant.origin !== 'EDITOR' ? new Date().toISOString() : variant.editorModifiedAt,
-                modifiedBy: 'EDITOR' as const,
-                correction,
               };
             })
             .sort(compareVariants),
@@ -487,6 +423,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         {
           ...document,
           variants: document.variants.filter((variant) => variant.id !== variantId),
+          // الخطوط التابعة للاختلاف المحذوف تُزال معه، وكذلك روابطه.
           branches: document.branches.filter((branch) => branch.variantId !== variantId),
           links: pruneLinksForVariant(document.links ?? [], variantId),
         },
@@ -500,81 +437,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         document
       );
     });
-    set({ selection: null, selectedVariantId: null, selectedAlternativeId: null, selectedBranchId: null, selectedFaceIds: [], multiSelectedVariantIds: [] });
-  },
-
-  duplicateVariant: (variantId) => {
-    const state = get();
-    const doc = state.document;
-    if (!doc) return;
-    const source = doc.variants.find((v) => v.id === variantId);
-    if (!source) return;
-    const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const id = `v-copy-${suffix}`;
-    state.addVariant({
-      ...structuredClone(source),
-      id,
-      title: `${source.title} — نسخة`,
-      alternatives: source.alternatives.map((item, index) => ({ ...item, id: `${id}-face-${index + 1}-${suffix}` })),
-      origin: 'EDITOR',
-      source: 'EDITOR',
-      engineSnapshot: undefined,
-      editorModifiedAt: undefined,
-      correction: { final: `${source.title} — نسخة`, editor: `${source.title} — نسخة` },
-    } as any);
-    get().selectVariant(id);
-  },
-
-  mergeVariants: (sourceId, targetId) => {
-    mutate(set, get, (document) => {
-      const source = document.variants.find((v) => v.id === sourceId);
-      const target = document.variants.find((v) => v.id === targetId);
-      if (!source || !target || sourceId === targetId) return document;
-      // دمج الأوجه: كل أوجه المصدر تنقل إلى الهدف بمعرّفات جديدة مستقلة.
-      const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 4)}`;
-      const newAlts = source.alternatives
-        .filter((a) => !a.isBase)
-        .map((alt, idx) => ({ ...structuredClone(alt), id: `${target.id}-merged-${idx}-${suffix}` }));
-      return withLoggedEdit(
-        {
-          ...document,
-          variants: document.variants
-            .map((v) => (v.id === targetId ? { ...v, alternatives: [...v.alternatives, ...newAlts] } : v))
-            .filter((v) => v.id !== sourceId),
-          links: pruneLinksForVariant(document.links ?? [], sourceId),
-        },
-        {
-          action: 'دمج اختلافين',
-          targetType: 'VARIANT',
-          targetId: `${sourceId}→${targetId}`,
-          summary: `دمج «${source.title}» في «${target.title}» مع حفظ الاستقلال السابق في السجل`,
-        },
-        document
-      );
-    });
-  },
-
-  moveVariant: (variantId, targetIndex) => {
-    mutate(set, get, (document) => {
-      const sorted = [...document.variants].sort(compareVariants);
-      const currentIndex = sorted.findIndex((v) => v.id === variantId);
-      if (currentIndex === -1) return document;
-      const without = sorted.filter((v) => v.id !== variantId);
-      const clamped = Math.max(0, Math.min(targetIndex, without.length));
-      const reordered = [...without.slice(0, clamped), sorted[currentIndex], ...without.slice(clamped)];
-      // نثبت orderRank صريحا حسب الترتيب الجديد.
-      const withRanks = reordered.map((v, idx) => ({ ...v, orderRank: idx + 1 }));
-      return withLoggedEdit(
-        { ...document, variants: withRanks },
-        {
-          action: 'إعادة ترتيب اختلاف',
-          targetType: 'VARIANT',
-          targetId: variantId,
-          summary: `نقل الاختلاف إلى الموضع ${targetIndex + 1}`,
-        },
-        document
-      );
-    });
+    set({ selection: null, selectedVariantId: null, selectedAlternativeId: null, selectedBranchId: null });
   },
 
   addAlternative: (variantId, alternative) => {
@@ -584,7 +447,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         {
           ...document,
           variants: document.variants.map((variant) =>
-            variant.id === variantId ? { ...variant, alternatives: [...variant.alternatives, alternative] } : variant
+            variant.id === variantId
+              ? { ...variant, alternatives: [...variant.alternatives, alternative] }
+              : variant
           ),
         },
         {
@@ -640,23 +505,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         if (variant.id !== variantId) return variant;
         return {
           ...variant,
-          alternatives: variant.alternatives.filter((alternative) => alternative.id !== alternativeId),
+          alternatives: variant.alternatives.filter(
+            (alternative) => alternative.id !== alternativeId
+          ),
         };
       }),
       branches: document.branches.filter((branch) => branch.alternativeId !== alternativeId),
     }));
-  },
-
-  duplicateAlternative: (variantId, alternativeId) => {
-    const doc = get().document;
-    if (!doc) return;
-    const variant = doc.variants.find((v) => v.id === variantId);
-    const alt = variant?.alternatives.find((a) => a.id === alternativeId);
-    if (!alt) return;
-    const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const id = `face-copy-${suffix}`;
-    get().addAlternative(variantId, { ...structuredClone(alt), id, isBase: false, label: `${alt.label} — نسخة` });
-    get().selectAlternative(variantId, id);
   },
 
   setVariantOrderRank: (variantId, rank) => {
@@ -666,7 +521,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         {
           ...document,
           variants: document.variants.map((variant) =>
-            variant.id === variantId ? { ...variant, orderRank: rank === null ? undefined : Math.max(1, Math.round(rank)) } : variant
+            variant.id === variantId
+              ? { ...variant, orderRank: rank === null ? undefined : Math.max(1, Math.round(rank)) }
+              : variant
           ),
         },
         {
@@ -674,7 +531,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           targetType: 'VARIANT',
           targetId: variantId,
           category: before?.category,
-          summary: rank === null ? `إلغاء الرتبة اليدوية للموضع «${before?.title ?? variantId}»` : `تعديل رقم ترتيب السطر للموضع «${before?.title ?? variantId}» إلى ${rank}`,
+          summary:
+            rank === null
+              ? `إلغاء الرتبة اليدوية للموضع «${before?.title ?? variantId}»`
+              : `تعديل رقم ترتيب السطر للموضع «${before?.title ?? variantId}» إلى ${rank}`,
           changes: [{ field: 'orderRank', before: before?.orderRank, after: rank ?? undefined }],
         },
         document
@@ -685,15 +545,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setEffectiveOrderRank: (variantId, rank) => {
     const document = get().document;
     if (!document) return;
+
     const local = document.variants.find((variant) => variant.id === variantId);
     if (local) {
       get().setVariantOrderRank(variantId, rank);
       return;
     }
+
     const derived = getEffectiveVariants(document).find((variant) => variant.id === variantId);
     if (!derived?.globalRuleId) return;
     const match = matchFromDerivedVariant(derived);
     if (!match) return;
+
     setOccurrenceOrderRank(derived.globalRuleId, match, rank);
     mutate(
       set,
@@ -704,7 +567,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         targetType: 'RULE',
         targetId: variantId,
         category: derived.category,
-        summary: rank === null ? `إلغاء ترتيب السطر اليدوي للموضع «${derived.title}»` : `تعديل رقم ترتيب السطر للموضع «${derived.title}» إلى ${rank}`,
+        summary:
+          rank === null
+            ? `إلغاء ترتيب السطر اليدوي للموضع «${derived.title}»`
+            : `تعديل رقم ترتيب السطر للموضع «${derived.title}» إلى ${rank}`,
         changes: [{ field: 'orderRank', before: derived.orderRank, after: rank ?? undefined }],
       }
     );
@@ -715,11 +581,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ...document,
       variants: document.variants.map((variant) => {
         if (variant.id !== variantId) return variant;
+
+        // نبني الترتيب الصريح من الترتيب الظاهر الآن، ثم ننقل الوجه فيه.
+        // هكذا لا يقفز بقية الأوجه عند أول نقلة يدوية.
         const current = orderedAlternativeIds(variant);
         const index = current.indexOf(alternativeId);
         if (index === -1) return variant;
+
         const target = index + delta;
         if (target < 0 || target >= current.length) return variant;
+
         const next = [...current];
         [next[index], next[target]] = [next[target], next[index]];
         return { ...variant, alternativeOrder: next };
@@ -730,38 +601,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   resetAlternativeOrder: (variantId) => {
     mutate(set, get, (document) => ({
       ...document,
-      variants: document.variants.map((variant) => (variant.id === variantId ? { ...variant, alternativeOrder: undefined } : variant)),
+      variants: document.variants.map((variant) =>
+        variant.id === variantId ? { ...variant, alternativeOrder: undefined } : variant
+      ),
     }));
   },
 
-  toggleSelectedFace: (variantId, faceId) => {
-    set((state) => {
-      const exists = state.selectedFaceIds.includes(faceId);
-      const next = exists ? state.selectedFaceIds.filter((id) => id !== faceId) : [...state.selectedFaceIds, faceId];
-      return {
-        selectedFaceIds: next,
-        selection: next.length > 0 ? { kind: 'FACE', id: faceId, differenceId: variantId, faceId, position: state.document?.variants.find((v) => v.id === variantId)?.startPosition } : state.selection,
-        selectedVariantId: variantId,
-        selectedAlternativeId: faceId,
-      };
-    });
-  },
-
-  clearFaceSelection: () => set({ selectedFaceIds: [] }),
-
-  selectMultipleVariants: (ids) => set({ multiSelectedVariantIds: ids, selectedFaceIds: [] }),
-
-  toggleMultiVariant: (id) =>
-    set((state) => {
-      const exists = state.multiSelectedVariantIds.includes(id);
-      return {
-        multiSelectedVariantIds: exists ? state.multiSelectedVariantIds.filter((item) => item !== id) : [...state.multiSelectedVariantIds, id],
-      };
-    }),
+  // ==================== الخطوط ====================
 
   regenerateBranches: () => {
     mutate(set, get, (document) => ({
       ...document,
+      // إعادة توليد كاملة: تُلغى التعديلات اليدوية عمدا.
       branches: computeBranches(document, []),
     }));
   },
@@ -769,13 +620,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   refreshDerivedBranches: () => {
     const document = get().document;
     if (!document) return;
+    // لا نسجل عملية اشتقاق في التراجع ولا نعلّم المستند «غير محفوظ»: لا
+    // تتغير بيانات الوجه، بل تتغير طريقة تحويلها إلى خطوط بسبب كتالوج جديد.
     set({ document: withRegeneratedBranches(document) });
   },
 
   toggleBranchVisibility: (branchId) => {
     mutate(set, get, (document) => ({
       ...document,
-      branches: document.branches.map((branch) => (branch.id === branchId ? { ...branch, isHidden: !branch.isHidden } : branch)),
+      branches: document.branches.map((branch) =>
+        branch.id === branchId ? { ...branch, isHidden: !branch.isHidden } : branch
+      ),
     }));
   },
 
@@ -783,7 +638,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     mutate(set, get, (document) => ({
       ...document,
       branches: document.branches.map((branch) =>
-        branch.id === branchId ? { ...branch, lane: Math.max(0, branch.lane + delta), isManual: true } : branch
+        branch.id === branchId
+          ? { ...branch, lane: Math.max(0, branch.lane + delta), isManual: true }
+          : branch
       ),
     }));
   },
@@ -792,7 +649,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     mutate(set, get, (document) => ({
       ...document,
       branches: document.branches.map((branch) =>
-        branch.id === branchId ? { ...branch, lane: Math.max(0, Math.round(lane)), isManual: true } : branch
+        branch.id === branchId
+          ? { ...branch, lane: Math.max(0, Math.round(lane)), isManual: true }
+          : branch
       ),
     }));
   },
@@ -801,7 +660,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     mutate(set, get, (document) => ({
       ...document,
       branches: document.branches.map((branch) =>
-        branch.id === branchId ? { ...branch, rowOffset: Math.round(rowOffset), isManual: true } : branch
+        branch.id === branchId
+          ? { ...branch, rowOffset: Math.round(rowOffset), isManual: true }
+          : branch
       ),
     }));
   },
@@ -810,7 +671,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     mutate(set, get, (document) => ({
       ...document,
       branches: document.branches.map((branch) =>
-        branch.id === branchId ? { ...branch, lane: 0, rowOffset: undefined, isManual: false } : branch
+        branch.id === branchId
+          ? { ...branch, lane: 0, rowOffset: undefined, isManual: false }
+          : branch
       ),
     }));
   },
@@ -825,7 +688,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   updateManualLine: (lineId, patch) => {
     mutate(set, get, (document) => ({
       ...document,
-      manualLines: document.manualLines.map((line) => (line.id === lineId ? { ...line, ...patch } : line)),
+      manualLines: document.manualLines.map((line) =>
+        line.id === lineId ? { ...line, ...patch } : line
+      ),
     }));
   },
 
@@ -836,9 +701,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }));
   },
 
+  // ==================== الروابط والأجزاء والترتيب اليدوي ====================
+
   addLink: ({ kind, relation, from, to, notes }) => {
     mutate(set, get, (document) => {
-      const id = `link-${document.ayahKey}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      const id = `link-${document.ayahKey}-${Date.now().toString(36)}-${Math.random()
+        .toString(36)
+        .slice(2, 6)}`;
       const now = new Date().toISOString();
       const link: TashjeerLink = {
         id,
@@ -865,42 +734,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 
-  addLinkGroup: (linksInput) => {
-    if (linksInput.length === 0) return;
-    mutate(set, get, (document) => {
-      const now = new Date().toISOString();
-      const links: TashjeerLink[] = linksInput.map((input) => ({
-        id: `link-${document.ayahKey}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-        ayahKey: document.ayahKey,
-        kind: input.kind,
-        relation: input.relation,
-        from: input.from,
-        to: input.to,
-        notes: input.notes?.trim() || undefined,
-        origin: 'EDITOR' as const,
-        createdAt: now,
-        updatedAt: now,
-      }));
-      return withLoggedEdit(
-        { ...document, links: [...(document.links ?? []), ...links] },
-        {
-          action: 'إنشاء مجموعة علاقات',
-          targetType: 'FACE_LINK',
-          targetId: links.map((l) => l.id).join(','),
-          summary: `أنشأ المحرر ${links.length} علاقات دفعة واحدة`,
-        },
-        document
-      );
-    });
-  },
-
   updateLink: (linkId, patch) => {
     mutate(set, get, (document) => {
       const before = (document.links ?? []).find((link) => link.id === linkId);
       return withLoggedEdit(
         {
           ...document,
-          links: (document.links ?? []).map((link) => (link.id === linkId ? { ...link, ...patch, updatedAt: new Date().toISOString() } : link)),
+          links: (document.links ?? []).map((link) =>
+            link.id === linkId ? { ...link, ...patch, updatedAt: new Date().toISOString() } : link
+          ),
         },
         {
           action: 'تعديل علاقة',
@@ -940,8 +782,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   addSegment: ({ title, startPosition, endPosition, characterRange, notes }) => {
     const document = get().document;
     if (!document) return undefined;
+
     const segment: LineSegment = {
-      id: `segment-${document.ayahKey}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      id: `segment-${document.ayahKey}-${Date.now().toString(36)}-${Math.random()
+        .toString(36)
+        .slice(2, 6)}`,
       ayahKey: document.ayahKey,
       title: title.trim() || 'جزء من سطر',
       startPosition,
@@ -952,6 +797,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
     mutate(
       set,
       get,
@@ -966,6 +812,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         summary: `إنشاء جزء «${segment.title}» (${segment.startPosition}–${segment.endPosition})`,
       }
     );
+
     return segment;
   },
 
@@ -976,7 +823,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         {
           ...document,
           segments: (document.segments ?? []).map((segment) =>
-            segment.id === segmentId ? { ...segment, ...patch, updatedAt: new Date().toISOString() } : segment
+            segment.id === segmentId
+              ? { ...segment, ...patch, updatedAt: new Date().toISOString() }
+              : segment
           ),
         },
         {
@@ -1002,7 +851,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         {
           ...document,
           segments: (document.segments ?? []).filter((segment) => segment.id !== segmentId),
-          links: (document.links ?? []).filter((link) => link.from.id !== segmentId && link.to.id !== segmentId),
+          // روابط الجزء المحذوف تُزال معه، فلا تبقى روابط معلقة.
+          links: (document.links ?? []).filter(
+            (link) => link.from.id !== segmentId && link.to.id !== segmentId
+          ),
         },
         {
           action: 'حذف جزء',
@@ -1025,7 +877,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           action: 'ترتيب الأسطر يدويا',
           targetType: 'LINE_ORDER',
           targetId: String(document.ayahKey),
-          summary: order.length === 0 ? 'إعادة الترتيب إلى قاعدة المحرك' : `تثبيت ترتيب ${order.length} سطرا يدويا`,
+          summary:
+            order.length === 0
+              ? 'إعادة الترتيب إلى قاعدة المحرك'
+              : `تثبيت ترتيب ${order.length} سطرا يدويا`,
           changes: [{ field: 'lineOrder', before, after: [...order] }],
         },
         document
@@ -1041,6 +896,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     get().setLineOrder([]);
   },
 
+  // ==================== الوقف والابتداء وتخطيط النص ====================
+
   addBoundary: (boundary) => {
     mutate(set, get, (document) => ({
       ...document,
@@ -1051,7 +908,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   updateBoundary: (boundaryId, patch) => {
     mutate(set, get, (document) => ({
       ...document,
-      boundaries: document.boundaries.map((boundary) => (boundary.id === boundaryId ? { ...boundary, ...patch } : boundary)).sort((first, second) => first.position - second.position),
+      boundaries: document.boundaries
+        .map((boundary) => (boundary.id === boundaryId ? { ...boundary, ...patch } : boundary))
+        .sort((first, second) => first.position - second.position),
     }));
   },
 
@@ -1068,13 +927,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ...document,
         readingWindow: { ...(document.readingWindow ?? {}), linkNextAyah: false },
       }).length;
-      const isForbidden = document.boundaries.some((boundary) => boundary.kind === 'NO_WASL' && boundary.position === baseWordsCount);
+      const isForbidden = document.boundaries.some(
+        (boundary) => boundary.kind === 'NO_WASL' && boundary.position === baseWordsCount
+      );
       const accepted = linked && !isForbidden;
       return {
         ...document,
         readingWindow: {
           ...(document.readingWindow ?? {}),
           linkNextAyah: accepted,
+          // فك الوصل يبطل مقطعا قد يكون امتد إلى الآية الثانية.
           focusSegment: accepted ? (document.readingWindow?.focusSegment ?? null) : null,
         },
       };
@@ -1116,44 +978,41 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }));
   },
 
-  setWaqfContext: (variantId, context) => {
-    mutate(set, get, (document) => ({
-      ...document,
-      variants: document.variants.map((variant) =>
-        variant.id === variantId
-          ? {
-              ...variant,
-              waqfContext: context ?? undefined,
-              recitationMode: context ? context.mode : variant.recitationMode,
-            }
-          : variant
-      ),
-    }));
-  },
+  // ==================== التحديد ====================
 
   toggleMarkedPosition: (position) => {
     set((state) => {
       const exists = state.markedPositions.includes(position);
-      const next = exists ? state.markedPositions.filter((item) => item !== position) : [...state.markedPositions, position];
+      const next = exists
+        ? state.markedPositions.filter((item) => item !== position)
+        : [...state.markedPositions, position];
+
       return { markedPositions: next.sort((a, b) => a - b) };
     });
   },
 
   toggleMarkedCharacter: (anchor) => {
     set((state) => {
-      const exists = state.markedCharacters.some((item) => item.position === anchor.position && item.characterIndex === anchor.characterIndex);
+      const exists = state.markedCharacters.some(
+        (item) => item.position === anchor.position && item.characterIndex === anchor.characterIndex
+      );
       const next = exists
-        ? state.markedCharacters.filter((item) => item.position !== anchor.position || item.characterIndex !== anchor.characterIndex)
+        ? state.markedCharacters.filter(
+            (item) => item.position !== anchor.position || item.characterIndex !== anchor.characterIndex
+          )
         : [...state.markedCharacters, anchor];
+
       return {
-        markedCharacters: next.sort((first, second) => first.position - second.position || first.characterIndex - second.characterIndex),
+        markedCharacters: next.sort(
+          (first, second) =>
+            first.position - second.position || first.characterIndex - second.characterIndex
+        ),
       };
     });
   },
 
   clearMarks: () => set({ markedPositions: [], markedCharacters: [] }),
   setMarkingMode: (mode) => set({ markingMode: mode, markedPositions: [], markedCharacters: [] }),
-
   selectWord: (wordId) => {
     const word = wordId ? documentWindowWords(get().document).find((item) => item.id === wordId) : undefined;
     set({
@@ -1162,31 +1021,32 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       selectedAlternativeId: null,
     });
   },
-
   selectVariant: (variantId) => {
     const currentDocument = get().document;
-    const variant = variantId && currentDocument ? getEffectiveVariants(currentDocument).find((item) => item.id === variantId) : undefined;
+    const variant = variantId && currentDocument
+      ? getEffectiveVariants(currentDocument).find((item) => item.id === variantId)
+      : undefined;
     set({
-      selection: variantId ? { kind: variant?.isGlobalDerived ? 'RULE' : 'DIFFERENCE', id: variantId, differenceId: variantId, position: variant?.startPosition } : null,
+      selection: variantId
+        ? { kind: variant?.isGlobalDerived ? 'RULE' : 'DIFFERENCE', id: variantId, differenceId: variantId, position: variant?.startPosition }
+        : null,
       selectedVariantId: variantId,
       selectedAlternativeId: null,
       selectedBranchId: null,
-      selectedFaceIds: [],
     });
   },
-
   selectAlternative: (variantId, alternativeId) => {
     const currentDocument = get().document;
-    const variant = currentDocument ? getEffectiveVariants(currentDocument).find((item) => item.id === variantId) : undefined;
+    const variant = currentDocument
+      ? getEffectiveVariants(currentDocument).find((item) => item.id === variantId)
+      : undefined;
     set({
       selection: { kind: 'FACE', id: alternativeId, differenceId: variantId, faceId: alternativeId, position: variant?.startPosition },
       selectedVariantId: variantId,
       selectedAlternativeId: alternativeId,
       selectedBranchId: null,
-      selectedFaceIds: [alternativeId],
     });
   },
-
   selectSegment: (segmentId) => {
     const segment = get().document?.segments?.find((item) => item.id === segmentId);
     set({
@@ -1194,90 +1054,53 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       selectedVariantId: null,
       selectedAlternativeId: null,
       selectedBranchId: null,
-      selectedFaceIds: [],
     });
   },
-
-  selectLine: (lineId, differenceId, position) =>
-    set({
-      selection: { kind: 'LINE', id: lineId, lineId, differenceId, position },
-      selectedVariantId: differenceId ?? null,
-      selectedAlternativeId: null,
-      selectedBranchId: lineId,
-    }),
-
-  selectBranch: (branchId) =>
-    set((state) => ({
-      selectedBranchId: branchId,
-      selection: branchId
-        ? { kind: 'LINE', id: branchId, lineId: branchId, differenceId: state.selectedVariantId ?? undefined }
-        : state.selectedVariantId
-          ? { kind: 'DIFFERENCE', id: state.selectedVariantId, differenceId: state.selectedVariantId }
-          : null,
-    })),
-
+  selectLine: (lineId, differenceId, position) => set({
+    selection: { kind: 'LINE', id: lineId, lineId, differenceId, position },
+    selectedVariantId: differenceId ?? null,
+    selectedAlternativeId: null,
+    selectedBranchId: lineId,
+  }),
+  selectBranch: (branchId) => set((state) => ({
+    selectedBranchId: branchId,
+    selection: branchId
+      ? { kind: 'LINE', id: branchId, lineId: branchId, differenceId: state.selectedVariantId ?? undefined }
+      : state.selectedVariantId
+        ? { kind: 'DIFFERENCE', id: state.selectedVariantId, differenceId: state.selectedVariantId }
+        : null,
+  })),
   copySelection: () => {
     const state = get();
     const selection = state.selection;
     if (!selection || !state.document) return;
-
-    if (selection.kind === 'DIFFERENCE' || selection.kind === 'RULE') {
-      const value = state.document.variants.find((item) => item.id === selection.id) ?? getEffectiveVariants(state.document).find((item) => item.id === selection.id);
+    if (selection.kind === 'DIFFERENCE') {
+      const value = state.document.variants.find((item) => item.id === selection.id);
       if (value) set({ clipboard: { kind: 'DIFFERENCE', value: structuredClone(value) } });
-      // نسخ متعدد
-      if (state.multiSelectedVariantIds.length > 1) {
-        const values = state.multiSelectedVariantIds
-          .map((id) => state.document!.variants.find((v) => v.id === id))
-          .filter(Boolean) as Variant[];
-        if (values.length > 1) set({ clipboard: { kind: 'DIFFERENCES', values: values.map((v) => structuredClone(v)) } });
-      }
-    } else if (selection.kind === 'FACE') {
-      if (state.selectedFaceIds.length > 1 && selection.differenceId) {
-        const parentId = selection.differenceId;
-        const faces = state.selectedFaceIds
-          .map((faceId) => {
-            const face = state.document!.variants.find((v) => v.id === parentId)?.alternatives.find((a) => a.id === faceId);
-            return face ? { face: structuredClone(face), parentId } : null;
-          })
-          .filter(Boolean) as Array<{ face: VariantAlternative; parentId: string }>;
-        if (faces.length > 1) {
-          set({ clipboard: { kind: 'FACES', values: faces } });
-          return;
-        }
-      }
-      if (selection.differenceId) {
-        const value = state.document.variants.find((item) => item.id === selection.differenceId)?.alternatives.find((item) => item.id === selection.id);
-        if (value) set({ clipboard: { kind: 'FACE', value: structuredClone(value), parentId: selection.differenceId } });
-      }
+    } else if (selection.kind === 'FACE' && selection.differenceId) {
+      const value = state.document.variants
+        .find((item) => item.id === selection.differenceId)
+        ?.alternatives.find((item) => item.id === selection.id);
+      if (value) set({ clipboard: { kind: 'FACE', value: structuredClone(value) } });
     } else if (selection.kind === 'SEGMENT') {
       const value = state.document.segments?.find((item) => item.id === selection.id);
       if (value) set({ clipboard: { kind: 'SEGMENT', value: structuredClone(value) } });
     }
   },
-
   cutSelection: () => {
     const state = get();
     state.copySelection();
     const selection = get().selection;
     if (!selection) return;
     if (selection.kind === 'DIFFERENCE') get().deleteVariant(selection.id);
-    else if (selection.kind === 'FACE' && selection.differenceId) {
-      if (get().selectedFaceIds.length > 1) {
-        for (const faceId of get().selectedFaceIds) {
-          get().deleteAlternative(selection.differenceId, faceId);
-        }
-      } else {
-        get().deleteAlternative(selection.differenceId, selection.id);
-      }
-    } else if (selection.kind === 'SEGMENT') get().deleteSegment(selection.id);
+    else if (selection.kind === 'FACE' && selection.differenceId) get().deleteAlternative(selection.differenceId, selection.id);
+    else if (selection.kind === 'SEGMENT') get().deleteSegment(selection.id);
   },
-
   pasteSelection: () => {
     const state = get();
     const clipboard = state.clipboard;
     if (!clipboard || !state.document) return;
     const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-
     if (clipboard.kind === 'DIFFERENCE') {
       const source = structuredClone(clipboard.value);
       const id = `v-copy-${suffix}`;
@@ -1287,36 +1110,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         title: `${source.title} — نسخة`,
         alternatives: source.alternatives.map((item, index) => ({ ...item, id: `${id}-face-${index + 1}-${suffix}` })),
         origin: 'EDITOR',
-        source: 'EDITOR',
         engineSnapshot: undefined,
         editorModifiedAt: undefined,
-      } as any);
+      });
       get().selectVariant(id);
-    } else if (clipboard.kind === 'DIFFERENCES') {
-      const newIds: string[] = [];
-      for (const src of clipboard.values) {
-        const id = `v-copy-${suffix}-${Math.random().toString(36).slice(2, 4)}`;
-        newIds.push(id);
-        state.addVariant({
-          ...structuredClone(src),
-          id,
-          title: `${src.title} — نسخة`,
-          alternatives: src.alternatives.map((item, index) => ({ ...item, id: `${id}-face-${index + 1}-${suffix}` })),
-          origin: 'EDITOR',
-          source: 'EDITOR',
-        } as any);
-      }
-      if (newIds[0]) get().selectVariant(newIds[0]);
     } else if (clipboard.kind === 'FACE' && state.selectedVariantId) {
       const face = structuredClone(clipboard.value);
       const id = `face-copy-${suffix}`;
       state.addAlternative(state.selectedVariantId, { ...face, id, isBase: false });
       get().selectAlternative(state.selectedVariantId, id);
-    } else if (clipboard.kind === 'FACES' && state.selectedVariantId) {
-      for (const item of clipboard.values) {
-        const id = `face-copy-${suffix}-${Math.random().toString(36).slice(2, 4)}`;
-        state.addAlternative(state.selectedVariantId, { ...structuredClone(item.face), id, isBase: false });
-      }
     } else if (clipboard.kind === 'SEGMENT') {
       const segment = clipboard.value;
       const created = state.addSegment({
@@ -1329,7 +1131,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       if (created) get().selectSegment(created.id);
     }
   },
-
   setTool: (tool) =>
     set({
       currentTool: tool,
@@ -1337,6 +1138,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       markedCharacters: tool === 'mark' ? get().markedCharacters : [],
     }),
   setDraftCategory: (category) => set({ draftCategory: category }),
+
+  // ==================== العرض ====================
 
   setZoom: (zoom) => set({ zoom: clamp(zoom, 0.2, 6) }),
   zoomIn: () => set((state) => ({ zoom: clamp(state.zoom * 1.2, 0.2, 6) })),
@@ -1352,7 +1155,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         filter: {
           ...state.filter,
-          categories: exists ? state.filter.categories.filter((item) => item !== category) : [...state.filter.categories, category],
+          categories: exists
+            ? state.filter.categories.filter((item) => item !== category)
+            : [...state.filter.categories, category],
         },
       };
     });
@@ -1364,20 +1169,24 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         filter: {
           ...state.filter,
-          narratorIds: exists ? state.filter.narratorIds.filter((item) => item !== narratorId) : [...state.filter.narratorIds, narratorId],
+          narratorIds: exists
+            ? state.filter.narratorIds.filter((item) => item !== narratorId)
+            : [...state.filter.narratorIds, narratorId],
         },
       };
     });
   },
 
-  togglePropertiesPanel: () => set((state) => ({ showPropertiesPanel: !state.showPropertiesPanel })),
+  togglePropertiesPanel: () =>
+    set((state) => ({ showPropertiesPanel: !state.showPropertiesPanel })),
   toggleVariantsPanel: () => set((state) => ({ showVariantsPanel: !state.showVariantsPanel })),
-  setFocusMode: (value) => set({ focusMode: value }),
-  setPinnedPanel: (panel, pinned) => set((state) => ({ pinnedPanels: { ...state.pinnedPanels, [panel]: pinned } })),
+
+  // ==================== التراجع ====================
 
   undo: () => {
     const { past, document } = get();
     if (past.length === 0 || !document) return;
+
     set({
       document: past[past.length - 1],
       past: past.slice(0, -1),
@@ -1389,6 +1198,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   redo: () => {
     const { future, document } = get();
     if (future.length === 0 || !document) return;
+
     set({
       document: future[0],
       future: future.slice(1),
@@ -1401,6 +1211,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   canRedo: () => get().future.length > 0,
 }));
 
+// ==================== دوال داخلية ====================
+
+/** وصف تعديل يُسجَّل في سجل المستند لأغراض التتبع. */
 interface EditDescriptor {
   action: string;
   targetType: import('@/types/tashjeer').DocumentEditTargetType;
@@ -1410,6 +1223,12 @@ interface EditDescriptor {
   changes?: import('@/types/tashjeer').DocumentEditChange[];
 }
 
+/**
+ * يطبّق تعديلا على المستند مع تسجيل لقطة تراجع وإعادة توليد الخطوط.
+ *
+ * @param updater دالة تُرجع النسخة الجديدة من المستند
+ * @param edit وصف التعديل لسجل التتبع، اختياري لتعديلات العرض الصرفة
+ */
 function mutate(
   set: (partial: Partial<EditorState>) => void,
   get: () => EditorState,
@@ -1419,8 +1238,12 @@ function mutate(
   const state = get();
   const current = state.document;
   if (!current) return;
+
   const updated = updater(current);
-  const next = withRegeneratedBranches(edit ? withLoggedEdit(updated, edit, current) : updated);
+  const next = withRegeneratedBranches(
+    edit ? withLoggedEdit(updated, edit, current) : updated
+  );
+
   set({
     past: pushHistory(state.past, current),
     future: [],
@@ -1429,7 +1252,12 @@ function mutate(
   });
 }
 
-function withLoggedEdit(next: TashjeerDocument, edit: EditDescriptor, before: TashjeerDocument): TashjeerDocument {
+/** يلحق سطر سجل تعديل بالمستند إن كان التعديل حقيقيا (تغيرت بياناته). */
+function withLoggedEdit(
+  next: TashjeerDocument,
+  edit: EditDescriptor,
+  before: TashjeerDocument
+): TashjeerDocument {
   if (next === before) return next;
   return appendEditLog(
     next,
@@ -1445,15 +1273,23 @@ function withLoggedEdit(next: TashjeerDocument, edit: EditDescriptor, before: Ta
   );
 }
 
+/** يعيد توليد الخطوط مع الحفاظ على التعديلات اليدوية. */
 function withRegeneratedBranches(document: TashjeerDocument): TashjeerDocument {
   return { ...document, branches: computeBranches(document, document.branches) };
 }
 
-function computeBranches(document: TashjeerDocument, existing: TashjeerBranch[]): TashjeerBranch[] {
+/** يحسب خطوط المستند اعتمادا على تخطيط الآية الحالي. */
+function computeBranches(
+  document: TashjeerDocument,
+  existing: TashjeerBranch[]
+): TashjeerBranch[] {
   const words = documentWindowWords(document);
   if (words.length === 0) return existing;
+
   const layout = layoutAyah(document.ayahKey, words, document.layout);
   const engine = readEngineSettings();
+  // القواعد العامة لا تُنسخ إلى كل مستند؛ تُحوّل هنا إلى اختلافات مشتقة
+  // وقت الرسم، فتظل قاعدة واحدة هي مصدر الحقيقة للمصحف كله.
   const effectiveVariants = getEffectiveVariants(document);
   return generateBranches(effectiveVariants, layout, existing, {
     catalog: readTransmissionCatalog(),
@@ -1463,10 +1299,15 @@ function computeBranches(document: TashjeerDocument, existing: TashjeerBranch[])
   });
 }
 
+/**
+ * ترتيب معرّفات أوجه موضع: الترتيب الصريح المحفوظ إن وُجد، وإلا ترتيب
+ * الإدخال. نستثني وجه الأساس لأنه نص المصحف ولا يُرسم له سطر.
+ */
 function orderedAlternativeIds(variant: Variant): string[] {
   const drawable = variant.alternatives.filter((alternative) => !alternative.isBase);
   const explicit = variant.alternativeOrder ?? [];
   const known = new Set(drawable.map((alternative) => alternative.id));
+
   const ordered = explicit.filter((id) => known.has(id));
   for (const alternative of drawable) {
     if (!ordered.includes(alternative.id)) ordered.push(alternative.id);
@@ -1474,12 +1315,10 @@ function orderedAlternativeIds(variant: Variant): string[] {
   return ordered;
 }
 
+/** ترتيب الاختلافات: من آخر الآية إلى أولها، موافقا لقاعدة التشجير. */
 function compareVariants(a: Variant, b: Variant): number {
-  if (typeof a.orderRank === 'number' && typeof b.orderRank === 'number' && a.orderRank !== b.orderRank) {
-    return a.orderRank - b.orderRank;
-  }
-  if (typeof a.orderRank === 'number' && typeof b.orderRank !== 'number') return -1;
-  if (typeof a.orderRank !== 'number' && typeof b.orderRank === 'number') return 1;
+  // ارتكاز التشجير الصحيح هو آخر كلمة في المدى عند السير من آخر الآية.
+  // استخدام startPosition هنا كان يقلب ترتيب اختلاف يمتد على أكثر من كلمة.
   if (a.endPosition !== b.endPosition) return b.endPosition - a.endPosition;
   if (a.startPosition !== b.startPosition) return b.startPosition - a.startPosition;
   return a.title.localeCompare(b.title, 'ar');
@@ -1489,15 +1328,24 @@ function pushHistory(past: TashjeerDocument[], document: TashjeerDocument): Tash
   return [...past, document].slice(-MAX_HISTORY);
 }
 
-function linkTargetTypeOf(kind: import('@/types/tashjeer').TashjeerLinkKind): import('@/types/tashjeer').DocumentEditTargetType {
+/** نوع هدف الرابط في سجل التعديل بحسب نوع العلاقة. */
+function linkTargetTypeOf(
+  kind: import('@/types/tashjeer').TashjeerLinkKind
+): import('@/types/tashjeer').DocumentEditTargetType {
   if (kind === 'FACE_TO_FACE') return 'FACE_LINK';
   if (kind === 'LINE_TO_LINE') return 'LINE_LINK';
   return 'SEGMENT';
 }
 
+/** وصف طرف العلاقة في صياغة عربية مفهومة للسجل والتتبع. */
 function describeEndpoint(endpoint?: import('@/types/tashjeer').LinkEndpoint): string {
   if (!endpoint) return 'غير محدد';
-  const labels: Record<string, string> = { FACE: 'وجه', LINE: 'سطر', SEGMENT: 'جزء', RULE: 'قاعدة' };
+  const labels: Record<string, string> = {
+    FACE: 'وجه',
+    LINE: 'سطر',
+    SEGMENT: 'جزء',
+    RULE: 'قاعدة',
+  };
   return `${labels[endpoint.type] ?? endpoint.type} (${shortenId(endpoint.id)})`;
 }
 
@@ -1505,6 +1353,7 @@ function shortenId(id: string): string {
   return id.length > 40 ? `${id.slice(0, 37)}…` : id;
 }
 
+/** يزيل روابط وجه اختفى اختلافه، فلا تبقى علاقات تشير إلى معدوم. */
 function pruneLinksForVariant(links: TashjeerLink[], variantId: string): TashjeerLink[] {
   return links.filter((link) => {
     if (link.from.type === 'FACE' && link.from.id.startsWith(`${variantId}::`)) return false;
@@ -1523,7 +1372,11 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-export function getOpenAyahInfo(document: TashjeerDocument | null): { surahNumber: number; ayahNumber: number } | null {
+/** أداة مساعدة للواجهة: معرّف السورة والآية من المستند المفتوح. */
+export function getOpenAyahInfo(document: TashjeerDocument | null): {
+  surahNumber: number;
+  ayahNumber: number;
+} | null {
   if (!document) return null;
   return parseAyahKey(document.ayahKey);
 }

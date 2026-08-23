@@ -265,11 +265,7 @@ describe('التصدير والاستيراد', () => {
 
     const result = store.importDocuments(json);
     expect(result.imported).toBe(1);
-    const loaded = store.loadDocument(ayahKey);
-    // v9 يضيف حقولا جديدة (isIndependent, correction...) لكن المحتوى الأساسي يجب أن يبقى
-    expect(loaded?.variants.length).toBe(saved.variants.length);
-    expect(loaded?.variants[0].id).toBe(saved.variants[0].id);
-    expect(loaded?.variants[0].title).toBe(saved.variants[0].title);
+    expect(store.loadDocument(ayahKey)?.variants).toEqual(saved.variants);
   });
 
   it('لا يستبدل الموجود إلا بطلب صريح', async () => {
