@@ -308,3 +308,27 @@ describe('Engine Studio Store', () => {
     });
   });
 });
+
+describe('تصدير إعداد المحرك الحتمي', () => {
+  it('يرتب القواعد ومصفوفة الدمج ترتيبا مستقرا بلا تغيير البروفايل الحي', () => {
+    const state = useEngineStudioStore.getState();
+    state.addMergeMatrixEntry({ a: 'Z', b: 'A', merge: true, priority: 1, reason: 'آخر' });
+    state.addMergeMatrixEntry({ a: 'A', b: 'B', merge: false, priority: 2, reason: 'أول' });
+    const exported = state.exportConfig();
+    const keys = exported.mergeMatrix.map((entry) => `${entry.a}:${entry.b}`);
+    expect(keys).toEqual([...keys].sort());
+    expect(exported.rules.map((rule) => rule.id)).toEqual([...exported.rules.map((rule) => rule.id)].sort());
+  });
+});
+
+describe('تحقق استيراد إعداد المحرك', () => {
+  it('يرفض بنية ناقصة أو معرفات قواعد مكررة', async () => {
+    const { validateEngineConfig } = await import('@/lib/tashjeer/decision/policy');
+    expect(validateEngineConfig({}).valid).toBe(false);
+    const config = useEngineStudioStore.getState().exportConfig();
+    config.rules = [...config.rules, { ...config.rules[0] }];
+    const result = validateEngineConfig(config);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((message) => message.includes('مكرر'))).toBe(true);
+  });
+});

@@ -81,3 +81,27 @@
 - `tests/migrate-v7-v8.test.ts` — الترحيل وحفظ المعرّفات وتعدد الاختلافات.
 - `tests/decision-resolver.test.ts` — حلّ القرار والسياسات ومصفوفة الدمج.
 - `tests/command-log.test.ts` — سجل التراجع الموحّد.
+
+## توافق التصحيح وحتمية الترحيل
+
+`Correction` يحفظ الشكل المعتمد:
+
+```ts
+{ id, targetId, engineResult, editorResult, finalResult, reason, at, source }
+```
+
+وعند قراءة سجل/ملف قديم تقبل الطبقة أيضا `before/after/timestamp/targetType/metadata`
+ثم توحدها دوال `correctionEngineResult` و`correctionEditorResult` و
+`correctionFinalResult`. لا يسمح ذلك بإسقاط اقتراح المحرك A عند حفظ قرار
+المحرر B.
+
+ترحيل المستند نفسه مرتين يعطي المعرفات المشتقة نفسها (`corr-<variantId>` و
+`range-<ayah>-<from>-<to>`) و`exportedAt` المستقر من `meta.updatedAt`. لذلك لا
+ينتج Diff عشوائي من عملية ترحيل فقط.
+
+## قاعدة السياسة المتوافقة
+
+`EngineRule` يقبل الحقول الإلزامية في v8، كما يطبع ملفات التجارب السابقة التي
+تستعمل `enabled` أو `operator` أو `parameters` أو إجراءات قديمة. قبل التنفيذ
+يستعمل Resolver `normalizeEngineRule`؛ وتبقى القواعد غير النشطة خارج النتائج
+مع ظهور سبب تجاهلها في الأثر.

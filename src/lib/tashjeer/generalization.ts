@@ -76,7 +76,7 @@ export interface MultiTypeGeneralizationResult {
  */
 export function createMultiTypeGeneralization(
   input: MultiTypeGeneralization,
-  matchCount: number
+  _matchCount: number
 ): MultiTypeGeneralizationResult {
   const sortedCategories = sortCategoriesByRank(input.categories);
   const rules: GlobalRule[] = [];

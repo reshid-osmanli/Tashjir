@@ -16,7 +16,6 @@ import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-system';
 import {
-  groupDifferencesByLocus,
   computeVariantOccurrenceIndices,
   formatOccurrenceLabel,
 } from '@/lib/tashjeer/multi-difference';
