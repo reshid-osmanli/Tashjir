@@ -4,7 +4,7 @@
 // المبدأ: Display Order ≠ Creation Order ≠ Name Order
 // تغيير الترتيب يتم فقط بتعديل الرقم الصريح، لا بتغيير الاسم أو تاريخ الإنشاء.
 
-import type { Imam, Narrator, Path } from '@/lib/transmissions/catalog';
+import type { ReadingImam, Narrator, TransmissionPath } from '@/types';
 
 // ==================== أنواع البيانات ====================
 
@@ -146,11 +146,11 @@ export function renumberItems<T extends OrderableItem>(items: T[]): ReorderResul
 /**
  * يحول الأئمة إلى عناصر قابلة للترتيب.
  */
-export function imamsToOrderable(imams: Imam[]): OrderableItem[] {
+export function imamsToOrderable(imams: ReadingImam[]): OrderableItem[] {
   return imams.map((imam) => ({
     id: imam.id,
     name: imam.name,
-    displayOrder: imam.displayOrder ?? 999,
+    displayOrder: imam.order,
   }));
 }
 
@@ -161,18 +161,18 @@ export function narratorsToOrderable(narrators: Narrator[]): OrderableItem[] {
   return narrators.map((narrator) => ({
     id: narrator.id,
     name: narrator.name,
-    displayOrder: narrator.displayOrder ?? 999,
+    displayOrder: narrator.order,
   }));
 }
 
 /**
  * يحول الطرق إلى عناصر قابلة للترتيب.
  */
-export function pathsToOrderable(paths: Path[]): OrderableItem[] {
+export function pathsToOrderable(paths: TransmissionPath[]): OrderableItem[] {
   return paths.map((path) => ({
     id: path.id,
-    name: path.name,
-    displayOrder: path.displayOrder ?? 999,
+    name: path.shortName,
+    displayOrder: path.order,
   }));
 }
 

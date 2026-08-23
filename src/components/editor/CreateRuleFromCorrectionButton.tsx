@@ -19,24 +19,32 @@ export function CreateRuleFromCorrectionButton({
 }: CreateRuleFromCorrectionButtonProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const { createCandidateRule, activeProfile } = useEngineStudioStore();
+  const addCandidateRule = useEngineStudioStore((state) => state.addCandidateRule);
+  const getActiveConfig = useEngineStudioStore((state) => state.getActiveConfig);
 
   const handleCreate = async () => {
     setIsCreating(true);
 
     try {
       // إنشاء قاعدة مرشحة من التصحيح.
-      const candidate = createCandidateFromCorrection(correction, activeProfile.config);
+      const candidate = createCandidateFromCorrection(correction, getActiveConfig());
 
-      // حفظ القاعدة المرشحة.
-      createCandidateRule(candidate);
+      // يوحّد المخزن شكل المرشح المعروض في الاستوديو مع مرشح حلقة التعلم.
+      // لا تُفعل القاعدة تلقائيا؛ تبقى بانتظار مراجعة المستخدم.
+      const candidateId = addCandidateRule({
+        pattern: candidate.pattern.description,
+        count: candidate.pattern.count,
+        suggestedCondition: candidate.pattern.suggestedConditions,
+        suggestedAction: candidate.pattern.suggestedAction,
+        reason: `مستخرجة من التصحيح ${correction.id}`,
+      });
 
       // إظهار رسالة النجاح.
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
 
       // استدعاء callback.
-      onCreated?.(candidate.id);
+      onCreated?.(candidateId);
     } catch (error) {
       console.error('Failed to create candidate rule:', error);
     } finally {

@@ -25,6 +25,8 @@ interface EditorToolbarProps {
   onExport: () => void;
   onImport: () => void;
   onShowShortcuts: () => void;
+  /** فتح المعالج الذكي ذي الخطوات السبع (FR-ED-08). */
+  onSmartCreate: () => void;
 }
 
 const TOOLS: Array<{ id: EditorTool; label: string; hint: string; icon: string }> = [
@@ -39,6 +41,7 @@ export function EditorToolbar({
   onExport,
   onImport,
   onShowShortcuts,
+  onSmartCreate,
 }: EditorToolbarProps) {
   const {
     currentTool,
@@ -105,6 +108,14 @@ export function EditorToolbar({
         >
           حروف
         </ToggleButton>
+      </Group>
+
+      <Divider />
+
+      <Group label="الإنشاء">
+        <ToolButton title="المعالج الذكي: إنشاء اختلافات وأوجه وعلاقات دفعة واحدة" onClick={onSmartCreate}>
+          إنشاء ذكي
+        </ToolButton>
       </Group>
 
       <Divider />

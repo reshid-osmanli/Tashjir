@@ -6,13 +6,24 @@
 import { useEngineStudioStore } from '@/stores/engine-studio-store';
 
 export function PrioritySystem() {
-  const { getActiveConfig, reorderPriorityGroups } = useEngineStudioStore();
+  const { getActiveConfig, reorderPriorityGroups, moveRule } = useEngineStudioStore();
   const config = getActiveConfig();
 
   const sortedGroups = [...config.priorityGroups].sort((a, b) => a.order - b.order);
 
-  const getRulesInGroup = (groupId: string) => {
-    return config.rules.filter((r) => r.groupId === groupId);
+  const getRulesInGroup = (groupId: string) =>
+    config.rules
+      .filter((rule) => (rule.groupId ?? 'fallback') === groupId)
+      .sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id));
+
+  const moveGroup = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= sortedGroups.length) return;
+    const next = [...sortedGroups];
+    [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+    if (window.confirm(`تغيير أولوية مجموعة «${sortedGroups[index].label}»؟`)) {
+      reorderPriorityGroups(next.map((group) => group.id));
+    }
   };
 
   return (
@@ -46,6 +57,7 @@ export function PrioritySystem() {
                     <button
                       type="button"
                       disabled={index === 0}
+                      onClick={() => moveGroup(index, 'up')}
                       className="rounded p-1 text-gray-400 hover:bg-gray-100 disabled:opacity-30"
                     >
                       ↑
@@ -53,6 +65,7 @@ export function PrioritySystem() {
                     <button
                       type="button"
                       disabled={index === sortedGroups.length - 1}
+                      onClick={() => moveGroup(index, 'down')}
                       className="rounded p-1 text-gray-400 hover:bg-gray-100 disabled:opacity-30"
                     >
                       ↓
@@ -62,18 +75,16 @@ export function PrioritySystem() {
 
                 {rulesInGroup.length > 0 && (
                   <div className="mt-3 space-y-1">
-                    {rulesInGroup
-                      .sort((a, b) => b.priority - a.priority)
-                      .slice(0, 5)
-                      .map((rule) => (
-                        <div
-                          key={rule.id}
-                          className="flex items-center justify-between rounded bg-gray-50 px-3 py-2 text-sm"
-                        >
-                          <span className="text-gray-700">{rule.name}</span>
+                    {rulesInGroup.slice(0, 5).map((rule, ruleIndex) => (
+                      <div key={rule.id} className="flex items-center justify-between rounded bg-gray-50 px-3 py-2 text-sm">
+                        <span className="text-gray-700">{rule.name}</span>
+                        <div className="flex items-center gap-2">
                           <span className="font-mono text-xs text-gray-500">P{rule.priority}</span>
+                          <button type="button" disabled={ruleIndex === 0} onClick={() => moveRule(rule.id, 'up')} className="rounded px-1 text-xs text-gray-500 hover:bg-white disabled:opacity-30" aria-label="رفع أولوية القاعدة">↑</button>
+                          <button type="button" disabled={ruleIndex === rulesInGroup.length - 1} onClick={() => moveRule(rule.id, 'down')} className="rounded px-1 text-xs text-gray-500 hover:bg-white disabled:opacity-30" aria-label="خفض أولوية القاعدة">↓</button>
                         </div>
-                      ))}
+                      </div>
+                    ))}
                     {rulesInGroup.length > 5 && (
                       <div className="text-xs text-gray-500">
                         +{rulesInGroup.length - 5} قاعدة أخرى

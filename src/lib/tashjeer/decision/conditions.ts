@@ -29,8 +29,11 @@ function asArray(value: unknown): unknown[] {
 /** يقيم شرطا واحدا مقابل السياق. */
 export function evaluateCondition(cond: RuleCondition, ctx: Record<string, unknown>): boolean {
   const actual = readField(ctx, cond.field);
+  // `operator` صيغة قديمة مدعومة عند الاستيراد؛ غياب المعامل لا يطابق
+  // تلقائيا حتى لا تصبح قاعدة ناقصة نافذة بلا قصد.
+  const operator = cond.op ?? cond.operator;
 
-  switch (cond.op) {
+  switch (operator) {
     case 'exists':
       return actual !== undefined && actual !== null;
     case 'equals':
@@ -71,7 +74,9 @@ export function evaluateGroup(group: ConditionGroup, ctx: Record<string, unknown
 }
 
 function evaluateItem(item: RuleCondition | ConditionGroup, ctx: Record<string, unknown>): boolean {
-  if ('field' in item && 'op' in item) return evaluateCondition(item, ctx);
+  if ('field' in item && ('op' in item || 'operator' in item)) {
+    return evaluateCondition(item as RuleCondition, ctx);
+  }
   return evaluateGroup(item as ConditionGroup, ctx);
 }
 

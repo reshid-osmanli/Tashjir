@@ -16,7 +16,9 @@ import { TashjeerCanvas } from '@/components/editor/TashjeerCanvas';
 import { PropertiesPanel } from '@/components/editor/PropertiesPanel';
 import { VariantsPanel } from '@/components/editor/VariantsPanel';
 import { ShortcutsDialog } from '@/components/editor/ShortcutsDialog';
+import { SmartCreateWizard } from '@/components/editor/SmartCreateWizard';
 import { useEditorStore } from '@/stores/editor-store';
+import { useSelectionStore, buildBreadcrumb } from '@/stores/selection-store';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { exportDocument, importDocuments } from '@/lib/storage/document-store';
 import { makeAyahKey, parseAyahKey } from '@/data/quran';
@@ -32,6 +34,7 @@ export default function EditorPage() {
     variantId: null as string | null,
   });
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showSmartCreate, setShowSmartCreate] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [revealedEdge, setRevealedEdge] = useState<'top' | 'start' | 'end' | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -41,6 +44,7 @@ export default function EditorPage() {
     document,
     isDirty,
     selectedVariantId,
+    markedPositions,
     openAyah,
     selectVariant,
     replaceDocument,
@@ -158,6 +162,7 @@ export default function EditorPage() {
             onExport={handleExport}
             onImport={handleImportClick}
             onShowShortcuts={() => setShowShortcuts(true)}
+            onSmartCreate={() => setShowSmartCreate(true)}
           />
           <AyahNavigator ayahKey={ayahKey} onNavigate={openAyah} />
         </div>
@@ -215,6 +220,13 @@ export default function EditorPage() {
       </button>
 
       {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
+      {showSmartCreate && (
+        <SmartCreateWizard
+          initialPositions={markedPositions}
+          onClose={() => setShowSmartCreate(false)}
+        />
+      )}
+      <UnifiedSelectionBridge />
 
       <input
         ref={fileInputRef}
@@ -241,6 +253,57 @@ export default function EditorPage() {
       <span className="hidden" data-replace-document={typeof replaceDocument} />
     </div>
   );
+}
+
+/**
+ * يجسر حالة المحرر القديمة والتحديد الموحد. لا يحتفظ بنفسه بأي حالة؛ ومن ثم
+ * يظل النقر في اللوحة أو قائمة الاختلافات أو التتبع على مصدر حقيقة واحد.
+ */
+function UnifiedSelectionBridge() {
+  const document = useEditorStore((state) => state.document);
+  const selectedWordId = useEditorStore((state) => state.selectedWordId);
+  const selectedVariantId = useEditorStore((state) => state.selectedVariantId);
+  const selectedAlternativeId = useEditorStore((state) => state.selectedAlternativeId);
+  const selectedBranchId = useEditorStore((state) => state.selectedBranchId);
+  const selectWord = useEditorStore((state) => state.selectWord);
+  const selectVariant = useEditorStore((state) => state.selectVariant);
+  const selectAlternative = useEditorStore((state) => state.selectAlternative);
+  const selectLine = useEditorStore((state) => state.selectLine);
+  const current = useSelectionStore((state) => state.current);
+  const selectionSource = useSelectionStore((state) => state.source);
+  const setBreadcrumb = useSelectionStore((state) => state.setBreadcrumb);
+
+  // لوحة أخرى → المحرر، مع تحقق من وجود الكيان في الآية المفتوحة.
+  useEffect(() => {
+    if (!document || !current || selectionSource === 'editor' || selectionSource === 'canvas') return;
+    if ((current.kind === 'DIFFERENCE' || current.kind === 'RULE') && document.variants.some((variant) => variant.id === current.id)) {
+      if (selectedVariantId !== current.id) selectVariant(current.id);
+    } else if (current.kind === 'FACE' && current.differenceId) {
+      const owner = document.variants.find((variant) => variant.id === current.differenceId);
+      if (owner?.alternatives.some((face) => face.id === current.id) && (selectedVariantId !== owner.id || selectedAlternativeId !== current.id)) {
+        selectAlternative(owner.id, current.id);
+      }
+    } else if (current.kind === 'LINE' && current.lineId && selectedBranchId !== current.lineId) {
+      selectLine(current.lineId, current.differenceId, current.position);
+    } else if (current.kind === 'WORD') {
+      const wordId = Number(current.id);
+      if (Number.isFinite(wordId) && selectedWordId !== wordId) selectWord(wordId);
+    }
+  }, [current, document, selectAlternative, selectLine, selectVariant, selectWord, selectedAlternativeId, selectedBranchId, selectedVariantId, selectedWordId, selectionSource]);
+
+  useEffect(() => {
+    if (!current || !document) {
+      setBreadcrumb([]);
+      return;
+    }
+    const labels: Record<string, string> = {
+      ...Object.fromEntries(document.variants.map((variant) => [variant.id, variant.title])),
+      ...Object.fromEntries(document.branches.map((branch) => [branch.id, branch.label])),
+    };
+    setBreadcrumb(buildBreadcrumb(current, labels));
+  }, [current, document, setBreadcrumb]);
+
+  return null;
 }
 
 function StatusBar({
