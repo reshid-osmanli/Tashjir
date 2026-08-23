@@ -189,3 +189,24 @@ npm run db:seed
 ```
 
 لا يحتاج أي مكوّن في المحرر إلى تعديل.
+
+---
+
+## 7. النموذج الموحّد v8 والترحيل (PH0 — DM-01..18، DM-18)
+
+المرحلة PH0 أضافت نموذجًا موحّدًا في `src/lib/tashjeer/model/v8.ts` يوسّع النموذج
+القائم (انظر `docs/SCHEMA.md` للتفصيل الكامل). أبرز الإضافات:
+
+- **`Difference`** ككيان مستقل كامل (كان `Variant`) مع `locus` موحّد، `occurrenceIndex`
+  لتعدد الاختلافات في الموضع نفسه (DM-09)، `context` (وقف/وصل، DM-06)، و`relations`.
+- **`Variant` (الوجه)** ككيان مستقل بـ`id` و`rank` صريح (DM-02).
+- **`Relation`** تشير إلى معرّفات فقط بستة أنواع (DM-03).
+- **`WaqfMark`** بأربعة أنواع تشمل `FORBIDDEN_WASL` (DM-07).
+- **`Correction`** تحقّق الثلاثية Engine/Editor/Final (DM-05).
+- **`EngineConfig` / `EngineRule`** لطبقة السياسة (DM-14، FR-ES-02).
+
+### الترحيل v7 → v8
+
+`src/lib/tashjeer/migration/migrate-v7-v8.ts` يحوّل `TashjeerDocument` القديم إلى
+النموذج الموحّد دون تعديل الأصل، ويُولّد نسخة احتياطية (`migrateWithBackup`) قبل
+الترحيل (NFR-04). كل معرّف يُحفظ (P-03)، ولا تُفقد بيانات (P-13).
