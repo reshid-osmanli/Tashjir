@@ -401,6 +401,26 @@ export type GlobalRulePattern = GlobalCharacterPattern | GlobalMorphologyPattern
  */
 export type RecitationMode = 'ALWAYS' | 'WAQF_ONLY' | 'WASL_ONLY';
 
+/** تفصيل إضافي لسياق الوقف والوصل والوقف والابتداء. */
+export interface WaqfContext {
+  /** سياق الأداء: وقفا فقط، وصلا فقط، أو دائما. */
+  mode: RecitationMode;
+  /** هل يمنع الوصل بعد هذا الموضع علميا؟ */
+  forbidsWasl?: boolean;
+  /** هل يتطلب وقفا قبله أو بعده؟ */
+  requiresWaqf?: boolean;
+  /** ملاحظة المحقق حول الوقف. */
+  note?: string;
+}
+
+/** مصدر الاختلاف ونتيجة التصحيح النهائية. */
+export interface CorrectionRecord {
+  engine?: string;
+  editor?: string;
+  final: string;
+  engineSnapshotId?: string;
+}
+
 /** اختلاف قرائي مستقل في موضع محدد من الآية. */
 export interface Variant {
   id: string;
@@ -432,6 +452,8 @@ export interface Variant {
   alternatives: VariantAlternative[];
   /** شرط الأداء؛ غيابه يعني أن الاختلاف صالح في الوقف والوصل. */
   recitationMode?: RecitationMode;
+  /** سياق الوقف والابتداء المفصل. */
+  waqfContext?: WaqfContext;
   /**
    * لقطة اقتراح المحرك قبل أي تصحيح يدوي. لا تُستبدل عند التحرير، وبذلك
    * يظل Engine + Editor + Final قابلا للمقارنة في ملف JSON المرجعي.
@@ -459,6 +481,16 @@ export interface Variant {
    * المحرر (EDITOR). أساس نظام التتبع: ماذا وجد المحرك وماذا أضاف المحرر.
    */
   origin?: EditOrigin;
+  /** مصدر مفصل ونتيجة التصحيح النهائية. */
+  source?: EditOrigin;
+  modifiedBy?: EditOrigin;
+  correction?: CorrectionRecord;
+  /** معرّف مجموعة الإنشاء الجماعي: اختلافات أنشئت معا لكنها مستقلة. */
+  batchGroupId?: string;
+  /** هل هذا اختلاف مستقل حتى لو نفس القارئ ونفس الكلمة؟ */
+  isIndependent?: boolean;
+  /** نوع الاختلاف الفرعي: مد، صلة، فرش، تحقيق... */
+  subType?: string;
   /**
    * رتبة الموضع في ترتيب المرور، يحددها المحقق يدويا لهذه الآية.
    * الأصغر يُعالج أولا فيأخذ السطر الأعلى. غيابه يعني اعتماد قاعدة المحرك.

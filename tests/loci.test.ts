@@ -124,7 +124,7 @@ describe('تنافي أوجه الموضع الواحد المسجّلة اخت�
           scope: { kind: 'NARRATORS', narratorIds: ['narrator-warsh'] },
         },
       ],
-      { category: 'MADUD' }
+      { category: 'MADUD', isIndependent: false } as any
     );
     const tawassut = variant(
       'tawassut',
@@ -141,7 +141,7 @@ describe('تنافي أوجه الموضع الواحد المسجّلة اخت�
           scope: { kind: 'NARRATORS', narratorIds: ['narrator-warsh'] },
         },
       ],
-      { category: 'MADUD' }
+      { category: 'MADUD', isIndependent: false } as any
     );
 
     expect(exclusiveLocusKey(qasr)).toBe(exclusiveLocusKey(tawassut));
