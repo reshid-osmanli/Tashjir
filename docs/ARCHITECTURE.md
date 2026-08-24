@@ -337,3 +337,21 @@ Engine Studio، ويُحلّ عبر مكوّن واحد:
 تعديل الرتبة، علامات الوقف، والتجاوزات المحلية. العمليات الدفعية تُتراجع **وحدة
 واحدة** (`transaction`)، ويدعم القفز إلى أي عمق (`jumpTo`) وقوائم اللقطات
 (`snapshotCommand`).
+
+---
+
+## طبقة القرار الحالية (v8)
+
+المرجع التشغيلي للقرارات القابلة للتهيئة هو:
+
+```
+Engine Studio profile → Decision API → Decision Resolver → Engine Core
+```
+
+- `src/lib/tashjeer/decision/resolver.ts` هو المكان الوحيد لحل الأولوية
+  والخصوصية والتعارض والدمج/التنافي.
+- `src/lib/tashjeer/decision/api.ts` يتيح `resolveDifference`, `resolveMerge`,
+  `resolveOrder`, `resolveRelation`, `resolveConnection`, و`resolveVariant`.
+- لا تنفذ الواجهة قرار دمج خاصا بها؛ تستدعي السياسة وتعرض `DecisionTrace`.
+- `engine-studio-store` مخزن Zustand دائم في المتصفح، فيما يبقى محرك القياس
+  والرسم والضرب كودا حتميا في `lib/tashjeer/`.

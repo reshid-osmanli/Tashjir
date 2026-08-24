@@ -20,7 +20,6 @@ import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-system';
 import { documentWindowWords } from '@/lib/tashjeer/reading-window';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
-import { describeScope } from '@/lib/tashjeer/scope';
 import type { VariantCategory } from '@/types';
 import {
   createInitialWizardState,
@@ -73,6 +72,7 @@ export function SmartCreateWizard({ onClose, initialPositions = [] }: SmartCreat
     useEditorStore();
   const catalog = useTransmissionCatalog();
 
+  const [confirmCreate, setConfirmCreate] = useState(false);
   const [state, setState] = useState<WizardState>(() => {
     const initial = createInitialWizardState();
     if (initialPositions.length > 0) {
@@ -313,14 +313,31 @@ export function SmartCreateWizard({ onClose, initialPositions = [] }: SmartCreat
           ) : (
             <button
               type="button"
-              onClick={handleExecute}
+              onClick={() => setConfirmCreate(true)}
               className="rounded-lg bg-emerald-600 px-6 py-2 text-sm font-medium text-white hover:bg-emerald-700"
             >
-              ✓ إنشاء ({toArabicDigits(summary.totalEntitiesToCreate)} كيانات)
+              ✓ مراجعة الإنشاء ({toArabicDigits(summary.totalEntitiesToCreate)} كيانات)
             </button>
           )}
         </div>
       </div>
+
+      {confirmCreate && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="تأكيد إنشاء الاختلافات">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl">
+            <h3 className="text-base font-bold text-gray-900">تأكيد الإنشاء</h3>
+            <p className="mt-2 text-sm leading-relaxed text-gray-600">
+              سيُنشأ {toArabicDigits(summary.totalEntitiesToCreate)} اختلافات مستقلة
+              {summary.relationsCount > 0 ? ` و${toArabicDigits(summary.relationsCount)} علاقات` : ''}.
+              ستُوسم العناصر كدفعة واحدة ويمكن التراجع عنها من سجل المحرر.
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button type="button" onClick={handleExecute} className="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">تأكيد الإنشاء</button>
+              <button type="button" onClick={() => setConfirmCreate(false)} className="flex-1 rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300">إلغاء</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

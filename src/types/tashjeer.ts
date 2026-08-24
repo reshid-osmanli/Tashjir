@@ -127,6 +127,8 @@ export interface VariantAlternative {
    * آخر، فلا يصح حصر الترجيح في رقم واحد للوجه كله.
    */
   strengthByNarrator?: ReaderStrengthMap;
+  /** رتبة عرض صريحة داخل الاختلاف (v8/DM-04). */
+  rank?: number;
 }
 
 /** خريطة درجة القوة لكل راوٍ: معرّف الراوي ← معرّف الدرجة. */
@@ -469,6 +471,8 @@ export interface Variant {
    * وما لم يرد يأتي بعده بقاعدة المحرك. هذا هو «التحكم في كل موضع».
    */
   alternativeOrder?: string[];
+  /** معرّف الدفعة عند الإنشاء الجماعي؛ للتتبع والتراجع فقط (P-05). */
+  createBatchId?: string;
 }
 
 // ==================== التخطيط البصري ====================
@@ -853,6 +857,11 @@ export interface TashjeerDocument {
    * فيصبح الفرق بين نتيجة المحرك والنتيجة النهائية قابلا للمراجعة.
    */
   editLog?: DocumentEditEntry[];
+  /**
+   * ثلاثية تصحيحات v8 (Engine/Editor/Final). تبقى اختيارية لتوافق مستندات
+   * v7، وتُستنتج من اللقطة القديمة عند غيابها.
+   */
+  corrections?: import('@/lib/tashjeer/model/v8').Correction[];
   /** وصل الآية بالتالية، والمقطع المشجَّر وحده. */
   readingWindow?: ReadingWindowSettings;
   meta: DocumentMeta;

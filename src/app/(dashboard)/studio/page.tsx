@@ -6,7 +6,9 @@
 // بيئة رسومية لتعليم المحرك: الأولويات، متى يُدمج ومتى لا يُدمج، سياسات
 // القرار، القواعد، واختبارها — دون العودة إلى الكود أو تحرير JSON يدويًا.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useEngineStudioStore } from '@/stores/engine-studio-store';
+import { useSelectionStore } from '@/stores/selection-store';
 import { RuleExplorer } from '@/components/studio/RuleExplorer';
 import { RuleBuilder } from '@/components/studio/RuleBuilder';
 import { MergeMatrix } from '@/components/studio/MergeMatrix';
@@ -33,6 +35,26 @@ const tabs: { id: StudioTab; label: string; icon: string; description: string }[
 export default function StudioPage() {
   const [activeTab, setActiveTab] = useState<StudioTab>('rules');
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
+  const activeProfile = useEngineStudioStore((state) =>
+    state.profiles.find((profile) => profile.id === state.activeProfileId)
+  );
+  const selectUnified = useSelectionStore((state) => state.select);
+
+  // الربط الثنائي: /editor?… → /studio?rule=<id> يفتح القاعدة نفسها مباشرة.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ruleId = params.get('rule') ?? params.get('ruleId');
+    if (ruleId) {
+      setActiveTab('rules');
+      setSelectedRuleId(ruleId);
+      selectUnified({ kind: 'RULE', id: ruleId }, 'studio');
+    }
+  }, [selectUnified]);
+
+  const handleSelectRule = (ruleId: string) => {
+    setSelectedRuleId(ruleId || null);
+    if (ruleId) selectUnified({ kind: 'RULE', id: ruleId }, 'studio');
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -48,7 +70,7 @@ export default function StudioPage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
-                البروفايل النشط: الافتراضي
+                البروفايل النشط: {activeProfile?.name ?? 'الافتراضي'}
               </span>
             </div>
           </div>
@@ -89,7 +111,7 @@ export default function StudioPage() {
             <div className="space-y-6">
               <RuleExplorer
                 selectedRuleId={selectedRuleId}
-                onSelectRule={setSelectedRuleId}
+                onSelectRule={handleSelectRule}
               />
               {selectedRuleId && (
                 <RuleBuilder

@@ -10,29 +10,37 @@
 //   - Git-friendly: ترتيب مستقر، معرّفات صريحة (DM-13)
 
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import type {
   EngineConfig,
   EngineRule,
   PriorityGroup,
   MergeMatrixEntry,
   ConflictPolicyStep,
-  RuleCondition,
   ConditionGroup,
   RuleAction,
   EngineRuleCategory,
-  EngineRuleScope,
-  RuleHardness,
   RuleStatus,
-  SpecificityLevel,
   TestCase,
   EntityId,
 } from '@/lib/tashjeer/model/v8';
-import { createEntityId } from '@/lib/tashjeer/model/v8';
+import { createEntityId, normalizeEngineRule } from '@/lib/tashjeer/model/v8';
 import {
   createDefaultEngineConfig,
+  canonicalizeEngineConfig,
   DEFAULT_SYSTEM_PROFILE,
-  type DecisionContext,
 } from '@/lib/tashjeer/decision/policy';
+
+/** تخزين آمن في SSR؛ يستبدل بـlocalStorage تلقائيا في المتصفح. */
+const engineStudioFallbackStorage = {
+  getItem: (_name: string) => null,
+  setItem: (_name: string, _value: string) => undefined,
+  removeItem: (_name: string) => undefined,
+};
+
+const engineStudioStorage = createJSONStorage(() =>
+  typeof window === 'undefined' ? engineStudioFallbackStorage : window.localStorage
+);
 
 /** بروفايل محرك متاح للمقارنة (FR-ES-11). */
 export interface EngineProfile {
@@ -134,7 +142,7 @@ interface EngineStudioState {
   importProfile: (profileId: string, config: EngineConfig) => void;
 
   // ---------- القواعد المرشحة ----------
-  addCandidateRule: (candidate: Omit<CandidateRule, 'id' | 'createdAt' | 'status'>) => void;
+  addCandidateRule: (candidate: Omit<CandidateRule, 'id' | 'createdAt' | 'status'>) => string;
   approveCandidateRule: (candidateId: string) => void;
   rejectCandidateRule: (candidateId: string) => void;
   createRuleFromCandidate: (candidateId: string) => string | null;
@@ -146,7 +154,7 @@ interface EngineStudioState {
   getRulesByStatus: (status: RuleStatus) => EngineRule[];
 }
 
-export const useEngineStudioStore = create<EngineStudioState>((set, get) => {
+export const useEngineStudioStore = create<EngineStudioState>()(persist((set, get) => {
   const defaultProfile: EngineProfile = {
     id: 'profile-default',
     name: 'الافتراضي',
@@ -278,13 +286,13 @@ export const useEngineStudioStore = create<EngineStudioState>((set, get) => {
 
     createRule: (rule) => {
       const id = createEntityId('er');
-      const newRule: EngineRule = {
+      const newRule = normalizeEngineRule({
         ...rule,
         id,
         version: 1,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      };
+      });
       set((state) => ({
         profiles: state.profiles.map((p) =>
           p.isActive
@@ -327,7 +335,12 @@ export const useEngineStudioStore = create<EngineStudioState>((set, get) => {
                     ...p.config,
                     rules: p.config.rules.map((r) =>
                       r.id === ruleId
-                        ? { ...r, ...patch, version: r.version + 1, updatedAt: new Date().toISOString() }
+                        ? normalizeEngineRule({
+                            ...r,
+                            ...patch,
+                            version: (r.version ?? 0) + 1,
+                            updatedAt: new Date().toISOString(),
+                          })
                         : r
                     ),
                   },
@@ -427,22 +440,35 @@ export const useEngineStudioStore = create<EngineStudioState>((set, get) => {
     },
 
     moveRule: (ruleId, direction) => {
-      set((state) => ({
-        profiles: state.profiles.map((p) => {
-          if (!p.isActive) return p;
-          const rules = [...p.config.rules];
-          const index = rules.findIndex((r) => r.id === ruleId);
-          if (index === -1) return p;
-          const targetIndex = direction === 'up' ? index - 1 : index + 1;
-          if (targetIndex < 0 || targetIndex >= rules.length) return p;
-          [rules[index], rules[targetIndex]] = [rules[targetIndex], rules[index]];
-          return {
-            ...p,
-            config: { ...p.config, rules },
-            updatedAt: new Date().toISOString(),
-          };
-        }),
-      }));
+      set((state) => {
+        const activeProfile = state.profiles.find((profile) => profile.isActive);
+        const source = activeProfile?.config.rules.find((rule) => rule.id === ruleId);
+        if (!source) return state;
+        const groupRules = activeProfile!.config.rules
+          .filter((rule) => (rule.groupId ?? 'fallback') === (source.groupId ?? 'fallback'))
+          .sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id));
+        const index = groupRules.findIndex((rule) => rule.id === ruleId);
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+        if (index < 0 || targetIndex < 0 || targetIndex >= groupRules.length) return state;
+        const target = groupRules[targetIndex];
+        const now = new Date().toISOString();
+        const rules = activeProfile!.config.rules.map((rule) => {
+          if (rule.id === source.id) return normalizeEngineRule({ ...rule, priority: target.priority, version: (rule.version ?? 0) + 1, updatedAt: now });
+          if (rule.id === target.id) return normalizeEngineRule({ ...rule, priority: source.priority, version: (rule.version ?? 0) + 1, updatedAt: now });
+          return rule;
+        });
+        return {
+          profiles: state.profiles.map((profile) => profile.isActive
+            ? { ...profile, config: { ...profile.config, rules }, updatedAt: now }
+            : profile),
+          auditLog: [...state.auditLog, {
+            id: createEntityId('audit'), at: now, action: 'إعادة ترتيب قاعدة', targetType: 'PRIORITY', targetId: ruleId,
+            summary: `نقل أولوية «${source.name}» ${direction === 'up' ? 'إلى أعلى' : 'إلى أسفل'}`,
+            before: { id: source.id, priority: source.priority },
+            after: { id: source.id, priority: target.priority },
+          }],
+        };
+      });
     },
 
     setRulePriority: (ruleId, priority) => {
@@ -673,7 +699,7 @@ export const useEngineStudioStore = create<EngineStudioState>((set, get) => {
 
     exportConfig: () => {
       const activeProfile = get().profiles.find((p) => p.isActive);
-      return activeProfile?.config ?? DEFAULT_SYSTEM_PROFILE;
+      return canonicalizeEngineConfig(activeProfile?.config ?? DEFAULT_SYSTEM_PROFILE);
     },
 
     importConfig: (config) => {
@@ -682,7 +708,7 @@ export const useEngineStudioStore = create<EngineStudioState>((set, get) => {
           p.isActive
             ? {
                 ...p,
-                config: JSON.parse(JSON.stringify(config)),
+                config: canonicalizeEngineConfig(config),
                 updatedAt: new Date().toISOString(),
               }
             : p
@@ -703,7 +729,7 @@ export const useEngineStudioStore = create<EngineStudioState>((set, get) => {
 
     exportProfile: (profileId) => {
       const profile = get().profiles.find((p) => p.id === profileId);
-      return profile?.config ?? DEFAULT_SYSTEM_PROFILE;
+      return canonicalizeEngineConfig(profile?.config ?? DEFAULT_SYSTEM_PROFILE);
     },
 
     importProfile: (profileId, config) => {
@@ -712,7 +738,7 @@ export const useEngineStudioStore = create<EngineStudioState>((set, get) => {
           p.id === profileId
             ? {
                 ...p,
-                config: JSON.parse(JSON.stringify(config)),
+                config: canonicalizeEngineConfig(config),
                 updatedAt: new Date().toISOString(),
               }
             : p
@@ -735,6 +761,7 @@ export const useEngineStudioStore = create<EngineStudioState>((set, get) => {
           },
         ],
       }));
+      return id;
     },
 
     approveCandidateRule: (candidateId) => {
@@ -795,4 +822,8 @@ export const useEngineStudioStore = create<EngineStudioState>((set, get) => {
       return config.rules.filter((r) => r.status === status);
     },
   };
-});
+}, {
+  name: 'tashjeer:engine-studio:v1',
+  storage: engineStudioStorage,
+  version: 1,
+}));

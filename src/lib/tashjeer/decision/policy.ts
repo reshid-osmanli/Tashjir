@@ -15,6 +15,7 @@ import type {
   ConflictPolicyStep,
   SpecificityLevel,
 } from '@/lib/tashjeer/model/v8';
+import { normalizeEngineRule } from '@/lib/tashjeer/model/v8';
 
 /** مجموعات الأولوية الافتراضية (FR-ES-01، ملحق ب). */
 export const DEFAULT_PRIORITY_GROUPS: PriorityGroup[] = [
@@ -177,4 +178,73 @@ export interface DecisionContext {
 /** يبني سياق قرار من حقول مسطّحة. */
 export function makeContext(fields: DecisionContext): DecisionContext {
   return fields;
+}
+
+/**
+ * يطبع ملف المحرك قبل التصدير/الاستيراد. ترتيب القواعد في JSON ليس قرارا
+ * تنفيذيا؛ Resolver يقرأ الأولوية والخصوصية صراحة. لذلك نرتبه بالمعرّف
+ * الثابت لتبقى فروق Git دقيقة، مع حفظ ترتيب التنفيذ بوصفه سياسة دلالية.
+ */
+export function canonicalizeEngineConfig(config: EngineConfig): EngineConfig {
+  return {
+    schemaVersion: 1,
+    profile: config.profile || 'default',
+    priorityGroups: [...(config.priorityGroups ?? [])]
+      .map((group) => ({ ...group }))
+      .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)),
+    rules: [...(config.rules ?? [])]
+      .map((rule) => ({ ...normalizeEngineRule(rule), conditions: structuredClone(rule.conditions), actions: structuredClone(rule.actions) }))
+      .sort((a, b) => a.id.localeCompare(b.id)),
+    conflictPolicy: [...(config.conflictPolicy ?? [])],
+    executionOrder: [...(config.executionOrder ?? [])],
+    mergeMatrix: [...(config.mergeMatrix ?? [])]
+      .map((entry) => ({ ...entry }))
+      .sort((a, b) => a.a.localeCompare(b.a) || a.b.localeCompare(b.b) || b.priority - a.priority || a.reason.localeCompare(b.reason, 'ar')),
+    contexts: {
+      waqf: [...(config.contexts?.waqf ?? [])].sort(),
+      wasl: [...(config.contexts?.wasl ?? [])].sort(),
+      ibtida: [...(config.contexts?.ibtida ?? [])].sort(),
+      forbiddenConnection: [...(config.contexts?.forbiddenConnection ?? [])].sort(),
+    },
+  };
+}
+
+export interface EngineConfigValidation {
+  valid: boolean;
+  errors: string[];
+}
+
+/** تحقق بنيوي محافظ قبل قبول ملف إعداد من المستخدم (FR-ES-14). */
+export function validateEngineConfig(value: unknown): EngineConfigValidation {
+  const errors: string[] = [];
+  if (!value || typeof value !== 'object') return { valid: false, errors: ['الإعداد ليس كائنا JSON.'] };
+  const config = value as Partial<EngineConfig>;
+  if (config.schemaVersion !== 1) errors.push('إصدار مخطط إعداد المحرك غير مدعوم.');
+  if (typeof config.profile !== 'string' || !config.profile.trim()) errors.push('اسم البروفايل مفقود.');
+  if (!Array.isArray(config.priorityGroups)) errors.push('priorityGroups يجب أن تكون قائمة.');
+  if (!Array.isArray(config.rules)) errors.push('rules يجب أن تكون قائمة.');
+  if (!Array.isArray(config.mergeMatrix)) errors.push('mergeMatrix يجب أن تكون قائمة.');
+  if (!Array.isArray(config.conflictPolicy)) errors.push('conflictPolicy يجب أن تكون قائمة.');
+  if (!Array.isArray(config.executionOrder)) errors.push('executionOrder يجب أن تكون قائمة.');
+  if (!config.contexts || typeof config.contexts !== 'object') errors.push('contexts مفقود.');
+
+  if (Array.isArray(config.rules)) {
+    const ids = new Set<string>();
+    for (const [index, rule] of config.rules.entries()) {
+      if (!rule || typeof rule.id !== 'string' || !rule.id.trim()) errors.push(`القاعدة ${index + 1} بلا id صالح.`);
+      else if (ids.has(rule.id)) errors.push(`معرّف قاعدة مكرر: ${rule.id}.`);
+      else ids.add(rule.id);
+      if (!rule || typeof rule.name !== 'string') errors.push(`القاعدة ${index + 1} بلا اسم.`);
+      if (!rule || !Number.isFinite(rule.priority)) errors.push(`أولوية القاعدة ${index + 1} غير صالحة.`);
+      if (!rule || !rule.conditions || !Array.isArray(rule.actions)) errors.push(`بنية القاعدة ${index + 1} ناقصة.`);
+    }
+  }
+  if (Array.isArray(config.mergeMatrix)) {
+    for (const [index, entry] of config.mergeMatrix.entries()) {
+      if (!entry || typeof entry.a !== 'string' || typeof entry.b !== 'string' || typeof entry.merge !== 'boolean' || !Number.isFinite(entry.priority)) {
+        errors.push(`صف الدمج ${index + 1} غير صالح.`);
+      }
+    }
+  }
+  return { valid: errors.length === 0, errors };
 }

@@ -23,7 +23,6 @@ import {
   buildMergeConfirmation,
   initialDragState,
   type DragState,
-  type DropTarget,
 } from '@/lib/tashjeer/drag-drop';
 import {
   calculateBulkDeleteConfirmation,
@@ -99,7 +98,7 @@ export function DragDropLineList({
   // ==================== Drag Handlers ====================
 
   const handleDragStart = useCallback(
-    (e: React.DragEvent, lineId: string, index: number) => {
+    (e: React.DragEvent, lineId: string, _index: number) => {
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', lineId);
       setDragState({
