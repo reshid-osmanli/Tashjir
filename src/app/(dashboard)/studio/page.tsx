@@ -20,8 +20,9 @@ import { WhyTracePlayground } from '@/components/studio/WhyTracePlayground';
 import { ExportImportPanel } from '@/components/studio/ExportImportPanel';
 import { Dashboard } from '@/components/studio/Dashboard';
 import { RuleTestsPanel } from '@/components/studio/RuleTestsPanel';
+import { CandidateRulesPanel } from '@/components/studio/CandidateRulesPanel';
 
-type Section = 'dashboard' | 'rules' | 'merge' | 'priority' | 'why' | 'tests' | 'io';
+type Section = 'dashboard' | 'rules' | 'merge' | 'priority' | 'why' | 'tests' | 'candidates' | 'io';
 
 const SECTIONS: Array<{ id: Section; label: string; hint: string }> = [
   { id: 'dashboard', label: 'لوحة المعلومات', hint: 'نظرة عامة' },
@@ -30,6 +31,7 @@ const SECTIONS: Array<{ id: Section; label: string; hint: string }> = [
   { id: 'priority', label: 'الأولويات والأنابيب', hint: 'FR-ES-01/04/06' },
   { id: 'why', label: 'ساحة لماذا؟', hint: 'FR-ES-09/10' },
   { id: 'tests', label: 'اختبارات القواعد', hint: 'FR-ES-08' },
+  { id: 'candidates', label: 'قاعدة من تصحيح', hint: 'FR-ES-12' },
   { id: 'io', label: 'التصدير والاستيراد', hint: 'FR-ES-14' },
 ];
 
@@ -200,6 +202,15 @@ export default function EngineStudioPage() {
             {section === 'why' && <WhyTracePlayground config={config} />}
 
             {section === 'tests' && <RuleTestsPanel config={config} />}
+
+            {section === 'candidates' && (
+              <CandidateRulesPanel
+                onAdopt={(rule) => {
+                  addRule(rule);
+                  setSection('rules');
+                }}
+              />
+            )}
 
             {section === 'io' && <ExportImportPanel onExport={exportText} onImport={importText} />}
           </div>
