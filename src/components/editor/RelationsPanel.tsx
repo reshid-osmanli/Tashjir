@@ -472,6 +472,52 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
     [hasManualOrder, savedOrder, engineOrder]
   );
 
+  // عرض بترتيب العمل حتى تطابق مؤشرات السحب مواضع العرض الفعلية (FR-ED-04).
+  const lineById = useMemo(() => new Map(classic.lines.map((line) => [line.id, line])), [classic.lines]);
+  const orderedLines = useMemo(
+    () =>
+      workingOrder
+        .map((id) => lineById.get(id))
+        .filter((line): line is ClassicTashjeer['lines'][number] => Boolean(line)),
+    [workingOrder, lineById]
+  );
+
+  // حالة السحب: المعرّف المسحوب، وموضع مؤشر الإدراج.
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+
+  const clearDrag = () => {
+    setDraggingId(null);
+    setDropIndex(null);
+  };
+
+  /** ملخّص موجز للسطر لرسالة التأكيد. */
+  const lineSummary = (id: string): string => {
+    const line = lineById.get(id);
+    return line ? `${line.label}` : id;
+  };
+
+  /** ينفّذ النقل بعد تأكيد كمي (FR-ED-04.2)، ولا يغيّر شيئًا عند الإلغاء. */
+  const commitDrop = (targetIndex: number) => {
+    if (!draggingId) {
+      clearDrag();
+      return;
+    }
+    const fromIndex = workingOrder.indexOf(draggingId);
+    if (fromIndex === -1 || fromIndex === targetIndex || fromIndex === targetIndex - 1) {
+      clearDrag();
+      return;
+    }
+    const before = targetIndex > 0 ? lineSummary(workingOrder[targetIndex - 1]) : null;
+    const after = targetIndex < workingOrder.length ? lineSummary(workingOrder[targetIndex]) : null;
+    const positionHint = before && after ? `بين «${before}» و«${after}»` : before ? `بعد «${before}»` : after ? `قبل «${after}»` : 'في الطرف';
+    const confirmed = window.confirm(`نقل السطر «${lineSummary(draggingId)}» إلى هذا الموضع؟ (${positionHint})`);
+    if (confirmed) {
+      moveLineInOrder(workingOrder, draggingId, targetIndex);
+    }
+    clearDrag();
+  };
+
   const orderForIndex = (lineId: string): number => {
     const index = workingOrder.indexOf(lineId);
     return index === -1 ? engineOrder.indexOf(lineId) + 1 : index + 1;
@@ -503,13 +549,46 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
       </div>
 
       <ol className="max-h-72 space-y-1 overflow-y-auto">
-        {classic.lines.map((line) => {
+        {orderedLines.map((line, index) => {
           const currentOrder = orderForIndex(line.id);
+          const isDragging = draggingId === line.id;
+          const showIndicatorBefore = dropIndex === index;
           return (
-            <li
-              key={line.id}
-              className="flex items-center gap-1.5 rounded border border-stone-100 bg-white px-2 py-1.5"
-            >
+            <li key={line.id}>
+              {showIndicatorBefore && (
+                <div className="mb-0.5 h-0.5 rounded-full bg-emerald-500" aria-hidden />
+              )}
+              <div
+                className={`flex items-center gap-1.5 rounded border bg-white px-2 py-1.5 transition ${
+                  isDragging ? 'border-emerald-400 opacity-50' : 'border-stone-100'
+                }`}
+                draggable
+                onDragStart={(event) => {
+                  setDraggingId(line.id);
+                  event.dataTransfer.effectAllowed = 'move';
+                  event.dataTransfer.setData('text/plain', line.id);
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'move';
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  const before = event.clientY < rect.top + rect.height / 2;
+                  setDropIndex(before ? index : index + 1);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const target = dropIndex ?? index;
+                  commitDrop(target);
+                }}
+                onDragEnd={clearDrag}
+              >
+              <span
+                className="cursor-grab shrink-0 text-stone-300 hover:text-stone-500 active:cursor-grabbing"
+                title="اسحب لإعادة الترتيب (مع تأكيد)"
+                aria-hidden
+              >
+                ⠿
+              </span>
               <span
                 className="h-2 w-2 shrink-0 rounded-full"
                 style={{ backgroundColor: getCategoryColor(line.category) }}
@@ -556,6 +635,7 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
                   {toArabicDigits(line.linkIds?.length ?? 0)} رابطا
                 </span>
               )}
+              </div>
             </li>
           );
         })}
