@@ -21,8 +21,9 @@ import { ExportImportPanel } from '@/components/studio/ExportImportPanel';
 import { Dashboard } from '@/components/studio/Dashboard';
 import { RuleTestsPanel } from '@/components/studio/RuleTestsPanel';
 import { CandidateRulesPanel } from '@/components/studio/CandidateRulesPanel';
+import { ProfileComparePanel } from '@/components/studio/ProfileComparePanel';
 
-type Section = 'dashboard' | 'rules' | 'merge' | 'priority' | 'why' | 'tests' | 'candidates' | 'io';
+type Section = 'dashboard' | 'rules' | 'merge' | 'priority' | 'why' | 'tests' | 'candidates' | 'compare' | 'io';
 
 const SECTIONS: Array<{ id: Section; label: string; hint: string }> = [
   { id: 'dashboard', label: 'لوحة المعلومات', hint: 'نظرة عامة' },
@@ -32,6 +33,7 @@ const SECTIONS: Array<{ id: Section; label: string; hint: string }> = [
   { id: 'why', label: 'ساحة لماذا؟', hint: 'FR-ES-09/10' },
   { id: 'tests', label: 'اختبارات القواعد', hint: 'FR-ES-08' },
   { id: 'candidates', label: 'قاعدة من تصحيح', hint: 'FR-ES-12' },
+  { id: 'compare', label: 'مقارنة الملفات', hint: 'FR-ES-11' },
   { id: 'io', label: 'التصدير والاستيراد', hint: 'FR-ES-14' },
 ];
 
@@ -211,6 +213,8 @@ export default function EngineStudioPage() {
                 }}
               />
             )}
+
+            {section === 'compare' && <ProfileComparePanel config={config} />}
 
             {section === 'io' && <ExportImportPanel onExport={exportText} onImport={importText} />}
           </div>
