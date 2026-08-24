@@ -41,7 +41,7 @@ export interface BulkDeleteConfirmation {
 export function calculateBulkDeleteConfirmation(
   targets: BulkDeleteTarget[],
   links: TashjeerLink[],
-  _variants: Variant[]
+  variants: Variant[]
 ): BulkDeleteConfirmation {
   const summary: Record<BulkTargetKind, number> = {
     DIFFERENCE: 0,

@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { useEngineStudioStore } from '@/stores/engine-studio-store';
+import type { MergeMatrixEntry } from '@/lib/tashjeer/model/v8';
 
 const elementTypes = [
   'MADD', 'TAHQIQ', 'WASL', 'FARSH', 'USUL', 'HAMZ', 'SILA', 'TASHEEL',

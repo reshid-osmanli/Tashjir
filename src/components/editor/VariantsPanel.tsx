@@ -25,7 +25,6 @@ import { findGlobalRuleMatchesInAyah } from '@/lib/quran-logic/global-rule-engin
 import { deletedOccurrenceIds, occurrenceIdFor } from '@/lib/storage/rule-occurrences-store';
 import { useRuleOccurrences } from '@/hooks/useRuleOccurrences';
 import { RuleOccurrenceReview } from './RuleOccurrenceReview';
-import { RulesInDifferencesList } from './RulesInDifferencesList';
 import type { VariantCategory } from '@/types';
 import type { Variant, VariantLocus } from '@/types/tashjeer';
 import { boundsOfLoci, buildLociFromMarks, describeLoci, lociOfVariant } from '@/lib/tashjeer/loci';
@@ -328,15 +327,6 @@ export function VariantsPanel() {
           </ul>
         )}
       </section>
-
-      <div className="border-b border-stone-200 px-4 py-3">
-        <RulesInDifferencesList
-          ayahKey={document.ayahKey}
-          onNavigateToStudio={(ruleId) => {
-            window.location.assign(`/studio?rule=${encodeURIComponent(ruleId)}`);
-          }}
-        />
-      </div>
 
       {/* إنشاء اختلاف من الكلمات المعلّمة */}
       <section className="border-b border-stone-200 bg-stone-50 px-4 py-3">

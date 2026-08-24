@@ -27,12 +27,6 @@ const categoryLabels: Record<EngineRuleCategory, string> = {
   EXCEPTION: 'استثناء',
   OVERRIDE: 'تجاوز',
   VALIDATION: 'تحقق',
-  USUL: 'أصول',
-  FARSH: 'فرش',
-  MADUD: 'مدود',
-  HAMZ: 'همز',
-  TAJWEED: 'تجويد',
-  CORRECTION_BASED: 'تصحيح مرجعي',
 };
 
 const statusLabels: Record<RuleStatus, string> = {
@@ -207,8 +201,8 @@ function RuleItem({ rule, isSelected, onSelect, onDuplicate, onDelete }: RuleIte
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h3 className="font-medium text-gray-900">{rule.name}</h3>
-            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[rule.status ?? (rule.enabled === false ? 'DISABLED' : 'ACTIVE')]}`}>
-              {statusLabels[rule.status ?? (rule.enabled === false ? 'DISABLED' : 'ACTIVE')]}
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[rule.status]}`}>
+              {statusLabels[rule.status]}
             </span>
             {rule.protected && <span className="text-xs text-gray-500">🔒</span>}
           </div>

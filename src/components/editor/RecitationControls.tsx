@@ -741,6 +741,28 @@ export function TashjeerOrderControls() {
   );
 }
 
+function MarkedFocusButton() {
+  const { markedPositions, markedCharacters, setFocusSegment } = useEditorStore();
+  const positions = [
+    ...markedPositions,
+    ...markedCharacters.map((anchor) => anchor.position),
+  ];
+  if (positions.length === 0) return null;
+
+  const startPosition = Math.min(...positions);
+  const endPosition = Math.max(...positions);
+
+  return (
+    <button
+      type="button"
+      onClick={() => setFocusSegment({ startPosition, endPosition })}
+      className="w-full rounded border border-cyan-200 bg-cyan-50 px-2 py-1 text-[10px] text-cyan-900 hover:bg-cyan-100"
+    >
+      تشجير الكلمات المحددة فقط ({toArabicDigits(startPosition)}–{toArabicDigits(endPosition)})
+    </button>
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="border-b border-stone-100 px-4 py-3 last:border-b-0">

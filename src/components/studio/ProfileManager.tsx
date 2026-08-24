@@ -9,10 +9,12 @@ import { useEngineStudioStore } from '@/stores/engine-studio-store';
 export function ProfileManager() {
   const {
     profiles,
+    activeProfileId,
     createProfile,
     duplicateProfile,
     deleteProfile,
     activateProfile,
+    renameProfile,
   } = useEngineStudioStore();
 
   const [showCreate, setShowCreate] = useState(false);

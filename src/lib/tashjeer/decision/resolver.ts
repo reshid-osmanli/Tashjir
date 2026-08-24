@@ -11,7 +11,7 @@ import type {
   MergeMatrixEntry,
   ConflictPolicyStep,
 } from '@/lib/tashjeer/model/v8';
-import { SPECIFICITY_RANK, isEngineRuleActive } from '@/lib/tashjeer/model/v8';
+import { SPECIFICITY_RANK } from '@/lib/tashjeer/model/v8';
 import { evaluateGroup } from './conditions';
 import { DEFAULT_SYSTEM_PROFILE } from './policy';
 import type { DecisionContext } from './policy';
@@ -37,8 +37,8 @@ export interface DecisionResult<T = unknown> {
 export function sortRulesByPrecedence(rules: EngineRule[]): EngineRule[] {
   return [...rules].sort((a, b) => {
     if (a.priority !== b.priority) return b.priority - a.priority;
-    const sa = SPECIFICITY_RANK[a.specificity ?? 'MUSHFAF'] ?? 0;
-    const sb = SPECIFICITY_RANK[b.specificity ?? 'MUSHFAF'] ?? 0;
+    const sa = SPECIFICITY_RANK[a.specificity] ?? 0;
+    const sb = SPECIFICITY_RANK[b.specificity] ?? 0;
     if (sa !== sb) return sb - sa;
     return a.id.localeCompare(b.id, 'ar');
   });
@@ -49,11 +49,9 @@ export function matchRules(
   profile: EngineConfig,
   ctx: DecisionContext
 ): { matched: EngineRule[]; evaluated: Array<{ rule: EngineRule; matched: boolean }> } {
-  const evaluated = (profile.rules ?? []).map((rule) => ({
+  const evaluated = profile.rules.map((rule) => ({
     rule,
-    // لا تعمل المسودة أو القاعدة المعطلة في المحرك الحقيقي. تظل في الأثر
-    // كقاعدة متجاهلة كي يكون Why؟ صادقا.
-    matched: isEngineRuleActive(rule) && evaluateGroup(rule.conditions, ctx),
+    matched: evaluateGroup(rule.conditions, ctx),
   }));
   const matched = sortRulesByPrecedence(evaluated.filter((item) => item.matched).map((item) => item.rule));
   return { matched, evaluated };
@@ -81,9 +79,9 @@ export function resolveConflictPolicy(
       }
     }
     if (step === 'MOST_SPECIFIC') {
-      const topSpecificity = Math.max(...sorted.map((rule) => SPECIFICITY_RANK[rule.specificity ?? 'MUSHFAF'] ?? 0));
+      const topSpecificity = Math.max(...sorted.map((rule) => SPECIFICITY_RANK[rule.specificity] ?? 0));
       const mostSpecific = sorted.filter(
-        (rule) => (SPECIFICITY_RANK[rule.specificity ?? 'MUSHFAF'] ?? 0) === topSpecificity
+        (rule) => (SPECIFICITY_RANK[rule.specificity] ?? 0) === topSpecificity
       );
       if (mostSpecific.length === 1) {
         return { winner: mostSpecific[0], reason: `الأخص (${mostSpecific[0].specificity})` };
@@ -116,13 +114,7 @@ export function resolveMergeDecision(
   options?: { conditionalContext?: 'WAQF_ONLY' | 'WASL_ONLY' }
 ): { merge: boolean; reason: string; priority: number; entry?: MergeMatrixEntry } {
   const key = matrixKey(a, b);
-  const entries = (profile.mergeMatrix ?? []).filter((entry) => {
-    if (matrixKey(entry.a, entry.b) !== key) return false;
-    // المدخل المشروط لا يصلح خارج سياق الوقف/الوصل المعلن. ملفات أقدم لا
-    // تحمل سياقا تبقى متوافقة: conditional وحده يعني أن المستدعي يحدده.
-    if (entry.conditional && !options?.conditionalContext) return false;
-    return true;
-  });
+  const entries = profile.mergeMatrix.filter((entry) => matrixKey(entry.a, entry.b) === key);
 
   if (entries.length === 0) {
     return { merge: false, reason: 'لا مدخل في مصفوفة الدمج — افتراضيًا لا دمج', priority: 0 };
@@ -151,7 +143,7 @@ export function resolveMergeDecision(
     createdAt: 'matrix',
     updatedAt: 'matrix',
   }));
-  const { winner } = resolveConflictPolicy(profile.conflictPolicy ?? [], candidates as unknown as EngineRule[]);
+  const { winner } = resolveConflictPolicy(profile.conflictPolicy, candidates as unknown as EngineRule[]);
   const chosen = entries.find((entry) => entry.priority === winner?.priority) ?? entries[0];
   return { merge: chosen.merge, reason: chosen.reason, priority: chosen.priority, entry: chosen };
 }
@@ -168,19 +160,9 @@ export function decideMerge(
   const trace: DecisionTraceStep[] = [];
   trace.push({ stage: 'INPUT', message: `تقييم الدمج بين ${a} و${b}`, status: 'info' });
 
-  // قواعد الدمج المطابقة من ملف المحرك. العلاقة بين العنصرين غير موجهة،
-  // لذلك نختبر الاتجاهين؛ لا يختلف الحكم بمجرد أن يبدّل المستعمل A وB.
+  // قواعد الدمج المطابقة من ملف المحرك.
   const context: DecisionContext = { differenceType: a, relatedType: b, otherType: b, ...ctx };
-  const reverseContext: DecisionContext = { differenceType: b, relatedType: a, otherType: a, ...ctx };
-  const forward = matchRules(profile, context);
-  const reverse = matchRules(profile, reverseContext);
-  const matchedById = new Map<string, EngineRule>();
-  for (const rule of [...forward.matched, ...reverse.matched]) matchedById.set(rule.id, rule);
-  const matched = sortRulesByPrecedence([...matchedById.values()]);
-  const evaluated = forward.evaluated.map((item) => ({
-    ...item,
-    matched: matchedById.has(item.rule.id),
-  }));
+  const { matched, evaluated } = matchRules(profile, context);
   const mergeRules = matched.filter((rule) => rule.category === 'MERGE' || rule.type === 'MERGE');
 
   for (const item of evaluated) {
@@ -192,53 +174,31 @@ export function decideMerge(
     trace.push({ stage: 'MATCH', ruleId: rule.id, message: `طابقت: ${rule.name}`, status: 'applied', priority: rule.priority });
   }
 
-  // مصفوفة الدمج هي نقطة البدء، ثم قواعد Engine Studio المطابقة هي
-  // التجاوزات القابلة للتفسير عليها.
-  const conditionalContext = ctx?.context === 'WAQF_ONLY' || ctx?.context === 'WASL_ONLY' ? ctx.context : undefined;
-  const matrix = resolveMergeDecision(a, b, profile, { conditionalContext });
+  // مصفوفة الدمج هي المرجع الأساسي.
+  const matrix = resolveMergeDecision(a, b, profile);
   trace.push({
     stage: 'MERGE',
     message: `مصفوفة الدمج: ${matrix.merge ? 'ادمج' : 'لا تدمج'} — ${matrix.reason}`,
-    status: 'info',
+    status: matrix.merge ? 'won' : 'blocked',
     priority: matrix.priority,
   });
 
-  const decisionRules = mergeRules.filter((rule) =>
-    rule.actions.some((action) => action.type === 'PREVENT_MERGE' || action.type === 'MERGE')
-  );
+  // حسم التعارض بين القواعد إن وُجدت نتيجة معاكسة للمصفوفة.
+  const preventRules = mergeRules.filter((rule) => rule.actions.some((action) => action.type === 'PREVENT_MERGE'));
+  const allowRules = mergeRules.filter((rule) => rule.actions.some((action) => action.type === 'MERGE'));
+
   let decision = matrix.merge;
   let reason = matrix.reason;
-  let priority = matrix.priority;
 
-  if (decisionRules.length > 0) {
-    const { winner, reason: why } = resolveConflictPolicy(profile.conflictPolicy ?? [], decisionRules);
-    const blocks = winner?.actions.some((action) => action.type === 'PREVENT_MERGE') ?? false;
-    const allows = winner?.actions.some((action) => action.type === 'MERGE') ?? false;
-    if (blocks || allows) {
-      decision = !blocks;
-      priority = winner?.priority ?? priority;
-      reason = blocks
-        ? `منع الدمج بقاعدة «${winner?.name}»: ${why}`
-        : `سماح الدمج بقاعدة «${winner?.name}»: ${why}`;
-      trace.push({
-        stage: decisionRules.length > 1 ? 'CONFLICT' : 'RULE_OVERRIDE',
-        ruleId: winner?.id,
-        message: reason,
-        status: decision ? 'won' : 'blocked',
-        priority,
-      });
-    }
+  if (preventRules.length > 0 && allowRules.length > 0) {
+    const { winner, reason: why } = resolveConflictPolicy(profile.conflictPolicy, [...preventRules, ...allowRules]);
+    decision = winner?.actions.some((action) => action.type === 'PREVENT_MERGE') ? false : true;
+    reason = `تعارض قواعد الدمج حُسم: ${why}`;
+    trace.push({ stage: 'CONFLICT', message: reason, status: 'won' });
   }
 
-  trace.push({
-    stage: 'FINAL',
-    message: decision ? 'النتيجة النهائية: ادمج' : 'النتيجة النهائية: لا تدمج',
-    status: decision ? 'won' : 'blocked',
-    priority,
-  });
-
   return {
-    decision: { merge: decision, reason, priority },
+    decision: { merge: decision, reason, priority: matrix.priority },
     appliedRules: mergeRules,
     skippedRules: evaluated.filter((item) => !item.matched).map((item) => ({ rule: item.rule, reason: 'غير مطابقة' })),
     trace,

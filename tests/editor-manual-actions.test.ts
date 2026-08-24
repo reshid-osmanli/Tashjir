@@ -201,23 +201,3 @@ describe('إجراءات التصحيح اليدوي', () => {
     expect(document.editLog?.at(-1)?.summary).toContain('إضافة يدوية للاختبار');
   });
 });
-
-  it('يحفظ ثلاثية Engine/Editor/Final عند تصحيح اقتراح المحرك', async () => {
-    const useEditorStore = await loadStore();
-    useEditorStore.getState().openAyah(AYAH_KEY);
-    const source = useEditorStore.getState().document!.variants[0]!;
-    // البذور القديمة قد لا تحمل origin صراحة؛ غيابه يعامل كمقترح محرك
-    // حفاظا على التوافق الخلفي.
-    expect(source.origin).not.toBe('EDITOR');
-
-    useEditorStore.getState().updateVariant(source.id, { title: 'تصحيح المحرر' });
-    const document = useEditorStore.getState().document!;
-    const correction = document.corrections?.at(-1);
-    expect(correction?.targetId).toBe(source.id);
-    expect(correction?.engineResult).toBeTruthy();
-    expect(correction?.editorResult).toMatchObject({ title: 'تصحيح المحرر' });
-    expect(correction?.finalResult).toEqual(correction?.editorResult);
-
-    useEditorStore.getState().undo();
-    expect(useEditorStore.getState().document!.corrections).toHaveLength(0);
-  });

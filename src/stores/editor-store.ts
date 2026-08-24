@@ -15,7 +15,6 @@
 //   مع الحفاظ على الخطوط التي عدّلها المستخدم يدويا (isManual).
 
 import { create } from 'zustand';
-import { useSelectionStore } from '@/stores/selection-store';
 import type { VariantCategory } from '@/types';
 import type {
   ManualTashjeerLine,
@@ -43,7 +42,6 @@ import { readTransmissionCatalog } from '@/lib/transmissions/catalog';
 import { readEngineSettings } from '@/lib/tashjeer/engine-settings';
 import { moveLineToIndex } from '@/lib/tashjeer/manual-links';
 import { setOccurrenceOrderRank } from '@/lib/storage/rule-occurrences-store';
-import { createEntityId, type Correction } from '@/lib/tashjeer/model/v8';
 import {
   appendEditLog,
   createDocument,
@@ -377,66 +375,30 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   updateVariant: (variantId, patch) => {
     mutate(set, get, (document) => {
       const before = document.variants.find((variant) => variant.id === variantId);
-      const now = new Date().toISOString();
-      let edited: Variant | undefined;
-      const variants = document.variants
-        .map((variant) => {
-          if (variant.id !== variantId) return variant;
-          const engineSnapshot =
-            variant.origin !== 'EDITOR' && !variant.engineSnapshot
-              ? {
-                  title: variant.title,
-                  category: variant.category,
-                  alternatives: structuredClone(variant.alternatives),
-                  capturedAt: now,
-                }
-              : variant.engineSnapshot;
-          edited = {
-            ...variant,
-            ...patch,
-            engineSnapshot,
-            editorModifiedAt: variant.origin !== 'EDITOR' ? now : variant.editorModifiedAt,
-          };
-          return edited;
-        })
-        .sort(compareVariants);
-
-      // P-06: لا تستبدل نتيجة المحرك عند تصحيحها. نسجل A وB وFinal=B
-      // في كيان Correction مستقل من نفس المستند، فيظهر فورا في التتبع.
-      const corrections = [...(document.corrections ?? [])];
-      if (before && edited && before.origin !== 'EDITOR') {
-        const engineResult = before.engineSnapshot ?? {
-          title: before.title,
-          category: before.category,
-          alternatives: structuredClone(before.alternatives),
-          capturedAt: now,
-        };
-        const editorResult = {
-          title: edited.title,
-          category: edited.category,
-          alternatives: structuredClone(edited.alternatives),
-        };
-        const correction: Correction = {
-          id: createEntityId('corr'),
-          targetId: variantId,
-          targetType: 'VARIANT',
-          engineResult,
-          editorResult,
-          finalResult: editorResult,
-          reason: `تعديل يدوي: ${Object.keys(patch).join('، ') || 'تصحيح'}`,
-          at: now,
-          source: 'editor',
-          metadata: {
-            category: edited.category,
-            context: edited.recitationMode ?? 'ALWAYS',
-            ayahKey: document.ayahKey,
-          },
-        };
-        corrections.push(correction);
-      }
-
       return withLoggedEdit(
-        { ...document, variants, corrections },
+        {
+          ...document,
+          variants: document.variants
+            .map((variant) => {
+              if (variant.id !== variantId) return variant;
+              const engineSnapshot =
+                variant.origin !== 'EDITOR' && !variant.engineSnapshot
+                  ? {
+                      title: variant.title,
+                      category: variant.category,
+                      alternatives: JSON.parse(JSON.stringify(variant.alternatives)),
+                      capturedAt: new Date().toISOString(),
+                    }
+                  : variant.engineSnapshot;
+              return {
+                ...variant,
+                ...patch,
+                engineSnapshot,
+                editorModifiedAt: variant.origin !== 'EDITOR' ? new Date().toISOString() : variant.editorModifiedAt,
+              };
+            })
+            .sort(compareVariants),
+        },
         {
           action: 'تعديل اختلاف',
           targetType: 'VARIANT',
@@ -1053,51 +1015,61 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setMarkingMode: (mode) => set({ markingMode: mode, markedPositions: [], markedCharacters: [] }),
   selectWord: (wordId) => {
     const word = wordId ? documentWindowWords(get().document).find((item) => item.id === wordId) : undefined;
-    const selection = wordId ? { kind: 'WORD' as const, id: String(wordId), position: word?.position } : null;
-    set({ selection, selectedWordId: wordId, selectedAlternativeId: null });
-    useSelectionStore.getState().select(selection, 'editor');
+    set({
+      selection: wordId ? { kind: 'WORD', id: String(wordId), position: word?.position } : null,
+      selectedWordId: wordId,
+      selectedAlternativeId: null,
+    });
   },
   selectVariant: (variantId) => {
     const currentDocument = get().document;
     const variant = variantId && currentDocument
       ? getEffectiveVariants(currentDocument).find((item) => item.id === variantId)
       : undefined;
-    const selection = variantId
-      ? { kind: (variant?.isGlobalDerived ? 'RULE' : 'DIFFERENCE') as 'RULE' | 'DIFFERENCE', id: variantId, differenceId: variantId, position: variant?.startPosition }
-      : null;
-    set({ selection, selectedVariantId: variantId, selectedAlternativeId: null, selectedBranchId: null });
-    useSelectionStore.getState().select(selection, 'editor');
+    set({
+      selection: variantId
+        ? { kind: variant?.isGlobalDerived ? 'RULE' : 'DIFFERENCE', id: variantId, differenceId: variantId, position: variant?.startPosition }
+        : null,
+      selectedVariantId: variantId,
+      selectedAlternativeId: null,
+      selectedBranchId: null,
+    });
   },
   selectAlternative: (variantId, alternativeId) => {
     const currentDocument = get().document;
     const variant = currentDocument
       ? getEffectiveVariants(currentDocument).find((item) => item.id === variantId)
       : undefined;
-    const selection = { kind: 'FACE' as const, id: alternativeId, differenceId: variantId, faceId: alternativeId, position: variant?.startPosition };
-    set({ selection, selectedVariantId: variantId, selectedAlternativeId: alternativeId, selectedBranchId: null });
-    useSelectionStore.getState().select(selection, 'editor');
+    set({
+      selection: { kind: 'FACE', id: alternativeId, differenceId: variantId, faceId: alternativeId, position: variant?.startPosition },
+      selectedVariantId: variantId,
+      selectedAlternativeId: alternativeId,
+      selectedBranchId: null,
+    });
   },
   selectSegment: (segmentId) => {
     const segment = get().document?.segments?.find((item) => item.id === segmentId);
-    const selection = segmentId ? { kind: 'SEGMENT' as const, id: segmentId, position: segment?.startPosition } : null;
-    set({ selection, selectedVariantId: null, selectedAlternativeId: null, selectedBranchId: null });
-    useSelectionStore.getState().select(selection, 'editor');
+    set({
+      selection: segmentId ? { kind: 'SEGMENT', id: segmentId, position: segment?.startPosition } : null,
+      selectedVariantId: null,
+      selectedAlternativeId: null,
+      selectedBranchId: null,
+    });
   },
-  selectLine: (lineId, differenceId, position) => {
-    const selection = { kind: 'LINE' as const, id: lineId, lineId, differenceId, position };
-    set({ selection, selectedVariantId: differenceId ?? null, selectedAlternativeId: null, selectedBranchId: lineId });
-    useSelectionStore.getState().select(selection, 'editor');
-  },
-  selectBranch: (branchId) => {
-    const selectedVariantId = get().selectedVariantId;
-    const selection = branchId
-      ? { kind: 'LINE' as const, id: branchId, lineId: branchId, differenceId: selectedVariantId ?? undefined }
-      : selectedVariantId
-        ? { kind: 'DIFFERENCE' as const, id: selectedVariantId, differenceId: selectedVariantId }
-        : null;
-    set({ selectedBranchId: branchId, selection });
-    useSelectionStore.getState().select(selection, 'editor');
-  },
+  selectLine: (lineId, differenceId, position) => set({
+    selection: { kind: 'LINE', id: lineId, lineId, differenceId, position },
+    selectedVariantId: differenceId ?? null,
+    selectedAlternativeId: null,
+    selectedBranchId: lineId,
+  }),
+  selectBranch: (branchId) => set((state) => ({
+    selectedBranchId: branchId,
+    selection: branchId
+      ? { kind: 'LINE', id: branchId, lineId: branchId, differenceId: state.selectedVariantId ?? undefined }
+      : state.selectedVariantId
+        ? { kind: 'DIFFERENCE', id: state.selectedVariantId, differenceId: state.selectedVariantId }
+        : null,
+  })),
   copySelection: () => {
     const state = get();
     const selection = state.selection;

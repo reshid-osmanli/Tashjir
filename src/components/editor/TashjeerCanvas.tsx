@@ -13,7 +13,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type WheelEvent } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
-import { useSelectionStore } from '@/stores/selection-store';
 import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
 import {
   CATEGORY_LABELS,
@@ -49,7 +48,6 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
   const [showSymbols, setShowSymbols] = useState(false);
   // الراوي المفتوحة بطاقته بعد النقر على رمزه في طرف السطر.
   const [openReader, setOpenReader] = useState<ClassicReaderChip | null>(null);
-  const selectUnified = useSelectionStore((state) => state.select);
 
   const {
     document,
@@ -203,7 +201,6 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     (box: WordBox) => {
       if (readOnly) {
         selectWord(box.wordId);
-        selectUnified({ kind: 'WORD', id: String(box.wordId), position: box.position }, 'canvas');
         return;
       }
 
@@ -220,12 +217,6 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
         (item) => box.position >= item.startPosition && box.position <= item.endPosition
       );
       selectVariant(variant?.id ?? null);
-      selectUnified(
-        variant
-          ? { kind: variant.isGlobalDerived ? 'RULE' : 'DIFFERENCE', id: variant.id, differenceId: variant.id, position: box.position }
-          : { kind: 'WORD', id: String(box.wordId), position: box.position },
-        'canvas'
-      );
     },
     [
       currentTool,
@@ -235,7 +226,6 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
       selectVariant,
       selectWord,
       selectedWordId,
-      selectUnified,
       toggleMarkedPosition,
     ]
   );
@@ -245,9 +235,8 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
       if (readOnly || currentTool !== 'mark' || markingMode !== 'CHARACTERS') return;
       toggleMarkedCharacter({ position: box.position, characterIndex });
       selectWord(box.wordId);
-      selectUnified({ kind: 'CHARACTER', id: `${box.wordId}:${characterIndex}`, position: box.position }, 'canvas');
     },
-    [currentTool, markingMode, readOnly, selectUnified, selectWord, toggleMarkedCharacter]
+    [currentTool, markingMode, readOnly, selectWord, toggleMarkedCharacter]
   );
 
   const handleLineClick = useCallback(
@@ -256,20 +245,16 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
       if (line.source === 'MANUAL') {
         selectVariant(null);
         selectBranch(null);
-        selectUnified({ kind: 'LINE', id: line.id, lineId: line.id, position: line.startPosition }, 'canvas');
         return;
       }
       const nextVariantId = line.variantId === selectedVariantId ? null : line.variantId;
-      if (nextVariantId) {
-        selectLine(line.id, nextVariantId, line.startPosition);
-        selectUnified({ kind: 'LINE', id: line.id, lineId: line.id, differenceId: nextVariantId, position: line.startPosition }, 'canvas');
-      } else {
+      if (nextVariantId) selectLine(line.id, nextVariantId, line.startPosition);
+      else {
         selectVariant(null);
         selectBranch(null);
-        selectUnified(null, 'canvas');
       }
     },
-    [readOnly, selectBranch, selectLine, selectUnified, selectVariant, selectedVariantId]
+    [readOnly, selectBranch, selectLine, selectVariant, selectedVariantId]
   );
 
   /**
@@ -279,16 +264,11 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
   const handleEntryClick = useCallback(
     (_line: ClassicLine, entry: { variantId: string; alternativeId?: string }) => {
       if (readOnly || !entry.variantId) return;
-      if (entry.alternativeId) {
-        selectAlternative(entry.variantId, entry.alternativeId);
-        selectUnified({ kind: 'FACE', id: entry.alternativeId, faceId: entry.alternativeId, differenceId: entry.variantId }, 'canvas');
-      } else {
-        selectVariant(entry.variantId);
-        selectUnified({ kind: 'DIFFERENCE', id: entry.variantId, differenceId: entry.variantId }, 'canvas');
-      }
+      if (entry.alternativeId) selectAlternative(entry.variantId, entry.alternativeId);
+      else selectVariant(entry.variantId);
       selectBranch(null);
     },
-    [readOnly, selectAlternative, selectBranch, selectUnified, selectVariant]
+    [readOnly, selectAlternative, selectBranch, selectVariant]
   );
 
   // الكلمات المشمولة باختلاف: تُظلَّل تظليلا خفيفا يرشد المحرر.

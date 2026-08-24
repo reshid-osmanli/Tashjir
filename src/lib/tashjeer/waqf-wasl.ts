@@ -11,6 +11,7 @@
 import type {
   Variant,
   RecitationBoundary,
+  RecitationMode,
 } from '@/types/tashjeer';
 import type { RenderRange, WaqfMark } from '@/lib/tashjeer/model/v8';
 import { createEntityId } from '@/lib/tashjeer/model/v8';

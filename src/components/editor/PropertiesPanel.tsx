@@ -22,8 +22,6 @@ import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getImamColor } from '@/lib/tashjeer/color-system';
 import { describeScope, getFullNarratorName, resolveScope } from '@/lib/tashjeer/scope';
 import { StatusBadge } from './VariantsPanel';
-import { SelectionBreadcrumb } from './SelectionBreadcrumb';
-import { SelectionDetailPanel } from './SelectionDetailPanel';
 import {
   ManualLinesControls,
   RecitationControls,
@@ -110,11 +108,6 @@ export function PropertiesPanel() {
           </select>
         </label>
       </Section>
-
-      <div className="border-b border-stone-200 px-3 py-3">
-        <SelectionBreadcrumb />
-        <div className="mt-2"><SelectionDetailPanel /></div>
-      </div>
 
       {/* الإحصاءات */}
       <Section title="إحصاءات الآية">
