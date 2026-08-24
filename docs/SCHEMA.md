@@ -75,9 +75,57 @@
 المنطقية، والمعرّفات صريحة والترتيب حسب الرتب لا الإدراج، ليكون Git diff ذا معنى
 (مثل `Rule A priority: 80 → 100`).
 
+## ملف إعداد المحرك (EngineConfig — DM-14، FR-ES-14)
+
+كتلة مستقلة قابلة للتصدير منفصلة عن مستند الآية، يديرها استوديو المحرك
+(`/studio`). التصدير حتمي: القواعد مرتبة بمعرّفها المستقر (لا بأولويتها)،
+ومصفوفة الدمج مرتبة بمفاتيحها، وبلا طوابع زمنية متقلّبة — فتغيير أولوية قاعدة
+واحدة يغيّر سطرها وحده في Git.
+
+```jsonc
+{
+  "schemaVersion": 1,
+  "profile": "default",
+  "priorityGroups": [ { "id": "merge", "label": "قواعد الدمج", "order": 80 } ],
+  "rules": [
+    {
+      "id": "er-system-merge-farsh-madd",
+      "name": "لا تدمج الفرش مع المد",
+      "type": "MERGE",
+      "category": "MERGE",
+      "scope": "MUSHAF",
+      "conditions": { "all": [
+        { "field": "differenceType", "op": "equals", "value": "FARSH" },
+        { "field": "sameReader", "op": "equals", "value": true }
+      ]},
+      "actions": [ { "type": "PREVENT_MERGE" } ],
+      "priority": 100,
+      "groupId": "merge",
+      "specificity": "MUSHFAF",
+      "hardness": "HARD",
+      "status": "ACTIVE",
+      "version": 1
+    }
+  ],
+  "conflictPolicy": ["MOST_SPECIFIC", "HIGHEST_PRIORITY", "EXPLICIT", "LOCAL", "MANUAL"],
+  "executionOrder": ["NORMALIZE", "CONTEXT", "BLOCKING", "EXCEPTIONS", "STRUCTURAL",
+                     "READER", "DIFFERENCE", "MERGE", "ORDERING", "FALLBACK"],
+  "mergeMatrix": [
+    { "a": "MADD", "b": "TAHQIQ", "merge": true,  "priority": 80,  "reason": "مرتبطان" },
+    { "a": "FARSH","b": "MADD",   "merge": false, "priority": 100, "reason": "مستقلان" }
+  ],
+  "contexts": { "waqf": [], "wasl": [], "ibtida": [], "forbiddenConnection": [] }
+}
+```
+
+التخزين والواجهات النقيّة في `src/lib/tashjeer/engine-config-store.ts`؛
+السياسات الافتراضية في `src/lib/tashjeer/decision/policy.ts`.
+
 ## الاختبارات
 
 - `tests/model-v8.test.ts` — أنواع ومساعدات v8.
 - `tests/migrate-v7-v8.test.ts` — الترحيل وحفظ المعرّفات وتعدد الاختلافات.
 - `tests/decision-resolver.test.ts` — حلّ القرار والسياسات ومصفوفة الدمج.
 - `tests/command-log.test.ts` — سجل التراجع الموحّد.
+- `tests/engine-config-store.test.ts` — طبقة سياسات المحرك: الحتمية والصداقة
+  لـ Git (DM-13)، الفحص والاستيراد وكشف التعارض، والجولة الكاملة.

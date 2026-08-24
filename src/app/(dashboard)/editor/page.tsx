@@ -15,6 +15,7 @@ import { AyahNavigator } from '@/components/editor/AyahNavigator';
 import { TashjeerCanvas } from '@/components/editor/TashjeerCanvas';
 import { PropertiesPanel } from '@/components/editor/PropertiesPanel';
 import { VariantsPanel } from '@/components/editor/VariantsPanel';
+import { SelectionBreadcrumb } from '@/components/editor/SelectionBreadcrumb';
 import { ShortcutsDialog } from '@/components/editor/ShortcutsDialog';
 import { useEditorStore } from '@/stores/editor-store';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -173,8 +174,11 @@ export default function EditorPage() {
           </div>
         )}
 
-        <main className="min-w-0 flex-1">
-          <TashjeerCanvas fontSize={fontSize} />
+        <main className="flex min-w-0 flex-1 flex-col">
+          <SelectionBreadcrumb />
+          <div className="min-h-0 flex-1">
+            <TashjeerCanvas fontSize={fontSize} />
+          </div>
         </main>
 
         {showVariantsPanel && (!focusMode || revealedEdge === 'end') && (

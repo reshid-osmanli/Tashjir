@@ -131,6 +131,10 @@ interface EditorState {
     patch: Partial<VariantAlternative>
   ) => void;
   deleteAlternative: (variantId: string, alternativeId: string) => void;
+  /** يحذف عدة أوجه من اختلاف واحد دفعة واحدة (قابلة للتراجع كخطوة واحدة). */
+  deleteAlternativesBulk: (variantId: string, alternativeIds: string[]) => void;
+  /** يحذف عدة اختلافات دفعة واحدة (قابلة للتراجع كخطوة واحدة). */
+  deleteVariantsBulk: (variantIds: string[]) => void;
   /** يثبّت رتبة الموضع في ترتيب المرور، أو يزيلها بتمرير null. */
   setVariantOrderRank: (variantId: string, rank: number | null) => void;
   /**
@@ -511,6 +515,79 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         };
       }),
       branches: document.branches.filter((branch) => branch.alternativeId !== alternativeId),
+    }));
+  },
+
+  deleteAlternativesBulk: (variantId, alternativeIds) => {
+    if (alternativeIds.length === 0) return;
+    const doomed = new Set(alternativeIds);
+    mutate(
+      set,
+      get,
+      (document) => {
+        const owner = document.variants.find((variant) => variant.id === variantId);
+        return withLoggedEdit(
+          {
+            ...document,
+            variants: document.variants.map((variant) =>
+              variant.id === variantId
+                ? { ...variant, alternatives: variant.alternatives.filter((alt) => !doomed.has(alt.id)) }
+                : variant
+            ),
+            branches: document.branches.filter((branch) => !doomed.has(branch.alternativeId)),
+          },
+          {
+            action: 'حذف جماعي للأوجه',
+            targetType: 'ALTERNATIVE',
+            targetId: alternativeIds.join(','),
+            category: owner?.category,
+            summary: `حذف المحرر ${alternativeIds.length} وجهًا دفعة واحدة`,
+          },
+          document
+        );
+      },
+    );
+    set((state) => ({
+      selectedAlternativeId: state.selectedAlternativeId && doomed.has(state.selectedAlternativeId)
+        ? null
+        : state.selectedAlternativeId,
+    }));
+  },
+
+  deleteVariantsBulk: (variantIds) => {
+    if (variantIds.length === 0) return;
+    const doomed = new Set(variantIds);
+    mutate(
+      set,
+      get,
+      (document) => {
+        const removed = document.variants.filter((variant) => doomed.has(variant.id));
+        const links = variantIds.reduce(
+          (current, id) => pruneLinksForVariant(current, id),
+          document.links ?? []
+        );
+        return withLoggedEdit(
+          {
+            ...document,
+            variants: document.variants.filter((variant) => !doomed.has(variant.id)),
+            branches: document.branches.filter((branch) => !doomed.has(branch.variantId)),
+            links,
+          },
+          {
+            action: 'حذف جماعي للاختلافات',
+            targetType: 'VARIANT',
+            targetId: variantIds.join(','),
+            category: removed[0]?.category,
+            summary: `حذف المحرر ${variantIds.length} اختلافًا دفعة واحدة`,
+          },
+          document
+        );
+      },
+    );
+    set((state) => ({
+      selection: state.selectedVariantId && doomed.has(state.selectedVariantId) ? null : state.selection,
+      selectedVariantId: state.selectedVariantId && doomed.has(state.selectedVariantId) ? null : state.selectedVariantId,
+      selectedAlternativeId: state.selectedVariantId && doomed.has(state.selectedVariantId) ? null : state.selectedAlternativeId,
     }));
   },
 
