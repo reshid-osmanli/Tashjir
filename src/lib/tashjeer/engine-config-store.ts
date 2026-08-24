@@ -459,4 +459,5 @@ export {
   DEFAULT_CONFLICT_POLICY,
   DEFAULT_EXECUTION_ORDER,
   DEFAULT_MERGE_MATRIX,
+  createDefaultEngineConfig,
 };
