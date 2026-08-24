@@ -8,6 +8,7 @@
 
 import { useMemo } from 'react';
 import type { EngineConfig, RuleStatus } from '@/lib/tashjeer/model/v8';
+import { auditProfile } from '@/lib/tashjeer/decision/profile-audit';
 import { STATUS_LABELS } from './labels';
 
 interface DashboardProps {
@@ -31,14 +32,38 @@ export function Dashboard({ config }: DashboardProps) {
     };
   }, [config]);
 
+  const audit = useMemo(() => auditProfile(config), [config]);
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard label="إجمالي القواعد" value={stats.total} tone="emerald" />
         <StatCard label="قواعد مفعّلة" value={stats.active} tone="emerald" />
         <StatCard label="صفوف مصفوفة الدمج" value={stats.mergeEntries} tone="blue" />
-        <StatCard label="مجموعات الأولوية" value={stats.groups} tone="amber" />
+        <StatCard label="مشكلات في الفحص" value={audit.issueCount} tone={audit.issueCount > 0 ? 'amber' : 'emerald'} />
       </div>
+
+      {audit.issueCount > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+          <h3 className="font-bold text-amber-900">فحص الملف</h3>
+          <ul className="mt-2 space-y-1.5 text-sm text-amber-800">
+            {audit.priorityCollisions.length > 0 && (
+              <li>
+                تصادم أولويات: {audit.priorityCollisions.length} مجموعة فيها قواعد تتساوى بالأولوية داخل المجموعة.
+              </li>
+            )}
+            {audit.catchAllRules.length > 0 && (
+              <li>قواعد شاملة بلا شروط: {audit.catchAllRules.length} (تطابق كل سياق).</li>
+            )}
+            {audit.mergeConflicts.length > 0 && (
+              <li>
+                تعارض أفعال دمج: {audit.mergeConflicts.length} (قاعدة تسمح وأخرى تمنع على نفس النوع) — راجعها في سلم
+                حل التعارض.
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
 
       <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <h3 className="mb-4 font-bold text-gray-900">توزيع القواعد حسب الحالة</h3>
