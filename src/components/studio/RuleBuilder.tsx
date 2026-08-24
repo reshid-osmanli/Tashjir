@@ -7,8 +7,9 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type {
+  EngineConfig,
   EngineRule,
   EngineRuleCategory,
   EngineRuleScope,
@@ -36,6 +37,7 @@ import {
   DIFFERENCE_TYPE_LABELS,
 } from './labels';
 import { WAQF_WASL_TEMPLATES, type RuleTemplate } from './templates';
+import { previewRuleEdit, summarizePreview } from '@/lib/tashjeer/decision/rule-edit-preview';
 
 const RULE_TYPES = Object.keys(RULE_TYPE_LABELS) as EngineRule['type'][];
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as EngineRuleCategory[];
@@ -113,11 +115,12 @@ function ruleToDraft(rule: EngineRule | null): {
 interface RuleBuilderProps {
   rule: EngineRule | null;
   groups: Array<{ id: string; label: string }>;
+  profile?: EngineConfig;
   onSave: (rule: EngineRule | Omit<EngineRule, 'createdAt' | 'updatedAt' | 'version'>) => void;
   onCancel: () => void;
 }
 
-export function RuleBuilder({ rule, groups, onSave, onCancel }: RuleBuilderProps) {
+export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBuilderProps) {
   const [draft, setDraft] = useState(() => ruleToDraft(rule));
 
   useEffect(() => {
@@ -165,11 +168,11 @@ export function RuleBuilder({ rule, groups, onSave, onCancel }: RuleBuilderProps
   const removeTestCase = (index: number) =>
     setDraft((current) => ({ ...current, testCases: current.testCases.filter((_, idx) => idx !== index) }));
 
-  const handleSave = () => {
-    const trimmedName = draft.name.trim() || 'قاعدة بلا عنوان';
-    const payload = {
-      ...(draft.id ? { id: draft.id } : { id: createEntityId('er') }),
-      name: trimmedName,
+  const assembleRule = (): EngineRule => {
+    const now = new Date().toISOString();
+    return {
+      id: draft.id ?? createEntityId('er'),
+      name: draft.name.trim() || 'قاعدة بلا عنوان',
       type: draft.type,
       category: draft.category,
       scope: draft.scope,
@@ -182,9 +185,22 @@ export function RuleBuilder({ rule, groups, onSave, onCancel }: RuleBuilderProps
       status: draft.status,
       protected: draft.protected,
       testCases: draft.testCases.length > 0 ? draft.testCases : undefined,
+      version: rule?.version ?? 1,
+      createdAt: rule?.createdAt ?? now,
+      updatedAt: now,
     };
-    onSave(payload as EngineRule);
   };
+
+  const handleSave = () => {
+    onSave(assembleRule());
+  };
+
+  // معاينة أثر التعديل قبل الحفظ (FR-ES-09.4): فقط عند تحرير قاعدة موجودة.
+  const preview = useMemo(() => {
+    if (!rule || !profile) return null;
+    return previewRuleEdit(profile, rule, assembleRule());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, rule, profile]);
 
   return (
     <div className="space-y-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -383,6 +399,30 @@ export function RuleBuilder({ rule, groups, onSave, onCancel }: RuleBuilderProps
           حفظ القاعدة
         </button>
       </div>
+
+      {/* معاينة أثر التعديل قبل الحفظ (FR-ES-09.4) */}
+      {preview && (
+        <div
+          className={`rounded-lg border px-4 py-3 text-sm ${
+            preview.introducesRegression
+              ? 'border-red-200 bg-red-50 text-red-700'
+              : preview.flipped.length > 0
+                ? 'border-amber-200 bg-amber-50 text-amber-700'
+                : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+          }`}
+        >
+          <p className="font-medium">معاينة الأثر: {summarizePreview(preview)}</p>
+          {preview.flipped.length > 0 && (
+            <ul className="mt-1.5 space-y-0.5 text-xs">
+              {preview.flipped.map((flipped) => (
+                <li key={flipped.name}>
+                  «{flipped.name}»: {flipped.before} ← {flipped.after}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }

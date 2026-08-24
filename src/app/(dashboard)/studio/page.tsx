@@ -162,6 +162,7 @@ export default function EngineStudioPage() {
                     <RuleBuilder
                       rule={builderRule}
                       groups={config.priorityGroups}
+                      profile={config}
                       onSave={handleSaveRule}
                       onCancel={() => {
                         setCreatingNew(false);
