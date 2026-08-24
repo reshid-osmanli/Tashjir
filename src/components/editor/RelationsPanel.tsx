@@ -462,6 +462,7 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
   const setLineOrder = useEditorStore((state) => state.setLineOrder);
   const moveLineInOrder = useEditorStore((state) => state.moveLineInOrder);
   const resetLineOrder = useEditorStore((state) => state.resetLineOrder);
+  const addLink = useEditorStore((state) => state.addLink);
 
   // الترتيب الجاري: ما حفظه المستند إن وجد، مكمَّلا بأسطر المحرك الحالية.
   const savedOrder = document?.lineOrder;
@@ -485,10 +486,13 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
   // حالة السحب: المعرّف المسحوب، وموضع مؤشر الإدراج.
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  // سحب الدمج: مقبض مخصص يُسحب فوق سطر آخر لدمجهما (FR-ED-05).
+  const [mergeDragId, setMergeDragId] = useState<string | null>(null);
 
   const clearDrag = () => {
     setDraggingId(null);
     setDropIndex(null);
+    setMergeDragId(null);
   };
 
   /** ملخّص موجز للسطر لرسالة التأكيد. */
@@ -516,6 +520,23 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
       moveLineInOrder(workingOrder, draggingId, targetIndex);
     }
     clearDrag();
+  };
+
+  /** ينفّذ دمج سطرين بعد تأكيد، فوق نموذج البيانات الموحّد (Relation: MERGE) — FR-ED-05. */
+  const commitMerge = (toId: string) => {
+    const fromId = mergeDragId;
+    clearDrag();
+    if (!fromId || fromId === toId) return;
+    const confirmed = window.confirm(`دمج السطر «${lineSummary(fromId)}» مع السطر «${lineSummary(toId)}»؟`);
+    if (confirmed) {
+      addLink({
+        kind: 'LINE_TO_LINE',
+        relation: 'MERGE',
+        from: { type: 'LINE', id: fromId },
+        to: { type: 'LINE', id: toId },
+        notes: 'دمج بالسحب من المحرر',
+      });
+    }
   };
 
   const orderForIndex = (lineId: string): number => {
@@ -552,7 +573,8 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
         {orderedLines.map((line, index) => {
           const currentOrder = orderForIndex(line.id);
           const isDragging = draggingId === line.id;
-          const showIndicatorBefore = dropIndex === index;
+          const isMergeTarget = Boolean(mergeDragId) && mergeDragId !== line.id;
+          const showIndicatorBefore = dropIndex === index && !mergeDragId;
           return (
             <li key={line.id}>
               {showIndicatorBefore && (
@@ -560,7 +582,11 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
               )}
               <div
                 className={`flex items-center gap-1.5 rounded border bg-white px-2 py-1.5 transition ${
-                  isDragging ? 'border-emerald-400 opacity-50' : 'border-stone-100'
+                  isMergeTarget
+                    ? 'border-violet-400 bg-violet-50'
+                    : isDragging
+                      ? 'border-emerald-400 opacity-50'
+                      : 'border-stone-100'
                 }`}
                 draggable
                 onDragStart={(event) => {
@@ -570,15 +596,19 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
                 }}
                 onDragOver={(event) => {
                   event.preventDefault();
-                  event.dataTransfer.dropEffect = 'move';
+                  event.dataTransfer.dropEffect = mergeDragId ? 'link' : 'move';
+                  if (mergeDragId) return;
                   const rect = event.currentTarget.getBoundingClientRect();
                   const before = event.clientY < rect.top + rect.height / 2;
                   setDropIndex(before ? index : index + 1);
                 }}
                 onDrop={(event) => {
                   event.preventDefault();
-                  const target = dropIndex ?? index;
-                  commitDrop(target);
+                  if (mergeDragId) {
+                    commitMerge(line.id);
+                    return;
+                  }
+                  commitDrop(dropIndex ?? index);
                 }}
                 onDragEnd={clearDrag}
               >
@@ -588,6 +618,22 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
                 aria-hidden
               >
                 ⠿
+              </span>
+              <span
+                className="cursor-grab shrink-0 text-violet-400 hover:text-violet-600 active:cursor-grabbing"
+                title="مقبض الدمج: اسحب فوق سطر آخر لدمجهما (مع تأكيد)"
+                draggable
+                onDragStart={(event) => {
+                  event.stopPropagation();
+                  setMergeDragId(line.id);
+                  setDraggingId(null);
+                  setDropIndex(null);
+                  event.dataTransfer.effectAllowed = 'link';
+                  event.dataTransfer.setData('text/plain', `merge:${line.id}`);
+                }}
+                aria-label={`مقبض دمج السطر ${line.label}`}
+              >
+                ⛓
               </span>
               <span
                 className="h-2 w-2 shrink-0 rounded-full"
