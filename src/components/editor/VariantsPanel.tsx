@@ -42,6 +42,7 @@ export function VariantsPanel() {
     selectVariant,
     selectAlternative,
     deleteVariant,
+    deleteAlternativesBulk,
     updateVariant,
     clearMarks,
     addVariant,
@@ -521,6 +522,16 @@ export function VariantsPanel() {
                     deleteVariant(variant.id);
                   }
                 }}
+                onBulkDeleteFaces={(faceIds) => {
+                  if (faceIds.length === 0) return;
+                  if (
+                    window.confirm(
+                      `حذف ${toArabicDigits(faceIds.length)} وجهًا دفعة واحدة؟ تتوفر خاصية التراجع بعد الحذف.`
+                    )
+                  ) {
+                    deleteAlternativesBulk(variant.id, faceIds);
+                  }
+                }}
               />
             ))}
           </ul>
@@ -637,6 +648,7 @@ function VariantRow({
   onEdit,
   onGeneralize,
   onDelete,
+  onBulkDeleteFaces,
 }: {
   variant: Variant;
   catalog: import('@/lib/transmissions/catalog').TransmissionCatalog;
@@ -650,8 +662,25 @@ function VariantRow({
   /** يحوّل هذا الاختلاف الحرفي إلى قاعدة عامة على المصحف كله. */
   onGeneralize?: () => void;
   onDelete: () => void;
+  /** يحذف الأوجه المحددة دفعة واحدة (FR-ED-07). */
+  onBulkDeleteFaces: (faceIds: string[]) => void;
 }) {
   const drawnAlternatives = variant.alternatives.filter((alternative) => !alternative.isBase);
+  const [checkedFaces, setCheckedFaces] = useState<Set<string>>(new Set());
+
+  // إخلاء التحديد المتعدد عند مغادرة هذا الاختلاف حتى لا تبقى علامات معلَّقة.
+  useEffect(() => {
+    if (!isSelected) setCheckedFaces(new Set());
+  }, [isSelected]);
+
+  const toggleFaceCheck = (faceId: string) => {
+    setCheckedFaces((current) => {
+      const next = new Set(current);
+      if (next.has(faceId)) next.delete(faceId);
+      else next.add(faceId);
+      return next;
+    });
+  };
 
   return (
     <li ref={rowRef} data-difference-id={variant.id} className={isSelected ? 'bg-emerald-50/60 ring-2 ring-inset ring-emerald-500' : ''}>
@@ -722,9 +751,17 @@ function VariantRow({
                     : 'border-stone-200 hover:border-cyan-300'
                 }`}
                 data-face-id={alternative.id}
-                title="انقر لتحديد هذا الوجه؛ يمكن نسخه أو قصه ثم لصقه في اختلاف آخر"
+                title="انقر لتحديد هذا الوجه؛ يمكن نسخه أو قصه ثم لصقه في اختلاف آخر. أو ضع علامة للحذف الجماعي."
               >
                 <div className="flex items-baseline justify-between gap-2">
+                  <input
+                    type="checkbox"
+                    checked={checkedFaces.has(alternative.id)}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={() => toggleFaceCheck(alternative.id)}
+                    className="h-3.5 w-3.5 shrink-0 accent-rose-600"
+                    aria-label={`تحديد الوجه ${alternative.label} للحذف الجماعي`}
+                  />
                   <span
                     className="text-sm text-stone-900"
                     style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }}
@@ -744,6 +781,30 @@ function VariantRow({
               </li>
             ))}
           </ul>
+          {checkedFaces.size > 0 && (
+            <div className="mt-2 flex items-center justify-between gap-2 rounded border border-rose-200 bg-rose-50 px-2 py-1.5 text-[11px] text-rose-800">
+              <span>محدَّد {toArabicDigits(checkedFaces.size)} وجهًا للحذف الجماعي</span>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCheckedFaces(new Set())}
+                  className="rounded border border-rose-300 bg-white px-2 py-0.5 text-rose-700 hover:bg-rose-100"
+                >
+                  إلغاء التحديد
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onBulkDeleteFaces([...checkedFaces]);
+                    setCheckedFaces(new Set());
+                  }}
+                  className="rounded bg-rose-600 px-2 py-0.5 font-medium text-white hover:bg-rose-700"
+                >
+                  حذف المحدد
+                </button>
+              </div>
+            </div>
+          )}
           </>
         )}
 
