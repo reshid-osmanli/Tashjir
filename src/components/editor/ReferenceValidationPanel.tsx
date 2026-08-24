@@ -5,7 +5,7 @@
 
 import { useMemo, useState } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
-import { validateAgainstReference, type ValidationReport, type ValidationItem as ValidationItemData } from '@/lib/tashjeer/learning-loop';
+import { validateAgainstReference, type ValidationReport } from '@/lib/tashjeer/learning-loop';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 
 export function ReferenceValidationPanel() {
@@ -153,7 +153,7 @@ function ValidationStat({ label, value, color, icon }: ValidationStatProps) {
 }
 
 interface ValidationItemProps {
-  item: ValidationItemData;
+  item: any;
 }
 
 function ValidationItem({ item }: ValidationItemProps) {

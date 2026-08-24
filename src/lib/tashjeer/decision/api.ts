@@ -12,8 +12,14 @@ import {
   decideMerge,
   decideMutualExclusion,
   matchRules,
+  resolveMergeDecision,
   type DecisionResult,
 } from './resolver';
+
+/** يبني نتيجة قرار فارغة عند عدم وجود قواعد. */
+function emptyResult<T>(decision: T): DecisionResult<T> {
+  return { decision, appliedRules: [], skippedRules: [], trace: [] };
+}
 
 // ==================== الدمج ====================
 
@@ -175,33 +181,21 @@ export function resolveConnection(
   profile: EngineConfig = DEFAULT_SYSTEM_PROFILE
 ): DecisionResult<{ allowed: boolean; reason: string }> {
   const trace: DecisionResult<{ allowed: boolean; reason: string }>['trace'] = [];
-  const { matched, evaluated } = matchRules(profile, {
-    connection: 'WASL',
-    forbiddenConnection: forbidden,
-    context: 'WASL_ONLY',
-  });
-  const policyBlocks = matched.filter((rule) =>
-    rule.actions.some((action) => action.type === 'BLOCK_RESULT' || action.type === 'PREVENT_MERGE')
-  );
-  const allowed = !forbidden && policyBlocks.length === 0;
-  const reason = forbidden
-    ? 'الوصل ممنوع في هذا الموضع بعلامة صلبة'
-    : policyBlocks.length > 0
-      ? `الوصل محظور بقاعدة: ${policyBlocks.map((rule) => rule.name).join(' + ')}`
-      : 'لا علامة ممنوع وصل ولا قاعدة مانعة';
-
-  for (const item of evaluated) {
-    trace.push({
-      stage: 'MATCH', ruleId: item.rule.id,
-      message: item.matched ? `طابقت: ${item.rule.name}` : `لم تطابق: ${item.rule.name}`,
-      status: item.matched ? 'applied' : 'skipped', priority: item.rule.priority,
-    });
+  const blocked = resolveMergeDecision('FORBIDDEN_WASL', 'WASL', profile);
+  if (forbidden) {
+    trace.push({ stage: 'CONNECTION', message: 'علامة ممنوع الوصل present — الوصل مرفوض', status: 'blocked' });
+    return {
+      decision: { allowed: false, reason: 'الوصل ممنوع في هذا الموضع' },
+      appliedRules: [],
+      skippedRules: [],
+      trace,
+    };
   }
-  trace.push({ stage: 'CONNECTION', message: reason, status: allowed ? 'won' : 'blocked' });
+  trace.push({ stage: 'CONNECTION', message: 'لا مانع — الوصل مسموح', status: 'won' });
   return {
-    decision: { allowed, reason },
-    appliedRules: policyBlocks,
-    skippedRules: evaluated.filter((item) => !item.matched).map((item) => ({ rule: item.rule, reason: 'غير مطابقة أو غير نشطة' })),
+    decision: { allowed: true, reason: 'لا علامة ممنوع وصل' },
+    appliedRules: [],
+    skippedRules: [],
     trace,
   };
 }

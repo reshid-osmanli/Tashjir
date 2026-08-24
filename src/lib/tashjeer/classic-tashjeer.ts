@@ -662,7 +662,7 @@ function normalizeFocusSegment(
 }
 
 /** هل يتقاطع مدى الموضع مع مقطع العمل؟ */
-function _intersectsSegment(
+function intersectsSegment(
   startPosition: number,
   endPosition: number,
   segment: { startPosition: number; endPosition: number }

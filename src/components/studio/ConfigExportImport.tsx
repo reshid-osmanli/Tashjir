@@ -5,8 +5,6 @@
 
 import { useState } from 'react';
 import { useEngineStudioStore } from '@/stores/engine-studio-store';
-import { validateEngineConfig } from '@/lib/tashjeer/decision/policy';
-import type { EngineConfig } from '@/lib/tashjeer/model/v8';
 
 export function ConfigExportImport() {
   const { exportConfig, importConfig, getActiveConfig } = useEngineStudioStore();
@@ -36,13 +34,12 @@ export function ConfigExportImport() {
     setImportError(null);
     setImportSuccess(false);
     try {
-      const parsed: unknown = JSON.parse(importText);
-      const validation = validateEngineConfig(parsed);
-      if (!validation.valid) {
-        setImportError(`ملف غير صالح: ${validation.errors.join(' ')}`);
+      const config = JSON.parse(importText);
+      if (!config.schemaVersion || !config.rules || !config.mergeMatrix) {
+        setImportError('ملف غير صالح: يفتقر إلى الحقول المطلوبة');
         return;
       }
-      importConfig(parsed as EngineConfig);
+      importConfig(config);
       setImportSuccess(true);
       setImportText('');
     } catch (err) {

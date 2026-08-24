@@ -231,31 +231,23 @@ export function executeWizard(state: WizardState): WizardResult {
   const variants: Variant[] = [];
   const relations: Relation[] = [];
 
-  // يحافظ التحديد المتباعد على استقلال المواضع ولا يملأ الفراغ بينها.
-  const positions = [...state.selection.positions].sort((a, b) => a - b);
-  const loci = state.selection.multipleLoci?.length
-    ? state.selection.multipleLoci.map((locus) => ({ startPosition: locus.start, endPosition: locus.end }))
-    : state.selection.range
-      ? [{ startPosition: state.selection.range.start, endPosition: state.selection.range.end }]
-      : positions.map((position) => ({ startPosition: position, endPosition: position }));
-  const startPosition = Math.min(...loci.map((locus) => locus.startPosition));
-  const endPosition = Math.max(...loci.map((locus) => locus.endPosition));
+  // تحديد الموضع.
+  const startPosition = state.selection.range?.start ?? Math.min(...state.selection.positions);
+  const endPosition = state.selection.range?.end ?? Math.max(...state.selection.positions);
 
+  // تحويل النطاق.
   const scope: ReadingScope = {
     kind: state.scope.kind,
     narratorIds: state.scope.narratorIds,
     imamIds: state.scope.imamIds,
     pathIds: state.scope.pathIds,
   };
-  const selectedComponentIds = new Set(
-    state.targets.filter((target) => target.selected).map((target) => target.componentId)
-  );
-  const componentToVariantId = new Map<string, string>();
 
-  // كل مكون مختار كيان مستقل حتى لو تشابه عنوانه مع مكون آخر (P-05).
+  // إنشاء الاختلافات.
   for (const component of state.components) {
-    if (!selectedComponentIds.has(component.id)) continue;
     const variantId = createEntityId('v');
+
+    // إنشاء الأوجه.
     const alternatives: VariantAlternative[] = [
       {
         id: `${variantId}-base`,
@@ -263,54 +255,60 @@ export function executeWizard(state: WizardState): WizardResult {
         label: 'وجه المصحف',
         isBase: true,
         scope,
-        rank: 0,
       },
-      ...component.variants.map((definition) => ({
+      ...component.variants.map((vDef) => ({
         id: createEntityId('face'),
-        text: definition.text,
-        label: definition.label,
+        text: vDef.text,
+        label: vDef.label,
         isBase: false,
         scope,
-        strengthDegreeId: definition.strengthDegreeId,
-        rank: definition.rank,
+        strengthDegreeId: vDef.strengthDegreeId,
+        rank: vDef.rank,
       })),
     ];
 
-    variants.push({
+    const variant: Variant = {
       id: variantId,
-      ayahKey: 0, // يملؤه مخزن المحرر عند الإدراج في المستند النشط.
+      ayahKey: 0, // سيُملأ من المحرر
       category: component.category,
       title: component.title,
       startPosition,
       endPosition,
       targetKind: 'WORDS',
-      loci: loci.length > 1 ? loci : undefined,
       status: 'DRAFT',
       origin: 'EDITOR',
       alternatives,
       orderRank: component.rank,
-      createBatchId: batchId,
       recitationMode: state.context.context === 'ALWAYS' ? undefined : state.context.context,
-    });
-    componentToVariantId.set(component.id, variantId);
+    };
+
+    variants.push(variant);
   }
 
-  // العلاقات تشير إلى المعرّفات، لا إلى عناوين قد تتكرر (DM-03).
-  for (const relationRequest of state.relations) {
-    const fromId = componentToVariantId.get(relationRequest.fromComponentId);
-    const toId = componentToVariantId.get(relationRequest.toComponentId);
-    if (!fromId || !toId) continue;
-    relations.push({
-      id: createEntityId('rel'),
-      type: relationRequest.type,
-      fromId,
-      toId,
-      source: 'editor',
-      createdAt: now,
-    });
+  // إنشاء العلاقات.
+  for (const rel of state.relations) {
+    const fromVariant = variants.find((v) => v.title === state.components.find((c) => c.id === rel.fromComponentId)?.title);
+    const toVariant = variants.find((v) => v.title === state.components.find((c) => c.id === rel.toComponentId)?.title);
+
+    if (fromVariant && toVariant) {
+      const relation: Relation = {
+        id: createEntityId('rel'),
+        type: rel.type,
+        fromId: fromVariant.id,
+        toId: toVariant.id,
+        source: 'editor',
+        createdAt: now,
+      };
+      relations.push(relation);
+    }
   }
 
-  return { variants, relations, generalizationScope: state.generalizationScope, batchId };
+  return {
+    variants,
+    relations,
+    generalizationScope: state.generalizationScope,
+    batchId,
+  };
 }
 
 // ==================== ملخص المعالج ====================
@@ -371,6 +369,6 @@ export function buildWizardSummary(state: WizardState): WizardSummary {
     scopeDescription,
     generalizationDescription,
     contextDescription,
-    totalEntitiesToCreate: selectedTargetsCount,
+    totalEntitiesToCreate: state.components.length,
   };
 }

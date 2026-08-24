@@ -33,7 +33,7 @@ import type {
   Locus,
   EntityId,
 } from '@/lib/tashjeer/model/v8';
-import { linkKindToRelationType } from '@/lib/tashjeer/model/v8';
+import { createEntityId, linkKindToRelationType } from '@/lib/tashjeer/model/v8';
 
 /**
  * مفتاح نطاق للتجميع عند تعدد الاختلافات في الموضع نفسه (DM-09).
@@ -140,7 +140,6 @@ export function migrateVariantToDifference(
     variantOrder: variant.alternativeOrder,
     isGlobalDerived: variant.isGlobalDerived,
     globalRuleId: variant.globalRuleId,
-    createBatchId: variant.createBatchId,
     sourceRef: variant.sourceRef,
     description: variant.description,
     createdAt: variant.id,
@@ -264,39 +263,28 @@ export function migrateDocumentToV8(
     migrateBoundaryToWaqfMark(boundary, document.ayahKey)
   );
 
-  // إن كان المستند قد حفظ تصحيحات v8 نحتفظ بها كما هي. أما لقطات v7
-  // فتتحول إلى ثلاثية كاملة مرة واحدة فقط، فلا يكرر التصدير نفس التصحيح.
-  const corrections: Correction[] = [...(document.corrections ?? [])];
-  const correctionTargets = new Set(corrections.map((correction) => correction.targetId));
+  const corrections: Correction[] = [];
   for (const variant of document.variants) {
-    if (!variant.engineSnapshot || correctionTargets.has(variant.id)) continue;
-    const editorResult = {
-      title: variant.title,
-      category: variant.category,
-      alternatives: variant.alternatives,
-    };
+    if (!variant.engineSnapshot) continue;
     corrections.push({
-      id: `corr-${variant.id}`,
+      id: createEntityId('corr'),
       targetId: variant.id,
-      targetType: 'VARIANT',
       engineResult: variant.engineSnapshot,
-      editorResult,
-      finalResult: editorResult,
-      reason: 'رُحّل من لقطة نتيجة المحرك في ملف v7',
-      at: variant.editorModifiedAt ?? variant.engineSnapshot.capturedAt,
-      source: 'editor',
-      metadata: {
+      editorResult: null,
+      finalResult: {
+        title: variant.title,
         category: variant.category,
-        context: variant.recitationMode ?? 'ALWAYS',
-        ayahKey: document.ayahKey,
+        alternatives: variant.alternatives,
       },
+      at: variant.engineSnapshot.capturedAt,
+      source: 'editor',
     });
   }
 
   const renderRanges: RenderRange[] = [];
   if (document.readingWindow?.focusSegment) {
     renderRanges.push({
-      id: `range-${document.ayahKey}-${document.readingWindow.focusSegment.startPosition}-${document.readingWindow.focusSegment.endPosition}`,
+      id: createEntityId('range'),
       ayahKey: document.ayahKey,
       fromPosition: document.readingWindow.focusSegment.startPosition,
       toPosition: document.readingWindow.focusSegment.endPosition,
@@ -337,7 +325,7 @@ export function migrateDocumentToV8(
   return {
     format: 'tashjeer-export',
     schemaVersion: 8,
-    exportedAt: document.meta?.updatedAt ?? document.meta?.createdAt ?? 'unknown',
+    exportedAt: new Date().toISOString(),
     meta: {
       appVersion: options?.appVersion ?? '0.1.0',
       profile: options?.profile ?? 'default',
@@ -358,8 +346,8 @@ export function migrateDocumentToV8(
       focusSegment: document.readingWindow?.focusSegment ?? null,
     },
     lineOrder: document.lineOrder ?? [],
-    createdAt: document.meta?.createdAt ?? 'unknown',
-    updatedAt: document.meta?.updatedAt ?? document.meta?.createdAt ?? 'unknown',
+    createdAt: document.meta?.createdAt ?? new Date().toISOString(),
+    updatedAt: document.meta?.updatedAt ?? new Date().toISOString(),
   };
 }
 

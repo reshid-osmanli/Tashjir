@@ -99,7 +99,6 @@ export function createDocument(ayahKey: number, author = 'محرر محلي'): T
     links: [],
     segments: [],
     editLog: [],
-    corrections: [],
     readingWindow: { linkNextAyah: false, focusSegment: null },
     meta: {
       createdAt: now,
@@ -402,7 +401,6 @@ function migrateDocument(document: TashjeerDocument): TashjeerDocument {
     links: (Array.isArray(document.links) ? document.links : []).filter(isValidLink),
     segments: (Array.isArray(document.segments) ? document.segments : []).filter(isValidSegment),
     editLog: (Array.isArray(document.editLog) ? document.editLog : []).filter(isValidEditEntry),
-    corrections: Array.isArray(document.corrections) ? document.corrections.filter(isValidCorrection) : [],
     readingWindow: {
       linkNextAyah: document.readingWindow?.linkNextAyah === true,
       focusSegment: normalizeFocusSegmentValue(document.readingWindow?.focusSegment),
@@ -536,12 +534,6 @@ function sanitizeIdList(value: unknown): string[] {
     if (typeof item === 'string' && item.trim() && !seen.has(item)) seen.add(item);
   }
   return [...seen];
-}
-
-function isValidCorrection(value: unknown): value is NonNullable<TashjeerDocument['corrections']>[number] {
-  if (!value || typeof value !== 'object') return false;
-  const correction = value as { id?: unknown; targetId?: unknown };
-  return typeof correction.id === 'string' && typeof correction.targetId === 'string';
 }
 
 function isValidLink(value: unknown): value is TashjeerLink {

@@ -94,14 +94,14 @@ export function RuleBuilder({ ruleId, onClose }: RuleBuilderProps) {
   useEffect(() => {
     if (rule) {
       setName(rule.name);
-      setType(rule.type ?? 'MERGE');
+      setType(rule.type);
       setCategory(rule.category);
-      setScope(rule.scope ?? 'MUSHAF');
+      setScope(rule.scope);
       setPriority(rule.priority);
-      setGroupId(rule.groupId ?? 'fallback');
-      setSpecificity(rule.specificity ?? 'MUSHFAF');
-      setHardness(rule.hardness ?? 'SOFT');
-      setStatus(rule.status ?? (rule.enabled === false ? 'DISABLED' : 'ACTIVE'));
+      setGroupId(rule.groupId);
+      setSpecificity(rule.specificity);
+      setHardness(rule.hardness);
+      setStatus(rule.status);
       setConditions(rule.conditions);
       setActions(rule.actions);
     }
@@ -234,7 +234,7 @@ export function RuleBuilder({ ruleId, onClose }: RuleBuilderProps) {
                 {isEditing ? (
                   <select
                     value={type}
-                    onChange={(e) => setType(e.target.value as NonNullable<EngineRule['type']>)}
+                    onChange={(e) => setType(e.target.value as EngineRule['type'])}
                     className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
                   >
                     <option value="DIFFERENCE">اختلاف</option>
@@ -477,7 +477,7 @@ export function RuleBuilder({ ruleId, onClose }: RuleBuilderProps) {
                         </>
                       ) : (
                         <div className="rounded bg-emerald-50 px-3 py-2 text-sm">
-                          <span className="font-medium">{actionLabels[action.type as RuleActionType] ?? action.type}</span>
+                          <span className="font-medium">{actionLabels[action.type]}</span>
                         </div>
                       )}
                     </div>

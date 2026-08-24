@@ -235,86 +235,22 @@ export interface WaqfMark {
  * التثليث: المحرك يقترح ← المحرر يصحّح ← التصحيح يتحول إلى قاعدة مرشحة.
  * Engine = A (تُحفظ ولا تُحذف)، Editor = B، Final = B (P-06، DM-05).
  */
-/** نوع الكيان الذي استهدفه التصحيح. */
-export type CorrectionTargetType =
-  | 'DIFFERENCE'
-  | 'VARIANT'
-  | 'FACE'
-  | 'LINE'
-  | 'SEGMENT'
-  | 'RULE'
-  | 'RELATION'
-  | 'WAQF_MARK';
-
-/**
- * بيانات السياق التي تسمح بتحويل التصحيحات المتكررة إلى قواعد مرشحة.
- * تبقى اختيارية لأن ملفات v7 لم تكن تسجلها كلها؛ لا يعني غيابها فقدان
- * الثلاثية Engine/Editor/Final.
- */
-export interface CorrectionMetadata {
-  category?: string;
-  context?: RecitationContext;
-  readerIds?: string[];
-  narratorIds?: string[];
-  pathIds?: string[];
-  ayahKey?: number;
-  locus?: Locus;
-  [key: string]: unknown;
-}
-
-/**
- * التثليث: المحرك يقترح ← المحرر يصحّح ← التصحيح يتحول إلى قاعدة مرشحة.
- *
- * حقول v8 (`engineResult`/`editorResult`/`finalResult`/`at`) هي الشكل
- * المعتمد عند الحفظ. الحقول القديمة (`before`/`after`/`timestamp`) تُقرأ
- * فقط لتوافق ملفات وسجلات v7 ولتحويلها بأمان أثناء الاستيراد. لذلك جعلت
- * الحقول الأساسية اختيارية على مستوى TypeScript، ثم تُطبّع عند الحفظ؛ فلا
- * يتعذر فتح ملف قديم ولا تضيع النتيجة الأصلية للمحرك (P-06، DM-05).
- */
 export interface Correction {
   id: EntityId;
   /** معرّف الكيان المصحَّح (Difference أو Variant أو Line). */
   targetId: EntityId;
   /** نتيجة المحرك الأصلية (A). */
-  engineResult?: unknown;
+  engineResult: unknown;
   /** قرار المحرر (B). */
-  editorResult?: unknown;
+  editorResult: unknown;
   /** النتيجة النهائية (= B). */
-  finalResult?: unknown;
+  finalResult: unknown;
   /** سبب التصحيح. */
   reason?: string;
-  /** هل وُلّدت منه قاعدة مرشحة؟ */
+  /** هل وُلّدت fromه قاعدة مرشحة؟ */
   promotedToRuleId?: EntityId;
-  /** وقت قرار v8. */
-  at?: string;
-  source?: 'engine' | 'editor';
-
-  // توافق v7 / سجل التحرير السابق. لا تكتبها منشئات v8 الجديدة.
-  timestamp?: string;
-  targetType?: CorrectionTargetType;
-  before?: unknown;
-  after?: unknown;
-  metadata?: CorrectionMetadata;
-}
-
-/** يعيد نتيجة المحرك سواء كان التصحيح v8 أو سجلا قديما. */
-export function correctionEngineResult(correction: Correction): unknown {
-  return correction.engineResult ?? correction.before;
-}
-
-/** يعيد قرار المحرر سواء كان التصحيح v8 أو سجلا قديما. */
-export function correctionEditorResult(correction: Correction): unknown {
-  return correction.editorResult ?? correction.after;
-}
-
-/** يعيد النتيجة النهائية؛ قرار المحرر يتقدم دائما على اقتراح المحرك. */
-export function correctionFinalResult(correction: Correction): unknown {
-  return correction.finalResult ?? correctionEditorResult(correction) ?? correctionEngineResult(correction);
-}
-
-/** يعيد طابع التصحيح في الصيغتين. */
-export function correctionTimestamp(correction: Correction): string | undefined {
-  return correction.at ?? correction.timestamp;
+  at: string;
+  source: 'editor';
 }
 
 // ==================== القاعدة العامة (GlobalRule) ====================
@@ -415,12 +351,7 @@ export interface RenderRange {
 
 // ==================== القاعدة السياساتية (EngineRule) ====================
 
-/** فئات قواعد Engine Studio (FR-ES-16).
- *
- * أضفنا فئات البيانات القديمة (`USUL`… إلخ) و`CORRECTION_BASED` للتوافق
- * مع ملفات التجارب السابقة. تبقى الفئات الأولى هي فئات السياسة المعتمدة؛
- * المترحل يحول القديمة إلى أقرب فئة سياسة عند الاعتماد.
- */
+/** فئات قواعد Engine Studio (FR-ES-16). */
 export type EngineRuleCategory =
   | 'DETECTION'
   | 'DIFFERENCE'
@@ -435,9 +366,7 @@ export type EngineRuleCategory =
   | 'IBTIDA'
   | 'EXCEPTION'
   | 'OVERRIDE'
-  | 'VALIDATION'
-  | VariantCategory
-  | 'CORRECTION_BASED';
+  | 'VALIDATION';
 
 /** نطاق تطبيق القاعدة. */
 export type EngineRuleScope = 'CHARACTER' | 'WORD' | 'RANGE' | 'AYAH' | 'SURAH' | 'MUSHAF';
@@ -445,22 +374,10 @@ export type EngineRuleScope = 'CHARACTER' | 'WORD' | 'RANGE' | 'AYAH' | 'SURAH' 
 /** صلابة القاعدة (FR-ES-01). */
 export type RuleHardness = 'HARD' | 'SOFT';
 
-/** معاملات المقارنة المسموح بها في منشئ الشروط. */
-export type RuleConditionOperator =
-  | 'equals'
-  | 'not-equals'
-  | 'in'
-  | 'not-in'
-  | 'matches-pattern'
-  | 'exists';
-
-/** بنية شرط بلا كود (FR-ES-03).
- * `operator` اسم قديم مدعوم عند الاستيراد؛ `op` هو المفتاح المتسق في v8.
- */
+/** بنية شرط بلا كود (FR-ES-03). */
 export interface RuleCondition {
   field: string;
-  op?: RuleConditionOperator;
-  operator?: RuleConditionOperator;
+  op: 'equals' | 'not-equals' | 'in' | 'not-in' | 'matches-pattern' | 'exists';
   value?: unknown;
 }
 
@@ -487,19 +404,9 @@ export type RuleActionType =
   | 'ASSIGN_CONTEXT'
   | 'GENERATE_CORRECTION';
 
-/** أسماء إجراءات أقدم؛ تُقرأ ولا تنشئها واجهة v8 الجديدة. */
-export type LegacyRuleActionType =
-  | 'OVERRIDE_VARIANT'
-  | 'MODIFY_VARIANT'
-  | 'MERGE_VARIANTS'
-  | 'SKIP_VARIANT';
-
 export interface RuleAction {
-  type: RuleActionType | LegacyRuleActionType;
-  /** مفتاح v8 المعتمد. */
+  type: RuleActionType;
   params?: Record<string, unknown>;
-  /** توافق مع ملفات الاختبارات/التجارب السابقة. */
-  parameters?: Record<string, unknown>;
 }
 
 /** حالة تنفيذ القاعدة في ملف التصدير (Git-friendly — DM-13). */
@@ -513,42 +420,24 @@ export interface TestCase {
  * قاعدة سياسة في Engine Studio: شرط ← إجراء، بأولوية وخصوصية وحالة وإصدار
  * (FR-ES-02). لا يكتب المستخدم شروطا برمجية أبدا (FR-ES-02).
  */
-export type EngineRuleType = 'DIFFERENCE' | 'ORDERING' | 'MERGE' | 'RELATION' | 'CONTEXT' | 'EXCEPTION';
-
-/** بيانات وصفية قابلة للتوسع بلا منطق قرار مخفي. */
-export interface EngineRuleMetadata {
-  surahNumber?: number;
-  ayahKeys?: number[];
-  sourceCorrectionId?: EntityId;
-  patternId?: EntityId;
-  correctionCount?: number;
-  [key: string]: unknown;
-}
-
 export interface EngineRule {
   id: EntityId;
   name: string;
-  /** غياب الحقول الموروثة يعامل كقيمة افتراضية عند التطبيع. */
-  type?: EngineRuleType;
+  type: 'DIFFERENCE' | 'ORDERING' | 'MERGE' | 'RELATION' | 'CONTEXT' | 'EXCEPTION';
   category: EngineRuleCategory;
-  scope?: EngineRuleScope;
+  scope: EngineRuleScope;
   conditions: ConditionGroup;
   actions: RuleAction[];
   /** أولوية رقمية صريحة (FR-ES-01). الأعلى أقوى. */
   priority: number;
   /** معرّف مجموعة الأولوية. */
-  groupId?: string;
+  groupId: string;
   /** مستوى الخصوصية (FR-ES-06): MUSHAF→SURAH→AYAH→SEGMENT→WORD→CHARACTER. */
-  specificity?: SpecificityLevel;
-  hardness?: RuleHardness;
-  status?: RuleStatus;
-  version?: number;
+  specificity: SpecificityLevel;
+  hardness: RuleHardness;
+  status: RuleStatus;
+  version: number;
   protected?: boolean;
-  description?: string;
-  /** حقل توافقي؛ status=DISABLED يتقدم عليه في v8. */
-  enabled?: boolean;
-  source?: 'SYSTEM' | 'EDITOR' | 'CORRECTION' | 'CORRECTION_PATTERN' | 'IMPORT';
-  metadata?: EngineRuleMetadata;
   /** معرّفات القواعد المعتمدة عليها/المتعارضة معها (FR-ES-07). */
   dependsOn?: EntityId[];
   overrides?: EntityId[];
@@ -556,27 +445,6 @@ export interface EngineRule {
   testCases?: TestCase[];
   createdAt: string;
   updatedAt: string;
-}
-
-/** القاعدة النشطة لا تكون معطلة صراحة ولا في حالة تعطيل/إهمال. */
-export function isEngineRuleActive(rule: EngineRule): boolean {
-  if (rule.enabled === false) return false;
-  return rule.status === undefined || rule.status === 'ACTIVE' || rule.status === 'EXPERIMENTAL';
-}
-
-/** تطبيع قيم القاعدة القديمة إلى خيارات v8 الحتمية دون تعديل الأصل. */
-export function normalizeEngineRule(rule: EngineRule): EngineRule {
-  return {
-    ...rule,
-    type: rule.type ?? 'EXCEPTION',
-    scope: rule.scope ?? 'MUSHAF',
-    groupId: rule.groupId ?? 'fallback',
-    specificity: rule.specificity ?? 'MUSHFAF',
-    hardness: rule.hardness ?? 'SOFT',
-    status: rule.status ?? (rule.enabled === false ? 'DISABLED' : 'ACTIVE'),
-    version: rule.version ?? 1,
-    enabled: rule.enabled ?? rule.status !== 'DISABLED',
-  };
 }
 
 /** سلّم الخصوصية (FR-ES-06). */

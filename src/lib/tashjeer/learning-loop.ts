@@ -7,20 +7,10 @@
 //   ← Rule تُختبر وتُعتمد ← Engine يُعاد تشغيله ← مقارنة النتائج
 //   ← Reference Data تتحسن
 
-import type {
-  Correction,
-  EngineRule,
-  EngineConfig,
-  ConditionGroup,
-  RuleAction,
-  RuleCondition,
-} from '@/lib/tashjeer/model/v8';
+import type { Correction, EngineRule } from '@/lib/tashjeer/model/v8';
 import type { Variant } from '@/types/tashjeer';
-import {
-  createEntityId,
-  correctionEngineResult,
-  correctionEditorResult,
-} from '@/lib/tashjeer/model/v8';
+import type { EngineConfig, ConditionGroup, RuleAction } from '@/lib/tashjeer/model/v8';
+import { createEntityId } from '@/lib/tashjeer/model/v8';
 
 // ==================== أنواع البيانات ====================
 
@@ -73,11 +63,6 @@ export interface CorrectionPattern {
 }
 
 /** قاعدة مرشحة من التصحيحات. */
-/** إدخال مرن لقاعدة مرشحة مستوردة من سجل قديم. */
-export type CorrectionPatternInput = Omit<CorrectionPattern, 'suggestedAction'> & {
-  suggestedAction: RuleAction | { type: string; params?: Record<string, unknown>; parameters?: Record<string, unknown> };
-};
-
 export interface CandidateRule {
   id: string;
   pattern: CorrectionPattern;
@@ -259,136 +244,147 @@ export function discoverCorrectionPatterns(corrections: Correction[]): Correctio
  * يبني مفتاح تجميع للتصحيح.
  */
 function buildCorrectionKey(correction: Correction): string {
-  const metadata = correction.metadata;
-  const parts = [
-    `target:${correction.targetType ?? 'DIFFERENCE'}`,
-    `category:${metadata?.category ?? 'unknown'}`,
-    `context:${metadata?.context ?? 'ALWAYS'}`,
-  ];
-  const readers = metadata?.readerIds;
-  if (readers && readers.length > 0) {
-    // لا نرتب مصفوفة المستند الأصلية in-place؛ السجل جزء من بيانات المرجع.
-    parts.push(`readers:${[...readers].sort().join(',')}`);
+  const parts: string[] = [];
+
+  if (correction.targetType === 'VARIANT') {
+    parts.push(`category:${correction.metadata?.category || 'unknown'}`);
+    parts.push(`context:${correction.metadata?.context || 'ALWAYS'}`);
+    if (correction.metadata?.readerIds?.length) {
+      parts.push(`readers:${correction.metadata.readerIds.sort().join(',')}`);
+    }
   }
+
   return parts.join('|');
-}
-
-/** يحول إجراء استيراد قديم إلى الشكل الذي يفهمه Resolver. */
-function normalizeSuggestedAction(action: CorrectionPatternInput['suggestedAction']): RuleAction {
-  const legacyAliases: Record<string, RuleAction['type']> = {
-    OVERRIDE_VARIANT: 'OVERRIDE_RESULT',
-    MODIFY_VARIANT: 'OVERRIDE_RESULT',
-    MERGE_VARIANTS: 'MERGE',
-    SKIP_VARIANT: 'BLOCK_RESULT',
-  };
-  return {
-    type: legacyAliases[action.type] ?? action.type as RuleAction['type'],
-    params: action.params ?? action.parameters,
-  };
-}
-
-function titleOf(value: unknown): string | undefined {
-  if (value && typeof value === 'object' && 'title' in value) {
-    const title = (value as Record<string, unknown>).title;
-    return typeof title === 'string' ? title : undefined;
-  }
-  return typeof value === 'string' ? value : undefined;
 }
 
 /**
  * يبني نمطًا من مجموعة تصحيحات.
  */
-function buildPatternFromGroup(_key: string, corrections: Correction[]): CorrectionPattern | null {
+function buildPatternFromGroup(key: string, corrections: Correction[]): CorrectionPattern | null {
+  if (corrections.length === 0) return null;
+
   const first = corrections[0];
-  if (!first) return null;
+  const category = first.metadata?.category;
+  const context = first.metadata?.context as 'WAQF_ONLY' | 'WASL_ONLY' | 'ALWAYS' | undefined;
+  const readerIds = first.metadata?.readerIds || [];
 
-  const metadata = first.metadata;
-  const category = metadata?.category;
-  const context = metadata?.context;
-  const readerIds = metadata?.readerIds ?? [];
-  const conditions: RuleCondition[] = [];
+  // بناء الشروط المقترحة.
+  const conditions: any[] = [];
 
-  if (category) conditions.push({ field: 'category', op: 'equals', value: category });
-  if (context && context !== 'ALWAYS') conditions.push({ field: 'context', op: 'equals', value: context });
-  if (readerIds.length > 0) conditions.push({ field: 'readerId', op: 'in', value: [...readerIds] });
+  if (category) {
+    conditions.push({
+      field: 'category',
+      operator: 'equals',
+      value: category,
+    });
+  }
 
+  if (context && context !== 'ALWAYS') {
+    conditions.push({
+      field: 'context',
+      operator: 'equals',
+      value: context,
+    });
+  }
+
+  if (readerIds.length > 0) {
+    conditions.push({
+      field: 'readerId',
+      operator: 'in',
+      value: readerIds,
+    });
+  }
+
+  // بناء الإجراء المقترح (من التصحيح الأول).
   const action: RuleAction = {
-    type: 'OVERRIDE_RESULT',
-    params: {
-      originalTitle: titleOf(correctionEngineResult(first)),
-      correctedTitle: titleOf(correctionEditorResult(first)),
+    type: 'OVERRIDE_VARIANT',
+    parameters: {
+      originalTitle: first.before?.title,
+      correctedTitle: first.after?.title,
     },
   };
 
   return {
     id: createEntityId('pattern'),
-    description: `نمط تصحيح متكرر: ${category ?? 'unknown'}${context ? ` (${context})` : ''}`,
+    description: `نمط تصحيح متكرر: ${category || 'unknown'} ${context ? `(${context})` : ''}`,
     count: corrections.length,
-    commonReaders: [...readerIds],
+    commonReaders: readerIds,
     commonCategory: category,
     commonContext: context,
-    suggestedConditions: { all: conditions },
+    suggestedConditions: {
+      all: conditions,
+    },
     suggestedAction: action,
-    correctionIds: corrections.map((correction) => correction.id),
+    correctionIds: corrections.map((c) => c.id),
   };
 }
 
 // ==================== إنشاء قاعدة من تصحيح ====================
 
 /**
- * ينشئ قاعدة مرشحة من تصحيح واحد. المرشح لا ينشط تلقائيا أبدا.
+ * ينشئ قاعدة مرشحة من تصحيح واحد.
  */
 export function createCandidateFromCorrection(
   correction: Correction,
-  _profile: EngineConfig
+  profile: EngineConfig
 ): CandidateRule {
-  const metadata = correction.metadata;
-  const category = metadata?.category;
-  const context = metadata?.context;
-  const conditions: RuleCondition[] = [];
+  const category = correction.metadata?.category;
+  const context = correction.metadata?.context as 'WAQF_ONLY' | 'WASL_ONLY' | 'ALWAYS' | undefined;
 
-  if (category) conditions.push({ field: 'category', op: 'equals', value: category });
-  if (context && context !== 'ALWAYS') conditions.push({ field: 'context', op: 'equals', value: context });
-  if (metadata?.readerIds?.length) {
-    conditions.push({ field: 'readerId', op: 'in', value: [...metadata.readerIds] });
+  // بناء الشروط.
+  const conditions: any[] = [];
+
+  if (category) {
+    conditions.push({
+      field: 'category',
+      operator: 'equals',
+      value: category,
+    });
   }
 
-  const action: RuleAction = {
-    type: 'OVERRIDE_RESULT',
-    params: {
-      originalTitle: titleOf(correctionEngineResult(correction)),
-      correctedTitle: titleOf(correctionEditorResult(correction)),
-    },
-  };
+  if (context && context !== 'ALWAYS') {
+    conditions.push({
+      field: 'context',
+      operator: 'equals',
+      value: context,
+    });
+  }
 
+  // بناء القاعدة المقترحة.
   const suggestedRule: Partial<EngineRule> = {
     id: createEntityId('rule'),
     name: `قاعدة من تصحيح: ${correction.id}`,
     description: `قاعدة مقترحة من التصحيح ${correction.id}`,
-    type: 'EXCEPTION',
-    category: 'OVERRIDE',
-    scope: 'MUSHAF',
-    conditions: { all: conditions },
-    actions: [action],
-    priority: 100,
-    groupId: 'exceptions',
-    specificity: 'MUSHFAF',
-    hardness: 'SOFT',
-    status: 'DRAFT',
-    enabled: false,
+    category: 'CORRECTION_BASED',
+    conditions: {
+      all: conditions,
+    },
+    actions: [
+      {
+        type: 'OVERRIDE_VARIANT',
+        parameters: {
+          originalTitle: correction.before?.title,
+          correctedTitle: correction.after?.title,
+        },
+      },
+    ],
+    priority: 100, // أولوية عالية لأنها من تصحيح بشري
+    enabled: false, // غير مفعلة حتى الموافقة
     source: 'CORRECTION',
-    metadata: { sourceCorrectionId: correction.id },
+    metadata: {
+      sourceCorrectionId: correction.id,
+    },
   };
 
   const pattern: CorrectionPattern = {
     id: createEntityId('pattern'),
     description: `تصحيح واحد: ${correction.id}`,
     count: 1,
-    commonReaders: [...(metadata?.readerIds ?? [])],
+    commonReaders: correction.metadata?.readerIds || [],
     commonCategory: category,
     commonContext: context,
     suggestedConditions: { all: conditions },
-    suggestedAction: action,
+    suggestedAction: suggestedRule.actions![0],
     correctionIds: [correction.id],
   };
 
@@ -401,30 +397,21 @@ export function createCandidateFromCorrection(
   };
 }
 
-/** ينشئ قاعدة مرشحة من نمط تصحيحات متكرر. */
+/**
+ * ينشئ قاعدة مرشحة من نمط تصحيحات متكرر.
+ */
 export function createCandidateFromPattern(
-  input: CorrectionPatternInput,
-  _profile: EngineConfig
+  pattern: CorrectionPattern,
+  profile: EngineConfig
 ): CandidateRule {
-  const action = normalizeSuggestedAction(input.suggestedAction);
-  const pattern: CorrectionPattern = {
-    ...input,
-    suggestedAction: action,
-  };
   const suggestedRule: Partial<EngineRule> = {
     id: createEntityId('rule'),
     name: `قاعدة من نمط: ${pattern.description}`,
     description: `قاعدة مقترحة من ${pattern.count} تصحيحات متكررة`,
-    type: 'EXCEPTION',
-    category: 'OVERRIDE',
-    scope: 'MUSHAF',
+    category: 'CORRECTION_BASED',
     conditions: pattern.suggestedConditions,
-    actions: [action],
+    actions: [pattern.suggestedAction],
     priority: 100,
-    groupId: 'exceptions',
-    specificity: 'MUSHFAF',
-    hardness: 'SOFT',
-    status: 'DRAFT',
     enabled: false,
     source: 'CORRECTION_PATTERN',
     metadata: {
