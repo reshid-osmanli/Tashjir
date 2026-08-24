@@ -18,6 +18,7 @@ import type {
   RuleHardness,
   RuleStatus,
   SpecificityLevel,
+  TestCase,
 } from '@/lib/tashjeer/model/v8';
 import { createEntityId } from '@/lib/tashjeer/model/v8';
 import {
@@ -34,6 +35,7 @@ import {
   DIFFERENCE_TYPES,
   DIFFERENCE_TYPE_LABELS,
 } from './labels';
+import { WAQF_WASL_TEMPLATES, type RuleTemplate } from './templates';
 
 const RULE_TYPES = Object.keys(RULE_TYPE_LABELS) as EngineRule['type'][];
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as EngineRuleCategory[];
@@ -70,6 +72,7 @@ function ruleToDraft(rule: EngineRule | null): {
   conditions: RuleCondition[];
   actions: RuleAction[];
   protected: boolean;
+  testCases: TestCase[];
 } {
   if (!rule) {
     return {
@@ -85,6 +88,7 @@ function ruleToDraft(rule: EngineRule | null): {
       conditions: [emptyCondition()],
       actions: [{ type: 'PREVENT_MERGE' }],
       protected: false,
+      testCases: [],
     };
   }
   const flat = rule.conditions.all ?? [];
@@ -102,6 +106,7 @@ function ruleToDraft(rule: EngineRule | null): {
     conditions: flat.length > 0 ? flat.filter((c): c is RuleCondition => 'field' in c) : [emptyCondition()],
     actions: rule.actions,
     protected: rule.protected ?? false,
+    testCases: rule.testCases ?? [],
   };
 }
 
@@ -136,6 +141,30 @@ export function RuleBuilder({ rule, groups, onSave, onCancel }: RuleBuilderProps
   const removeAction = (index: number) =>
     setDraft((current) => ({ ...current, actions: current.actions.filter((_, idx) => idx !== index) }));
 
+  const applyTemplate = (template: RuleTemplate) => {
+    setDraft((current) => ({
+      ...current,
+      type: template.type,
+      category: template.category,
+      conditions: template.conditions.length > 0 ? template.conditions.map((condition) => ({ ...condition })) : [emptyCondition()],
+      actions: template.actions.map((action) => ({ ...action })),
+      name: current.name.trim() || template.label,
+    }));
+  };
+
+  const addTestCase = () =>
+    setDraft((current) => ({
+      ...current,
+      testCases: [...current.testCases, { name: `حالة ${current.testCases.length + 1}`, input: { differenceType: 'MADD', relatedType: 'TAHQIQ' }, expected: 'MERGE' }],
+    }));
+  const updateTestCase = (index: number, patch: Partial<TestCase>) =>
+    setDraft((current) => ({
+      ...current,
+      testCases: current.testCases.map((item, idx) => (idx === index ? { ...item, ...patch } : item)),
+    }));
+  const removeTestCase = (index: number) =>
+    setDraft((current) => ({ ...current, testCases: current.testCases.filter((_, idx) => idx !== index) }));
+
   const handleSave = () => {
     const trimmedName = draft.name.trim() || 'قاعدة بلا عنوان';
     const payload = {
@@ -152,6 +181,7 @@ export function RuleBuilder({ rule, groups, onSave, onCancel }: RuleBuilderProps
       hardness: draft.hardness,
       status: draft.status,
       protected: draft.protected,
+      testCases: draft.testCases.length > 0 ? draft.testCases : undefined,
     };
     onSave(payload as EngineRule);
   };
@@ -218,6 +248,25 @@ export function RuleBuilder({ rule, groups, onSave, onCancel }: RuleBuilderProps
 
       {/* منشئ الشروط */}
       <div className="space-y-3">
+        {/* قوالب الوقف/الوصل الجاهزة (FR-ES-16.2) */}
+        <div>
+          <h4 className="font-semibold text-gray-800">قوالب جاهزة</h4>
+          <p className="mt-1 text-xs text-gray-500">قوالب الوقف/الوصل/الابتداء/ممنوع الوصل تملأ المسودة بلا كود (FR-ES-16).</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {WAQF_WASL_TEMPLATES.map((template) => (
+              <button
+                key={template.id}
+                type="button"
+                onClick={() => applyTemplate(template)}
+                title={template.description}
+                className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-800 hover:bg-violet-100"
+              >
+                {template.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="flex items-center justify-between">
           <h4 className="font-semibold text-gray-800">الشروط</h4>
           <button type="button" onClick={addCondition} className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100">
@@ -278,6 +327,46 @@ export function RuleBuilder({ rule, groups, onSave, onCancel }: RuleBuilderProps
                 className="mr-auto rounded px-2 py-1 text-sm text-red-600 hover:bg-red-50"
                 aria-label="حذف الإجراء"
               >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* حالات الاختبار (FR-ES-08) */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h4 className="font-semibold text-gray-800">حالات الاختبار</h4>
+          <button type="button" onClick={addTestCase} className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100">
+            + حالة
+          </button>
+        </div>
+        <p className="text-xs text-gray-500">لكل حالة: مدخلات والنتيجة المتوقَّعة. تُشغَّل تلقائيًا لاكتشاف الانحدار عند التعديل (FR-ES-08).</p>
+        <div className="space-y-2">
+          {draft.testCases.map((testCase, index) => (
+            <div key={index} className="flex flex-wrap items-center gap-2 rounded-lg bg-gray-50 p-2">
+              <input
+                type="text"
+                value={testCase.name}
+                onChange={(event) => updateTestCase(index, { name: event.target.value })}
+                placeholder="اسم الحالة"
+                className="w-28 rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              <Select
+                value={testCase.expected}
+                onChange={(value) => updateTestCase(index, { expected: value })}
+                options={[
+                  { value: 'MERGE', label: 'ادمج' },
+                  { value: 'SEPARATE', label: 'لا تدمج' },
+                  { value: 'CREATE', label: 'أنشئ' },
+                  { value: 'SKIP', label: 'تجاوز' },
+                  { value: 'BLOCK', label: 'احجب' },
+                  { value: 'ALLOW', label: 'اسمح' },
+                ]}
+                compact
+              />
+              <button type="button" onClick={() => removeTestCase(index)} className="mr-auto rounded px-2 py-1 text-sm text-red-600 hover:bg-red-50" aria-label="حذف الحالة">
                 ✕
               </button>
             </div>
