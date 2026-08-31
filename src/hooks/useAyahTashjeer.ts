@@ -17,6 +17,7 @@ import {
   layoutAyah,
 } from '@/lib/tashjeer/layout-engine';
 import { buildReadingWindow, type ReadingWindow } from '@/lib/tashjeer/reading-window';
+import { variantAppliesToRecitation } from '@/lib/tashjeer/reading-plan';
 import {
   computeStats,
   filterBranches,
@@ -126,7 +127,12 @@ export function useAyahTashjeer(
   });
 
   const effectiveVariants = useMemo(
-    () => (document ? getEffectiveVariants(document) : []),
+    () =>
+      document
+        ? getEffectiveVariants(document).filter((variant) =>
+            variantAppliesToRecitation(variant, document.boundaries ?? [])
+          )
+        : [],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [document, runtime.occurrencesKey]
   );

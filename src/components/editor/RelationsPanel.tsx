@@ -462,6 +462,7 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
   const setLineOrder = useEditorStore((state) => state.setLineOrder);
   const moveLineInOrder = useEditorStore((state) => state.moveLineInOrder);
   const resetLineOrder = useEditorStore((state) => state.resetLineOrder);
+  const addLink = useEditorStore((state) => state.addLink);
 
   // الترتيب الجاري: ما حفظه المستند إن وجد، مكمَّلا بأسطر المحرك الحالية.
   const savedOrder = document?.lineOrder;
@@ -471,6 +472,72 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
     () => coalesceLineOrder(hasManualOrder ? savedOrder : undefined, engineOrder),
     [hasManualOrder, savedOrder, engineOrder]
   );
+
+  // عرض بترتيب العمل حتى تطابق مؤشرات السحب مواضع العرض الفعلية (FR-ED-04).
+  const lineById = useMemo(() => new Map(classic.lines.map((line) => [line.id, line])), [classic.lines]);
+  const orderedLines = useMemo(
+    () =>
+      workingOrder
+        .map((id) => lineById.get(id))
+        .filter((line): line is ClassicTashjeer['lines'][number] => Boolean(line)),
+    [workingOrder, lineById]
+  );
+
+  // حالة السحب: المعرّف المسحوب، وموضع مؤشر الإدراج.
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  // سحب الدمج: مقبض مخصص يُسحب فوق سطر آخر لدمجهما (FR-ED-05).
+  const [mergeDragId, setMergeDragId] = useState<string | null>(null);
+
+  const clearDrag = () => {
+    setDraggingId(null);
+    setDropIndex(null);
+    setMergeDragId(null);
+  };
+
+  /** ملخّص موجز للسطر لرسالة التأكيد. */
+  const lineSummary = (id: string): string => {
+    const line = lineById.get(id);
+    return line ? `${line.label}` : id;
+  };
+
+  /** ينفّذ النقل بعد تأكيد كمي (FR-ED-04.2)، ولا يغيّر شيئًا عند الإلغاء. */
+  const commitDrop = (targetIndex: number) => {
+    if (!draggingId) {
+      clearDrag();
+      return;
+    }
+    const fromIndex = workingOrder.indexOf(draggingId);
+    if (fromIndex === -1 || fromIndex === targetIndex || fromIndex === targetIndex - 1) {
+      clearDrag();
+      return;
+    }
+    const before = targetIndex > 0 ? lineSummary(workingOrder[targetIndex - 1]) : null;
+    const after = targetIndex < workingOrder.length ? lineSummary(workingOrder[targetIndex]) : null;
+    const positionHint = before && after ? `بين «${before}» و«${after}»` : before ? `بعد «${before}»` : after ? `قبل «${after}»` : 'في الطرف';
+    const confirmed = window.confirm(`نقل السطر «${lineSummary(draggingId)}» إلى هذا الموضع؟ (${positionHint})`);
+    if (confirmed) {
+      moveLineInOrder(workingOrder, draggingId, targetIndex);
+    }
+    clearDrag();
+  };
+
+  /** ينفّذ دمج سطرين بعد تأكيد، فوق نموذج البيانات الموحّد (Relation: MERGE) — FR-ED-05. */
+  const commitMerge = (toId: string) => {
+    const fromId = mergeDragId;
+    clearDrag();
+    if (!fromId || fromId === toId) return;
+    const confirmed = window.confirm(`دمج السطر «${lineSummary(fromId)}» مع السطر «${lineSummary(toId)}»؟`);
+    if (confirmed) {
+      addLink({
+        kind: 'LINE_TO_LINE',
+        relation: 'MERGE',
+        from: { type: 'LINE', id: fromId },
+        to: { type: 'LINE', id: toId },
+        notes: 'دمج بالسحب من المحرر',
+      });
+    }
+  };
 
   const orderForIndex = (lineId: string): number => {
     const index = workingOrder.indexOf(lineId);
@@ -503,13 +570,71 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
       </div>
 
       <ol className="max-h-72 space-y-1 overflow-y-auto">
-        {classic.lines.map((line) => {
+        {orderedLines.map((line, index) => {
           const currentOrder = orderForIndex(line.id);
+          const isDragging = draggingId === line.id;
+          const isMergeTarget = Boolean(mergeDragId) && mergeDragId !== line.id;
+          const showIndicatorBefore = dropIndex === index && !mergeDragId;
           return (
-            <li
-              key={line.id}
-              className="flex items-center gap-1.5 rounded border border-stone-100 bg-white px-2 py-1.5"
-            >
+            <li key={line.id}>
+              {showIndicatorBefore && (
+                <div className="mb-0.5 h-0.5 rounded-full bg-emerald-500" aria-hidden />
+              )}
+              <div
+                className={`flex items-center gap-1.5 rounded border bg-white px-2 py-1.5 transition ${
+                  isMergeTarget
+                    ? 'border-violet-400 bg-violet-50'
+                    : isDragging
+                      ? 'border-emerald-400 opacity-50'
+                      : 'border-stone-100'
+                }`}
+                draggable
+                onDragStart={(event) => {
+                  setDraggingId(line.id);
+                  event.dataTransfer.effectAllowed = 'move';
+                  event.dataTransfer.setData('text/plain', line.id);
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = mergeDragId ? 'link' : 'move';
+                  if (mergeDragId) return;
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  const before = event.clientY < rect.top + rect.height / 2;
+                  setDropIndex(before ? index : index + 1);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (mergeDragId) {
+                    commitMerge(line.id);
+                    return;
+                  }
+                  commitDrop(dropIndex ?? index);
+                }}
+                onDragEnd={clearDrag}
+              >
+              <span
+                className="cursor-grab shrink-0 text-stone-300 hover:text-stone-500 active:cursor-grabbing"
+                title="اسحب لإعادة الترتيب (مع تأكيد)"
+                aria-hidden
+              >
+                ⠿
+              </span>
+              <span
+                className="cursor-grab shrink-0 text-violet-400 hover:text-violet-600 active:cursor-grabbing"
+                title="مقبض الدمج: اسحب فوق سطر آخر لدمجهما (مع تأكيد)"
+                draggable
+                onDragStart={(event) => {
+                  event.stopPropagation();
+                  setMergeDragId(line.id);
+                  setDraggingId(null);
+                  setDropIndex(null);
+                  event.dataTransfer.effectAllowed = 'link';
+                  event.dataTransfer.setData('text/plain', `merge:${line.id}`);
+                }}
+                aria-label={`مقبض دمج السطر ${line.label}`}
+              >
+                ⛓
+              </span>
               <span
                 className="h-2 w-2 shrink-0 rounded-full"
                 style={{ backgroundColor: getCategoryColor(line.category) }}
@@ -556,6 +681,7 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
                   {toArabicDigits(line.linkIds?.length ?? 0)} رابطا
                 </span>
               )}
+              </div>
             </li>
           );
         })}

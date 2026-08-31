@@ -64,6 +64,8 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     setPan,
     selectWord,
     selectVariant,
+    selectAlternative,
+    selectLine,
     selectBranch,
     refreshDerivedBranches,
     toggleMarkedPosition,
@@ -246,10 +248,13 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
         return;
       }
       const nextVariantId = line.variantId === selectedVariantId ? null : line.variantId;
-      selectVariant(nextVariantId);
-      selectBranch(nextVariantId ? line.id : null);
+      if (nextVariantId) selectLine(line.id, nextVariantId, line.startPosition);
+      else {
+        selectVariant(null);
+        selectBranch(null);
+      }
     },
-    [readOnly, selectBranch, selectVariant, selectedVariantId]
+    [readOnly, selectBranch, selectLine, selectVariant, selectedVariantId]
   );
 
   /**
@@ -257,13 +262,13 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
    * النقر موضع الحكم الذي تحته المؤشر لا أول أحكام السطر.
    */
   const handleEntryClick = useCallback(
-    (_line: ClassicLine, entry: { variantId: string }) => {
+    (_line: ClassicLine, entry: { variantId: string; alternativeId?: string }) => {
       if (readOnly || !entry.variantId) return;
-      const nextVariantId = entry.variantId === selectedVariantId ? null : entry.variantId;
-      selectVariant(nextVariantId);
+      if (entry.alternativeId) selectAlternative(entry.variantId, entry.alternativeId);
+      else selectVariant(entry.variantId);
       selectBranch(null);
     },
-    [readOnly, selectBranch, selectVariant, selectedVariantId]
+    [readOnly, selectAlternative, selectBranch, selectVariant]
   );
 
   // الكلمات المشمولة باختلاف: تُظلَّل تظليلا خفيفا يرشد المحرر.

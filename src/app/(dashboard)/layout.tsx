@@ -3,6 +3,7 @@ import Link from 'next/link';
 const navItems = [
   { href: '/', icon: '⌂', label: 'الرئيسية' },
   { href: '/editor', icon: '✎', label: 'المحرر' },
+  { href: '/studio', icon: 'Ɇ', label: 'استوديو المحرك' },
   { href: '/quran', icon: 'ق', label: 'المصحف' },
   { href: '/variants', icon: '⌕', label: 'فهرس الاختلافات' },
   { href: '/tracking', icon: '⇄', label: 'التتبع' },

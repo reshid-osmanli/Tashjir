@@ -24,6 +24,7 @@ export const SHORTCUT_HINTS: ShortcutHint[] = [
   { keys: 'M', description: 'أداة تعليم الكلمات' },
   { keys: 'E', description: 'أداة المسح' },
   { keys: 'Ctrl + S', description: 'حفظ المستند' },
+  { keys: 'Ctrl + C / X / V', description: 'نسخ أو قص أو لصق الاختلاف/الوجه/الجزء المحدد' },
   { keys: 'Ctrl + Z', description: 'تراجع' },
   { keys: 'Ctrl + Shift + Z', description: 'إعادة' },
   { keys: 'Ctrl + =', description: 'تكبير' },
@@ -59,6 +60,18 @@ export function useKeyboardShortcuts(enabled = true): void {
           case 's':
             event.preventDefault();
             store.save();
+            return;
+          case 'c':
+            event.preventDefault();
+            store.copySelection();
+            return;
+          case 'x':
+            event.preventDefault();
+            store.cutSelection();
+            return;
+          case 'v':
+            event.preventDefault();
+            store.pasteSelection();
             return;
           case 'z':
             event.preventDefault();

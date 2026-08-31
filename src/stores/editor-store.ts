@@ -20,6 +20,7 @@ import type {
   ManualTashjeerLine,
   RecitationBoundary,
   CharacterAnchor,
+  EditorSelection,
   LinkEndpoint,
   TashjeerBranch,
   TashjeerDocument,
@@ -99,9 +100,13 @@ interface EditorState {
   markedCharacters: CharacterAnchor[];
   /** هل ينشئ التعليم اختلاف كلمات أم اختلاف حروف. */
   markingMode: MarkingMode;
+  /** المصدر الوحيد للتحديد بين المحرر وكل اللوحات. */
+  selection: EditorSelection | null;
   selectedWordId: number | null;
   selectedVariantId: string | null;
+  selectedAlternativeId: string | null;
   selectedBranchId: string | null;
+  clipboard: { kind: 'DIFFERENCE'; value: Variant } | { kind: 'FACE'; value: VariantAlternative } | { kind: 'SEGMENT'; value: LineSegment } | null;
   currentTool: EditorTool;
   /** الفئة المستخدمة عند إنشاء اختلاف جديد */
   draftCategory: VariantCategory;
@@ -115,6 +120,8 @@ interface EditorState {
 
   // ---------- إجراءات الاختلافات ----------
   addVariant: (variant: Omit<Variant, 'ayahKey'>) => void;
+  /** إنشاء عدة اختلافات مستقلة في معاملة واحدة ولقطة تراجع واحدة. */
+  addVariantGroup: (variants: Array<Omit<Variant, 'ayahKey'>>) => void;
   updateVariant: (variantId: string, patch: Partial<Variant>) => void;
   deleteVariant: (variantId: string) => void;
   addAlternative: (variantId: string, alternative: VariantAlternative) => void;
@@ -124,6 +131,10 @@ interface EditorState {
     patch: Partial<VariantAlternative>
   ) => void;
   deleteAlternative: (variantId: string, alternativeId: string) => void;
+  /** يحذف عدة أوجه من اختلاف واحد دفعة واحدة (قابلة للتراجع كخطوة واحدة). */
+  deleteAlternativesBulk: (variantId: string, alternativeIds: string[]) => void;
+  /** يحذف عدة اختلافات دفعة واحدة (قابلة للتراجع كخطوة واحدة). */
+  deleteVariantsBulk: (variantIds: string[]) => void;
   /** يثبّت رتبة الموضع في ترتيب المرور، أو يزيلها بتمرير null. */
   setVariantOrderRank: (variantId: string, rank: number | null) => void;
   /**
@@ -195,7 +206,13 @@ interface EditorState {
   setMarkingMode: (mode: MarkingMode) => void;
   selectWord: (wordId: number | null) => void;
   selectVariant: (variantId: string | null) => void;
+  selectAlternative: (variantId: string, alternativeId: string) => void;
+  selectSegment: (segmentId: string | null) => void;
+  selectLine: (lineId: string, differenceId?: string, position?: number) => void;
   selectBranch: (branchId: string | null) => void;
+  copySelection: () => void;
+  cutSelection: () => void;
+  pasteSelection: () => void;
   setTool: (tool: EditorTool) => void;
   setDraftCategory: (category: VariantCategory) => void;
 
@@ -233,9 +250,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   markedPositions: [],
   markedCharacters: [],
   markingMode: 'WORDS',
+  selection: null,
   selectedWordId: null,
   selectedVariantId: null,
+  selectedAlternativeId: null,
   selectedBranchId: null,
+  clipboard: null,
   currentTool: 'select',
   draftCategory: 'FARSH',
 
@@ -252,8 +272,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       future: [],
       markedPositions: [],
       markedCharacters: [],
+      selection: null,
       selectedWordId: null,
       selectedVariantId: null,
+      selectedAlternativeId: null,
       selectedBranchId: null,
     });
   },
@@ -270,7 +292,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       isDirty: true,
       markedPositions: [],
       markedCharacters: [],
+      selection: null,
       selectedVariantId: null,
+      selectedAlternativeId: null,
       selectedBranchId: null,
     }));
   },
@@ -326,6 +350,32 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ markedPositions: [], markedCharacters: [] });
   },
 
+  addVariantGroup: (variants) => {
+    if (variants.length === 0) return;
+    mutate(
+      set,
+      get,
+      (document) => ({
+        ...document,
+        variants: [
+          ...document.variants,
+          ...variants.map((variant) => ({
+            ...variant,
+            ayahKey: document.ayahKey,
+            origin: 'EDITOR' as const,
+          })),
+        ].sort(compareVariants),
+      }),
+      {
+        action: 'إنشاء مجموعة اختلافات',
+        targetType: 'VARIANT',
+        targetId: variants.map((item) => item.id).join(','),
+        summary: `أنشأ المحرر ${variants.length} اختلافات مستقلة في عملية واحدة`,
+      }
+    );
+    set({ markedPositions: [], markedCharacters: [] });
+  },
+
   updateVariant: (variantId, patch) => {
     mutate(set, get, (document) => {
       const before = document.variants.find((variant) => variant.id === variantId);
@@ -333,7 +383,24 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         {
           ...document,
           variants: document.variants
-            .map((variant) => (variant.id === variantId ? { ...variant, ...patch } : variant))
+            .map((variant) => {
+              if (variant.id !== variantId) return variant;
+              const engineSnapshot =
+                variant.origin !== 'EDITOR' && !variant.engineSnapshot
+                  ? {
+                      title: variant.title,
+                      category: variant.category,
+                      alternatives: JSON.parse(JSON.stringify(variant.alternatives)),
+                      capturedAt: new Date().toISOString(),
+                    }
+                  : variant.engineSnapshot;
+              return {
+                ...variant,
+                ...patch,
+                engineSnapshot,
+                editorModifiedAt: variant.origin !== 'EDITOR' ? new Date().toISOString() : variant.editorModifiedAt,
+              };
+            })
             .sort(compareVariants),
         },
         {
@@ -374,7 +441,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         document
       );
     });
-    set({ selectedVariantId: null });
+    set({ selection: null, selectedVariantId: null, selectedAlternativeId: null, selectedBranchId: null });
   },
 
   addAlternative: (variantId, alternative) => {
@@ -448,6 +515,79 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         };
       }),
       branches: document.branches.filter((branch) => branch.alternativeId !== alternativeId),
+    }));
+  },
+
+  deleteAlternativesBulk: (variantId, alternativeIds) => {
+    if (alternativeIds.length === 0) return;
+    const doomed = new Set(alternativeIds);
+    mutate(
+      set,
+      get,
+      (document) => {
+        const owner = document.variants.find((variant) => variant.id === variantId);
+        return withLoggedEdit(
+          {
+            ...document,
+            variants: document.variants.map((variant) =>
+              variant.id === variantId
+                ? { ...variant, alternatives: variant.alternatives.filter((alt) => !doomed.has(alt.id)) }
+                : variant
+            ),
+            branches: document.branches.filter((branch) => !doomed.has(branch.alternativeId)),
+          },
+          {
+            action: 'حذف جماعي للأوجه',
+            targetType: 'ALTERNATIVE',
+            targetId: alternativeIds.join(','),
+            category: owner?.category,
+            summary: `حذف المحرر ${alternativeIds.length} وجهًا دفعة واحدة`,
+          },
+          document
+        );
+      },
+    );
+    set((state) => ({
+      selectedAlternativeId: state.selectedAlternativeId && doomed.has(state.selectedAlternativeId)
+        ? null
+        : state.selectedAlternativeId,
+    }));
+  },
+
+  deleteVariantsBulk: (variantIds) => {
+    if (variantIds.length === 0) return;
+    const doomed = new Set(variantIds);
+    mutate(
+      set,
+      get,
+      (document) => {
+        const removed = document.variants.filter((variant) => doomed.has(variant.id));
+        const links = variantIds.reduce(
+          (current, id) => pruneLinksForVariant(current, id),
+          document.links ?? []
+        );
+        return withLoggedEdit(
+          {
+            ...document,
+            variants: document.variants.filter((variant) => !doomed.has(variant.id)),
+            branches: document.branches.filter((branch) => !doomed.has(branch.variantId)),
+            links,
+          },
+          {
+            action: 'حذف جماعي للاختلافات',
+            targetType: 'VARIANT',
+            targetId: variantIds.join(','),
+            category: removed[0]?.category,
+            summary: `حذف المحرر ${variantIds.length} اختلافًا دفعة واحدة`,
+          },
+          document
+        );
+      },
+    );
+    set((state) => ({
+      selection: state.selectedVariantId && doomed.has(state.selectedVariantId) ? null : state.selection,
+      selectedVariantId: state.selectedVariantId && doomed.has(state.selectedVariantId) ? null : state.selectedVariantId,
+      selectedAlternativeId: state.selectedVariantId && doomed.has(state.selectedVariantId) ? null : state.selectedAlternativeId,
     }));
   },
 
@@ -859,15 +999,25 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   setLinkNextAyah: (linked) => {
-    mutate(set, get, (document) => ({
-      ...document,
-      readingWindow: {
-        ...(document.readingWindow ?? {}),
-        linkNextAyah: linked,
-        // فك الوصل يبطل مقطعا قد يكون امتد إلى الآية الثانية.
-        focusSegment: linked ? (document.readingWindow?.focusSegment ?? null) : null,
-      },
-    }));
+    mutate(set, get, (document) => {
+      const baseWordsCount = documentWindowWords({
+        ...document,
+        readingWindow: { ...(document.readingWindow ?? {}), linkNextAyah: false },
+      }).length;
+      const isForbidden = document.boundaries.some(
+        (boundary) => boundary.kind === 'NO_WASL' && boundary.position === baseWordsCount
+      );
+      const accepted = linked && !isForbidden;
+      return {
+        ...document,
+        readingWindow: {
+          ...(document.readingWindow ?? {}),
+          linkNextAyah: accepted,
+          // فك الوصل يبطل مقطعا قد يكون امتد إلى الآية الثانية.
+          focusSegment: accepted ? (document.readingWindow?.focusSegment ?? null) : null,
+        },
+      };
+    });
     set({ selectedWordId: null, markedPositions: [], markedCharacters: [] });
   },
 
@@ -940,9 +1090,124 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   clearMarks: () => set({ markedPositions: [], markedCharacters: [] }),
   setMarkingMode: (mode) => set({ markingMode: mode, markedPositions: [], markedCharacters: [] }),
-  selectWord: (wordId) => set({ selectedWordId: wordId }),
-  selectVariant: (variantId) => set({ selectedVariantId: variantId, selectedBranchId: null }),
-  selectBranch: (branchId) => set({ selectedBranchId: branchId }),
+  selectWord: (wordId) => {
+    const word = wordId ? documentWindowWords(get().document).find((item) => item.id === wordId) : undefined;
+    set({
+      selection: wordId ? { kind: 'WORD', id: String(wordId), position: word?.position } : null,
+      selectedWordId: wordId,
+      selectedAlternativeId: null,
+    });
+  },
+  selectVariant: (variantId) => {
+    const currentDocument = get().document;
+    const variant = variantId && currentDocument
+      ? getEffectiveVariants(currentDocument).find((item) => item.id === variantId)
+      : undefined;
+    set({
+      selection: variantId
+        ? { kind: variant?.isGlobalDerived ? 'RULE' : 'DIFFERENCE', id: variantId, differenceId: variantId, position: variant?.startPosition }
+        : null,
+      selectedVariantId: variantId,
+      selectedAlternativeId: null,
+      selectedBranchId: null,
+    });
+  },
+  selectAlternative: (variantId, alternativeId) => {
+    const currentDocument = get().document;
+    const variant = currentDocument
+      ? getEffectiveVariants(currentDocument).find((item) => item.id === variantId)
+      : undefined;
+    set({
+      selection: { kind: 'FACE', id: alternativeId, differenceId: variantId, faceId: alternativeId, position: variant?.startPosition },
+      selectedVariantId: variantId,
+      selectedAlternativeId: alternativeId,
+      selectedBranchId: null,
+    });
+  },
+  selectSegment: (segmentId) => {
+    const segment = get().document?.segments?.find((item) => item.id === segmentId);
+    set({
+      selection: segmentId ? { kind: 'SEGMENT', id: segmentId, position: segment?.startPosition } : null,
+      selectedVariantId: null,
+      selectedAlternativeId: null,
+      selectedBranchId: null,
+    });
+  },
+  selectLine: (lineId, differenceId, position) => set({
+    selection: { kind: 'LINE', id: lineId, lineId, differenceId, position },
+    selectedVariantId: differenceId ?? null,
+    selectedAlternativeId: null,
+    selectedBranchId: lineId,
+  }),
+  selectBranch: (branchId) => set((state) => ({
+    selectedBranchId: branchId,
+    selection: branchId
+      ? { kind: 'LINE', id: branchId, lineId: branchId, differenceId: state.selectedVariantId ?? undefined }
+      : state.selectedVariantId
+        ? { kind: 'DIFFERENCE', id: state.selectedVariantId, differenceId: state.selectedVariantId }
+        : null,
+  })),
+  copySelection: () => {
+    const state = get();
+    const selection = state.selection;
+    if (!selection || !state.document) return;
+    if (selection.kind === 'DIFFERENCE') {
+      const value = state.document.variants.find((item) => item.id === selection.id);
+      if (value) set({ clipboard: { kind: 'DIFFERENCE', value: structuredClone(value) } });
+    } else if (selection.kind === 'FACE' && selection.differenceId) {
+      const value = state.document.variants
+        .find((item) => item.id === selection.differenceId)
+        ?.alternatives.find((item) => item.id === selection.id);
+      if (value) set({ clipboard: { kind: 'FACE', value: structuredClone(value) } });
+    } else if (selection.kind === 'SEGMENT') {
+      const value = state.document.segments?.find((item) => item.id === selection.id);
+      if (value) set({ clipboard: { kind: 'SEGMENT', value: structuredClone(value) } });
+    }
+  },
+  cutSelection: () => {
+    const state = get();
+    state.copySelection();
+    const selection = get().selection;
+    if (!selection) return;
+    if (selection.kind === 'DIFFERENCE') get().deleteVariant(selection.id);
+    else if (selection.kind === 'FACE' && selection.differenceId) get().deleteAlternative(selection.differenceId, selection.id);
+    else if (selection.kind === 'SEGMENT') get().deleteSegment(selection.id);
+  },
+  pasteSelection: () => {
+    const state = get();
+    const clipboard = state.clipboard;
+    if (!clipboard || !state.document) return;
+    const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    if (clipboard.kind === 'DIFFERENCE') {
+      const source = structuredClone(clipboard.value);
+      const id = `v-copy-${suffix}`;
+      state.addVariant({
+        ...source,
+        id,
+        title: `${source.title} — نسخة`,
+        alternatives: source.alternatives.map((item, index) => ({ ...item, id: `${id}-face-${index + 1}-${suffix}` })),
+        origin: 'EDITOR',
+        engineSnapshot: undefined,
+        editorModifiedAt: undefined,
+      });
+      get().selectVariant(id);
+    } else if (clipboard.kind === 'FACE' && state.selectedVariantId) {
+      const face = structuredClone(clipboard.value);
+      const id = `face-copy-${suffix}`;
+      state.addAlternative(state.selectedVariantId, { ...face, id, isBase: false });
+      get().selectAlternative(state.selectedVariantId, id);
+    } else if (clipboard.kind === 'SEGMENT') {
+      const segment = clipboard.value;
+      const created = state.addSegment({
+        title: `${segment.title} — نسخة`,
+        startPosition: segment.startPosition,
+        endPosition: segment.endPosition,
+        characterRange: segment.characterRange,
+        notes: segment.notes,
+      });
+      if (created) get().selectSegment(created.id);
+    }
+  },
   setTool: (tool) =>
     set({
       currentTool: tool,

@@ -9,6 +9,7 @@ import { layoutAyah } from '@/lib/tashjeer/layout-engine';
 import {
   buildReadingPlan,
   compareReadingPositions,
+  variantAppliesToRecitation,
   variantTraversalAnchor,
 } from '@/lib/tashjeer/reading-plan';
 import {
@@ -80,6 +81,25 @@ describe('خطة المرور من آخر الآية', () => {
       { id: 'wasl', kind: 'WASL', position: 4, connectsToNextAyah: true },
     ]);
     expect(plan.connectsToNextAyah).toBe(true);
+  });
+
+  it('منع الوصل يتغلب على علامة الوصل ويقسم المقطع', () => {
+    const plan = buildReadingPlan(4, [
+      { id: 'wasl', kind: 'WASL', position: 4, connectsToNextAyah: true },
+      { id: 'forbidden', kind: 'NO_WASL', position: 4 },
+    ]);
+    expect(plan.connectsToNextAyah).toBe(false);
+    expect(plan.forbiddenWaslAfter).toEqual([4]);
+  });
+
+  it('يفصل اختلاف الوقف فقط عن اختلاف الوصل فقط في الموضع نفسه', () => {
+    const waqfOnly = { ...variant('waqf-only', 2, 2, 'WAQF'), recitationMode: 'WAQF_ONLY' as const };
+    const waslOnly = { ...variant('wasl-only', 2, 2, 'WAQF'), recitationMode: 'WASL_ONLY' as const };
+    expect(variantAppliesToRecitation(waqfOnly, [])).toBe(false);
+    expect(variantAppliesToRecitation(waslOnly, [])).toBe(true);
+    const stopped = [{ id: 'stop', kind: 'WAQF' as const, position: 2 }];
+    expect(variantAppliesToRecitation(waqfOnly, stopped)).toBe(true);
+    expect(variantAppliesToRecitation(waslOnly, stopped)).toBe(false);
   });
 
   it('يعتمد آخر كلمة من مدى الاختلاف مرساة في الوضع الصحيح', () => {

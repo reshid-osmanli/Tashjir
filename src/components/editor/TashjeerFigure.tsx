@@ -146,15 +146,18 @@ export function TashjeerFigure({
       </g>
 
       <g>
-        {layout.boxes.map((box) => (
+        {layout.boxes
+          .filter(
+            (box) =>
+              focusSegment === null ||
+              (box.position >= focusSegment.startPosition && box.position <= focusSegment.endPosition)
+          )
+          .map((box) => (
           <WordShape
             key={box.wordId}
             box={box}
             fontSize={fontSize}
-            isOutsideFocus={
-              focusSegment !== null &&
-              (box.position < focusSegment.startPosition || box.position > focusSegment.endPosition)
-            }
+            isOutsideFocus={false}
             isMarked={markedPositions.includes(box.position)}
             markedCharacters={markedCharacters.filter((anchor) => anchor.position === box.position)}
             isSelected={box.wordId === selectedWordId}
@@ -875,11 +878,13 @@ function BoundaryMarkers({
     WAQF: 'وقف',
     IBTIDA: 'ابتداء',
     WASL: 'وصل',
+    NO_WASL: 'ممنوع الوصل',
   };
   const colors: Record<RecitationBoundary['kind'], string> = {
     WAQF: '#7c3aed',
     IBTIDA: '#0f766e',
     WASL: '#0369a1',
+    NO_WASL: '#b91c1c',
   };
 
   return (
