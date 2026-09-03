@@ -19,6 +19,7 @@ import { describeScope, resolveScope } from '@/lib/tashjeer/scope';
 import { VariantEditor } from './VariantEditor';
 import { GlobalRuleBuilder, type GlobalRuleSeed } from './GlobalRuleBuilder';
 import { RulesIndexDialog } from './RulesIndexDialog';
+import { SmartCreateWizard } from './SmartCreateWizard';
 import { characterCount, rangeFromCharacterAnchors, textForCharacterRange } from '@/lib/quran-logic/characters';
 import { listGlobalRules, type GlobalRule } from '@/lib/storage/global-rules-store';
 import { findGlobalRuleMatchesInAyah } from '@/lib/quran-logic/global-rule-engine';
@@ -62,6 +63,7 @@ export function VariantsPanel() {
   const [reviewingRule, setReviewingRule] = useState<GlobalRule | null>(null);
   const [showRulesIndex, setShowRulesIndex] = useState(false);
   const [showBatchBuilder, setShowBatchBuilder] = useState(false);
+  const [showSmartWizard, setShowSmartWizard] = useState(false);
   const [batchCategories, setBatchCategories] = useState<VariantCategory[]>(['USUL', 'FARSH', 'MADUD']);
   const listRef = useRef<HTMLDivElement>(null);
   const selectedRowRef = useRef<HTMLLIElement>(null);
@@ -378,6 +380,14 @@ export function VariantsPanel() {
             >
               + إنشاء عدة اختلافات مستقلة دفعة واحدة
             </button>
+            <button
+              type="button"
+              onClick={() => setShowSmartWizard(true)}
+              className="w-full rounded-md bg-gradient-to-l from-violet-600 to-fuchsia-600 px-3 py-1.5 text-xs font-bold text-white shadow hover:from-violet-700 hover:to-fuchsia-700"
+              title="Smart Create Wizard (FR-ED-08): تحديد بصري ← عدة أنواع ← عدة أوجه ← علاقات دفعة واحدة"
+            >
+              ✦ معالج الإنشاء الذكي (متعدد الأنواع والأوجه)
+            </button>
             {showBatchBuilder && (
               <div className="rounded-md border border-cyan-200 bg-white p-2">
                 <p className="text-[10px] leading-relaxed text-cyan-950">
@@ -650,6 +660,19 @@ export function VariantsPanel() {
             if (variantId) selectVariant(variantId);
           }}
           onRulesChanged={refreshDerivedBranches}
+        />
+      )}
+
+      {showSmartWizard && (
+        <SmartCreateWizard
+          open={showSmartWizard}
+          loci={draftLoci}
+          markedText={markedText}
+          onClose={() => setShowSmartWizard(false)}
+          onCreated={(ids) => {
+            // يحدّد أول اختلاف ليدخل المحرر إلى السياق الموحّد
+            if (ids[0]) selectVariant(ids[0]);
+          }}
         />
       )}
     </aside>
