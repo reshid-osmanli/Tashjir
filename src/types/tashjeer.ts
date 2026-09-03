@@ -758,6 +758,61 @@ export interface ManualTashjeerLine {
   isHidden?: boolean;
 }
 
+// ==================== علامات الوقف والابتداء (WaqfMark) ====================
+//
+// امتداد للنموذج القديم (RecitationBoundary) يضيف:
+//   1) FORBIDDEN_WASL: قيد صلب يمنع الوصل (DM-07، FR-ED-11.3).
+//   2) scope: END_OF_AYAH أو INTERNAL للتمييز بين عزل الجزء الداخلي وعزل الآية.
+//   3) id فريد مستقل عن سطر المستند لتتبعه في التصدير v8.
+
+/** أنواع علامات الوقف وفق النموذج v8. */
+export type WaqfMarkKind = 'WAQF' | 'IBTIDA' | 'FORBIDDEN_WASL' | 'WASL';
+
+/** نطاق العلامة داخل الآية. */
+export type WaqfMarkScope = 'END_OF_AYAH' | 'INTERNAL';
+
+/** علامة وقف/ابتداء/ممنوع وصل في موضع من الآية (DM-07). */
+export interface WaqfMark {
+  id: string;
+  /** معرّف الآية: surah * 1000 + ayah */
+  ayahKey: number;
+  /** ترتيب الكلمة (1-based) */
+  position: number;
+  /** فهرس الحرف داخل الكلمة عند العلامات الحرفية (INTERNAL الدقيقة). */
+  characterIndex?: number;
+  kind: WaqfMarkKind;
+  scope: WaqfMarkScope;
+  /** يربط نهاية الآية بأول الآية التالية (للوصل المتعدي). */
+  connectsToNextAyah?: boolean;
+  /** وصف مختصر للعلامة (مثل: وقف كاف، وصل أولى). */
+  label?: string;
+  notes?: string;
+  /** من أنشأ العلامة. */
+  source: EditOrigin;
+  createdAt: string;
+}
+
+// ==================== نطاقات العرض المعزول (RenderRange) ====================
+//
+// عند تفعيل وضع «الجزء المحدد فقط» (FR-ED-11.2)، يُسجَّل نطاق العرض
+// ليعزل جزءا من الآية ويبني التشجير عليه وحده (DM-11).
+
+/** سبب عزل نطاق العرض عن بقية الآية. */
+export type RenderRangeReason = 'WAQF_INTERNAL' | 'IBTIDA' | 'FOCUS_SEGMENT';
+
+/** نطاق عرض معزول لجزء من الآية (DM-11، FR-ED-11.2). */
+export interface RenderRange {
+  id: string;
+  ayahKey: number;
+  /** كلمة بداية الجزء المعروض. */
+  fromPosition: number;
+  /** كلمة نهاية الجزء المعروض. */
+  toPosition: number;
+  /** سبب العزل. */
+  reason: RenderRangeReason;
+  createdAt: string;
+}
+
 // ==================== الخطوط والعقد ====================
 
 /** موضع ربط الخط بالكلمة. */
@@ -850,6 +905,19 @@ export interface TashjeerDocument {
   manualLines: ManualTashjeerLine[];
   /** مواضع الوقف والابتداء والوصل الخاصة بهذه الآية. */
   boundaries: RecitationBoundary[];
+  /**
+   * علامات الوقف والابتداء وممنوع الوصل (DM-07، FR-ED-11).
+   *
+   * تُسجَّل هنا بدل الاعتماد على `boundaries` القديم فقط، لتفصل بين
+   * - علامة WAQF/IBTIDA/WASL الناعمة (أداء قارئي)،
+   * - و FORBIDDEN_WASL الصلب (قيد منهجي يمنع الوصل).
+   */
+  waqfMarks?: WaqfMark[];
+  /**
+   * نطاقات العرض المعزولة (DM-11، FR-ED-11.2). عند تفعيل «الجزء المحدد
+   * فقط»، يبني المحرر التشجير على هذا النطاق وحده.
+   */
+  renderRanges?: RenderRange[];
   /** ضبط مواضع أسطر النص لهذه الآية. */
   layout: DocumentLayoutSettings;
   /**

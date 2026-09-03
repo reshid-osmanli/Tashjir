@@ -22,6 +22,7 @@ import type {
   CharacterAnchor,
   EditorSelection,
   LinkEndpoint,
+  RenderRange,
   TashjeerBranch,
   TashjeerDocument,
   TashjeerLink,
@@ -32,6 +33,7 @@ import type {
   VariantAlternative,
   VerificationStatus,
   ViewFilter,
+  WaqfMark,
 } from '@/types/tashjeer';
 import { parseAyahKey } from '@/data/quran';
 import { documentWindowWords } from '@/lib/tashjeer/reading-window';
@@ -119,6 +121,20 @@ interface EditorState {
   replaceDocument: (document: TashjeerDocument) => void;
 
   // ---------- إجراءات الاختلافات ----------
+  // ---------- إجراءات الوقف والابتداء (WaqfMark) ----------
+  /** ينشئ علامة وقف/ابتداء/ممنوع وصل (DM-07، FR-ED-11). */
+  addWaqfMark: (mark: Omit<WaqfMark, 'id' | 'ayahKey' | 'createdAt' | 'source'>) => void;
+  /** يحدّث علامة قائمة. */
+  updateWaqfMark: (markId: string, patch: Partial<WaqfMark>) => void;
+  /** يحذف علامة (التراجع كخطوة واحدة). */
+  deleteWaqfMark: (markId: string) => void;
+  /** يعزل نطاقا معينا من الآية للعرض (DM-11، FR-ED-11.2). */
+  addRenderRange: (range: Omit<RenderRange, 'id' | 'ayahKey' | 'createdAt'>) => void;
+  /** يلغي عزل النطاق. */
+  deleteRenderRange: (rangeId: string) => void;
+  /** يفحص ما إذا كان الوصل بين موضعين ممنوعا بعلامة FORBIDDEN_WASL. */
+  isConnectionForbidden: (fromPosition: number, toPosition: number) => boolean;
+
   addVariant: (variant: Omit<Variant, 'ayahKey'>) => void;
   /** إنشاء عدة اختلافات مستقلة في معاملة واحدة ولقطة تراجع واحدة. */
   addVariantGroup: (variants: Array<Omit<Variant, 'ayahKey'>>) => void;
@@ -1094,6 +1110,86 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ...document,
       boundaries: document.boundaries.filter((boundary) => boundary.id !== boundaryId),
     }));
+  },
+
+  // ==================== علامات الوقف والابتداء (DM-07، FR-ED-11) ====================
+
+  addWaqfMark: (mark) => {
+    mutate(set, get, (document) => {
+      const id = `wm-${document.ayahKey}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      const full: WaqfMark = {
+        ...mark,
+        id,
+        ayahKey: document.ayahKey,
+        source: 'EDITOR',
+        createdAt: new Date().toISOString(),
+      };
+      const waqfMarks = [...(document.waqfMarks ?? []), full].sort(
+        (first, second) => first.position - second.position
+      );
+      // علامة FORBIDDEN_WASL على نهاية الآية تكسر تلقائيا الوصل بالآية
+      // التالية لاحترام القيد الصلب (P-07: قرار واحد في مكان واحد).
+      const breaksWasl =
+        full.kind === 'FORBIDDEN_WASL' &&
+        full.scope === 'END_OF_AYAH' &&
+        Boolean(full.connectsToNextAyah) &&
+        Boolean(document.readingWindow?.linkNextAyah);
+      return {
+        ...document,
+        waqfMarks,
+        readingWindow: breaksWasl
+          ? { ...(document.readingWindow ?? {}), linkNextAyah: false, focusSegment: null }
+          : document.readingWindow,
+      };
+    });
+  },
+
+  updateWaqfMark: (markId, patch) => {
+    mutate(set, get, (document) => ({
+      ...document,
+      waqfMarks: (document.waqfMarks ?? [])
+        .map((mark) => (mark.id === markId ? { ...mark, ...patch } : mark))
+        .sort((first, second) => first.position - second.position),
+    }));
+  },
+
+  deleteWaqfMark: (markId) => {
+    mutate(set, get, (document) => ({
+      ...document,
+      waqfMarks: (document.waqfMarks ?? []).filter((mark) => mark.id !== markId),
+    }));
+  },
+
+  addRenderRange: (range) => {
+    mutate(set, get, (document) => {
+      const id = `rr-${document.ayahKey}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      const full: RenderRange = {
+        ...range,
+        id,
+        ayahKey: document.ayahKey,
+        createdAt: new Date().toISOString(),
+      };
+      // نطاق جديد يحل محل النطاقات السابقة من نفس النوع لتفادي التعارض البصري.
+      const renderRanges = (document.renderRanges ?? [])
+        .filter((existing) => existing.reason !== range.reason)
+        .concat(full);
+      return { ...document, renderRanges };
+    });
+  },
+
+  deleteRenderRange: (rangeId) => {
+    mutate(set, get, (document) => ({
+      ...document,
+      renderRanges: (document.renderRanges ?? []).filter((range) => range.id !== rangeId),
+    }));
+  },
+
+  isConnectionForbidden: (fromPosition, toPosition) => {
+    const document = get().document;
+    if (!document) return false;
+    return (document.waqfMarks ?? []).some(
+      (mark) => mark.kind === 'FORBIDDEN_WASL' && mark.position >= fromPosition && mark.position <= toPosition
+    );
   },
 
   setLinkNextAyah: (linked) => {
