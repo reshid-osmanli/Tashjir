@@ -12,14 +12,8 @@ import {
   decideMerge,
   decideMutualExclusion,
   matchRules,
-  resolveMergeDecision,
   type DecisionResult,
 } from './resolver';
-
-/** يبني نتيجة قرار فارغة عند عدم وجود قواعد. */
-function emptyResult<T>(decision: T): DecisionResult<T> {
-  return { decision, appliedRules: [], skippedRules: [], trace: [] };
-}
 
 // ==================== الدمج ====================
 
@@ -178,10 +172,9 @@ export function resolveRelation(
 /** يتحقق من السماح بالوصل بين حدّين (FR-ED-11، DM-07، FR-ES-16). */
 export function resolveConnection(
   forbidden: boolean,
-  profile: EngineConfig = DEFAULT_SYSTEM_PROFILE
+  _profile: EngineConfig = DEFAULT_SYSTEM_PROFILE
 ): DecisionResult<{ allowed: boolean; reason: string }> {
   const trace: DecisionResult<{ allowed: boolean; reason: string }>['trace'] = [];
-  const blocked = resolveMergeDecision('FORBIDDEN_WASL', 'WASL', profile);
   if (forbidden) {
     trace.push({ stage: 'CONNECTION', message: 'علامة ممنوع الوصل present — الوصل مرفوض', status: 'blocked' });
     return {

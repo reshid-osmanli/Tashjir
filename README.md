@@ -203,6 +203,7 @@ npm run data:quran  # إعادة توليد بيانات المصحف
 | [`docs/EDITOR.md`](docs/EDITOR.md) | **المرجع الكامل للمحرر**: النموذج، المحركات، المكونات، سير العمل |
 | [`docs/ENGINE_STUDIO.md`](docs/ENGINE_STUDIO.md) | **استوديو المحرك**: طبقة القرار والسياسة، الأولويات، القوالب، التصدير الحتمي |
 | [`docs/DATA.md`](docs/DATA.md) | مصادر البيانات وحدود الاعتماد عليها |
+| [`docs/SRS_STATUS.md`](docs/SRS_STATUS.md) | **حالة تنفيذ SRS ومصفوفة التتبّع**: أيُّ متطلب منفَّذ وأين (ملف + اختبار)، وما الخطوات المتبقية |
 | [`docs/TRANSMISSIONS.md`](docs/TRANSMISSIONS.md) | نموذج القراء والرواة والطرق |
 | [`docs/TASHJEER_LOGIC.md`](docs/TASHJEER_LOGIC.md) | منطق التشجير النظري |
 | [`docs/QIRAAT.md`](docs/QIRAAT.md) | بيانات القراءات |
