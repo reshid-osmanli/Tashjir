@@ -28,6 +28,7 @@ import {
   TashjeerOrderControls,
   TextLayoutControls,
 } from './RecitationControls';
+import { WaqfMarksPanel } from './WaqfMarksPanel';
 import { RelationsPanel } from './RelationsPanel';
 import { OrderRankControl } from './OrderRankControl';
 import { coalesceLineOrder, orderSnapshotOf, shiftLineInOrder } from '@/lib/tashjeer/manual-links';
@@ -332,6 +333,7 @@ export function PropertiesPanel() {
       <TashjeerOrderControls />
       <TextLayoutControls />
       <RecitationControls />
+      <WaqfMarksPanel />
       <ManualLinesControls />
       <RelationsPanel />
     </aside>
