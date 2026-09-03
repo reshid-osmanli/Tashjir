@@ -37,21 +37,43 @@ const KIND_LABELS: Record<WaqfMarkKind, { label: string; tone: string; hint: str
 };
 
 export function WaqfMarksPanel() {
-  const { document, addWaqfMark, updateWaqfMark, deleteWaqfMark, isConnectionForbidden } =
+  const { document, addWaqfMark, updateWaqfMark, deleteWaqfMark, isConnectionForbidden, addRenderRange, deleteRenderRange, setFocusSegment } =
     useEditorStore();
   const [kind, setKind] = useState<WaqfMarkKind>('WAQF');
   const [scope, setScope] = useState<WaqfMarkScope>('INTERNAL');
   const [position, setPosition] = useState<number>(1);
   const [connectsToNextAyah, setConnectsToNextAyah] = useState(false);
+  const [isolatedEnd, setIsolatedEnd] = useState<number>(position);
 
   const words = useMemo(() => documentWindowWords(document), [document]);
   const marks = document?.waqfMarks ?? [];
+  const renderRanges = document?.renderRanges ?? [];
 
   if (!document) return null;
 
   const handleAdd = () => {
     if (position < 1 || position > words.length) return;
     addWaqfMark({ kind, position, scope, connectsToNextAyah: scope === 'END_OF_AYAH' && connectsToNextAyah });
+  };
+
+  /**
+   * يفعّل وضع العرض المعزول (FR-ED-11.2، DM-11): يسجّل نطاقا رسميا في
+   * المستند (RenderRange) ويفعّل focusSegment لتظليل الجزء في اللوحة.
+   * الإلغاء يزيل كليهما.
+   */
+  const handleIsolateFromHere = () => {
+    if (isolatedEnd < position) return;
+    addRenderRange({
+      fromPosition: position,
+      toPosition: isolatedEnd,
+      reason: scope === 'END_OF_AYAH' ? 'FOCUS_SEGMENT' : 'WAQF_INTERNAL',
+    });
+    setFocusSegment({ startPosition: position, endPosition: isolatedEnd });
+  };
+
+  const handleClearIsolated = () => {
+    for (const range of renderRanges) deleteRenderRange(range.id);
+    setFocusSegment(null);
   };
 
   return (
@@ -119,6 +141,49 @@ export function WaqfMarksPanel() {
           />
           يربط نهاية هذه الآية بأول الآية التالية (يمنع الوصل بينهما عند التفعيل)
         </label>
+      )}
+
+      {/* عزل الجزء للعرض (FR-ED-11.2) */}
+      {scope === 'INTERNAL' && (
+        <div className="mt-2 rounded border border-violet-200 bg-violet-50/60 px-2 py-1.5 text-[11px]">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-violet-900">عزل للعرض من الكلمة {toArabicDigits(position)} إلى:</span>
+            <select
+              value={isolatedEnd}
+              onChange={(event) => setIsolatedEnd(Number(event.target.value))}
+              className="h-7 rounded border border-violet-300 bg-white px-1 text-[11px]"
+            >
+              {words.filter((w) => w.position >= position).map((word) => (
+                <option key={word.id} value={word.position}>
+                  {toArabicDigits(word.position)}: {word.text}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleIsolateFromHere}
+              disabled={isolatedEnd < position}
+              className="rounded bg-violet-700 px-2 py-1 text-[10px] font-medium text-white hover:bg-violet-800 disabled:opacity-40"
+              title="فعّل وضع العرض المعزول: تبني رموز التشجير على الجزء وحده"
+            >
+              اعرض الجزء وحده
+            </button>
+          </div>
+          {renderRanges.length > 0 && (
+            <div className="mt-1 flex items-center justify-between">
+              <span className="text-violet-800">
+                معروض الآن: {toArabicDigits(renderRanges[0].fromPosition)}–{toArabicDigits(renderRanges[0].toPosition)}
+              </span>
+              <button
+                type="button"
+                onClick={handleClearIsolated}
+                className="rounded border border-violet-300 bg-white px-1.5 py-0.5 text-[10px] text-violet-900 hover:bg-violet-100"
+              >
+                إلغاء العزل
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       <p className="mt-1 text-[10px] leading-relaxed text-stone-500">
