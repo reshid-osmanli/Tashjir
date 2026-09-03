@@ -448,10 +448,10 @@ export interface EngineRule {
 }
 
 /** سلّم الخصوصية (FR-ES-06). */
-export type SpecificityLevel = 'MUSHFAF' | 'SURAH' | 'AYAH' | 'SEGMENT' | 'WORD' | 'CHARACTER';
+export type SpecificityLevel = 'MUSHAF' | 'SURAH' | 'AYAH' | 'SEGMENT' | 'WORD' | 'CHARACTER';
 
 export const SPECIFICITY_RANK: Record<SpecificityLevel, number> = {
-  MUSHFAF: 6,
+  MUSHAF: 6,
   SURAH: 5,
   AYAH: 4,
   SEGMENT: 3,

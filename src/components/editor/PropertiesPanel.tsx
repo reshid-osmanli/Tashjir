@@ -22,6 +22,7 @@ import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getImamColor } from '@/lib/tashjeer/color-system';
 import { describeScope, getFullNarratorName, resolveScope } from '@/lib/tashjeer/scope';
 import { StatusBadge } from './VariantsPanel';
+import { WhyTraceDialog } from './WhyTraceDialog';
 import {
   ManualLinesControls,
   RecitationControls,
@@ -45,6 +46,7 @@ const STATUS_OPTIONS: Array<{ value: VerificationStatus; label: string }> = [
 ];
 
 export function PropertiesPanel() {
+  const [showWhyDialog, setShowWhyDialog] = useState(false);
   const {
     document,
     filter,
@@ -220,6 +222,24 @@ export function PropertiesPanel() {
               })
             }
           />
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setShowWhyDialog(true)}
+              className="w-full rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-900 hover:bg-violet-100"
+              title="لماذا يقرر المحرك هذا الدمج/الترتيب؟ اعرض القواعد والمصفوفة التي حسمت القرار"
+            >
+              لماذا؟
+            </button>
+            <button
+              type="button"
+              onClick={() => window.location.assign('/studio')}
+              className="w-full rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-100"
+              title="افتح القاعدة/السياسة المرتبطة في استوديو المحرك"
+            >
+              في الاستوديو
+            </button>
+          </div>
         </Section>
       )}
 
@@ -334,6 +354,10 @@ export function PropertiesPanel() {
       <RecitationControls />
       <ManualLinesControls />
       <RelationsPanel />
+
+      {showWhyDialog && selectedVariant && (
+        <WhyTraceDialog category={selectedVariant.category} onClose={() => setShowWhyDialog(false)} />
+      )}
     </aside>
   );
 }

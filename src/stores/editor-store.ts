@@ -16,24 +16,27 @@
 
 import { create } from 'zustand';
 import type { VariantCategory } from '@/types';
-import type {
-  ManualTashjeerLine,
-  RecitationBoundary,
-  CharacterAnchor,
-  EditorSelection,
-  LinkEndpoint,
-  TashjeerBranch,
-  TashjeerDocument,
-  TashjeerLink,
-  TashjeerLinkKind,
-  TashjeerLinkRelation,
-  LineSegment,
-  Variant,
-  VariantAlternative,
-  VerificationStatus,
-  ViewFilter,
+import {
+  faceEndpointKey,
+  type ManualTashjeerLine,
+  type RecitationBoundary,
+  type CharacterAnchor,
+  type EditorSelection,
+  type LinkEndpoint,
+  type TashjeerBranch,
+  type TashjeerDocument,
+  type TashjeerLink,
+  type TashjeerLinkKind,
+  type TashjeerLinkRelation,
+  type LineSegment,
+  type Variant,
+  type VariantAlternative,
+  type VerificationStatus,
+  type ViewFilter,
 } from '@/types/tashjeer';
 import { parseAyahKey } from '@/data/quran';
+import type { SmartCreateResult } from '@/lib/tashjeer/smart-create';
+import { relationTypeToLinkRelation } from '@/lib/tashjeer/model/v8';
 import { documentWindowWords } from '@/lib/tashjeer/reading-window';
 import { layoutAyah } from '@/lib/tashjeer/layout-engine';
 import { generateBranches } from '@/lib/tashjeer/branch-engine';
@@ -122,6 +125,11 @@ interface EditorState {
   addVariant: (variant: Omit<Variant, 'ayahKey'>) => void;
   /** إنشاء عدة اختلافات مستقلة في معاملة واحدة ولقطة تراجع واحدة. */
   addVariantGroup: (variants: Array<Omit<Variant, 'ayahKey'>>) => void;
+  /**
+   * يطبّق ناتج المعالج الذكي (FR-ED-08) على المستند في معاملة واحدة:
+   * كل نوع كيان مستقل، وعلاقاته تُنشأ بمعرّفاتها، وكل ذلك خطوة تراجع واحدة.
+   */
+  applySmartCreateBatch: (result: SmartCreateResult) => void;
   updateVariant: (variantId: string, patch: Partial<Variant>) => void;
   deleteVariant: (variantId: string) => void;
   addAlternative: (variantId: string, alternative: VariantAlternative) => void;
@@ -373,6 +381,104 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         summary: `أنشأ المحرر ${variants.length} اختلافات مستقلة في عملية واحدة`,
       }
     );
+    set({ markedPositions: [], markedCharacters: [] });
+  },
+
+  applySmartCreateBatch: (result) => {
+    if (result.differences.length === 0 || !get().document) return;
+
+    mutate(set, get, (document) => {
+      const variants: Variant[] = result.differences.map((difference) => {
+        const hasCharacters = Boolean(
+          difference.locus.characterRange || difference.locus.loci?.some((locus) => locus.characterRange)
+        );
+        const characterRange =
+          difference.locus.characterRange ??
+          (difference.locus.loci?.length === 1 ? difference.locus.loci[0]?.characterRange : undefined);
+        return {
+          id: difference.id,
+          ayahKey: document.ayahKey,
+          category: difference.category,
+          title: difference.title,
+          startPosition: difference.locus.startPosition,
+          endPosition: difference.locus.endPosition,
+          targetKind: hasCharacters ? ('CHARACTERS' as const) : ('WORDS' as const),
+          characterRange,
+          loci: difference.locus.loci && difference.locus.loci.length > 1
+            ? difference.locus.loci.map((locus) => ({
+                startPosition: locus.startPosition,
+                endPosition: locus.endPosition,
+                characterRange: locus.characterRange,
+              }))
+            : undefined,
+          alternatives: [...difference.variants]
+            .sort((first, second) => first.rank - second.rank)
+            .map((variant) => ({
+              id: variant.id,
+              text: variant.text,
+              label: variant.label,
+              scope: variant.scope,
+              isBase: variant.isBase,
+              strengthDegreeId: variant.strengthDegreeId,
+              strengthByNarrator: variant.strengthByNarrator,
+              ruleLabel: variant.ruleLabel,
+              maddHarakat: variant.maddHarakat,
+              notes: variant.notes,
+              evidences: variant.evidences,
+            })),
+          recitationMode: difference.context === 'ALWAYS' ? undefined : difference.context,
+          engineSnapshot: undefined,
+          editorModifiedAt: undefined,
+          status: difference.status,
+          origin: 'EDITOR' as const,
+          orderRank: difference.rank,
+          description: difference.description,
+          sourceRef: difference.sourceRef,
+          alternativeOrder: [...difference.variants]
+            .sort((first, second) => first.rank - second.rank)
+            .map((variant) => variant.id),
+        };
+      });
+
+      const faceByDifference = new Map(
+        result.differences.map((difference) => [difference.id, difference.variants[0]?.id])
+      );
+      const links: TashjeerLink[] = [];
+      for (const relation of result.relations) {
+        const fromFace = faceByDifference.get(relation.fromId);
+        const toFace = faceByDifference.get(relation.toId);
+        if (!fromFace || !toFace) continue;
+        const now = new Date().toISOString();
+        links.push({
+          id: `link-${document.ayahKey}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+          ayahKey: document.ayahKey,
+          kind: 'FACE_TO_FACE',
+          relation: relationTypeToLinkRelation(relation.type),
+          from: { type: 'FACE', id: faceEndpointKey(relation.fromId, fromFace) },
+          to: { type: 'FACE', id: faceEndpointKey(relation.toId, toFace) },
+          notes: relation.note,
+          origin: 'EDITOR',
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+
+      return withLoggedEdit(
+        {
+          ...document,
+          variants: [...document.variants, ...variants].sort(compareVariants),
+          links: [...(document.links ?? []), ...links],
+        },
+        {
+          action: 'إنشاء مجموعة ذكية',
+          targetType: 'VARIANT',
+          targetId: result.batchId,
+          category: result.differences[0]?.category,
+          summary: `أنشأ المحرر ${result.differences.length} اختلافات مستقلة بعلاقاتها في عملية معالج ذكي واحدة`,
+        },
+        document
+      );
+    });
     set({ markedPositions: [], markedCharacters: [] });
   },
 

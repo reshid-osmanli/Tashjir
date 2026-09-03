@@ -136,7 +136,7 @@ export function resolveMergeDecision(
     actions: [],
     priority: entry.priority,
     groupId: 'merge',
-    specificity: 'MUSHFAF' as const,
+    specificity: 'MUSHAF' as const,
     hardness: (entry.merge ? 'SOFT' : 'HARD') as 'SOFT' | 'HARD',
     status: 'ACTIVE' as const,
     version: 1,

@@ -42,6 +42,35 @@ describe('الإنشاء الجماعي يحافظ على الاستقلال (FR
   });
 });
 
+describe('الأوجه المستقلة لكل نوع (FR-ED-08 الخطوة 2)', () => {
+  it('يضيف أوجهًا مستقلة برتب متتابعة بعد وجه المصحف', () => {
+    const { differences } = buildSmartCreateBatch({
+      ...baseInput,
+      variants: {
+        MADUD: [
+          { label: 'بالألف', text: 'مٰالِكِ' },
+          { label: 'بالساكنة', text: 'مٰالِكٍ' },
+        ],
+      },
+    });
+    const madd = differences.find((d) => d.category === 'MADUD')!;
+    expect(madd.variants).toHaveLength(3);
+    expect(madd.variants[0]!.isBase).toBe(true);
+    expect(madd.variants[1]!.label).toBe('بالألف');
+    expect(madd.variants[1]!.rank).toBe(2);
+    expect(madd.variants[2]!.label).toBe('بالساكنة');
+    expect(madd.variants[2]!.rank).toBe(3);
+  });
+
+  it('لا يضيف أوجهًا لنوع لم يُحدَّد له شيء', () => {
+    const { differences } = buildSmartCreateBatch({
+      ...baseInput,
+      variants: { MADUD: [{ label: 'بالألف' }] },
+    });
+    expect(differences.find((d) => d.category === 'USUL')!.variants).toHaveLength(1);
+  });
+});
+
 describe('العلاقات التلقائية بين الأنواع (FR-ED-08 الخطوة 5)', () => {
   it('ينشئ علاقة بين نوعين بمعرّفاتهما', () => {
     const { differences, relations } = buildSmartCreateBatch({

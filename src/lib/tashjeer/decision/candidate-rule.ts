@@ -62,7 +62,7 @@ export function proposeCandidateRule(ctx: CorrectionContext): EngineRule {
     priority: 90,
     groupId: 'merge',
     // خصوصية الآية افتراضيًا حتى تقدر القاعدة المرشحة على التجاوز المحلي إن لزم.
-    specificity: (ctx.scope === 'AYAH' ? 'AYAH' : 'MUSHFAF') as SpecificityLevel,
+    specificity: (ctx.scope === 'AYAH' ? 'AYAH' : 'MUSHAF') as SpecificityLevel,
     hardness: 'SOFT',
     status: 'DRAFT',
     version: 1,

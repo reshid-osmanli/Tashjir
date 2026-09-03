@@ -57,8 +57,8 @@ describe('نموذج v8 — العلاقات (DM-03)', () => {
 });
 
 describe('نموذج v8 — سلّم الخصوصية (FR-ES-06)', () => {
-  it('MUSHFAF أخص من WORD وأخص من CHARACTER', () => {
-    expect(SPECIFICITY_RANK.MUSHFAF).toBeGreaterThan(SPECIFICITY_RANK.WORD);
+  it('MUSHAF أخص من WORD وأخص من CHARACTER', () => {
+    expect(SPECIFICITY_RANK.MUSHAF).toBeGreaterThan(SPECIFICITY_RANK.WORD);
     expect(SPECIFICITY_RANK.WORD).toBeGreaterThan(SPECIFICITY_RANK.CHARACTER);
     expect(SPECIFICITY_RANK.CHARACTER).toBe(1);
   });

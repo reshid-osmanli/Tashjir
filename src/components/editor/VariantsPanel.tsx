@@ -17,6 +17,7 @@ import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-system';
 import { describeScope, resolveScope } from '@/lib/tashjeer/scope';
 import { VariantEditor } from './VariantEditor';
+import { SmartCreateWizard } from './SmartCreateWizard';
 import { GlobalRuleBuilder, type GlobalRuleSeed } from './GlobalRuleBuilder';
 import { RulesIndexDialog } from './RulesIndexDialog';
 import { characterCount, rangeFromCharacterAnchors, textForCharacterRange } from '@/lib/quran-logic/characters';
@@ -62,6 +63,8 @@ export function VariantsPanel() {
   const [showRulesIndex, setShowRulesIndex] = useState(false);
   const [showBatchBuilder, setShowBatchBuilder] = useState(false);
   const [batchCategories, setBatchCategories] = useState<VariantCategory[]>(['USUL', 'FARSH', 'MADUD']);
+  const [showSmartWizard, setShowSmartWizard] = useState(false);
+  const [listSearch, setListSearch] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
   const selectedRowRef = useRef<HTMLLIElement>(null);
   const [canScrollUp, setCanScrollUp] = useState(false);
@@ -106,6 +109,23 @@ export function VariantsPanel() {
   }, [draftLoci, words]);
 
   const hasMarks = draftLoci.length > 0;
+
+  const visibleVariants = useMemo(() => {
+    const query = listSearch.trim().toLowerCase();
+    if (!query || !document) return document?.variants ?? [];
+    return document.variants.filter((variant) => {
+      const title = variant.title.toLowerCase();
+      const category = CATEGORY_LABELS[variant.category] ?? variant.category;
+      const status = variant.status.toLowerCase();
+      const source = variant.isGlobalDerived ? 'قاعدة عامة' : variant.origin === 'EDITOR' ? 'محرر' : 'محرك';
+      return (
+        title.includes(query) ||
+        category.includes(query) ||
+        status.includes(query) ||
+        source.includes(query)
+      );
+    });
+  }, [document, listSearch]);
 
   const activeGlobalRules = useMemo(() => {
     if (!document) return [];
@@ -372,6 +392,14 @@ export function VariantsPanel() {
 
             <button
               type="button"
+              onClick={() => setShowSmartWizard(true)}
+              className="w-full rounded-md border border-emerald-600 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-950 hover:bg-emerald-100"
+              title="المعالج الموحّد: أنواع وأوجه ونطاق قرّاء وعلاقات وسياق ونطاق جغرافي في خطوات واضحة"
+            >
+              🧭 المعالج الذكي الموحّد (٧ خطوات)
+            </button>
+            <button
+              type="button"
               onClick={() => setShowBatchBuilder((value) => !value)}
               className="w-full rounded-md border border-cyan-500 bg-cyan-50 px-3 py-1.5 text-xs font-bold text-cyan-950 hover:bg-cyan-100"
             >
@@ -458,7 +486,22 @@ export function VariantsPanel() {
       </section>
 
       {/* قائمة الاختلافات: مساحة مستقلة لا تدفع اللوحة خارج الشاشة. */}
-      <div className="relative min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div className="sticky top-0 z-10 border-b border-stone-200 bg-white px-3 py-2">
+          <label className="block text-[10px] font-medium text-stone-500">بحث وتصفية فورية</label>
+          <input
+            type="search"
+            value={listSearch}
+            onChange={(event) => setListSearch(event.target.value)}
+            placeholder="النص، الفئة، المصدر، الحالة…"
+            className="mt-1 w-full rounded border border-stone-300 px-2 py-1 text-[11px] focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+          {listSearch.trim() && (
+            <button type="button" onClick={() => setListSearch('')} className="mt-1 text-[10px] text-emerald-700 hover:underline">
+              إلغاء البحث
+            </button>
+          )}
+        </div>
         {canScrollUp && (
           <button
             type="button"
@@ -471,17 +514,19 @@ export function VariantsPanel() {
         )}
         <div
           ref={listRef}
-          className="h-full overscroll-contain overflow-y-scroll scroll-smooth pb-10 pt-1 [scrollbar-gutter:stable] touch-pan-y"
+          className="min-h-0 flex-1 overscroll-contain overflow-y-scroll scroll-smooth pb-10 pt-1 [scrollbar-gutter:stable] touch-pan-y"
           tabIndex={0}
           aria-label="قائمة الاختلافات القابلة للتمرير"
         >
-        {document.variants.length === 0 ? (
+        {visibleVariants.length === 0 ? (
           <p className="px-4 py-6 text-center text-xs text-stone-500">
-            لا توجد اختلافات مسجّلة في هذه الآية بعد.
+            {document.variants.length === 0
+              ? 'لا توجد اختلافات مسجّلة في هذه الآية بعد.'
+              : 'لا نتائج مطابقة للبحث أو التصفية.'}
           </p>
         ) : (
           <ul className="divide-y divide-stone-100">
-            {document.variants.map((variant) => (
+            {visibleVariants.map((variant) => (
               <VariantRow
                 key={variant.id}
                 variant={variant}
@@ -628,6 +673,19 @@ export function VariantsPanel() {
             if (variantId) selectVariant(variantId);
           }}
           onRulesChanged={refreshDerivedBranches}
+        />
+      )}
+
+      {showSmartWizard && draftLoci.length > 0 && (
+        <SmartCreateWizard
+          selectionText={markedText}
+          initialLoci={draftLoci}
+          onClose={() => setShowSmartWizard(false)}
+          onComplete={(message) => {
+            clearMarks();
+            refreshDerivedBranches();
+            setGlobalNotice(message);
+          }}
         />
       )}
     </aside>

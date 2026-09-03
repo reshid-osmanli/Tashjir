@@ -18,7 +18,7 @@ function rule(overrides: Partial<EngineRule>): EngineRule {
     actions: [{ type: 'PREVENT_MERGE' }],
     priority: 50,
     groupId: 'merge',
-    specificity: 'MUSHFAF',
+    specificity: 'MUSHAF',
     hardness: 'SOFT',
     status: 'ACTIVE',
     version: 1,

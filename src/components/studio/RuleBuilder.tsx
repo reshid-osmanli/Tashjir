@@ -44,11 +44,11 @@ const CATEGORIES = Object.keys(CATEGORY_LABELS) as EngineRuleCategory[];
 const SCOPES = Object.keys(SCOPE_LABELS) as EngineRuleScope[];
 const HARDNESS = Object.keys(HARDNESS_LABELS) as RuleHardness[];
 const STATUSES = Object.keys(STATUS_LABELS) as RuleStatus[];
-const SPECIFICITIES: SpecificityLevel[] = ['MUSHFAF', 'SURAH', 'AYAH', 'SEGMENT', 'WORD', 'CHARACTER'];
+const SPECIFICITIES: SpecificityLevel[] = ['MUSHAF', 'SURAH', 'AYAH', 'SEGMENT', 'WORD', 'CHARACTER'];
 const ACTIONS = Object.keys(ACTION_LABELS) as RuleActionType[];
 
 const SPECIFICITY_LABELS: Record<SpecificityLevel, string> = {
-  MUSHFAF: 'المصحف',
+  MUSHAF: 'المصحف',
   SURAH: 'السورة',
   AYAH: 'الآية',
   SEGMENT: 'الجزء',
@@ -84,7 +84,7 @@ function ruleToDraft(rule: EngineRule | null): {
       scope: 'MUSHAF',
       priority: 50,
       groupId: 'merge',
-      specificity: 'MUSHFAF',
+      specificity: 'MUSHAF',
       hardness: 'SOFT',
       status: 'DRAFT',
       conditions: [emptyCondition()],
