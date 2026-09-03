@@ -163,7 +163,9 @@ if (aStart !== bStart) return bStart - aStart;  // الأكبر موضعا أو�
 | `GlobalRuleMetaEditor` | `components/editor/GlobalRuleMetaEditor.tsx` | تحرير بيانات قاعدة قائمة ونطاقها ودرجاتها، مشترك بين المحرر وصفحة الفهرس |
 | `StrengthDegreePicker` | `components/editor/StrengthDegreePicker.tsx` | اختيار درجة قوة الوجه، عامةً ولكل راوٍ على حدة |
 | `StrengthDegreesManager` | `components/settings/StrengthDegreesManager.tsx` | تحرير سلّم الدرجات من الإعدادات: إضافة، إعادة ترتيب، حذف |
+| `SmartCreateWizard` | `components/editor/SmartCreateWizard.tsx` | المعالج الذكي الموحّد ٧ خطوات: أنواع، أوجه، قرّاء، علاقات، سياق، تعميم |
 | `VariantEditor` | `components/editor/VariantEditor.tsx` | تحرير الأوجه والنطاقات والأدلة |
+| `WhyTraceDialog` | `components/editor/WhyTraceDialog.tsx` | «لماذا؟» في المحرر: أثر قرار الدمج والتتبع من نفس Decision Resolver |
 | `PropertiesPanel` | `components/editor/PropertiesPanel.tsx` | التفتيش والإحصاءات وتصفية الرواة |
 | `ShortcutsDialog` | `components/editor/ShortcutsDialog.tsx` | مرجع الاختصارات |
 
@@ -228,6 +230,20 @@ loadDocument / saveDocument / listDocuments / deleteDocument
 7. راجع النتيجة، ثم Ctrl+S للحفظ
 8. ارفع حالة المستند إلى "قيد المراجعة"
 ```
+
+### 6.0 المعالج الذكي الموحّد (FR-ED-08)
+
+زر **«المعالج الذكي الموحّد (٧ خطوات)»** في لوحة الاختلافات يجمع الإنشاء المتفرق السابق في مكان واحد:
+
+1. **التحديد البصري**: تعرض كلمات الآية قابلة للنقر، فيحدد المحقق كلمة واحدة أو مدى «كلمة ← كلمة». إن كان التحديد الحرفي قائما من المحرر يبقى المدى الحرفي.
+2. **الأنواع**: يحصر الأنواع المختارة (تحقيق/أصول/فرش/مدود…) في إنشاء واحد، وكل نوع كيان مستقل برتبته الصريحة.
+3. **الأوجه**: يمكن إضافة عدة أوجه لكل نوع سطرا سطرا، فينشئ كل وجه كيانا مستقلا.
+4. **القرّاء**: محدد النطاق نفسه في `VariantEditor`.
+5. **العلاقات**: خيارات جاهزة بلا كود: «مرتبط» أو «متنافٍ» بين النوع الأول والبقية.
+6. **النطاق الجغرافي**: موضع فقط، أو تعميم على المصحف كله عبر قاعدة عامة لكل نوع (يُفتح لدعم التحديد الحرفي).
+7. **السياق والمراجعة**: وقفا ووصلا / وقفا فقط / وصلا فقط، مع ملخص عددي قبل الإنشاء.
+
+كل الإنشاء يمرّ عبر `buildSmartCreateBatch` و`applySmartCreateBatch`: معاملة واحدة للتراجع، وعلاقات بمعرّفات الكيانات، لا هياكل خاصة بالواجهة.
 
 ### 6.1 قاعدة من تحديد الحروف وتطبيقها في المصحف كله
 

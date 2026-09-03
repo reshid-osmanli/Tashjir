@@ -245,7 +245,7 @@ function normalizeRule(rule: Partial<EngineRule>, now: string): EngineRule {
     actions: Array.isArray(rule.actions) ? rule.actions : [],
     priority: typeof rule.priority === 'number' ? rule.priority : 50,
     groupId: rule.groupId ?? 'fallback',
-    specificity: (rule.specificity as SpecificityLevel) ?? 'MUSHFAF',
+    specificity: (rule.specificity as SpecificityLevel) ?? 'MUSHAF',
     hardness: (rule.hardness as RuleHardness) ?? 'SOFT',
     status: (rule.status as RuleStatus) ?? 'DRAFT',
     version: typeof rule.version === 'number' ? rule.version : 1,

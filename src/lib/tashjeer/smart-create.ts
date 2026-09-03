@@ -37,6 +37,14 @@ export interface SmartRelationSpec {
   type: RelationType;
 }
 
+/** وجهًا إضافيًا يدخل من المعالج إلى نوع واحد (الخطوة 2). */
+export interface SmartVariantSpec {
+  label: string;
+  text?: string;
+  ruleLabel?: string;
+  maddHarakat?: number;
+}
+
 /** مدخلات المعالج. */
 export interface SmartCreateInput {
   ayahKey: number;
@@ -50,6 +58,8 @@ export interface SmartCreateInput {
   context?: RecitationContext;
   /** علاقات بين الأنواع تُنشأ تلقائيًا (الخطوة 5). */
   relations?: SmartRelationSpec[];
+  /** أوجه مستقلة إضافية لكل نوع (الخطوة 2). */
+  variants?: Partial<Record<VariantCategory, SmartVariantSpec[]>>;
 }
 
 /** ناتج المعالج: كيانات مستقلة + علاقاتها + معرّف الدفعة. */
@@ -116,6 +126,18 @@ export function buildSmartCreateBatch(input: SmartCreateInput): SmartCreateResul
       createdAt: now,
       updatedAt: now,
     };
+    const customVariants: Variant[] = (input.variants?.[category] ?? []).map((spec, faceIndex) => ({
+      id: createEntityId('v'),
+      text: spec.text?.trim() || titleBase,
+      label: spec.label.trim() || `وجه ${faceIndex + 2}`,
+      scope: input.scope,
+      rank: faceIndex + 2,
+      ruleLabel: spec.ruleLabel?.trim() || undefined,
+      maddHarakat: spec.maddHarakat,
+      source: 'editor',
+      createdAt: now,
+      updatedAt: now,
+    }));
     return {
       id,
       ayahKey: input.ayahKey,
@@ -129,7 +151,7 @@ export function buildSmartCreateBatch(input: SmartCreateInput): SmartCreateResul
       rank: index + 1,
       version: 1,
       status: 'DRAFT',
-      variants: [baseVariant],
+      variants: [baseVariant, ...customVariants],
       relations: [],
       createBatchId: batchId,
       createdAt: now,

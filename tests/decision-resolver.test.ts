@@ -26,13 +26,13 @@ import type { EngineRule, EngineConfig } from '@/lib/tashjeer/model/v8';
 describe('مطابقة القواعد والأولوية (FR-ES-01)', () => {
   it('يرتّب القواعد المطابقة بأعلى أولوية ثم أخص خصوصية', () => {
     const rules: EngineRule[] = [
-      { id: 'low', name: 'low', type: 'MERGE', category: 'MERGE', scope: 'MUSHAF', conditions: { all: [{ field: 'x', op: 'equals', value: 1 }] }, actions: [], priority: 50, groupId: 'merge', specificity: 'MUSHFAF', hardness: 'SOFT', status: 'ACTIVE', version: 1, createdAt: 't', updatedAt: 't' },
-      { id: 'high', name: 'high', type: 'MERGE', category: 'MERGE', scope: 'MUSHAF', conditions: { all: [{ field: 'x', op: 'equals', value: 1 }] }, actions: [], priority: 100, groupId: 'merge', specificity: 'MUSHFAF', hardness: 'SOFT', status: 'ACTIVE', version: 1, createdAt: 't', updatedAt: 't' },
+      { id: 'low', name: 'low', type: 'MERGE', category: 'MERGE', scope: 'MUSHAF', conditions: { all: [{ field: 'x', op: 'equals', value: 1 }] }, actions: [], priority: 50, groupId: 'merge', specificity: 'MUSHAF', hardness: 'SOFT', status: 'ACTIVE', version: 1, createdAt: 't', updatedAt: 't' },
+      { id: 'high', name: 'high', type: 'MERGE', category: 'MERGE', scope: 'MUSHAF', conditions: { all: [{ field: 'x', op: 'equals', value: 1 }] }, actions: [], priority: 100, groupId: 'merge', specificity: 'MUSHAF', hardness: 'SOFT', status: 'ACTIVE', version: 1, createdAt: 't', updatedAt: 't' },
       { id: 'specific', name: 'specific', type: 'MERGE', category: 'MERGE', scope: 'WORD', conditions: { all: [{ field: 'x', op: 'equals', value: 1 }] }, actions: [], priority: 100, groupId: 'merge', specificity: 'WORD', hardness: 'SOFT', status: 'ACTIVE', version: 1, createdAt: 't', updatedAt: 't' },
     ];
     const { matched } = matchRules({ ...DEFAULT_SYSTEM_PROFILE, rules }, { x: 1 });
     const sorted = sortRulesByPrecedence(matched);
-    // عند تساوي الأولوية يفوز الأخص خصوصية: MUSHFAF (high) أخص من WORD (specific).
+    // عند تساوي الأولوية يفوز الأخص خصوصية: MUSHAF (high) أخص من WORD (specific).
     expect(sorted[0].id).toBe('high');
     expect(sorted.map((r) => r.id)).toContain('specific');
   });
@@ -40,8 +40,8 @@ describe('مطابقة القواعد والأولوية (FR-ES-01)', () => {
 
 describe('حل التعارض (FR-ES-06)', () => {
   it('لا اختيار عشوائي: الأعلى أولوية يفوز', () => {
-    const a: EngineRule = { id: 'A', name: 'A Merge', type: 'MERGE', category: 'MERGE', scope: 'MUSHAF', conditions: { all: [] }, actions: [{ type: 'MERGE' }], priority: 100, groupId: 'merge', specificity: 'MUSHFAF', hardness: 'SOFT', status: 'ACTIVE', version: 1, createdAt: 't', updatedAt: 't' };
-    const b: EngineRule = { id: 'B', name: 'B DoNotMerge', type: 'MERGE', category: 'MERGE', scope: 'MUSHAF', conditions: { all: [] }, actions: [{ type: 'PREVENT_MERGE' }], priority: 80, groupId: 'merge', specificity: 'MUSHFAF', hardness: 'SOFT', status: 'ACTIVE', version: 1, createdAt: 't', updatedAt: 't' };
+    const a: EngineRule = { id: 'A', name: 'A Merge', type: 'MERGE', category: 'MERGE', scope: 'MUSHAF', conditions: { all: [] }, actions: [{ type: 'MERGE' }], priority: 100, groupId: 'merge', specificity: 'MUSHAF', hardness: 'SOFT', status: 'ACTIVE', version: 1, createdAt: 't', updatedAt: 't' };
+    const b: EngineRule = { id: 'B', name: 'B DoNotMerge', type: 'MERGE', category: 'MERGE', scope: 'MUSHAF', conditions: { all: [] }, actions: [{ type: 'PREVENT_MERGE' }], priority: 80, groupId: 'merge', specificity: 'MUSHAF', hardness: 'SOFT', status: 'ACTIVE', version: 1, createdAt: 't', updatedAt: 't' };
     const { winner, reason } = resolveConflictPolicy(DEFAULT_SYSTEM_PROFILE.conflictPolicy, [a, b]);
     expect(winner?.id).toBe('A');
     expect(reason).toContain('أولوية');
@@ -114,7 +114,7 @@ describe('واجهة القرار الموحّدة (FR-EN-03)', () => {
     profile.rules.push({
       id: 'er-block', name: 'منع ربط X', type: 'RELATION', category: 'RELATION', scope: 'MUSHAF',
       conditions: { all: [{ field: 'relationType', op: 'equals', value: 'MERGE' }] },
-      actions: [{ type: 'BLOCK_RESULT' }], priority: 90, groupId: 'exceptions', specificity: 'MUSHFAF',
+      actions: [{ type: 'BLOCK_RESULT' }], priority: 90, groupId: 'exceptions', specificity: 'MUSHAF',
       hardness: 'HARD', status: 'ACTIVE', version: 1, createdAt: 't', updatedAt: 't',
     });
     const res = resolveRelation('a', 'b', 'MERGE', profile);
