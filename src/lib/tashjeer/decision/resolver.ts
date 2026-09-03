@@ -110,8 +110,7 @@ function matrixKey(a: string, b: string): string {
 export function resolveMergeDecision(
   a: string,
   b: string,
-  profile: EngineConfig,
-  options?: { conditionalContext?: 'WAQF_ONLY' | 'WASL_ONLY' }
+  profile: EngineConfig
 ): { merge: boolean; reason: string; priority: number; entry?: MergeMatrixEntry } {
   const key = matrixKey(a, b);
   const entries = profile.mergeMatrix.filter((entry) => matrixKey(entry.a, entry.b) === key);

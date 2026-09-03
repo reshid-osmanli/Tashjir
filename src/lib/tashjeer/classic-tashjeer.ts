@@ -661,15 +661,6 @@ function normalizeFocusSegment(
   return { startPosition: start, endPosition: end };
 }
 
-/** هل يتقاطع مدى الموضع مع مقطع العمل؟ */
-function intersectsSegment(
-  startPosition: number,
-  endPosition: number,
-  segment: { startPosition: number; endPosition: number }
-): boolean {
-  return startPosition <= segment.endPosition && endPosition >= segment.startPosition;
-}
-
 /** يتقاطع الاختلاف مع المقطع إن وقع أحد مواضعه الفعلية فيه. */
 function intersectsSegmentForVariant(
   variant: Variant,
