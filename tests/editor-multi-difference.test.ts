@@ -119,4 +119,89 @@ describe('تعدد الاختلافات لنفس القارئ والموضع (FR
     expect(document.variants.find((v) => v.id === 'd-a')!.title).toBe('أ — معدّل');
     expect(document.variants.find((v) => v.id === 'd-b')!.title).toBe('ب');
   });
+
+  it('addSiblingVariant ينشئ اختلافا شقيقا يشارك الأصل في الموضع ومجموعة التعدد', async () => {
+    const useEditorStore = await loadStore();
+    useEditorStore.getState().openAyah(AYAH_KEY);
+
+    useEditorStore.getState().addVariant({
+      id: 'madd-2',
+      category: 'MADUD',
+      title: 'مد ٢',
+      startPosition: 3,
+      endPosition: 3,
+      alternatives: [
+        {
+          id: 'madd-2-f',
+          text: 'مَالِكِ',
+          label: 'مد ٢',
+          scope: { kind: 'NARRATORS', narratorIds: ['narrator-qalun'] },
+          maddHarakat: 2,
+        },
+      ],
+      status: 'DRAFT',
+    });
+
+    const siblingId = useEditorStore.getState().addSiblingVariant('madd-2', {
+      title: 'مد ٤',
+      alternatives: [
+        {
+          id: 'madd-4-f',
+          text: 'مَالِكِ',
+          label: 'مد ٤',
+          scope: { kind: 'NARRATORS', narratorIds: ['narrator-qalun'] },
+          maddHarakat: 4,
+        },
+      ],
+    });
+    expect(siblingId).toBeTruthy();
+
+    const document = useEditorStore.getState().document!;
+    const source = document.variants.find((v) => v.id === 'madd-2');
+    const sibling = document.variants.find((v) => v.id === siblingId);
+
+    // كلاهما باق وموجود ومستقل
+    expect(source).toBeDefined();
+    expect(sibling).toBeDefined();
+    // كلاهما في نفس مجموعة التعدد
+    expect(source!.occurrenceGroupId).toBe(sibling!.occurrenceGroupId);
+    // الفهارس متتالية
+    expect(source!.occurrenceIndex).toBe(1);
+    expect(sibling!.occurrenceIndex).toBe(2);
+    // الأصل لم يتغير في أبعاده الأساسية
+    expect(source!.startPosition).toBe(3);
+    expect(source!.endPosition).toBe(3);
+    // الشقيق احتفظ بمقدار مدّه الجديد
+    expect(sibling!.alternatives[0].maddHarakat).toBe(4);
+    // الشقيق أخذ موضع الأصل ولم يغيّره
+    expect(sibling!.startPosition).toBe(3);
+    expect(sibling!.endPosition).toBe(3);
+  });
+
+  it('حذف الشقيق لا يزيل مجموعة التعدد عن الأصل', async () => {
+    const useEditorStore = await loadStore();
+    useEditorStore.getState().openAyah(AYAH_KEY);
+
+    useEditorStore.getState().addVariant({
+      id: 'src',
+      category: 'MADUD',
+      title: 'أصل',
+      startPosition: 1,
+      endPosition: 1,
+      alternatives: [{ id: 'src-f', text: 'مد', label: 'مد', scope: { kind: 'ALL' } }],
+      status: 'DRAFT',
+    });
+
+    const siblingId = useEditorStore.getState().addSiblingVariant('src', {
+      title: 'شقيق',
+      alternatives: [{ id: 'sib-f', text: 'مد', label: 'مد', scope: { kind: 'ALL' } }],
+    })!;
+    useEditorStore.getState().deleteVariant(siblingId);
+
+    const source = useEditorStore.getState().document!.variants.find((v) => v.id === 'src');
+    expect(source).toBeDefined();
+    // بعد حذف الشقيق، يستعيد الأصل فهرسه ١ ويبقى مرتبطا بالمجموعة.
+    expect(source!.occurrenceIndex).toBe(1);
+    expect(source!.occurrenceGroupId).toBeTruthy();
+  });
 });

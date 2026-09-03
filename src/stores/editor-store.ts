@@ -122,6 +122,17 @@ interface EditorState {
   addVariant: (variant: Omit<Variant, 'ayahKey'>) => void;
   /** إنشاء عدة اختلافات مستقلة في معاملة واحدة ولقطة تراجع واحدة. */
   addVariantGroup: (variants: Array<Omit<Variant, 'ayahKey'>>) => void;
+  /**
+   * يضيف اختلافًا شقيقًا لاختلاف قائم (FR-ED-03، DM-09): يشاركه في
+   * الموضع ونطاق القراء، لكن لهويته المستقلة ونصّه ورتبته داخل
+   * مجموعة التعدد. الترميز البصري اللاحق «اختلاف ٢/٣» يُحسب تلقائيا.
+   */
+  addSiblingVariant: (
+    sourceVariantId: string,
+    overrides: Partial<Omit<Variant, 'ayahKey' | 'occurrenceGroupId' | 'occurrenceIndex' | 'id'>> & {
+      title: string;
+    }
+  ) => string | null;
   updateVariant: (variantId: string, patch: Partial<Variant>) => void;
   deleteVariant: (variantId: string) => void;
   addAlternative: (variantId: string, alternative: VariantAlternative) => void;
@@ -376,6 +387,79 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ markedPositions: [], markedCharacters: [] });
   },
 
+  /**
+   * ينشئ اختلافا شقيقا (FR-ED-03، DM-09):
+   *   1) يضمن مجموعة التعدد: إن لم تكن للأصل، يبدأها بهذا الزوج.
+   *   2) يولّد معرّفا جديدا مستقلا للاختلاف الشقيق.
+   *   3) يحدّث occurrenceIndex للمجموعة كلها: ١، ٢، ٣...
+   *   4) يحتفظ بالمصدر EDITOR ويحفظ الأصل (اللقطة) في engineSnapshot.
+   *
+   * الإرجاع: معرّف الشقيق الجديد أو null عند الفشل (لا مستند/لا أصل).
+   */
+  addSiblingVariant: (sourceVariantId, overrides) => {
+    const current = get().document;
+    if (!current) return null;
+    const source = current.variants.find((variant) => variant.id === sourceVariantId);
+    if (!source) return null;
+
+    const isNewGroup = !source.occurrenceGroupId;
+    const groupId = source.occurrenceGroupId
+      ?? `og-${current.ayahKey}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    // عند إنشاء مجموعة جديدة، الأصل يصبح العضو الأول (index=1) والشقيق الثاني (index=2).
+    // في المجموعات القائمة، الشقيق يلحق بآخر فهرس.
+    const existingInGroup = isNewGroup
+      ? []
+      : current.variants.filter((variant) => variant.occurrenceGroupId === source.occurrenceGroupId);
+    const nextIndex = isNewGroup ? 2 : existingInGroup.length + 1;
+
+    const newId = `v-sibling-${current.ayahKey}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const stamped = {
+      ...source,
+      ...overrides,
+      id: newId,
+      ayahKey: current.ayahKey,
+      origin: 'EDITOR' as const,
+      occurrenceGroupId: groupId,
+      occurrenceIndex: nextIndex,
+      // كل اختلاف شقيق يحتفظ ببداية لقطة المحرك لكون الأصل من بيانات الموقع.
+      engineSnapshot: source.engineSnapshot ?? {
+        title: source.title,
+        category: source.category,
+        alternatives: structuredClone(source.alternatives),
+        capturedAt: new Date().toISOString(),
+      },
+      // تجنّب تكرار الآية في title إن لم يقدّم overrides.title.
+      title: overrides.title || `${source.title} (${nextIndex})`,
+    };
+
+    mutate(
+      set,
+      get,
+      (document) => {
+        const updatedVariants = isNewGroup
+          ? document.variants.map((variant) =>
+              variant.id === source.id
+                ? { ...variant, occurrenceGroupId: groupId, occurrenceIndex: 1 }
+                : variant
+            )
+          : document.variants;
+        return {
+          ...document,
+          variants: [...updatedVariants, stamped].sort(compareVariants),
+        };
+      },
+      {
+        action: 'إضافة اختلاف شقيق',
+        targetType: 'VARIANT',
+        targetId: newId,
+        category: source.category,
+        summary: `أضاف المحرر اختلافا شقيقا لـ«${source.title}» (الموضع ${source.startPosition}–${source.endPosition})`,
+      }
+    );
+    set({ selectedVariantId: newId, selectedAlternativeId: null });
+    return newId;
+  },
+
   updateVariant: (variantId, patch) => {
     mutate(set, get, (document) => {
       const before = document.variants.find((variant) => variant.id === variantId);
@@ -423,10 +507,24 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   deleteVariant: (variantId) => {
     mutate(set, get, (document) => {
       const before = document.variants.find((variant) => variant.id === variantId);
+      const groupId = before?.occurrenceGroupId;
+      const remaining = document.variants.filter((variant) => variant.id !== variantId);
+      // عند حذف شقيق من مجموعة، أعيد ترقيم الباقين ليظلّوا متتابعين ١، ٢، ٣.
+      // لا نُسقط مجموعة التعدد عن الأصل حتى يبقى الترقيم التاريخي متّسقا.
+      const reindexed = groupId
+        ? remaining
+            .filter((variant) => variant.occurrenceGroupId === groupId)
+            .sort((a, b) => (a.occurrenceIndex ?? 0) - (b.occurrenceIndex ?? 0))
+            .map((variant, index) => ({ ...variant, occurrenceIndex: index + 1 }))
+        : [];
+      const reindexedIds = new Set(reindexed.map((variant) => variant.id));
+      const variants = remaining.map((variant) =>
+        reindexedIds.has(variant.id) ? reindexed.find((item) => item.id === variant.id)! : variant
+      );
       return withLoggedEdit(
         {
           ...document,
-          variants: document.variants.filter((variant) => variant.id !== variantId),
+          variants,
           // الخطوط التابعة للاختلاف المحذوف تُزال معه، وكذلك روابطه.
           branches: document.branches.filter((branch) => branch.variantId !== variantId),
           links: pruneLinksForVariant(document.links ?? [], variantId),

@@ -47,6 +47,7 @@ export function VariantsPanel() {
     clearMarks,
     addVariant,
     addVariantGroup,
+    addSiblingVariant,
     refreshDerivedBranches,
     openAyah,
   } = useEditorStore();
@@ -493,6 +494,27 @@ export function VariantsPanel() {
                 onSelectAlternative={(alternativeId) => selectAlternative(variant.id, alternativeId)}
                 onRecitationModeChange={(recitationMode) => updateVariant(variant.id, { recitationMode })}
                 onEdit={() => setEditingVariantId(variant.id)}
+                onAddSibling={(sourceId) => {
+                  // ينشئ شقيقا مستقلا بنفس الموضع ونطاق القراء، مع ترك
+                  // النص والرتبة للمستخدم في محرر الوجه (FR-ED-03، DM-09).
+                  const source = document.variants.find((v) => v.id === sourceId);
+                  if (!source) return;
+                  const promptTitle = window.prompt(
+                    'عنوان الاختلاف الشقيق (اتركه فارغا لاستخدام الافتراضي):',
+                    `${source.title} — اختلاف ${source.occurrenceGroupId ? 'لاحق' : 'ثان'}`
+                  );
+                  if (promptTitle === null) return; // إلغاء
+                  const createdId = addSiblingVariant(sourceId, {
+                    title: promptTitle.trim() || `${source.title} (${(source.occurrenceIndex ?? 1) + 1})`,
+                    alternatives: source.alternatives.map((alt, index) => ({
+                      ...structuredClone(alt),
+                      id: `${sourceId}-sib-${Date.now().toString(36)}-${index}`,
+                    })),
+                  });
+                  if (createdId) {
+                    setEditingVariantId(createdId);
+                  }
+                }}
                 onGeneralize={
                   variant.targetKind === 'CHARACTERS' && variant.characterRange
                     ? () => {
@@ -646,6 +668,7 @@ function VariantRow({
   onSelectAlternative,
   onRecitationModeChange,
   onEdit,
+  onAddSibling,
   onGeneralize,
   onDelete,
   onBulkDeleteFaces,
@@ -659,6 +682,11 @@ function VariantRow({
   onSelectAlternative: (alternativeId: string) => void;
   onRecitationModeChange: (mode: Variant['recitationMode']) => void;
   onEdit: () => void;
+  /**
+   * يضيف اختلافا شقيقا مستقلا بنفس القارئ والكلمة (FR-ED-03، DM-09).
+   * كل اختلاف يحتفظ بهويته ورتبته وأوجه، والتنافي يحسمه المحرك.
+   */
+  onAddSibling: (sourceId: string) => void;
   /** يحوّل هذا الاختلاف الحرفي إلى قاعدة عامة على المصحف كله. */
   onGeneralize?: () => void;
   onDelete: () => void;
@@ -667,6 +695,14 @@ function VariantRow({
 }) {
   const drawnAlternatives = variant.alternatives.filter((alternative) => !alternative.isBase);
   const [checkedFaces, setCheckedFaces] = useState<Set<string>>(new Set());
+
+  // عدد أعضاء مجموعة التعدد: يحسب من الـstore لأن الصف لا يستقبل المستند.
+  const siblingsCount = useEditorStore((state) => {
+    if (!variant.occurrenceGroupId) return 0;
+    return state.document?.variants.filter(
+      (item) => item.occurrenceGroupId === variant.occurrenceGroupId
+    ).length ?? 0;
+  });
 
   // إخلاء التحديد المتعدد عند مغادرة هذا الاختلاف حتى لا تبقى علامات معلَّقة.
   useEffect(() => {
@@ -703,6 +739,14 @@ function VariantRow({
                   title="أضافه المحرر يدويا — يظهر في التتبع ضمن «ما أضافه المحرر»"
                 >
                   من المحرر
+                </span>
+              )}
+              {variant.occurrenceGroupId && (
+                <span
+                  className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900"
+                  title={`اختلاف ضمن مجموعة تعدد (${toArabicDigits(variant.occurrenceIndex ?? 0)} من المجموعة). كل اختلاف مستقل وقابل للتعديل والحذف.`}
+                >
+                  {toArabicDigits(variant.occurrenceIndex ?? 0)}/{toArabicDigits(siblingsCount)} ضمن المجموعة
                 </span>
               )}
             </span>
@@ -815,6 +859,14 @@ function VariantRow({
             className="rounded border border-stone-300 px-2 py-1 text-[11px] text-stone-700 hover:bg-stone-100"
           >
             تحرير
+          </button>
+          <button
+            type="button"
+            onClick={() => onAddSibling(variant.id)}
+            className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900 hover:bg-amber-100"
+            title="إضافة اختلاف آخر مستقل بنفس القارئ والكلمة (FR-ED-03). يبقى كل اختلاف قابلا للتعديل والحذف على حدة."
+          >
+            + شقيق لنفس القارئ
           </button>
           {onGeneralize && (
             <button
