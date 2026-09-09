@@ -16,6 +16,25 @@ import { clearRuleOccurrences } from './rule-occurrences-store';
 
 const GLOBAL_RULES_KEY = 'tashjeer:global-rules:v1';
 
+/**
+ * نطاق تطبيق القاعدة على المصحف (FR-ED-08.6): غيابه يعني المصحف كله؛
+ * SURAH يحصرها في سورة؛ AYAH_RANGE يحصرها بين آيتين (مفتاحا آية شاملين).
+ * لا يغيّر النمط نفسه، بل يقيّد أين يُبحث عنه.
+ */
+export type GlobalRuleApplyRange =
+  | { kind: 'MUSHAF' }
+  | { kind: 'SURAH'; surahNumber: number }
+  | { kind: 'AYAH_RANGE'; fromAyahKey: number; toAyahKey: number };
+
+/** هل تنطبق القاعدة على هذه الآية بحسب نطاق تطبيقها؟ دالة نقيّة. */
+export function ruleAppliesToAyah(range: GlobalRuleApplyRange | undefined, ayahKey: number): boolean {
+  if (!range || range.kind === 'MUSHAF') return true;
+  if (range.kind === 'SURAH') return Math.floor(ayahKey / 1000) === range.surahNumber;
+  const from = Math.min(range.fromAyahKey, range.toAyahKey);
+  const to = Math.max(range.fromAyahKey, range.toAyahKey);
+  return ayahKey >= from && ayahKey <= to;
+}
+
 export interface GlobalRule {
   id: string;
   /** عنوان واضح للقاعدة، مثل: مد المنفصل لورش. */
@@ -30,6 +49,8 @@ export interface GlobalRule {
   /** نمط اختياري يجعل القاعدة قابلة للتطبيق الآلي على المصحف كله.
    * القواعد القديمة التي لا تحمل نمطا تبقى وصفية فقط. */
   pattern?: GlobalRulePattern;
+  /** نطاق التطبيق: المصحف كله (افتراضي) أو سورة أو مدى آيات. */
+  applyRange?: GlobalRuleApplyRange;
   /**
    * رقم ترتيب السطر للقاعدة: رتبة افتراضية تأخذها مواضع القاعدة في ترتيب
    * أسطر التشجير، يحددها المحرر يدويا عند الإنشاء ويمكن تعديلها لاحقا.
@@ -199,11 +220,29 @@ function normalizeRule(rule: GlobalRule): GlobalRule {
     status: rule.status ?? 'DRAFT',
     isActive: rule.isActive ?? true,
     pattern: isValidPattern(rule.pattern) ? rule.pattern : undefined,
+    applyRange: normalizeApplyRange(rule.applyRange),
     strengthByNarrator: normalizeStrengthMap(rule.strengthByNarrator),
     evidences: Array.isArray(rule.evidences) ? rule.evidences : [],
     createdAt: rule.createdAt ?? now,
     updatedAt: rule.updatedAt ?? rule.createdAt ?? now,
   };
+}
+
+/** يطبّع نطاق التطبيق؛ المصحف كله يُحذف حتى يبقى الملف المصدَّر نظيفا. */
+function normalizeApplyRange(value: unknown): GlobalRuleApplyRange | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const range = value as Partial<GlobalRuleApplyRange> & { surahNumber?: unknown; fromAyahKey?: unknown; toAyahKey?: unknown };
+  if (range.kind === 'SURAH' && typeof range.surahNumber === 'number' && range.surahNumber >= 1) {
+    return { kind: 'SURAH', surahNumber: Math.floor(range.surahNumber) };
+  }
+  if (range.kind === 'AYAH_RANGE' && typeof range.fromAyahKey === 'number' && typeof range.toAyahKey === 'number') {
+    return {
+      kind: 'AYAH_RANGE',
+      fromAyahKey: Math.min(range.fromAyahKey, range.toAyahKey),
+      toAyahKey: Math.max(range.fromAyahKey, range.toAyahKey),
+    };
+  }
+  return undefined;
 }
 
 /** تتحقق من الحد الأدنى للنمط قبل إدخاله إلى محرك التطبيق. */

@@ -14,6 +14,7 @@
 import { useMemo, useState } from 'react';
 import type { VariantCategory } from '@/types';
 import type { CharacterRange, ReadingScope } from '@/types/tashjeer';
+import type { GlobalRuleApplyRange } from '@/lib/storage/global-rules-store';
 import {
   buildSmartCreateBatch,
   type SmartCreateInput,
@@ -41,9 +42,62 @@ interface SmartCreateWizardProps {
   onComplete?: (message: string) => void;
 }
 
-type RelationMode = 'RELATED_TREE' | 'MUTUALLY_EXCLUSIVE' | 'NONE';
-type ApplicationScope = 'LOCAL' | 'MUSHAF';
+type RelationMode = 'RELATED_TREE' | 'MUTUALLY_EXCLUSIVE' | 'NONE' | 'CUSTOM';
+/** نطاق التطبيق (FR-ED-08.6): هذه الآية، هذه السورة، مدى آيات، أو المصحف كله. */
+type ApplicationScope = 'LOCAL' | 'SURAH' | 'AYAH_RANGE' | 'MUSHAF';
 type ContextMode = 'ALWAYS' | 'WAQF_ONLY' | 'WASL_ONLY';
+/** علاقة النوع الأول بكل هدف على حدة (FR-ED-08.4). */
+type PerTargetRelation = 'RELATED' | 'MUTUALLY_EXCLUSIVE' | 'NONE';
+
+/** قوالب جاهزة تعبّئ الأنواع والأوجه والعلاقة بنقرة واحدة (FR-ED-08.5). */
+interface WizardTemplate {
+  id: string;
+  label: string;
+  hint: string;
+  types: VariantCategory[];
+  faces: Partial<Record<VariantCategory, string>>;
+  relationMode: RelationMode;
+  context: ContextMode;
+}
+
+const WIZARD_TEMPLATES: WizardTemplate[] = [
+  {
+    id: 'madd-munfasil',
+    label: 'مد منفصل',
+    hint: 'مدود بأوجه القصر والتوسط والطول، وقفا ووصلا',
+    types: ['MADUD'],
+    faces: { MADUD: 'قصر\nتوسط\nطول' },
+    relationMode: 'NONE',
+    context: 'ALWAYS',
+  },
+  {
+    id: 'farsh-usul',
+    label: 'فرش مع أصول',
+    hint: 'اختلاف فرشي يرافقه أصل، مرتبطان في الشجرة',
+    types: ['FARSH', 'USUL'],
+    faces: {},
+    relationMode: 'RELATED_TREE',
+    context: 'ALWAYS',
+  },
+  {
+    id: 'waqf-faces',
+    label: 'أوجه الوقف',
+    hint: 'سكون وروم وإشمام في الوقف فقط، متنافية',
+    types: ['WAQF'],
+    faces: { WAQF: 'سكون\nروم\nإشمام' },
+    relationMode: 'MUTUALLY_EXCLUSIVE',
+    context: 'WAQF_ONLY',
+  },
+  {
+    id: 'hamz',
+    label: 'همز',
+    hint: 'تحقيق وتسهيل وإبدال',
+    types: ['HAMZ'],
+    faces: { HAMZ: 'تحقيق\nتسهيل\nإبدال' },
+    relationMode: 'NONE',
+    context: 'ALWAYS',
+  },
+];
 
 const CATEGORY_ORDER: VariantCategory[] = ['USUL', 'FARSH', 'MADUD', 'HAMZ', 'WAQF', 'TAJWEED'];
 
@@ -77,16 +131,35 @@ export function SmartCreateWizard({
   const [context, setContext] = useState<ContextMode>('ALWAYS');
   const [startPosition, setStartPosition] = useState(initialStart);
   const [endPosition, setEndPosition] = useState(initialEnd);
+  // أهداف متفرقة (FR-ED-08.3): مدى إضافية تُضاف إلى التحديد الرئيسي.
+  const [extraRanges, setExtraRanges] = useState<Array<{ startPosition: number; endPosition: number }>>([]);
+  const [pendingExtraStart, setPendingExtraStart] = useState<number | null>(null);
+  // علاقة لكل هدف على حدة عند اختيار «مخصص».
+  const [perTargetRelations, setPerTargetRelations] = useState<Partial<Record<VariantCategory, PerTargetRelation>>>({});
+  // مدى الآيات عند نطاق AYAH_RANGE.
+  const [rangeFromAyah, setRangeFromAyah] = useState<number>(document?.ayahNumber ?? 1);
+  const [rangeToAyah, setRangeToAyah] = useState<number>(document?.ayahNumber ?? 1);
   const [error, setError] = useState('');
   const [mushafCounts, setMushafCounts] = useState<Array<{ type: VariantCategory; count: number }>>([]);
 
-  const loci = useMemo<SmartSelectionLocus[]>(
-    () =>
+  const loci = useMemo<SmartSelectionLocus[]>(() => {
+    const primary: SmartSelectionLocus[] =
       hasCharacterSelection && startPosition === initialStart && endPosition === initialEnd
         ? initialLoci
-        : [{ startPosition: Math.min(startPosition, endPosition), endPosition: Math.max(startPosition, endPosition) }],
-    [hasCharacterSelection, initialEnd, initialLoci, initialStart, startPosition, endPosition]
-  );
+        : [{ startPosition: Math.min(startPosition, endPosition), endPosition: Math.max(startPosition, endPosition) }];
+    if (extraRanges.length === 0) return primary;
+    // الأهداف المتفرقة تُرتَّب بموضعها وتُزال المتكررة.
+    const merged = [...primary, ...extraRanges];
+    const seen = new Set<string>();
+    return merged
+      .filter((range) => {
+        const key = `${range.startPosition}-${range.endPosition}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => a.startPosition - b.startPosition);
+  }, [extraRanges, hasCharacterSelection, initialEnd, initialLoci, initialStart, startPosition, endPosition]);
 
   const selectedText = useMemo(() => {
     if (document && hasCharacterSelection === false) {
@@ -124,19 +197,49 @@ export function SmartCreateWizard({
   const relations = useMemo(() => {
     if (relationMode === 'NONE' || selectedTypes.length < 2) return [];
     const first = selectedTypes[0]!;
-    return selectedTypes.slice(1).map((type) => ({
-      fromType: first,
-      toType: type,
-      type: relationMode === 'RELATED_TREE' ? ('RELATED' as const) : ('MUTUALLY_EXCLUSIVE' as const),
-    }));
-  }, [relationMode, selectedTypes]);
+    return selectedTypes
+      .slice(1)
+      .map((type) => {
+        const relation: PerTargetRelation =
+          relationMode === 'CUSTOM'
+            ? (perTargetRelations[type] ?? 'RELATED')
+            : relationMode === 'RELATED_TREE'
+              ? 'RELATED'
+              : 'MUTUALLY_EXCLUSIVE';
+        return relation === 'NONE' ? null : { fromType: first, toType: type, type: relation };
+      })
+      .filter((item): item is { fromType: VariantCategory; toType: VariantCategory; type: 'RELATED' | 'MUTUALLY_EXCLUSIVE' } => item !== null);
+  }, [perTargetRelations, relationMode, selectedTypes]);
 
   const selectedTextLabel = selectedText || selectionText;
   const baseTitle = selectedTextLabel.trim();
 
   const canCreateLocal = selectedTypes.length > 0 && loci.length > 0 && Boolean(baseTitle);
-  const canGeneralize = applicationScope === 'MUSHAF' && Boolean(characterRange) && canCreateLocal;
+  const isGeneralizing = applicationScope !== 'LOCAL';
+  const canGeneralize = isGeneralizing && Boolean(characterRange) && canCreateLocal;
   const canCreate = applicationScope === 'LOCAL' ? canCreateLocal : canGeneralize;
+
+  /** نطاق تطبيق القاعدة العامة المشتق من اختيار المستخدم. */
+  const applyRange = useMemo((): GlobalRuleApplyRange | undefined => {
+    if (!document) return undefined;
+    if (applicationScope === 'SURAH') return { kind: 'SURAH', surahNumber: document.surahNumber };
+    if (applicationScope === 'AYAH_RANGE') {
+      return {
+        kind: 'AYAH_RANGE',
+        fromAyahKey: document.surahNumber * 1000 + Math.min(rangeFromAyah, rangeToAyah),
+        toAyahKey: document.surahNumber * 1000 + Math.max(rangeFromAyah, rangeToAyah),
+      };
+    }
+    return undefined;
+  }, [applicationScope, document, rangeFromAyah, rangeToAyah]);
+
+  const applyTemplate = (template: WizardTemplate) => {
+    setSelectedTypes(template.types);
+    setVariantsText((current) => ({ ...current, ...template.faces }));
+    setRelationMode(template.relationMode);
+    setContext(template.context);
+    setStep(1);
+  };
 
   const preview = useMemo(() => {
     if (!canCreateLocal) return { differences: 0, faces: 0, relations: 0 };
@@ -166,6 +269,7 @@ export function SmartCreateWizard({
       const rule = {
         id: createGlobalRuleId(),
         pattern,
+        applyRange,
       };
       const matches = findGlobalRuleMatches(rule, { limit: 100000 });
       return { type, count: matches.length };
@@ -213,6 +317,7 @@ export function SmartCreateWizard({
         scope,
         ruleLabel: CATEGORY_LABELS[type],
         pattern: buildCharacterPattern(document.ayahKey, characterRange),
+        applyRange,
         status: 'DRAFT',
         isActive: true,
         orderRank: index + 1,
@@ -220,7 +325,9 @@ export function SmartCreateWizard({
       if (saved.orderRank) setGlobalRuleOrderRank(saved.id, saved.orderRank);
       created += 1;
     }
-    onComplete?.(`أُنشئت ${created} قواعد عامة مستقلة على المصحف كله — تظهر في كل موضع مطابق بلا نسخ.`);
+    const rangeLabel =
+      applicationScope === 'SURAH' ? 'هذه السورة' : applicationScope === 'AYAH_RANGE' ? 'مدى الآيات المحدد' : 'المصحف كله';
+    onComplete?.(`أُنشئت ${toArabicDigits(created)} قواعد عامة مستقلة على ${rangeLabel} — تظهر في كل موضع مطابق بلا نسخ.`);
     onClose();
   };
 
@@ -231,6 +338,18 @@ export function SmartCreateWizard({
   };
 
   const pickWord = (position: number) => {
+    if (pendingExtraStart !== null) {
+      if (pendingExtraStart === -1) {
+        setPendingExtraStart(position);
+      } else {
+        setExtraRanges((current) => [
+          ...current,
+          { startPosition: Math.min(pendingExtraStart, position), endPosition: Math.max(pendingExtraStart, position) },
+        ]);
+        setPendingExtraStart(null);
+      }
+      return;
+    }
     if (startPosition === initialStart && endPosition === initialEnd && startPosition === endPosition) {
       setStartPosition(position);
     } else {
@@ -278,13 +397,18 @@ export function SmartCreateWizard({
               <div className="flex flex-wrap gap-2 rounded-lg border border-stone-200 bg-stone-50 p-3">
                 {words.map((word) => {
                   const inRange = word.position >= Math.min(startPosition, endPosition) && word.position <= Math.max(startPosition, endPosition);
+                  const inExtra = extraRanges.some((range) => word.position >= range.startPosition && word.position <= range.endPosition);
                   return (
                     <button
                       key={word.position}
                       type="button"
                       onClick={() => pickWord(word.position)}
                       className={`rounded-md border px-2 py-1 text-lg transition ${
-                        inRange ? 'border-emerald-500 bg-emerald-50 text-emerald-900' : 'border-stone-200 bg-white text-stone-700 hover:border-emerald-300'
+                        inRange
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-900'
+                          : inExtra
+                            ? 'border-violet-400 bg-violet-50 text-violet-900'
+                            : 'border-stone-200 bg-white text-stone-700 hover:border-emerald-300'
                       }`}
                       style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }}
                     >
@@ -293,9 +417,65 @@ export function SmartCreateWizard({
                   );
                 })}
               </div>
+              <div className="rounded-lg border border-stone-200 p-3">
+                <p className="text-xs font-semibold text-stone-700">أهداف متفرقة (اختياري)</p>
+                <p className="mt-0.5 text-[11px] text-stone-500">
+                  لإضافة موضع آخر غير متصل: اضغط «إضافة هدف» ثم انقر الكلمة الأولى فالأخيرة من الموضع الإضافي. تُنشأ الاختلافات على كل الأهداف معا كموضع مركّب واحد.
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {pendingExtraStart === null ? (
+                    <button
+                      type="button"
+                      onClick={() => setPendingExtraStart(-1)}
+                      className="rounded border border-emerald-300 bg-white px-2 py-1 text-[11px] text-emerald-800 hover:bg-emerald-50"
+                    >
+                      إضافة هدف
+                    </button>
+                  ) : (
+                    <span className="rounded bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
+                      {pendingExtraStart === -1 ? 'انقر الكلمة الأولى للهدف الإضافي' : `من ${toArabicDigits(pendingExtraStart)}: انقر الكلمة الأخيرة`}
+                      <button type="button" onClick={() => setPendingExtraStart(null)} className="mr-2 underline">
+                        إلغاء
+                      </button>
+                    </span>
+                  )}
+                  {extraRanges.map((range, index) => (
+                    <span key={`${range.startPosition}-${range.endPosition}-${index}`} className="flex items-center gap-1 rounded bg-stone-100 px-2 py-1 text-[11px] text-stone-700">
+                      {range.startPosition === range.endPosition
+                        ? `كلمة ${toArabicDigits(range.startPosition)}`
+                        : `${toArabicDigits(range.startPosition)} إلى ${toArabicDigits(range.endPosition)}`}
+                      <button
+                        type="button"
+                        onClick={() => setExtraRanges((current) => current.filter((_, idx) => idx !== index))}
+                        className="text-red-700"
+                        aria-label="إزالة الهدف"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
               <p className="rounded bg-emerald-50 px-3 py-2 text-sm leading-relaxed text-emerald-900">
                 المحدد: {describeLoci(loci)}
               </p>
+              <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-3">
+                <p className="text-xs font-semibold text-violet-900">قوالب جاهزة</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {WIZARD_TEMPLATES.map((template) => (
+                    <button
+                      key={template.id}
+                      type="button"
+                      onClick={() => applyTemplate(template)}
+                      title={template.hint}
+                      className="rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs text-violet-900 hover:bg-violet-100"
+                    >
+                      {template.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-[11px] text-violet-800">القالب يعبّئ الأنواع والأوجه والعلاقة والسياق؛ كل شيء قابل للتعديل بعده.</p>
+              </div>
               <p className="rounded bg-stone-50 px-3 py-2 text-sm leading-loose text-stone-900" style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }}>
                 {selectedText}
               </p>
@@ -379,11 +559,39 @@ export function SmartCreateWizard({
                   <input type="radio" checked={relationMode === 'MUTUALLY_EXCLUSIVE'} onChange={() => setRelationMode('MUTUALLY_EXCLUSIVE')} className="accent-emerald-600" />
                   تنافٍ (لا يُضربّا معًا) بين النوع الأول وكل نوع لاحق
                 </label>
+                <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${relationMode === 'CUSTOM' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
+                  <input type="radio" checked={relationMode === 'CUSTOM'} onChange={() => setRelationMode('CUSTOM')} className="accent-emerald-600" />
+                  علاقة مختلفة لكل هدف
+                </label>
                 <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${relationMode === 'NONE' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
                   <input type="radio" checked={relationMode === 'NONE'} onChange={() => setRelationMode('NONE')} className="accent-emerald-600" />
                   لا أُنشئ علاقات تلقائية
                 </label>
               </div>
+              {relationMode === 'CUSTOM' && selectedTypes.length >= 2 && (
+                <div className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 p-3">
+                  <p className="text-xs font-semibold text-stone-700">من «{CATEGORY_LABELS[selectedTypes[0]!]}» إلى:</p>
+                  {selectedTypes.slice(1).map((type) => (
+                    <div key={type} className="flex flex-wrap items-center justify-between gap-2 rounded bg-white px-3 py-2 text-sm">
+                      <span className="font-medium text-stone-800">{CATEGORY_LABELS[type]}</span>
+                      <select
+                        value={perTargetRelations[type] ?? 'RELATED'}
+                        onChange={(event) =>
+                          setPerTargetRelations((current) => ({ ...current, [type]: event.target.value as PerTargetRelation }))
+                        }
+                        className="rounded border border-stone-300 px-2 py-1 text-xs"
+                      >
+                        <option value="RELATED">مرتبط</option>
+                        <option value="MUTUALLY_EXCLUSIVE">تنافٍ</option>
+                        <option value="NONE">بلا علاقة</option>
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {relationMode === 'CUSTOM' && selectedTypes.length < 2 && (
+                <p className="rounded bg-amber-50 px-3 py-2 text-xs text-amber-800">اختر نوعين على الأقل لتعيين علاقة لكل هدف.</p>
+              )}
               <p className="text-xs text-stone-500">قد تُعين العلاقة لاحقًا من لوحة العلاقات. قرارات الدمج نفسها محسومة في السياسات لا هنا.</p>
             </div>
           )}
@@ -396,11 +604,67 @@ export function SmartCreateWizard({
                   <input type="radio" checked={applicationScope === 'LOCAL'} onChange={() => setApplicationScope('LOCAL')} className="accent-emerald-600" />
                   هذا الموضع فقط
                 </label>
+                <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${applicationScope === 'AYAH_RANGE' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
+                  <input
+                    type="radio"
+                    checked={applicationScope === 'AYAH_RANGE'}
+                    onChange={() => {
+                      setApplicationScope('AYAH_RANGE');
+                      setMushafCounts([]);
+                    }}
+                    disabled={!characterRange}
+                    className="accent-emerald-600"
+                  />
+                  مدى آيات في هذه السورة (قاعدة عامة مقيّدة)
+                </label>
+                {applicationScope === 'AYAH_RANGE' && document && (
+                  <div className="mr-7 flex flex-wrap items-center gap-2 text-xs text-stone-700">
+                    <span>من الآية</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={rangeFromAyah}
+                      onChange={(event) => {
+                        setRangeFromAyah(Math.max(1, Number(event.target.value) || 1));
+                        setMushafCounts([]);
+                      }}
+                      className="w-20 rounded border border-stone-300 px-2 py-1"
+                    />
+                    <span>إلى الآية</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={rangeToAyah}
+                      onChange={(event) => {
+                        setRangeToAyah(Math.max(1, Number(event.target.value) || 1));
+                        setMushafCounts([]);
+                      }}
+                      className="w-20 rounded border border-stone-300 px-2 py-1"
+                    />
+                    <span className="text-stone-500">في سورة رقم {toArabicDigits(document.surahNumber)}</span>
+                  </div>
+                )}
+                <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${applicationScope === 'SURAH' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
+                  <input
+                    type="radio"
+                    checked={applicationScope === 'SURAH'}
+                    onChange={() => {
+                      setApplicationScope('SURAH');
+                      setMushafCounts([]);
+                    }}
+                    disabled={!characterRange}
+                    className="accent-emerald-600"
+                  />
+                  هذه السورة كلها (قاعدة عامة مقيّدة بالسورة)
+                </label>
                 <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${applicationScope === 'MUSHAF' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
                   <input
                     type="radio"
                     checked={applicationScope === 'MUSHAF'}
-                    onChange={() => setApplicationScope('MUSHAF')}
+                    onChange={() => {
+                      setApplicationScope('MUSHAF');
+                      setMushafCounts([]);
+                    }}
                     disabled={!characterRange}
                     className="accent-emerald-600"
                   />
@@ -416,7 +680,7 @@ export function SmartCreateWizard({
                   التعميم على المصحف يدعم التحديد الحرفي داخل الآية. إن كان التحديد كلمات، أنشئ الموضع محليًا ثم «حفظ كقاعدة» من المحرر.
                 </p>
               )}
-              {applicationScope === 'MUSHAF' && characterRange && mushafCounts.length === 0 && (
+              {isGeneralizing && characterRange && mushafCounts.length === 0 && (
                 <button type="button" onClick={runMushafPreview} className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs text-emerald-800 hover:bg-emerald-50">
                   معاينة عدد المواضع المتطابقة
                 </button>
@@ -456,7 +720,7 @@ export function SmartCreateWizard({
                   <Summary value={toArabicDigits(preview.relations)} label="علاقة تلقائية" />
                 </div>
                 <p className="mt-2 text-xs text-stone-600">
-                  الهدف: {applicationScope === 'LOCAL' ? 'هذه الآية' : 'المصحف كله'} · النطاق: من {selectedTextLabel} · العلاقات: {relationMode === 'NONE' ? 'لا تلقائية' : relationMode === 'RELATED_TREE' ? 'مرتبط' : 'متنافٍ'}
+                  الهدف: {applicationScope === 'LOCAL' ? 'هذه الآية' : applicationScope === 'SURAH' ? 'هذه السورة' : applicationScope === 'AYAH_RANGE' ? 'مدى آيات' : 'المصحف كله'} · النطاق: من {selectedTextLabel} · العلاقات: {relationMode === 'NONE' ? 'لا تلقائية' : relationMode === 'RELATED_TREE' ? 'مرتبط' : relationMode === 'CUSTOM' ? 'لكل هدف' : 'متنافٍ'}
                 </p>
               </div>
             </div>

@@ -43,7 +43,7 @@ import type {
   TashjeerDocument,
   Variant,
 } from '@/types/tashjeer';
-import { listGlobalRules, type GlobalRule } from '@/lib/storage/global-rules-store';
+import { listGlobalRules, ruleAppliesToAyah, type GlobalRule } from '@/lib/storage/global-rules-store';
 import {
   occurrenceIdFor,
   occurrenceOverrideMap,
@@ -563,10 +563,12 @@ export function matchPatternInAyah(
 
 /** يبحث عن مواضع قاعدة في آية واحدة. */
 export function findGlobalRuleMatchesInAyah(
-  rule: Pick<GlobalRule, 'id' | 'pattern'>,
+  rule: Pick<GlobalRule, 'id' | 'pattern'> & Partial<Pick<GlobalRule, 'applyRange'>>,
   ayahKey: number
 ): GlobalRuleMatch[] {
   if (!rule.pattern) return [];
+  // نطاق التطبيق (سورة/مدى آيات) يقيّد أين تُطبَّق القاعدة دون تغيير نمطها.
+  if (!ruleAppliesToAyah(rule.applyRange, ayahKey)) return [];
   return matchPatternInAyah(
     getAyahWordsByKey(ayahKey),
     rule.pattern,
@@ -580,7 +582,7 @@ export function findGlobalRuleMatchesInAyah(
  * أول حرف من الآية التالية؛ هذا يمنع نتائج غير موجودة في سياق التلاوة.
  */
 export function findGlobalRuleMatches(
-  rule: Pick<GlobalRule, 'id' | 'pattern'>,
+  rule: Pick<GlobalRule, 'id' | 'pattern'> & Partial<Pick<GlobalRule, 'applyRange'>>,
   options: { limit?: number } = {}
 ): GlobalRuleMatch[] {
   if (!rule.pattern) return [];
