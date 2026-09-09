@@ -26,6 +26,7 @@ import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
 import { lociOfVariant, positionsOfVariant } from '@/lib/tashjeer/loci';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
+import { useEngineConfig } from '@/hooks/useEngineConfig';
 import { useStrengthDegrees } from '@/hooks/useStrengthDegrees';
 import { useRuleOccurrences } from '@/hooks/useRuleOccurrences';
 import { parseAyahKey } from '@/data/quran';
@@ -74,6 +75,7 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
 
   const catalog = useTransmissionCatalog();
   const engine = useEngineSettings();
+  const engineConfig = useEngineConfig();
   const strengthDegrees = useStrengthDegrees();
   const occurrences = useRuleOccurrences();
 
@@ -96,7 +98,7 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     document,
     filter,
     { fontSize, singleLine: engine.singleLineText },
-    { catalog, engine, strengthDegrees, occurrencesKey: occurrences.key }
+    { catalog, engine, strengthDegrees, engineConfig, occurrencesKey: occurrences.key }
   );
 
   // نهاية الآية الأولى حين تُوصل بالتالية: يُطبع عندها رقم الآية.

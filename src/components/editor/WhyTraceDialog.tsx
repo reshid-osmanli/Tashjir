@@ -11,6 +11,7 @@ import type { VariantCategory } from '@/types';
 import { DIFFERENCE_TYPES, DIFFERENCE_TYPE_LABELS } from '../studio/labels';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { resolveMerge } from '@/lib/tashjeer/decision/api';
+import { editorCategoryToStudioType } from '@/lib/tashjeer/decision/editor-bridge';
 import { useEngineStudioStore } from '@/stores/engine-config-ui-store';
 import { DEFAULT_SYSTEM_PROFILE } from '@/lib/tashjeer/decision/policy';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
@@ -20,30 +21,13 @@ interface WhyTraceDialogProps {
   onClose: () => void;
 }
 
-function editorTypeToStudioType(category: VariantCategory): string {
-  switch (category) {
-    case 'MADUD':
-      return 'MADD';
-    case 'USUL':
-      return 'TAHQIQ';
-    case 'HAMZ':
-      return 'HAMZ';
-    case 'WAQF':
-      return 'FORBIDDEN_WASL';
-    case 'TAJWEED':
-      return 'TAJWEED';
-    default:
-      return 'FARSH';
-  }
-}
-
 export function WhyTraceDialog({ category, onClose }: WhyTraceDialogProps) {
   const { config, hydrate, loaded } = useEngineStudioStore();
   useEffect(() => {
     hydrate();
   }, [hydrate]);
 
-  const a = editorTypeToStudioType(category);
+  const a = editorCategoryToStudioType(category);
   const [b, setB] = useState(a === 'MADD' ? 'FARSH' : 'MADD');
   const profile = loaded ? config : DEFAULT_SYSTEM_PROFILE;
 

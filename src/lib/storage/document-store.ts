@@ -43,6 +43,13 @@ import { characterCount, compareCharacterAnchors } from '@/lib/quran-logic/chara
 import { boundsOfLoci, normalizeLocus } from '@/lib/tashjeer/loci';
 import { getSeedVariants } from '@/data/variants/seed-variants';
 import { parseAyahKey } from '@/data/quran';
+import {
+  backupBeforeMigration,
+  migrateDocumentToV8,
+} from '@/lib/tashjeer/migration/migrate-v7-v8';
+import type { EngineConfig, TashjeerDocumentV8 } from '@/lib/tashjeer/model/v8';
+import { loadEngineConfig, toCanonicalConfig } from '@/lib/tashjeer/engine-config-store';
+import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 
 /**
  * إصدار صيغة المستند الحالي.
@@ -203,41 +210,66 @@ export interface ExportBundle {
   /** لقطة النص والكلمات التي استند إليها كل مستند، للقراءة بلا التطبيق. */
   ayahs: ExportedAyahSnapshot[];
   documents: TashjeerDocument[];
+  /**
+   * v8: الصورة الموحّدة لكل مستند (اختلافات/أوجه/علاقات/علامات وقف/تصحيحات/
+   * نطاقات عرض/سجل تدقيق) مشتقة من `documents` بدالة نقية. تُكتب للقراءة
+   * الخارجية ولملفات Git، ولا يُعتمد عليها في الاستيراد لأن `documents` هي
+   * المصدر الأصلي (DM-13).
+   */
+  v8?: TashjeerDocumentV8[];
+  /** v8: ملف سياسات المحرك المفعّل وقت التصدير بصيغة قانونية مرتّبة. */
+  engineConfig?: ReturnType<typeof toCanonicalConfig>;
+}
+
+/** خيارات التصدير: تثبيت الطابع الزمني يجعل الملف مستقرا بايتا ببايت (DM-13). */
+export interface ExportOptions {
+  exportedAt?: string;
+  engineConfig?: EngineConfig | null;
+  /** إدراج الصورة v8 (افتراضيا نعم). */
+  includeV8?: boolean;
 }
 
 /**
  * يصدّر مستندات إلى نص JSON منسّق، صالح للحفظ كملف أو للمشاركة للمراجعة.
  * @param ayahKeys معرّفات الآيات، أو undefined لتصدير كل المحفوظ.
  */
-export function exportDocuments(ayahKeys?: number[]): string {
+export function exportDocuments(ayahKeys?: number[], options: ExportOptions = {}): string {
   const keys = ayahKeys ?? listDocuments().map((entry) => entry.ayahKey);
   const documents = keys
     .map((key) => loadDocument(key))
     .filter((document): document is TashjeerDocument => document !== null);
 
-  return exportDocumentBundle(documents);
+  return exportDocumentBundle(documents, options);
 }
 
 /**
  * يصدّر مستندا موجودا في ذاكرة المحرر، حتى قبل الضغط على «حفظ». هذا مهم
  * لتسليم JSON لكل آية: لا يصبح الملف فارغا عند تصدير آية جديدة أو مسودة.
  */
-export function exportDocument(document: TashjeerDocument): string {
-  return exportDocumentBundle([migrateDocument(document)]);
+export function exportDocument(document: TashjeerDocument, options: ExportOptions = {}): string {
+  return exportDocumentBundle([migrateDocument(document)], options);
 }
 
 /** يصدر آية من فهرس المصحف حتى إن لم يسبق حفظ مستند لها. */
-export function exportAyahDocument(ayahKey: number): string {
-  return exportDocumentBundle([loadDocument(ayahKey) ?? createDocument(ayahKey)]);
+export function exportAyahDocument(ayahKey: number, options: ExportOptions = {}): string {
+  return exportDocumentBundle([loadDocument(ayahKey) ?? createDocument(ayahKey)], options);
 }
 
-function exportDocumentBundle(documents: TashjeerDocument[]): string {
+/**
+ * يبني حزمة التصدير كائنا (قبل التسلسل). تُستعمل في الاختبارات وفي التصدير
+ * القانوني: المعرّفات المولّدة للصورة v8 (تصحيحات/نطاقات) تُشتق من معرّف
+ * المستند لا من الوقت، فيعطي المستند نفسه الملف نفسه بايتا ببايت (DM-13).
+ */
+export function buildExportBundle(documents: TashjeerDocument[], options: ExportOptions = {}): ExportBundle {
   // قراءة واحدة للمخزن: الاستثناءات وسجلها يخرجان معا فلا يُقرأ المخزن مرتين.
   const occurrences = exportOccurrenceData();
+  const exportedAt = options.exportedAt ?? new Date().toISOString();
+  const engineConfig = options.engineConfig === null ? null : (options.engineConfig ?? safeLoadEngineConfig());
+
   const bundle: ExportBundle = {
     format: 'tashjeer-export',
     schemaVersion: SCHEMA_VERSION,
-    exportedAt: new Date().toISOString(),
+    exportedAt,
     globalRules: listGlobalRules(),
     strengthDegrees: readStrengthDegrees(),
     ruleOccurrences: occurrences.overrides,
@@ -246,7 +278,47 @@ function exportDocumentBundle(documents: TashjeerDocument[]): string {
     documents,
   };
 
-  return JSON.stringify(bundle, null, 2);
+  if (options.includeV8 !== false) {
+    bundle.v8 = documents.map((document) => toStableV8(document, exportedAt));
+  }
+  if (engineConfig) bundle.engineConfig = toCanonicalConfig(engineConfig);
+
+  return bundle;
+}
+
+function exportDocumentBundle(documents: TashjeerDocument[], options: ExportOptions = {}): string {
+  return JSON.stringify(buildExportBundle(documents, options), null, 2);
+}
+
+/** يحمّل ملف المحرك المفعّل، أو لا شيء خارج المتصفح أو عند تلف التخزين. */
+function safeLoadEngineConfig(): EngineConfig | null {
+  if (!isBrowser()) return null;
+  try {
+    return loadEngineConfig();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * الصورة v8 بمعرّفات حتمية: دالة الترحيل تولّد معرّفات عشوائية للتصحيحات
+ * ونطاقات العرض، وهنا تُستبدل بمعرّفات مشتقة من الآية والهدف حتى يكون
+ * التصدير مستقرا (يمكن مقارنة ملفين في Git دون ضجيج).
+ */
+function toStableV8(document: TashjeerDocument, exportedAt: string): TashjeerDocumentV8 {
+  const v8 = migrateDocumentToV8(document);
+  return {
+    ...v8,
+    exportedAt,
+    corrections: v8.corrections.map((correction, index) => ({
+      ...correction,
+      id: `corr-${document.ayahKey}-${correction.targetId}-${index + 1}`,
+    })),
+    renderRanges: v8.renderRanges.map((range, index) => ({
+      ...range,
+      id: `range-${document.ayahKey}-${range.fromPosition}-${range.toPosition}-${index + 1}`,
+    })),
+  };
 }
 
 function makeAyahSnapshot(document: TashjeerDocument): ExportedAyahSnapshot {
@@ -266,11 +338,121 @@ function makeAyahSnapshot(document: TashjeerDocument): ExportedAyahSnapshot {
   };
 }
 
+/** تقرير ترحيل مستند واحد أثناء الاستيراد (NFR-04). */
+export interface ImportMigrationReport {
+  ayahKey: number;
+  /** الإصدار الذي جاء به المستند (أو 0 إن كان بلا إصدار). */
+  fromVersion: number;
+  toVersion: number;
+  /** مفتاح النسخة الاحتياطية في التخزين المحلي، إن حُفظت. */
+  backupKey: string | null;
+}
+
 /** نتيجة عملية استيراد. */
 export interface ImportResult {
   imported: number;
   skipped: number;
   errors: string[];
+  /** المستندات التي رُقّيت من إصدار أقدم، مع مفاتيح نسخها الاحتياطية. */
+  migrated: ImportMigrationReport[];
+  /** تحذيرات لا تمنع الاستيراد (نسخة أحدث من المدعوم، حقول متجاهلة...). */
+  warnings: string[];
+}
+
+/** بادئة مفاتيح النسخ الاحتياطية قبل الترحيل. */
+export const BACKUP_PREFIX = 'tashjeer:backup:';
+
+/**
+ * يصوغ تقرير الاستيراد جملة عربية واحدة للواجهات (بالأرقام العربية)، حتى
+ * يكون النص واحدا في المحرر والإعدادات ولا يُنسى ذكر الترحيل والنسخ.
+ */
+export function describeImportResult(result: ImportResult): string {
+  if (result.errors.length > 0) return result.errors[0];
+  const parts = [`تم استيراد ${toArabicDigits(result.imported)} مستندا`];
+  if (result.skipped > 0) parts.push(`وتخطي ${toArabicDigits(result.skipped)}`);
+  if (result.migrated.length > 0) {
+    const backedUp = result.migrated.filter((item) => item.backupKey).length;
+    parts.push(
+      `ورُقّي ${toArabicDigits(result.migrated.length)} من إصدار أقدم إلى الإصدار ${toArabicDigits(SCHEMA_VERSION)}` +
+        (backedUp > 0 ? ` مع ${toArabicDigits(backedUp)} نسخة احتياطية` : '')
+    );
+  }
+  const sentence = `${parts.join(' ')}.`;
+  return result.warnings.length > 0 ? `${sentence} ${result.warnings[0]}` : sentence;
+}
+
+/** يسرد النسخ الاحتياطية المحفوظة قبل الترحيل، الأحدث أولا. */
+export function listMigrationBackups(): Array<{ key: string; ayahKey: number; backedUpAt: string; schemaVersion: number }> {
+  if (!isBrowser()) return [];
+  const result: Array<{ key: string; ayahKey: number; backedUpAt: string; schemaVersion: number }> = [];
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index);
+    if (!key || !key.startsWith(BACKUP_PREFIX)) continue;
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(key) ?? '{}') as {
+        backedUpAt?: string;
+        schemaVersion?: number;
+        payload?: { ayahKey?: number };
+      };
+      result.push({
+        key,
+        ayahKey: parsed.payload?.ayahKey ?? 0,
+        backedUpAt: parsed.backedUpAt ?? '',
+        schemaVersion: parsed.schemaVersion ?? 0,
+      });
+    } catch {
+      // نسخة تالفة: تُتجاهل في القائمة ولا تُحذف تلقائيا.
+    }
+  }
+  return result.sort((first, second) => second.backedUpAt.localeCompare(first.backedUpAt));
+}
+
+/** يقرأ نسخة احتياطية بمفتاحها ويعيد المستند الأصلي كما جاء قبل الترحيل. */
+export function readMigrationBackup(key: string): TashjeerDocument | null {
+  if (!isBrowser()) return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { payload?: TashjeerDocument };
+    return parsed.payload ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** يحذف نسخة احتياطية واحدة (بعد تأكيد المستخدم في الواجهة). */
+export function deleteMigrationBackup(key: string): void {
+  if (!isBrowser()) return;
+  if (!key.startsWith(BACKUP_PREFIX)) return;
+  window.localStorage.removeItem(key);
+}
+
+/**
+ * يحفظ نسخة احتياطية من مستند قديم قبل ترقيته. يعيد المفتاح، أو null خارج
+ * المتصفح. لا يرمي: فشل الحفظ (امتلاء التخزين) لا يجب أن يوقف الاستيراد،
+ * لكنه يُبلَّغ في التحذيرات.
+ */
+function persistMigrationBackup(document: TashjeerDocument, warnings: string[]): string | null {
+  if (!isBrowser()) return null;
+  const key = `${BACKUP_PREFIX}${document.ayahKey}:${Date.now()}`;
+  try {
+    window.localStorage.setItem(key, backupBeforeMigration(document));
+    return key;
+  } catch {
+    warnings.push(`تعذر حفظ نسخة احتياطية للآية ${document.ayahKey} قبل الترحيل.`);
+    return null;
+  }
+}
+
+/** هل يحتاج المستند إلى ترحيل؟ (إصدار أقدم أو حقول v7/v8 ناقصة). */
+export function needsMigration(document: Partial<TashjeerDocument>): boolean {
+  const version = typeof document.schemaVersion === 'number' ? document.schemaVersion : 0;
+  if (version < SCHEMA_VERSION) return true;
+  if (!document.meta) return true;
+  if (!Array.isArray(document.links) || !Array.isArray(document.segments)) return true;
+  if (!Array.isArray(document.editLog) || !Array.isArray(document.lineOrder)) return true;
+  if (!document.readingWindow) return true;
+  return false;
 }
 
 /**
@@ -280,7 +462,7 @@ export interface ImportResult {
  * @param overwrite هل يُستبدل المستند الموجود؟ الافتراضي لا، حفاظا على عمل المستخدم.
  */
 export function importDocuments(json: string, overwrite = false): ImportResult {
-  const result: ImportResult = { imported: 0, skipped: 0, errors: [] };
+  const result: ImportResult = { imported: 0, skipped: 0, errors: [], migrated: [], warnings: [] };
 
   let bundle: ExportBundle;
   try {
@@ -293,6 +475,12 @@ export function importDocuments(json: string, overwrite = false): ImportResult {
   if (bundle.format !== 'tashjeer-export' || !Array.isArray(bundle.documents)) {
     result.errors.push('الملف ليس ملف تصدير تشجير.');
     return result;
+  }
+
+  if (typeof bundle.schemaVersion === 'number' && bundle.schemaVersion > SCHEMA_VERSION) {
+    result.warnings.push(
+      `الملف بإصدار ${bundle.schemaVersion} وهو أحدث من المدعوم (${SCHEMA_VERSION})؛ قد تُتجاهل حقول غير معروفة.`
+    );
   }
 
   // ملفات الإصدار 4 تحمل القواعد العامة أيضا؛ الملف الأقدم يبقى صالحا من
@@ -316,6 +504,19 @@ export function importDocuments(json: string, overwrite = false): ImportResult {
     if (!overwrite && hasDocument(document.ayahKey)) {
       result.skipped += 1;
       continue;
+    }
+
+    // ترحيل تلقائي مع نسخة احتياطية: الملفات القديمة (v7 وما قبلها) تُحفظ
+    // كما جاءت قبل أي تغيير، ثم تُرقّى إلى v8 (NFR-04، AC-04).
+    const fromVersion = typeof document.schemaVersion === 'number' ? document.schemaVersion : 0;
+    if (needsMigration(document)) {
+      const backupKey = persistMigrationBackup(document, result.warnings);
+      result.migrated.push({
+        ayahKey: document.ayahKey,
+        fromVersion,
+        toVersion: SCHEMA_VERSION,
+        backupKey,
+      });
     }
 
     saveDocument(migrateDocument(document));

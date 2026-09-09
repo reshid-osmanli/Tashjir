@@ -33,6 +33,8 @@ import {
 import type { TransmissionCatalog } from '@/lib/transmissions/catalog';
 import type { TashjeerEngineSettings } from '@/lib/tashjeer/engine-settings';
 import type { StrengthDegreeCatalog } from '@/lib/tashjeer/strength-degrees';
+import type { EngineConfig } from '@/lib/tashjeer/model/v8';
+import { serializeEngineConfig } from '@/lib/tashjeer/engine-config-store';
 import type {
   AyahLayout,
   LayoutOptions,
@@ -54,6 +56,8 @@ export interface AyahTashjeerRuntime {
    * فيعاد اشتقاق الاختلافات دون انتظار إعادة تحميل المستند.
    */
   occurrencesKey?: string;
+  /** ملف سياسات المحرك المفعّل (Engine Studio)؛ به تُحسم قرارات التنافي. */
+  engineConfig?: EngineConfig;
 }
 
 export interface AyahTashjeerResult {
@@ -124,6 +128,7 @@ export function useAyahTashjeer(
     catalogUpdatedAt: runtime.catalog?.updatedAt,
     engine: runtime.engine,
     strengthUpdatedAt: runtime.strengthDegrees?.updatedAt,
+    engineConfig: runtime.engineConfig ? engineConfigKey(runtime.engineConfig) : null,
   });
 
   const effectiveVariants = useMemo(
@@ -152,6 +157,7 @@ export function useAyahTashjeer(
   const classic = useMemo(() => {
     const classicRuntime: ClassicTashjeerOptions = {
       catalog: runtime.catalog,
+      engineConfig: runtime.engineConfig,
       engine: runtime.engine,
       strengthDegrees: runtime.strengthDegrees,
       boundaries: document?.boundaries ?? [],
@@ -200,4 +206,17 @@ export function useAyahTashjeer(
   }, [classic, layout.canvasWidth, layoutOptions]);
 
   return { ayah, words, window, layout, branches, classic, stats, options: layoutOptions, viewBox };
+}
+
+/** بصمة مختصرة لملف المحرك: تتغير مع أي تعديل في القواعد أو المصفوفة. */
+function engineConfigKey(config: EngineConfig): string {
+  return `${config.profile}:${config.rules.length}:${config.mergeMatrix.length}:${hashText(serializeEngineConfig(config))}`;
+}
+
+function hashText(text: string): number {
+  let hash = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    hash = (hash * 31 + text.charCodeAt(index)) | 0;
+  }
+  return hash;
 }

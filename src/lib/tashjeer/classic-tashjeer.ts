@@ -85,6 +85,7 @@ import {
 } from './ordering';
 import { getCategoryColor } from './color-system';
 import { positionsOfVariant } from './loci';
+import type { EngineConfig } from './model/v8';
 import { marksForWordRange as marksForRange, marksForVariant } from './line-marks';
 import { applyManualLinks, sortLinesByManualOrder } from './manual-links';
 
@@ -105,6 +106,8 @@ const DEFAULT_LAYOUT_OPTIONS: LayoutOptions = {
 /** خيارات تشغيل لا تُحفظ في الوجه نفسه، بل تأتي من المحرر ولوحة التحكم. */
 export interface ClassicTashjeerOptions {
   catalog?: TransmissionCatalog;
+  /** ملف سياسات المحرك المفعّل؛ تُحسم به قرارات التنافي والدمج (P-07). */
+  engineConfig?: EngineConfig;
   /** سلّم درجات قوة الوجه؛ يُستعمل في ترتيب أوجه الموضع الواحد وفي بطاقاتها. */
   strengthDegrees?: StrengthDegreeCatalog;
   engine?: Partial<TashjeerEngineSettings>;
@@ -477,7 +480,8 @@ export function generateClassicTashjeer(
           engine,
           catalog,
           strengthDegrees,
-          overrideByKey
+          overrideByKey,
+          runtime.engineConfig
         );
 
   // الأسطر اليدوية لا تتجاوز التصفية؛ وهي تتبع نطاقها إن حُدد.
@@ -771,12 +775,14 @@ function buildCombinedLines(
   engine: TashjeerEngineSettings,
   catalog: TransmissionCatalog | undefined,
   strengthDegrees: StrengthDegreeCatalog,
-  overrideByKey: Map<string, TashjeerBranch>
+  overrideByKey: Map<string, TashjeerBranch>,
+  engineConfig?: EngineConfig
 ): ClassicLine[] {
   const combinations = buildReadingCombinations(variants, plan, {
     catalog,
     engine,
     strengthDegrees,
+    engineConfig,
   }).filter((combination) => {
     if (filter.narratorIds.length === 0) return true;
     return filter.narratorIds.some((narratorId) => combination.narratorIds.includes(narratorId));

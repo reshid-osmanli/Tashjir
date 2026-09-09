@@ -20,6 +20,7 @@ import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
 import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
+import { useEngineConfig } from '@/hooks/useEngineConfig';
 import { useStrengthDegrees } from '@/hooks/useStrengthDegrees';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor } from '@/lib/tashjeer/color-system';
@@ -49,8 +50,9 @@ export function RelationsPanel() {
   const filter = useEditorStore((state) => state.filter);
   const catalog = useTransmissionCatalog();
   const engine = useEngineSettings();
+  const engineConfig = useEngineConfig();
   const strengthDegrees = useStrengthDegrees();
-  const { classic } = useAyahTashjeer(document, filter, {}, { catalog, engine, strengthDegrees });
+  const { classic } = useAyahTashjeer(document, filter, {}, { catalog, engine, strengthDegrees, engineConfig });
   const [tab, setTab] = useState<LinkTab>('FACE');
 
   if (!document) return null;
@@ -84,6 +86,8 @@ export function RelationsPanel() {
         {TABS.find((item) => item.id === tab)?.hint}
       </p>
 
+      <LinkDecisionNoticeCard />
+
       {tab === 'FACE' && <FaceLinkEditor classic={classic} />}
       {tab === 'LINE' && <LineLinkEditor classic={classic} />}
       {tab === 'SEGMENT' && <SegmentEditor classic={classic} />}
@@ -91,6 +95,60 @@ export function RelationsPanel() {
 
       <LinksList links={document.links ?? []} segments={document.segments ?? []} classic={classic} />
     </section>
+  );
+}
+
+// ==================== قرار الرابط من Decision Resolver ====================
+
+/**
+ * يعرض آخر قرار أصدره Decision Resolver على رابط يدوي: رفض بقاعدة حاظرة،
+ * أو قبول بتحذير مخالفة مصفوفة الدمج، مع أثر القرار (Why؟). الواجهة تعرض
+ * فقط ولا تحسم (P-07).
+ */
+function LinkDecisionNoticeCard() {
+  const notice = useEditorStore((state) => state.lastLinkDecision);
+  const clear = useEditorStore((state) => state.clearLinkDecision);
+  const [showTrace, setShowTrace] = useState(false);
+
+  if (!notice) return null;
+  if (notice.allowed && !notice.warning) return null;
+
+  const tone = notice.allowed
+    ? 'border-amber-300 bg-amber-50 text-amber-900'
+    : 'border-red-300 bg-red-50 text-red-900';
+
+  return (
+    <div className={`mb-2 rounded-md border px-2.5 py-2 text-[10.5px] leading-relaxed ${tone}`} role="status">
+      <div className="flex items-start justify-between gap-2">
+        <p className="font-semibold">
+          {notice.allowed ? 'سُجّل الرابط بخلاف سياسة المحرك' : 'رفض الرابط بقاعدة من سياسات المحرك'}
+        </p>
+        <button type="button" onClick={clear} className="text-[10px] underline opacity-70 hover:opacity-100">
+          إخفاء
+        </button>
+      </div>
+      <p className="mt-0.5">{notice.warning ?? notice.reason}</p>
+      {notice.appliedRuleNames.length > 0 && (
+        <p className="mt-0.5 opacity-80">القواعد المطابقة: {notice.appliedRuleNames.join('، ')}</p>
+      )}
+      <button
+        type="button"
+        onClick={() => setShowTrace((current) => !current)}
+        className="mt-1 text-[10px] underline opacity-80 hover:opacity-100"
+      >
+        {showTrace ? 'إخفاء الأثر' : 'لماذا؟ (أثر القرار)'}
+      </button>
+      {showTrace && (
+        <ol className="mt-1 space-y-0.5 border-t border-current/20 pt-1">
+          {notice.trace.map((step, index) => (
+            <li key={index} className="flex gap-2">
+              <span className="font-mono text-[9px] opacity-60">{step.stage}</span>
+              <span>{step.message}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
   );
 }
 

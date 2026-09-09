@@ -17,6 +17,7 @@ import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
 import { getWordById, stripHarakat } from '@/data/quran';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
+import { useEngineConfig } from '@/hooks/useEngineConfig';
 import { useStrengthDegrees } from '@/hooks/useStrengthDegrees';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getImamColor } from '@/lib/tashjeer/color-system';
@@ -69,8 +70,9 @@ export function PropertiesPanel() {
 
   const catalog = useTransmissionCatalog();
   const engine = useEngineSettings();
+  const engineConfig = useEngineConfig();
   const strengthDegrees = useStrengthDegrees();
-  const { stats, classic } = useAyahTashjeer(document, filter, {}, { catalog, engine, strengthDegrees });
+  const { stats, classic } = useAyahTashjeer(document, filter, {}, { catalog, engine, strengthDegrees, engineConfig });
 
   const selectedWord = useMemo(
     () => (selectedWordId ? getWordById(selectedWordId) : undefined),

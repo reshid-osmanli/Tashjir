@@ -16,6 +16,7 @@ import {
 } from '@/lib/local-app-data';
 import {
   deleteDocument,
+  describeImportResult,
   exportDocuments,
   importDocuments,
   listDocuments,
@@ -69,11 +70,7 @@ export default function SettingsPage() {
   const importAll = async (file: File) => {
     const result = importDocuments(await file.text(), true);
     setDocuments(listDocuments());
-    setMessage(
-      result.errors.length > 0
-        ? result.errors[0]
-        : `تم استيراد ${result.imported} مستندا وتخطي ${result.skipped}.`
-    );
+    setMessage(describeImportResult(result));
   };
 
   const removeDocument = (entry: DocumentIndexEntry) => {

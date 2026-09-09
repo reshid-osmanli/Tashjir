@@ -19,7 +19,7 @@ import { SelectionBreadcrumb } from '@/components/editor/SelectionBreadcrumb';
 import { ShortcutsDialog } from '@/components/editor/ShortcutsDialog';
 import { useEditorStore } from '@/stores/editor-store';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
-import { exportDocument, importDocuments } from '@/lib/storage/document-store';
+import { describeImportResult, exportDocument, importDocuments } from '@/lib/storage/document-store';
 import { makeAyahKey, parseAyahKey } from '@/data/quran';
 import { formatAyahRef } from '@/lib/utils/arabic-numbers';
 
@@ -129,7 +129,7 @@ export default function EditorPage() {
         return;
       }
 
-      showToast(`تم استيراد ${result.imported} مستندا.`);
+      showToast(describeImportResult(result));
 
       // نفتح أول مستند مستورد ليراه المستخدم فورا.
       try {

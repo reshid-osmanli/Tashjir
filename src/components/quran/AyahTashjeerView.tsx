@@ -18,6 +18,7 @@ import { resolveAyahDocument } from '@/lib/tashjeer/ayah-tashjeer-source';
 import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
+import { useEngineConfig } from '@/hooks/useEngineConfig';
 import { useStrengthDegrees } from '@/hooks/useStrengthDegrees';
 import { TashjeerFigure } from '@/components/editor/TashjeerFigure';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
@@ -55,12 +56,13 @@ export function AyahTashjeerView({
 
   const catalog = useTransmissionCatalog();
   const engine = useEngineSettings();
+  const engineConfig = useEngineConfig();
   const strengthDegrees = useStrengthDegrees();
   const { layout, classic, viewBox } = useAyahTashjeer(
     document,
     FULL_FILTER,
     {},
-    { catalog, engine, strengthDegrees }
+    { catalog, engine, strengthDegrees, engineConfig }
   );
 
   if (!document) return null;
