@@ -38,7 +38,8 @@ import {
 import { allNarratorIds, resolveScope } from './scope';
 import { pathsOfNarrator, type ReadingUnit } from './reader-symbols';
 import { narratorTayyibahOrder } from './symbols';
-import { exclusiveGroupKeys } from './loci';
+import type { EngineConfig } from './model/v8';
+import { resolveExclusiveGroups } from './decision/editor-bridge';
 
 /** اختيار وجه في موضع من مواضع الآية. */
 export interface CombinationPick {
@@ -70,6 +71,12 @@ export interface CombinationOptions {
   strengthDegrees?: StrengthDegreeCatalog;
   /** سقف تراكيب الوحدة الواحدة، حماية من الانفجار العددي. */
   maxPerUnit?: number;
+  /**
+   * ملف سياسات المحرك المفعّل (Engine Studio). التنافي بين المواضع يُحسم به
+   * عبر Decision Resolver لا بمنطق خاص هنا (P-07). عند غيابه تُستعمل سياسات
+   * النظام الافتراضية.
+   */
+  engineConfig?: EngineConfig;
 }
 
 const DEFAULT_MAX_PER_UNIT = 48;
@@ -91,6 +98,8 @@ export function buildReadingCombinations(
 
   const orderedVariants = orderVariantsForReading(variants, plan);
   const units = buildReadingUnits(orderedVariants, catalog);
+  // مجموعات التنافي تُحسم مرة واحدة لكل الوحدات من Decision Resolver.
+  const exclusiveGroups = resolveExclusiveGroups(orderedVariants, options.engineConfig).groups;
 
   interface Draft {
     picks: CombinationPick[];
@@ -105,7 +114,7 @@ export function buildReadingCombinations(
     // (مد ٢ ومد ٤ مسجّلان اختلافا مستقلا) فأوجه متنافية لموضع واحد.
     const buckets = new Map<string, CombinationPick[]>();
     const bucketOrder: string[] = [];
-    const groupKeys = exclusiveGroupKeys(orderedVariants);
+    const groupKeys = exclusiveGroups;
 
     for (const variant of orderedVariants) {
       const applicable = variant.alternatives

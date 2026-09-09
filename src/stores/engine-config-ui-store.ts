@@ -26,6 +26,12 @@ import {
   setExecutionOrder,
   upsertPriorityGroup,
 } from '@/lib/tashjeer/engine-config-store';
+import {
+  captureEngineVersion,
+  getEngineVersion,
+  listEngineVersions,
+  type EngineConfigVersion,
+} from '@/lib/tashjeer/engine-config-history';
 
 type RuleDraft = Omit<EngineRule, 'createdAt' | 'updatedAt' | 'version'> & Partial<Pick<EngineRule, 'version'>>;
 
@@ -34,12 +40,21 @@ interface EngineStudioState {
   loaded: boolean;
   dirty: boolean;
   selectedRuleId: string | null;
+  /** آخر ملف محفوظ فعليا (لحساب أثر التغييرات غير المحفوظة). */
+  savedConfig: EngineConfig | null;
+  /** سجل الإصدارات (الأحدث أولا) — FR-ES-07. */
+  versions: EngineConfigVersion[];
 
   hydrate: () => void;
   setSelectedRule: (id: string | null) => void;
-  persist: () => void;
+  /** يحفظ الملف ويلتقط نسخة في السجل مع ملاحظة اختيارية. */
+  persist: (note?: string) => void;
   applyImported: (config: EngineConfig) => void;
   resetToDefault: () => void;
+  /** يعيد نسخة من السجل إلى الملف الحي ويحفظها (تراجع موثّق، غير مدمّر). */
+  rollbackTo: (versionId: string) => boolean;
+  /** يتجاهل التغييرات غير المحفوظة ويعود لآخر ملف محفوظ. */
+  discardChanges: () => void;
 
   addRule: (rule: RuleDraft) => void;
   updateRule: (ruleId: string, patch: Partial<EngineRule>) => void;
@@ -75,22 +90,70 @@ export const useEngineStudioStore = create<EngineStudioState>((set, get) => ({
   loaded: false,
   dirty: false,
   selectedRuleId: null,
+  savedConfig: null,
+  versions: [],
 
   hydrate: () => {
     if (get().loaded) return;
-    set({ config: loadEngineConfig(), loaded: true, dirty: false });
+    const config = loadEngineConfig();
+    let versions = listEngineVersions();
+    // أول تشغيل بعد إضافة السجل: نلتقط الملف الحالي كنسخة أساس حتى يكون
+    // للتراجع نقطة انطلاق دائما.
+    if (versions.length === 0) {
+      const base = captureEngineVersion(config, { source: 'SAVE', note: 'نسخة الأساس' });
+      versions = base ? [base] : [];
+    }
+    set({ config, savedConfig: config, versions, loaded: true, dirty: false });
   },
 
   setSelectedRule: (id) => set({ selectedRuleId: id }),
 
-  persist: () => {
+  persist: (note) => {
     const { config: saved } = saveEngineConfig(get().config);
-    set({ config: saved, dirty: false });
+    const captured = captureEngineVersion(saved, { source: 'SAVE', note });
+    set((state) => ({
+      config: saved,
+      savedConfig: saved,
+      dirty: false,
+      versions: captured ? [captured, ...state.versions] : state.versions,
+    }));
   },
 
   applyImported: (config) => set({ config, dirty: true, selectedRuleId: null }),
 
-  resetToDefault: () => set({ config: resetEngineConfig(), dirty: false, selectedRuleId: null }),
+  resetToDefault: () => {
+    const config = resetEngineConfig();
+    const captured = captureEngineVersion(config, { source: 'RESET', note: 'إعادة الضبط إلى سياسات النظام' });
+    set((state) => ({
+      config,
+      savedConfig: config,
+      dirty: false,
+      selectedRuleId: null,
+      versions: captured ? [captured, ...state.versions] : state.versions,
+    }));
+  },
+
+  rollbackTo: (versionId) => {
+    const version = getEngineVersion(versionId);
+    if (!version) return false;
+    const { config: saved } = saveEngineConfig(version.config);
+    const captured = captureEngineVersion(saved, {
+      source: 'ROLLBACK',
+      note: `استرجاع النسخة ${version.seq}`,
+      restoredFrom: version.id,
+    });
+    set((state) => ({
+      config: saved,
+      savedConfig: saved,
+      dirty: false,
+      selectedRuleId: null,
+      versions: captured ? [captured, ...state.versions] : state.versions,
+    }));
+    return true;
+  },
+
+  discardChanges: () =>
+    set((state) => ({ config: state.savedConfig ?? loadEngineConfig(), dirty: false, selectedRuleId: null })),
 
   addRule: (rule) => set((state) => ({ config: addEngineRule(state.config, rule), dirty: true })),
   updateRule: (ruleId, patch) =>
@@ -122,6 +185,7 @@ export const useEngineStudioStore = create<EngineStudioState>((set, get) => ({
   importText: (text) => {
     const { config, validation } = importEngineConfigText(text);
     if (validation.valid) {
+      // الاستيراد لا يُنشر تلقائيا: يبقى «غير محفوظ» حتى يمرّ ببوابة النشر.
       set({ config, dirty: true, selectedRuleId: null });
     }
     return { valid: validation.valid, errors: validation.errors, warnings: validation.warnings };

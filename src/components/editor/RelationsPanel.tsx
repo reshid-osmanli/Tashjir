@@ -14,12 +14,14 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { confirmAction } from '@/lib/ui/confirm-store';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
 import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
+import { useEngineConfig } from '@/hooks/useEngineConfig';
 import { useStrengthDegrees } from '@/hooks/useStrengthDegrees';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor } from '@/lib/tashjeer/color-system';
@@ -49,8 +51,9 @@ export function RelationsPanel() {
   const filter = useEditorStore((state) => state.filter);
   const catalog = useTransmissionCatalog();
   const engine = useEngineSettings();
+  const engineConfig = useEngineConfig();
   const strengthDegrees = useStrengthDegrees();
-  const { classic } = useAyahTashjeer(document, filter, {}, { catalog, engine, strengthDegrees });
+  const { classic } = useAyahTashjeer(document, filter, {}, { catalog, engine, strengthDegrees, engineConfig });
   const [tab, setTab] = useState<LinkTab>('FACE');
 
   if (!document) return null;
@@ -84,6 +87,8 @@ export function RelationsPanel() {
         {TABS.find((item) => item.id === tab)?.hint}
       </p>
 
+      <LinkDecisionNoticeCard />
+
       {tab === 'FACE' && <FaceLinkEditor classic={classic} />}
       {tab === 'LINE' && <LineLinkEditor classic={classic} />}
       {tab === 'SEGMENT' && <SegmentEditor classic={classic} />}
@@ -91,6 +96,60 @@ export function RelationsPanel() {
 
       <LinksList links={document.links ?? []} segments={document.segments ?? []} classic={classic} />
     </section>
+  );
+}
+
+// ==================== قرار الرابط من Decision Resolver ====================
+
+/**
+ * يعرض آخر قرار أصدره Decision Resolver على رابط يدوي: رفض بقاعدة حاظرة،
+ * أو قبول بتحذير مخالفة مصفوفة الدمج، مع أثر القرار (Why؟). الواجهة تعرض
+ * فقط ولا تحسم (P-07).
+ */
+function LinkDecisionNoticeCard() {
+  const notice = useEditorStore((state) => state.lastLinkDecision);
+  const clear = useEditorStore((state) => state.clearLinkDecision);
+  const [showTrace, setShowTrace] = useState(false);
+
+  if (!notice) return null;
+  if (notice.allowed && !notice.warning) return null;
+
+  const tone = notice.allowed
+    ? 'border-amber-300 bg-amber-50 text-amber-900'
+    : 'border-red-300 bg-red-50 text-red-900';
+
+  return (
+    <div className={`mb-2 rounded-md border px-2.5 py-2 text-[10.5px] leading-relaxed ${tone}`} role="status">
+      <div className="flex items-start justify-between gap-2">
+        <p className="font-semibold">
+          {notice.allowed ? 'سُجّل الرابط بخلاف سياسة المحرك' : 'رفض الرابط بقاعدة من سياسات المحرك'}
+        </p>
+        <button type="button" onClick={clear} className="text-[10px] underline opacity-70 hover:opacity-100">
+          إخفاء
+        </button>
+      </div>
+      <p className="mt-0.5">{notice.warning ?? notice.reason}</p>
+      {notice.appliedRuleNames.length > 0 && (
+        <p className="mt-0.5 opacity-80">القواعد المطابقة: {notice.appliedRuleNames.join('، ')}</p>
+      )}
+      <button
+        type="button"
+        onClick={() => setShowTrace((current) => !current)}
+        className="mt-1 text-[10px] underline opacity-80 hover:opacity-100"
+      >
+        {showTrace ? 'إخفاء الأثر' : 'لماذا؟ (أثر القرار)'}
+      </button>
+      {showTrace && (
+        <ol className="mt-1 space-y-0.5 border-t border-current/20 pt-1">
+          {notice.trace.map((step, index) => (
+            <li key={index} className="flex gap-2">
+              <span className="font-mono text-[9px] opacity-60">{step.stage}</span>
+              <span>{step.message}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
   );
 }
 
@@ -495,6 +554,85 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
     setMergeDragId(null);
   };
 
+  // السحب باللمس (FR-ED-04.3، NFR-06): HTML5 DnD لا يعمل على أغلب شاشات
+  // اللمس، فنوفّر مسارا بديلا بأحداث المؤشر: ضغط مطوّل يبدأ السحب، والحركة
+  // تحدّد موضع الإدراج، والرفع يمرّ بنفس التأكيد الكمي.
+  const listRef = useRef<HTMLOListElement | null>(null);
+  const longPressTimer = useRef<number | null>(null);
+  const touchDrag = useRef<{ mode: 'ORDER' | 'MERGE'; lineId: string } | null>(null);
+  const [touchTargetId, setTouchTargetId] = useState<string | null>(null);
+
+  const cancelLongPress = () => {
+    if (longPressTimer.current !== null) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const beginTouchDrag = (mode: 'ORDER' | 'MERGE', lineId: string) => {
+    touchDrag.current = { mode, lineId };
+    if (mode === 'ORDER') {
+      setDraggingId(lineId);
+      setMergeDragId(null);
+    } else {
+      setMergeDragId(lineId);
+      setDraggingId(null);
+    }
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate?.(15);
+      } catch {
+        // بعض المتصفحات تمنع الاهتزاز بلا إيماءة؛ لا يهم.
+      }
+    }
+  };
+
+  const handlePointerDown = (event: React.PointerEvent, mode: 'ORDER' | 'MERGE', lineId: string) => {
+    if (event.pointerType === 'mouse') return; // الفأرة تستعمل HTML5 DnD كما كان.
+    cancelLongPress();
+    longPressTimer.current = window.setTimeout(() => beginTouchDrag(mode, lineId), 350);
+  };
+
+  const handlePointerMove = (event: React.PointerEvent) => {
+    if (!touchDrag.current) {
+      // حركة قبل انتهاء الضغط المطوّل = تمرير عادي، لا سحب.
+      cancelLongPress();
+      return;
+    }
+    event.preventDefault();
+    const element = window.document.elementFromPoint(event.clientX, event.clientY);
+    const row = element?.closest<HTMLElement>('[data-order-line-id]');
+    if (!row) return;
+    const lineId = row.dataset.orderLineId ?? null;
+    const index = Number(row.dataset.orderIndex ?? -1);
+    if (touchDrag.current.mode === 'MERGE') {
+      setTouchTargetId(lineId && lineId !== touchDrag.current.lineId ? lineId : null);
+      return;
+    }
+    if (index < 0) return;
+    const rect = row.getBoundingClientRect();
+    const before = event.clientY < rect.top + rect.height / 2;
+    setDropIndex(before ? index : index + 1);
+  };
+
+  const handlePointerUp = () => {
+    cancelLongPress();
+    const active = touchDrag.current;
+    touchDrag.current = null;
+    if (!active) return;
+    if (active.mode === 'MERGE') {
+      const target = touchTargetId;
+      setTouchTargetId(null);
+      if (target) commitMerge(target);
+      else clearDrag();
+      return;
+    }
+    if (dropIndex !== null) commitDrop(dropIndex);
+    else clearDrag();
+  };
+
+  useEffect(() => cancelLongPress, []);
+
   /** ملخّص موجز للسطر لرسالة التأكيد. */
   const lineSummary = (id: string): string => {
     const line = lineById.get(id);
@@ -515,11 +653,18 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
     const before = targetIndex > 0 ? lineSummary(workingOrder[targetIndex - 1]) : null;
     const after = targetIndex < workingOrder.length ? lineSummary(workingOrder[targetIndex]) : null;
     const positionHint = before && after ? `بين «${before}» و«${after}»` : before ? `بعد «${before}»` : after ? `قبل «${after}»` : 'في الطرف';
-    const confirmed = window.confirm(`نقل السطر «${lineSummary(draggingId)}» إلى هذا الموضع؟ (${positionHint})`);
-    if (confirmed) {
-      moveLineInOrder(workingOrder, draggingId, targetIndex);
-    }
+    const movingId = draggingId;
     clearDrag();
+    void confirmAction({
+      title: `نقل السطر «${lineSummary(movingId)}»`,
+      message: `إلى هذا الموضع (${positionHint}). يُثبَّت الترتيب يدويا ويسبق ترتيب المحرك.`,
+      impacts: [{ label: 'سطر يتغير ترتيبه', count: Math.abs(targetIndex - fromIndex) }],
+      undoable: true,
+      confirmLabel: 'نقل',
+      tone: 'default',
+    }).then((confirmed) => {
+      if (confirmed) moveLineInOrder(workingOrder, movingId, targetIndex);
+    });
   };
 
   /** ينفّذ دمج سطرين بعد تأكيد، فوق نموذج البيانات الموحّد (Relation: MERGE) — FR-ED-05. */
@@ -527,8 +672,15 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
     const fromId = mergeDragId;
     clearDrag();
     if (!fromId || fromId === toId) return;
-    const confirmed = window.confirm(`دمج السطر «${lineSummary(fromId)}» مع السطر «${lineSummary(toId)}»؟`);
-    if (confirmed) {
+    void confirmAction({
+      title: 'دمج سطرين في سطر واحد',
+      message: `«${lineSummary(fromId)}» مع «${lineSummary(toId)}». يُسجَّل الدمج علاقة يدوية يمكن فكّها.`,
+      impacts: [{ label: 'سطر يُدمج', count: 2 }],
+      undoable: true,
+      confirmLabel: 'دمج',
+      tone: 'default',
+    }).then((confirmed) => {
+      if (!confirmed) return;
       addLink({
         kind: 'LINE_TO_LINE',
         relation: 'MERGE',
@@ -536,7 +688,7 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
         to: { type: 'LINE', id: toId },
         notes: 'دمج بالسحب من المحرر',
       });
-    }
+    });
   };
 
   const orderForIndex = (lineId: string): number => {
@@ -569,11 +721,18 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
         )}
       </div>
 
-      <ol className="max-h-72 space-y-1 overflow-y-auto">
+      <ol
+        ref={listRef}
+        className={`max-h-72 space-y-1 overflow-y-auto ${touchDrag.current ? 'touch-none' : ''}`}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      >
         {orderedLines.map((line, index) => {
           const currentOrder = orderForIndex(line.id);
           const isDragging = draggingId === line.id;
           const isMergeTarget = Boolean(mergeDragId) && mergeDragId !== line.id;
+          const isTouchMergeTarget = touchTargetId === line.id;
           const showIndicatorBefore = dropIndex === index && !mergeDragId;
           return (
             <li key={line.id}>
@@ -581,12 +740,16 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
                 <div className="mb-0.5 h-0.5 rounded-full bg-emerald-500" aria-hidden />
               )}
               <div
+                data-order-line-id={line.id}
+                data-order-index={index}
                 className={`flex items-center gap-1.5 rounded border bg-white px-2 py-1.5 transition ${
-                  isMergeTarget
-                    ? 'border-violet-400 bg-violet-50'
-                    : isDragging
-                      ? 'border-emerald-400 opacity-50'
-                      : 'border-stone-100'
+                  isTouchMergeTarget
+                    ? 'border-violet-600 bg-violet-100 ring-2 ring-violet-300'
+                    : isMergeTarget
+                      ? 'border-violet-400 bg-violet-50'
+                      : isDragging
+                        ? 'border-emerald-400 opacity-50'
+                        : 'border-stone-100'
                 }`}
                 draggable
                 onDragStart={(event) => {
@@ -613,15 +776,23 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
                 onDragEnd={clearDrag}
               >
               <span
-                className="cursor-grab shrink-0 text-stone-300 hover:text-stone-500 active:cursor-grabbing"
-                title="اسحب لإعادة الترتيب (مع تأكيد)"
+                className="cursor-grab shrink-0 select-none text-stone-300 hover:text-stone-500 active:cursor-grabbing"
+                title="اسحب لإعادة الترتيب (مع تأكيد). على اللمس: اضغط مطوّلا ثم حرّك"
                 aria-hidden
+                onPointerDown={(event) => handlePointerDown(event, 'ORDER', line.id)}
+                onPointerLeave={() => {
+                  if (!touchDrag.current) cancelLongPress();
+                }}
               >
                 ⠿
               </span>
               <span
-                className="cursor-grab shrink-0 text-violet-400 hover:text-violet-600 active:cursor-grabbing"
-                title="مقبض الدمج: اسحب فوق سطر آخر لدمجهما (مع تأكيد)"
+                className="cursor-grab shrink-0 select-none text-violet-400 hover:text-violet-600 active:cursor-grabbing"
+                title="مقبض الدمج: اسحب فوق سطر آخر لدمجهما (مع تأكيد). على اللمس: اضغط مطوّلا ثم حرّك"
+                onPointerDown={(event) => handlePointerDown(event, 'MERGE', line.id)}
+                onPointerLeave={() => {
+                  if (!touchDrag.current) cancelLongPress();
+                }}
                 draggable
                 onDragStart={(event) => {
                   event.stopPropagation();

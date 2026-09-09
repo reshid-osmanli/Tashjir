@@ -16,7 +16,14 @@ import { describeGlobalPattern } from '@/lib/quran-logic/global-rule-engine';
 import { resolveScope } from '@/lib/tashjeer/scope';
 import { pruneStrengthMap } from '@/lib/tashjeer/strength-degrees';
 import { readTransmissionCatalog } from '@/lib/transmissions/catalog';
-import { saveGlobalRule, setGlobalRuleOrderRank, listGlobalRules, type GlobalRule } from '@/lib/storage/global-rules-store';
+import {
+  saveGlobalRule,
+  setGlobalRuleOrderRank,
+  listGlobalRules,
+  type GlobalRule,
+  type GlobalRuleApplyRange,
+} from '@/lib/storage/global-rules-store';
+import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { ScopePicker } from './VariantEditor';
 import { StrengthDegreePicker } from './StrengthDegreePicker';
 import type { VariantCategory } from '@/types';
@@ -54,6 +61,19 @@ export function GlobalRuleMetaEditor({
   const [sourceRef, setSourceRef] = useState(rule.sourceRef ?? '');
   const [status, setStatus] = useState<VerificationStatus>(rule.status);
   const [isActive, setIsActive] = useState(rule.isActive);
+  // نطاق التطبيق (FR-ED-08.6): المصحف كله أو سورة أو مدى آيات.
+  const sourceAyahKey = rule.pattern?.sourceAyahKey;
+  const sourceSurah = sourceAyahKey ? Math.floor(sourceAyahKey / 1000) : undefined;
+  const [applyKind, setApplyKind] = useState<GlobalRuleApplyRange['kind']>(rule.applyRange?.kind ?? 'MUSHAF');
+  const [applySurah, setApplySurah] = useState<number>(
+    rule.applyRange?.kind === 'SURAH'
+      ? rule.applyRange.surahNumber
+      : rule.applyRange?.kind === 'AYAH_RANGE'
+        ? Math.floor(rule.applyRange.fromAyahKey / 1000)
+        : (sourceSurah ?? 1)
+  );
+  const [applyFrom, setApplyFrom] = useState<number>(rule.applyRange?.kind === 'AYAH_RANGE' ? rule.applyRange.fromAyahKey % 1000 : 1);
+  const [applyTo, setApplyTo] = useState<number>(rule.applyRange?.kind === 'AYAH_RANGE' ? rule.applyRange.toAyahKey % 1000 : 1);
   const [strengthDegreeId, setStrengthDegreeId] = useState<string | undefined>(rule.strengthDegreeId);
   const [strengthByNarrator, setStrengthByNarrator] = useState<ReaderStrengthMap | undefined>(
     rule.strengthByNarrator
@@ -84,6 +104,16 @@ export function GlobalRuleMetaEditor({
       strengthByNarrator: pruneStrengthMap(strengthByNarrator, narratorIds),
       status,
       isActive,
+      applyRange:
+        applyKind === 'SURAH'
+          ? { kind: 'SURAH', surahNumber: Math.max(1, applySurah) }
+          : applyKind === 'AYAH_RANGE'
+            ? {
+                kind: 'AYAH_RANGE',
+                fromAyahKey: Math.max(1, applySurah) * 1000 + Math.max(1, applyFrom),
+                toAyahKey: Math.max(1, applySurah) * 1000 + Math.max(1, applyTo),
+              }
+            : undefined,
     });
     // ترتيب السطر يضبط بالمضبّط المخصص له: إدراج بإزاحة المتأثرين تلقائيا.
     const wantedRank = orderRank === '' ? null : Math.max(1, Math.round(Number(orderRank)));
@@ -192,9 +222,43 @@ export function GlobalRuleMetaEditor({
           />
         </div>
 
+        <div className="mt-4 rounded-lg border border-stone-200 p-3">
+          <p className="text-xs font-semibold text-stone-700">نطاق التطبيق</p>
+          <p className="mt-0.5 text-[11px] text-stone-500">يقيّد أين تُبحث القاعدة دون تغيير نمطها. الافتراضي المصحف كله.</p>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-stone-700">
+            <label className="flex items-center gap-1.5">
+              <input type="radio" checked={applyKind === 'MUSHAF'} onChange={() => setApplyKind('MUSHAF')} className="accent-emerald-600" />
+              المصحف كله
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input type="radio" checked={applyKind === 'SURAH'} onChange={() => setApplyKind('SURAH')} className="accent-emerald-600" />
+              سورة واحدة
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input type="radio" checked={applyKind === 'AYAH_RANGE'} onChange={() => setApplyKind('AYAH_RANGE')} className="accent-emerald-600" />
+              مدى آيات
+            </label>
+          </div>
+          {applyKind !== 'MUSHAF' && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-stone-700">
+              <span>سورة رقم</span>
+              <input type="number" min={1} max={114} value={applySurah} onChange={(event) => setApplySurah(Number(event.target.value) || 1)} className="w-20 rounded border border-stone-300 px-2 py-1" />
+              {applyKind === 'AYAH_RANGE' && (
+                <>
+                  <span>من الآية</span>
+                  <input type="number" min={1} value={applyFrom} onChange={(event) => setApplyFrom(Number(event.target.value) || 1)} className="w-20 rounded border border-stone-300 px-2 py-1" />
+                  <span>إلى</span>
+                  <input type="number" min={1} value={applyTo} onChange={(event) => setApplyTo(Number(event.target.value) || 1)} className="w-20 rounded border border-stone-300 px-2 py-1" />
+                </>
+              )}
+              {sourceSurah && <span className="text-stone-500">(الآية المصدر في سورة {toArabicDigits(sourceSurah)})</span>}
+            </div>
+          )}
+        </div>
+
         <label className="mt-4 flex items-center gap-2 text-xs text-stone-700">
           <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} className="accent-emerald-600" />
-          القاعدة نشطة ومطبَّقة على المصحف
+          القاعدة نشطة ومطبَّقة {applyKind === 'MUSHAF' ? 'على المصحف' : applyKind === 'SURAH' ? 'على السورة المحددة' : 'على مدى الآيات المحدد'}
         </label>
         {error && <p className="mt-3 rounded bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
 

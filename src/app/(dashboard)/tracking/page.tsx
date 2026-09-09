@@ -31,6 +31,10 @@ import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-sys
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import type { VariantCategory } from '@/types';
 import type { VerificationStatus } from '@/types/tashjeer';
+import { DecisionTraceList } from '@/components/editor/WhyTraceDialog';
+import { resolveDifference } from '@/lib/tashjeer/decision/api';
+import { editorCategoryToStudioType } from '@/lib/tashjeer/decision/editor-bridge';
+import { useEngineConfig } from '@/hooks/useEngineConfig';
 
 type SourceFilter = TrackingSource | 'MODIFIED' | 'ALL';
 
@@ -235,6 +239,8 @@ function TrackingRowCard({
 
       {expanded && (
         <div className="mt-3 rounded-lg border border-stone-100 bg-stone-50/70 p-3">
+          {row.correction && <CorrectionTripletView row={row} />}
+          <RowDecisionTrace row={row} />
           <p className="mb-2 text-[11px] font-semibold text-stone-700">
             سجل التصحيح اليدوي (قبل ← بعد)
           </p>
@@ -268,6 +274,147 @@ function TrackingRowCard({
         </div>
       )}
     </li>
+  );
+}
+
+/**
+ * ثلاثية A/B/Final (AC-02): اقتراح المحرك، تغيير المحرر، النتيجة المعتمدة،
+ * مع زر ينقل التصحيح إلى الاستوديو ليُقترح منه قانون مرشّح (FR-ES-12).
+ */
+/**
+ * أثر قرار المحرك لهذا الموضع (Decision Trace في صف التتبع — FR-ES-10):
+ * يُعاد حسابه من ملف المحرك المفعّل الآن عبر Decision Resolver نفسه، فيرى
+ * المحقق أي قاعدة استوجبت الاختلاف وأيها تُركت، دون فتح المحرر.
+ */
+function RowDecisionTrace({ row }: { row: TrackingRow }) {
+  const engineConfig = useEngineConfig();
+  const [open, setOpen] = useState(false);
+  const result = useMemo(
+    () =>
+      resolveDifference(
+        {
+          differenceType: editorCategoryToStudioType(row.category),
+          category: 'DIFFERENCE',
+          source: row.source,
+          globalRuleId: row.globalRuleId,
+        },
+        engineConfig
+      ),
+    [row.category, row.source, row.globalRuleId, engineConfig]
+  );
+  const applied = result.appliedRules.length;
+  return (
+    <div className="mb-3 rounded-lg border border-stone-200 bg-white p-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold text-stone-800">
+          أثر قرار المحرك
+          <span className="mr-1 font-normal text-stone-500">
+            {applied > 0 ? `${toArabicDigits(applied)} قاعدة فاعلة · ${result.decision.reason}` : 'لا قاعدة استوديو تستوجب هذا الاختلاف (قاعدة عامة أو إدخال يدوي)'}
+          </span>
+        </p>
+        <button
+          type="button"
+          onClick={() => setOpen((current) => !current)}
+          className="rounded-md border border-stone-300 bg-white px-2 py-0.5 text-[10.5px] text-stone-700 hover:bg-stone-50"
+        >
+          {open ? 'إخفاء الأثر' : `عرض الأثر (${toArabicDigits(result.trace.length)})`}
+        </button>
+      </div>
+      {open && (
+        <div className="mt-2">
+          <DecisionTraceList trace={result.trace} compact />
+          {result.appliedRules.length > 0 && (
+            <ul className="mt-2 flex flex-wrap gap-1.5">
+              {result.appliedRules.map((rule) => (
+                <li key={rule.id}>
+                  <Link href={`/studio?rule=${encodeURIComponent(rule.id)}`} className="rounded bg-emerald-50 px-2 py-0.5 text-[10.5px] text-emerald-800 hover:bg-emerald-100">
+                    {rule.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CorrectionTripletView({ row }: { row: TrackingRow }) {
+  const correction = row.correction;
+  if (!correction) return null;
+  const changed = correction.editor !== null;
+  const fieldLabels: Record<string, string> = { title: 'العنوان', category: 'الفئة', alternatives: 'الأوجه' };
+
+  const candidateHref = correction.candidate
+    ? `/studio?section=candidates&differenceType=${encodeURIComponent(correction.candidate.differenceType)}&engineMerged=${correction.candidate.engineMerged ? '1' : '0'}&editorWantsMerge=${correction.candidate.editorWantsMerge ? '1' : '0'}&ayah=${row.ayahKey}&variant=${encodeURIComponent(row.variantId)}`
+    : null;
+
+  return (
+    <div className="mb-3 rounded-lg border border-stone-200 bg-white p-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold text-stone-800">
+          المحرك (أ) ← المحرر (ب) ← المعتمد
+          <span className="mr-1 font-normal text-stone-500">لُقطت {formatDate(correction.capturedAt)}</span>
+        </p>
+        {candidateHref && (
+          <Link
+            href={candidateHref}
+            className="rounded-md border border-violet-300 bg-violet-50 px-2 py-0.5 text-[10.5px] font-medium text-violet-800 hover:bg-violet-100"
+          >
+            اقتراح قاعدة من هذا التصحيح
+          </Link>
+        )}
+      </div>
+      <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+        <CorrectionColumn label="أ. اقتراح المحرك" state={correction.engine} tone="cyan" />
+        <div className="rounded border border-violet-200 bg-violet-50/60 p-2">
+          <p className="text-[10.5px] font-semibold text-violet-900">ب. تغيير المحرر</p>
+          {changed ? (
+            <ul className="mt-1 space-y-0.5 text-[10.5px] text-violet-900">
+              {correction.editor?.changedFields.map((field) => (
+                <li key={field}>غُيِّر: {fieldLabels[field] ?? field}</li>
+              ))}
+              {correction.editor?.at && <li className="text-violet-700/80">في {formatDate(correction.editor.at)}</li>}
+            </ul>
+          ) : (
+            <p className="mt-1 text-[10.5px] text-violet-700/80">لم يغيّر المحرر شيئا؛ المعتمد هو اقتراح المحرك.</p>
+          )}
+        </div>
+        <CorrectionColumn label="المعتمد (النهائي)" state={correction.final} tone="emerald" />
+      </div>
+    </div>
+  );
+}
+
+function CorrectionColumn({
+  label,
+  state,
+  tone,
+}: {
+  label: string;
+  state: NonNullable<TrackingRow['correction']>['engine'];
+  tone: 'cyan' | 'emerald';
+}) {
+  const box = tone === 'cyan' ? 'border-cyan-200 bg-cyan-50/60 text-cyan-900' : 'border-emerald-200 bg-emerald-50/60 text-emerald-900';
+  return (
+    <div className={`rounded border p-2 ${box}`}>
+      <p className="text-[10.5px] font-semibold">{label}</p>
+      <p className="mt-1 text-[10.5px]">
+        {state.title} <span className="opacity-70">({CATEGORY_LABELS[state.category]})</span>
+      </p>
+      <ul className="mt-0.5 space-y-0.5 text-[10.5px]">
+        {state.alternatives.length === 0 ? (
+          <li className="opacity-70">لا أوجه</li>
+        ) : (
+          state.alternatives.map((alternative, index) => (
+            <li key={alternative.id}>
+              {toArabicDigits(index + 1)}. {alternative.label || alternative.text}
+            </li>
+          ))
+        )}
+      </ul>
+    </div>
   );
 }
 

@@ -9,6 +9,7 @@
 
 'use client';
 
+import { confirmAction } from '@/lib/ui/confirm-store';
 import { useEffect, useState } from 'react';
 import type { EngineRule } from '@/lib/tashjeer/model/v8';
 import { useEngineStudioStore } from '@/stores/engine-config-ui-store';
@@ -22,8 +23,9 @@ import { Dashboard } from '@/components/studio/Dashboard';
 import { RuleTestsPanel } from '@/components/studio/RuleTestsPanel';
 import { CandidateRulesPanel } from '@/components/studio/CandidateRulesPanel';
 import { ProfileComparePanel } from '@/components/studio/ProfileComparePanel';
+import { PublishHistoryPanel } from '@/components/studio/PublishHistoryPanel';
 
-type Section = 'dashboard' | 'rules' | 'merge' | 'priority' | 'why' | 'tests' | 'candidates' | 'compare' | 'io';
+type Section = 'dashboard' | 'rules' | 'merge' | 'priority' | 'why' | 'tests' | 'candidates' | 'compare' | 'publish' | 'io';
 
 const SECTIONS: Array<{ id: Section; label: string; hint: string }> = [
   { id: 'dashboard', label: 'لوحة المعلومات', hint: 'نظرة عامة' },
@@ -34,21 +36,56 @@ const SECTIONS: Array<{ id: Section; label: string; hint: string }> = [
   { id: 'tests', label: 'اختبارات القواعد', hint: 'FR-ES-08' },
   { id: 'candidates', label: 'قاعدة من تصحيح', hint: 'FR-ES-12' },
   { id: 'compare', label: 'مقارنة الملفات', hint: 'FR-ES-11' },
+  { id: 'publish', label: 'النشر والسجل', hint: 'FR-ES-07/14' },
   { id: 'io', label: 'التصدير والاستيراد', hint: 'FR-ES-14' },
 ];
+
+/** معاملات الرابط العميق (FR-ES-15): القسم، القاعدة، وتصحيح مسبق التعبئة. */
+interface StudioDeepLink {
+  section?: Section;
+  ruleId?: string;
+  candidate?: { differenceType?: string; relatedType?: string; engineMerged?: boolean; editorWantsMerge?: boolean };
+}
+
+function readDeepLink(): StudioDeepLink {
+  if (typeof window === 'undefined') return {};
+  const params = new URLSearchParams(window.location.search);
+  const section = params.get('section') as Section | null;
+  const ruleId = params.get('rule') ?? undefined;
+  const flag = (key: string): boolean | undefined => {
+    const value = params.get(key);
+    if (value === null) return undefined;
+    return value === '1' || value === 'true';
+  };
+  const differenceType = params.get('differenceType') ?? undefined;
+  const relatedType = params.get('relatedType') ?? undefined;
+  const engineMerged = flag('engineMerged');
+  const editorWantsMerge = flag('editorWantsMerge');
+  const hasCandidate = differenceType || relatedType || engineMerged !== undefined || editorWantsMerge !== undefined;
+  return {
+    section: section && SECTIONS.some((item) => item.id === section) ? section : ruleId ? 'rules' : undefined,
+    ruleId,
+    candidate: hasCandidate ? { differenceType, relatedType, engineMerged, editorWantsMerge } : undefined,
+  };
+}
 
 export default function EngineStudioPage() {
   const [section, setSection] = useState<Section>('dashboard');
   const [creatingNew, setCreatingNew] = useState(false);
+  const [deepLink, setDeepLink] = useState<StudioDeepLink>({});
 
   const {
     config,
     loaded,
     dirty,
     selectedRuleId,
+    savedConfig,
+    versions,
     hydrate,
     persist,
     resetToDefault,
+    rollbackTo,
+    discardChanges,
     setSelectedRule,
     addRule,
     updateRule,
@@ -59,6 +96,8 @@ export default function EngineStudioPage() {
     updateMergeEntry,
     removeMergeEntry,
     setConflictPolicyAction,
+    setExecutionOrderAction,
+    upsertGroup,
     exportText,
     importText,
   } = useEngineStudioStore();
@@ -66,6 +105,15 @@ export default function EngineStudioPage() {
   useEffect(() => {
     hydrate();
   }, [hydrate]);
+
+  // الروابط العميقة: /studio?rule=... يفتح القاعدة، و?section=candidates مع
+  // معاملات التصحيح يعبّئ لوحة «قاعدة من تصحيح» (FR-ES-15).
+  useEffect(() => {
+    const link = readDeepLink();
+    setDeepLink(link);
+    if (link.section) setSection(link.section);
+    if (link.ruleId) setSelectedRule(link.ruleId);
+  }, [setSelectedRule]);
 
   const selectedRule = selectedRuleId ? config.rules.find((rule) => rule.id === selectedRuleId) ?? null : null;
   const builderRule = creatingNew ? null : selectedRule;
@@ -95,10 +143,18 @@ export default function EngineStudioPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => {
-              if (window.confirm('إعادة إعداد المحرك إلى سياسات النظام الافتراضية؟ سيُفقد ما لم يُحفظ.')) {
-                resetToDefault();
-              }
+            onClick={async () => {
+              const ok = await confirmAction({
+                title: 'إعادة إعداد المحرك إلى سياسات النظام',
+                message: 'تُستبدل القواعد ومصفوفة الدمج والسياسات الحالية بالافتراضية، ويُفقد ما لم يُحفظ.',
+                impacts: [
+                  { label: 'قاعدة', count: config.rules.length },
+                  { label: 'صف في مصفوفة الدمج', count: config.mergeMatrix.length },
+                ],
+                undoable: false,
+                confirmLabel: 'إعادة الضبط',
+              });
+              if (ok) resetToDefault();
             }}
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
@@ -106,7 +162,16 @@ export default function EngineStudioPage() {
           </button>
           <button
             type="button"
-            onClick={persist}
+            onClick={() => setSection('publish')}
+            disabled={!dirty}
+            className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+            title="تشغيل جاف قبل النشر: ما الذي سيتبدّل؟"
+          >
+            مراجعة قبل النشر
+          </button>
+          <button
+            type="button"
+            onClick={() => persist()}
             disabled={!dirty}
             className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -177,11 +242,23 @@ export default function EngineStudioPage() {
                       rule={selectedRule}
                       onPriority={setRulePriorityAction}
                       onStatus={setRuleStatusAction}
-                      onRemove={(id) => {
-                        if (selectedRule.protected) {
-                          if (!window.confirm('هذه قاعدة محمية. تأكيد الحذف؟')) return;
-                        }
-                        removeRule(id);
+                      onRemove={async (id) => {
+                        const dependents = config.rules.filter(
+                          (rule) => rule.dependsOn?.includes(id) || rule.overrides?.includes(id)
+                        ).length;
+                        const ok = await confirmAction({
+                          title: selectedRule.protected ? 'حذف قاعدة محمية' : `حذف القاعدة «${selectedRule.name}»`,
+                          message: selectedRule.protected
+                            ? 'هذه قاعدة محمية من قواعد النظام؛ حذفها يغيّر سلوك المحرك الافتراضي.'
+                            : 'تُحذف القاعدة من ملف المحرك الحالي.',
+                          impacts: [
+                            { label: 'قاعدة تعتمد عليها', count: dependents },
+                            { label: 'حالة اختبار مرفقة', count: selectedRule.testCases?.length ?? 0 },
+                          ],
+                          undoable: false,
+                          confirmLabel: 'حذف',
+                        });
+                        if (ok) removeRule(id);
                       }}
                     />
                   )}
@@ -199,7 +276,18 @@ export default function EngineStudioPage() {
             )}
 
             {section === 'priority' && (
-              <PriorityPipeline config={config} onConflictPolicyChange={setConflictPolicyAction} />
+              <PriorityPipeline
+                config={config}
+                onConflictPolicyChange={setConflictPolicyAction}
+                onExecutionOrderChange={setExecutionOrderAction}
+                onGroupChange={upsertGroup}
+                onRulePriorityChange={setRulePriorityAction}
+                onOpenRule={(ruleId) => {
+                  setSelectedRule(ruleId);
+                  setCreatingNew(false);
+                  setSection('rules');
+                }}
+              />
             )}
 
             {section === 'why' && <WhyTracePlayground config={config} />}
@@ -208,6 +296,7 @@ export default function EngineStudioPage() {
 
             {section === 'candidates' && (
               <CandidateRulesPanel
+                initial={deepLink.candidate}
                 onAdopt={(rule) => {
                   addRule(rule);
                   setSection('rules');
@@ -216,6 +305,23 @@ export default function EngineStudioPage() {
             )}
 
             {section === 'compare' && <ProfileComparePanel config={config} />}
+
+            {section === 'publish' && (
+              <PublishHistoryPanel
+                config={config}
+                savedConfig={savedConfig}
+                dirty={dirty}
+                versions={versions}
+                onPublish={(note) => persist(note)}
+                onDiscard={discardChanges}
+                onRollback={rollbackTo}
+                onOpenRule={(ruleId) => {
+                  setSelectedRule(ruleId);
+                  setCreatingNew(false);
+                  setSection('rules');
+                }}
+              />
+            )}
 
             {section === 'io' && <ExportImportPanel onExport={exportText} onImport={importText} />}
           </div>

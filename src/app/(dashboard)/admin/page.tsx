@@ -6,6 +6,8 @@
 
 'use client';
 
+import { confirmAction } from '@/lib/ui/confirm-store';
+import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { Narrator, ReadingImam, TransmissionPath } from '@/types';
 import {
@@ -14,6 +16,10 @@ import {
   catalogPathsForNarrator,
   createDefaultTransmissionCatalog,
   createTransmissionId,
+  findOrderConflict,
+  insertWithShift,
+  movePeer,
+  replacePeers,
   readTransmissionCatalog,
   resetTransmissionCatalog,
   saveTransmissionCatalog,
@@ -31,6 +37,31 @@ import {
   type TashjeerEngineSettings,
   type TieBreakOrder,
 } from '@/lib/tashjeer/engine-settings';
+
+/**
+ * يفحص تعارض رقم الترتيب مع قرين آخر (FR-ED-14). عند التعارض يعرض خيارا كميا:
+ * «إدراج مع إزاحة» يزيح من بعده رقما واحدا، أو إلغاء للعودة إلى النموذج.
+ * يعيد قائمة الأقران النهائية، أو null إن ألغى المستخدم.
+ */
+async function resolveOrderConflict<T extends { id: string; order: number }>(
+  peers: T[],
+  item: T,
+  describe: (peer: T) => string
+): Promise<T[] | null> {
+  const conflict = findOrderConflict(peers, item.id, item.order);
+  const others = peers.filter((peer) => peer.id !== item.id);
+  if (!conflict) return [...others, item];
+  const shifted = others.filter((peer) => peer.order >= item.order).length;
+  const ok = await confirmAction({
+    title: `الرقم ${toArabicDigits(item.order)} مشغول`,
+    message: `يشغله «${describe(conflict.occupant)}». هل تريد إدراج العنصر في هذا الرقم وإزاحة من بعده رقما واحدا؟ المعرّفات لا تتغير، والترتيب النسبي للباقي محفوظ.`,
+    impacts: [{ label: 'عنصر ستتغير رتبته', count: shifted }],
+    undoable: false,
+    confirmLabel: 'إدراج مع إزاحة',
+  });
+  if (!ok) return null;
+  return insertWithShift(peers, item, item.order);
+}
 
 const TABS = [
   { id: 'transmissions', label: 'القراء والرواة والطرق' },
@@ -115,8 +146,19 @@ export default function AdminPage() {
           onOpenEditor={setEditor}
           onCloseEditor={() => setEditor(null)}
           onPersist={persistCatalog}
-          onReset={() => {
-            if (!window.confirm('إعادة القراء والرواة والطرق إلى بذرة المشروع؟ ستفقد التعديلات المحلية.')) return;
+          onReset={async () => {
+            const ok = await confirmAction({
+              title: 'إعادة كتالوج القراءات إلى بذرة المشروع',
+              message: 'تُفقد التعديلات المحلية على القراء والرواة والطرق وترتيبهم.',
+              impacts: [
+                { label: 'قارئ', count: catalog.imams.length },
+                { label: 'راو', count: catalog.narrators.length },
+                { label: 'طريق', count: catalog.paths.length },
+              ],
+              undoable: false,
+              confirmLabel: 'إعادة',
+            });
+            if (!ok) return;
             setCatalog(resetTransmissionCatalog());
             setMessage('أعيد كتالوج القراءات إلى البذرة الافتراضية.');
             setEditor(null);
@@ -155,11 +197,74 @@ function TransmissionManager({
   const imams = useMemo(() => catalogImamsInOrder(catalog), [catalog]);
   const narrators = useMemo(() => catalogNarratorsInOrder(catalog), [catalog]);
 
-  const removeImam = (imam: ReadingImam) => {
+  // سحب وإفلات لإعادة الترتيب (FR-ED-14): كل إفلات يعيد الترقيم 1..n صراحة.
+  const [drag, setDrag] = useState<{ kind: 'IMAM' | 'NARRATOR' | 'PATH'; id: string; group?: string } | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+
+  const dropOn = (kind: 'IMAM' | 'NARRATOR' | 'PATH', targetId: string, group?: string) => {
+    if (!drag || drag.kind !== kind || drag.group !== group || drag.id === targetId) {
+      setDrag(null);
+      setDropTarget(null);
+      return;
+    }
+    if (kind === 'IMAM') {
+      const toIndex = imams.findIndex((imam) => imam.id === targetId);
+      onPersist({ ...catalog, imams: movePeer(catalog.imams, drag.id, toIndex) }, 'أُعيد ترتيب القراء.');
+    } else if (kind === 'NARRATOR') {
+      const peers = catalog.narrators.filter((narrator) => narrator.imamId === group);
+      const sorted = [...peers].sort((a, b) => a.order - b.order);
+      const toIndex = sorted.findIndex((narrator) => narrator.id === targetId);
+      onPersist({ ...catalog, narrators: replacePeers(catalog.narrators, movePeer(peers, drag.id, toIndex)) }, 'أُعيد ترتيب الرواة.');
+    } else {
+      const peers = catalog.paths.filter((path) => path.narratorId === group);
+      const sorted = [...peers].sort((a, b) => a.order - b.order);
+      const toIndex = sorted.findIndex((path) => path.id === targetId);
+      onPersist({ ...catalog, paths: replacePeers(catalog.paths, movePeer(peers, drag.id, toIndex)) }, 'أُعيد ترتيب الطرق.');
+    }
+    setDrag(null);
+    setDropTarget(null);
+  };
+
+  const dragProps = (kind: 'IMAM' | 'NARRATOR' | 'PATH', id: string, group?: string) => ({
+    draggable: true,
+    onDragStart: (event: React.DragEvent) => {
+      event.stopPropagation();
+      event.dataTransfer.effectAllowed = 'move';
+      setDrag({ kind, id, group });
+    },
+    onDragOver: (event: React.DragEvent) => {
+      if (!drag || drag.kind !== kind || drag.group !== group) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setDropTarget(id);
+    },
+    onDrop: (event: React.DragEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      dropOn(kind, id, group);
+    },
+    onDragEnd: () => {
+      setDrag(null);
+      setDropTarget(null);
+    },
+  });
+  const dropClass = (id: string) => (dropTarget === id && drag?.id !== id ? 'ring-2 ring-emerald-400' : drag?.id === id ? 'opacity-50' : '');
+
+  const removeImam = async (imam: ReadingImam) => {
     const relatedNarrators = catalog.narrators.filter((narrator) => narrator.imamId === imam.id);
     const relatedIds = new Set(relatedNarrators.map((narrator) => narrator.id));
     const relatedPaths = catalog.paths.filter((path) => relatedIds.has(path.narratorId));
-    if (!window.confirm(`حذف «${imam.name}» مع ${relatedNarrators.length} راو و${relatedPaths.length} طريق؟`)) return;
+    const ok = await confirmAction({
+      title: `حذف القارئ «${imam.name}»`,
+      message: 'يُحذف مع رواته وطرقهم؛ الأوجه المسنَدة إليهم تبقى في المستندات لكن بلا صاحب معروف.',
+      impacts: [
+        { label: 'راو', count: relatedNarrators.length },
+        { label: 'طريق', count: relatedPaths.length },
+      ],
+      undoable: false,
+      confirmLabel: 'حذف',
+    });
+    if (!ok) return;
     onPersist(
       {
         ...catalog,
@@ -172,9 +277,16 @@ function TransmissionManager({
     onCloseEditor();
   };
 
-  const removeNarrator = (narrator: Narrator) => {
+  const removeNarrator = async (narrator: Narrator) => {
     const pathsCount = catalog.paths.filter((path) => path.narratorId === narrator.id).length;
-    if (!window.confirm(`حذف الراوي «${narrator.name}» مع ${pathsCount} طريق؟`)) return;
+    const ok = await confirmAction({
+      title: `حذف الراوي «${narrator.name}»`,
+      message: 'يُحذف مع طرقه.',
+      impacts: [{ label: 'طريق', count: pathsCount }],
+      undoable: false,
+      confirmLabel: 'حذف',
+    });
+    if (!ok) return;
     onPersist(
       {
         ...catalog,
@@ -186,8 +298,15 @@ function TransmissionManager({
     onCloseEditor();
   };
 
-  const removePath = (path: TransmissionPath) => {
-    if (!window.confirm(`حذف الطريق «${path.shortName}»؟`)) return;
+  const removePath = async (path: TransmissionPath) => {
+    const ok = await confirmAction({
+      title: `حذف الطريق «${path.shortName}»`,
+      message: 'الأوجه المخصوصة بهذا الطريق تعود إلى نطاق راويه.',
+      impacts: [{ label: 'طريق', count: 1 }],
+      undoable: false,
+      confirmLabel: 'حذف',
+    });
+    if (!ok) return;
     onPersist(
       { ...catalog, paths: catalog.paths.filter((item) => item.id !== path.id) },
       `تم حذف الطريق ${path.shortName}.`
@@ -234,9 +353,10 @@ function TransmissionManager({
             {imams.map((imam) => {
               const imamNarrators = narrators.filter((narrator) => narrator.imamId === imam.id);
               return (
-                <section key={imam.id} className="overflow-hidden rounded-xl border border-stone-200 bg-white">
+                <section key={imam.id} className={`overflow-hidden rounded-xl border border-stone-200 bg-white ${dropClass(imam.id)}`} {...dragProps('IMAM', imam.id)}>
                   <header className="flex flex-wrap items-center justify-between gap-2 bg-stone-50 px-4 py-3">
                     <div className="flex items-center gap-2">
+                      <span className="cursor-grab select-none text-stone-300 hover:text-stone-500 active:cursor-grabbing" title="اسحب لإعادة ترتيب القراء" aria-hidden>⠿</span>
                       <span
                         className="flex h-7 min-w-7 items-center justify-center rounded bg-stone-800 px-1 text-sm font-bold text-white"
                         style={{ fontFamily: "'Amiri Quran', serif" }}
@@ -245,7 +365,7 @@ function TransmissionManager({
                         {imam.symbol || '—'}
                       </span>
                       <div>
-                        <h2 className="font-bold text-stone-900">{imam.order}. {imam.name}</h2>
+                        <h2 className="font-bold text-stone-900">{toArabicDigits(imam.order)}. {imam.name}</h2>
                         <p className="text-[11px] text-stone-500">{imam.region || 'البلد غير مسجل'} · {imam.slug}</p>
                       </div>
                     </div>
@@ -263,15 +383,16 @@ function TransmissionManager({
                       {imamNarrators.map((narrator) => {
                         const paths = catalogPathsForNarrator(catalog, narrator.id);
                         return (
-                          <li key={narrator.id} className="px-4 py-3">
+                          <li key={narrator.id} className={`px-4 py-3 ${dropClass(narrator.id)}`} {...dragProps('NARRATOR', narrator.id, imam.id)}>
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="flex items-center gap-2">
+                                <span className="cursor-grab select-none text-stone-300 hover:text-stone-500 active:cursor-grabbing" title="اسحب لإعادة ترتيب رواة هذا القارئ" aria-hidden>⠿</span>
                                 <span className="flex h-7 min-w-7 items-center justify-center rounded bg-emerald-700 px-1 text-sm font-bold text-white" style={{ fontFamily: "'Amiri Quran', serif" }}>
                                   {narrator.symbol || '—'}
                                 </span>
                                 <div>
                                   <p className="text-sm font-semibold text-stone-900">{narrator.name}</p>
-                                  <p className="text-[11px] text-stone-500">ترتيب الراوي: {narrator.order} · الطيبة: {narrator.legacyOrderInTayyibah ?? '—'}</p>
+                                  <p className="text-[11px] text-stone-500">ترتيب الراوي: {toArabicDigits(narrator.order)} · الطيبة: {narrator.legacyOrderInTayyibah != null ? toArabicDigits(narrator.legacyOrderInTayyibah) : '—'}</p>
                                 </div>
                               </div>
                               <div className="flex gap-1.5">
@@ -284,13 +405,14 @@ function TransmissionManager({
                             {paths.length > 0 && (
                               <ul className="mt-2 grid gap-1 sm:grid-cols-2">
                                 {paths.map((path) => (
-                                  <li key={path.id} className="flex items-center justify-between gap-2 rounded border border-stone-100 bg-stone-50 px-2 py-1.5">
-                                    <span className="min-w-0">
+                                  <li key={path.id} className={`flex items-center justify-between gap-2 rounded border border-stone-100 bg-stone-50 px-2 py-1.5 ${dropClass(path.id)}`} {...dragProps('PATH', path.id, narrator.id)}>
+                                    <span className="cursor-grab select-none text-stone-300 hover:text-stone-500 active:cursor-grabbing" title="اسحب لإعادة ترتيب طرق هذا الراوي" aria-hidden>⠿</span>
+                                    <span className="min-w-0 flex-1">
                                       <span className="block truncate text-[11px] font-medium text-stone-800">
                                         {path.symbol ? `${path.symbol} · ` : ''}
                                         {path.shortName}
                                       </span>
-                                      <span className="block truncate text-[10px] text-stone-500">{path.code}</span>
+                                      <span className="block truncate text-[10px] text-stone-500">{toArabicDigits(path.order)} · {path.code}</span>
                                     </span>
                                     <span className="flex shrink-0 gap-1">
                                       <button type="button" onClick={() => onOpenEditor({ kind: 'PATH', id: path.id })} className="text-[10px] text-emerald-800 hover:underline">تعديل</button>
@@ -379,7 +501,7 @@ function ImamForm({
   const [order, setOrder] = useState(value?.order ?? catalog.imams.length + 1);
   // رمز الإمام: يُطبع في طرف السطر إذا اجتمع راوياه على وجه واحد.
   const [symbol, setSymbol] = useState(value?.symbol ?? '');
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!name.trim()) return;
     const imam: ReadingImam = {
@@ -390,8 +512,10 @@ function ImamForm({
       order: Math.max(1, Number(order) || 1),
       symbol: symbol.trim(),
     };
+    const imams = await resolveOrderConflict(catalog.imams, imam, (peer) => peer.name);
+    if (!imams) return;
     onSave(
-      { ...catalog, imams: value ? catalog.imams.map((item) => item.id === value.id ? imam : item) : [...catalog.imams, imam] },
+      { ...catalog, imams },
       value ? `تم تعديل القارئ ${imam.name}.` : `تمت إضافة القارئ ${imam.name}.`
     );
   };
@@ -429,7 +553,7 @@ function NarratorForm({
   const [order, setOrder] = useState(value?.order ?? 1);
   const [tayyibahOrder, setTayyibahOrder] = useState(value?.legacyOrderInTayyibah ?? catalog.narrators.length + 1);
   const [slug, setSlug] = useState(value?.slug ?? '');
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!name.trim() || !imamId) return;
     const narrator: Narrator = {
@@ -441,8 +565,13 @@ function NarratorForm({
       legacyOrderInTayyibah: Math.max(1, Number(tayyibahOrder) || 1),
       slug: slug.trim() || undefinedSlug(name),
     };
+    // الأقران: رواة الإمام نفسه (الترتيب داخل الإمام).
+    const peers = catalog.narrators.filter((item) => item.imamId === imamId || item.id === narrator.id);
+    const resolved = await resolveOrderConflict(peers, narrator, (peer) => peer.name);
+    if (!resolved) return;
+    const kept = value ? catalog.narrators : [...catalog.narrators, narrator];
     onSave(
-      { ...catalog, narrators: value ? catalog.narrators.map((item) => item.id === value.id ? narrator : item) : [...catalog.narrators, narrator] },
+      { ...catalog, narrators: replacePeers(kept, resolved) },
       value ? `تم تعديل الراوي ${narrator.name}.` : `تمت إضافة الراوي ${narrator.name}.`
     );
   };
@@ -481,7 +610,7 @@ function PathForm({
   const [order, setOrder] = useState(value?.order ?? 1);
   const [symbol, setSymbol] = useState(value?.symbol ?? '');
   const [canonical, setCanonical] = useState(value?.isCanonical ?? false);
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!narratorId || !shortName.trim()) return;
     const path: TransmissionPath = {
@@ -497,8 +626,12 @@ function PathForm({
       sourceRef: value?.sourceRef,
       notes: value?.notes,
     };
+    const peers = catalog.paths.filter((item) => item.narratorId === narratorId || item.id === path.id);
+    const resolved = await resolveOrderConflict(peers, path, (peer) => peer.shortName);
+    if (!resolved) return;
+    const kept = value ? catalog.paths : [...catalog.paths, path];
     onSave(
-      { ...catalog, paths: value ? catalog.paths.map((item) => item.id === value.id ? path : item) : [...catalog.paths, path] },
+      { ...catalog, paths: replacePeers(kept, resolved) },
       value ? `تم تعديل الطريق ${path.shortName}.` : `تمت إضافة الطريق ${path.shortName}.`
     );
   };

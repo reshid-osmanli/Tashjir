@@ -37,6 +37,9 @@ import {
 import { parseAyahKey } from '@/data/quran';
 import type { SmartCreateResult } from '@/lib/tashjeer/smart-create';
 import { relationTypeToLinkRelation } from '@/lib/tashjeer/model/v8';
+import { resolveLinkPolicy, type LinkPolicyDecision } from '@/lib/tashjeer/decision/editor-bridge';
+import { loadEngineConfig } from '@/lib/tashjeer/engine-config-store';
+import type { DecisionTraceStep } from '@/lib/tashjeer/decision/resolver';
 import { documentWindowWords } from '@/lib/tashjeer/reading-window';
 import { layoutAyah } from '@/lib/tashjeer/layout-engine';
 import { generateBranches } from '@/lib/tashjeer/branch-engine';
@@ -78,6 +81,74 @@ const DEFAULT_FILTER: ViewFilter = {
   showAnchors: true,
 };
 
+// ==================== تفضيلات مساحة العمل (FR-ED-01.4) ====================
+//
+// إظهار اللوحات وخيارات العرض (الشبكة/البطاقات/المساطر) تفضيلات شخصية لا
+// تخص المستند، فتُحفظ محليا وتُستعاد عند فتح المحرر، ولا تدخل في التصدير.
+
+export const WORKSPACE_PREFS_KEY = 'tashjeer:editor-workspace:v1';
+
+interface WorkspacePrefs {
+  showPropertiesPanel: boolean;
+  showVariantsPanel: boolean;
+  showLabels: boolean;
+  showGrid: boolean;
+  showRulers: boolean;
+  showAnchors: boolean;
+}
+
+function readWorkspacePrefs(): Partial<WorkspacePrefs> {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(WORKSPACE_PREFS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Partial<WorkspacePrefs>;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeWorkspacePrefs(state: Pick<EditorState, 'showPropertiesPanel' | 'showVariantsPanel' | 'filter'>): void {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return;
+  const prefs: WorkspacePrefs = {
+    showPropertiesPanel: state.showPropertiesPanel,
+    showVariantsPanel: state.showVariantsPanel,
+    showLabels: state.filter.showLabels,
+    showGrid: state.filter.showGrid,
+    showRulers: state.filter.showRulers,
+    showAnchors: state.filter.showAnchors,
+  };
+  try {
+    window.localStorage.setItem(WORKSPACE_PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    // امتلاء التخزين لا يعطل المحرر.
+  }
+}
+
+const INITIAL_PREFS = readWorkspacePrefs();
+const bool = (value: unknown, fallback: boolean): boolean => (typeof value === 'boolean' ? value : fallback);
+
+/**
+ * حافظة المحرر (FR-ED-06): عنصر واحد، أو عدة أوجه من موضع واحد، أو سطر كامل
+ * (كل اختلافات السطر بأوجهها). اللصق يولّد معرّفات جديدة دائما ولا يمس الأصل.
+ */
+export type EditorClipboard =
+  | { kind: 'DIFFERENCE'; value: Variant }
+  | { kind: 'FACE'; value: VariantAlternative }
+  | { kind: 'FACES'; value: VariantAlternative[]; sourceVariantId: string }
+  | { kind: 'SEGMENT'; value: LineSegment }
+  | { kind: 'LINE'; value: { lineId: string; label: string; variants: Variant[] } }
+  | null;
+
+/** قرار رابط يدوي كما يُعرض في الواجهة، مع أثره القابل للتفسير. */
+export interface LinkDecisionNotice extends LinkPolicyDecision {
+  linkId?: string;
+  trace: DecisionTraceStep[];
+  appliedRuleNames: string[];
+  at: string;
+}
+
 interface EditorState {
   // ---------- المستند ----------
   /** المستند المفتوح حاليا، أو null قبل التحميل */
@@ -109,7 +180,7 @@ interface EditorState {
   selectedVariantId: string | null;
   selectedAlternativeId: string | null;
   selectedBranchId: string | null;
-  clipboard: { kind: 'DIFFERENCE'; value: Variant } | { kind: 'FACE'; value: VariantAlternative } | { kind: 'SEGMENT'; value: LineSegment } | null;
+  clipboard: EditorClipboard;
   currentTool: EditorTool;
   /** الفئة المستخدمة عند إنشاء اختلاف جديد */
   draftCategory: VariantCategory;
@@ -169,14 +240,31 @@ interface EditorState {
   deleteManualLine: (lineId: string) => void;
 
   // ---------- الروابط والأجزاء والترتيب اليدوي (تصحيح المحرك) ----------
-  /** ينشئ علاقة يدوية بين عنصرين: وجهين، سطرين، أو جزء وسطر/قاعدة. */
+  /**
+   * آخر قرار أصدره Decision Resolver على رابط يدوي (مقبول/مرفوض/بتحذير)،
+   * تعرضه لوحة العلاقات مع أثره (Why؟) بدل أن تحسم شيئا بنفسها (P-07).
+   */
+  lastLinkDecision: LinkDecisionNotice | null;
+  clearLinkDecision: () => void;
+  /**
+   * طلب فتح حوار «لماذا؟» من رابط عميق (/editor?ayah=&variant=&why=1) أو من
+   * صفحة التتبع؛ لوحة الخصائص تستهلكه وتصفّره. قد يحمل معرّف قاعدة استوديو
+   * لإبرازها في الأثر.
+   */
+  pendingWhy: { ruleId?: string } | null;
+  requestWhy: (request: { ruleId?: string } | null) => void;
+  /**
+   * ينشئ علاقة يدوية بين عنصرين: وجهين، سطرين، أو جزء وسطر/قاعدة.
+   * يمرّ أولا على Decision Resolver: الرابط المحظور بقاعدة لا يُسجَّل، والمخالف
+   * لمصفوفة الدمج يُسجَّل بتحذير (المحرر يقرر). يعيد القرار للمستدعي.
+   */
   addLink: (link: {
     kind: TashjeerLinkKind;
     relation: TashjeerLinkRelation;
     from: LinkEndpoint;
     to: LinkEndpoint;
     notes?: string;
-  }) => void;
+  }) => LinkDecisionNotice;
   updateLink: (linkId: string, patch: Partial<Pick<TashjeerLink, 'relation' | 'notes' | 'from' | 'to'>>) => void;
   deleteLink: (linkId: string) => void;
   /** ينشئ جزءا من سطر: مدى كلمات/حروف له روابطه وقواعده الخاصة. */
@@ -221,6 +309,13 @@ interface EditorState {
   copySelection: () => void;
   cutSelection: () => void;
   pasteSelection: () => void;
+  /** ينسخ عدة أوجه من موضع واحد (تحديد بالنقر + Shift/Ctrl) — FR-ED-06. */
+  copyFaces: (variantId: string, faceIds: string[]) => void;
+  /**
+   * ينسخ سطرا كاملا: كل الاختلافات التي يمر بها السطر بأوجهها التي تخص
+   * قرّاءه. اللصق ينشئ نسخا مستقلة بمعرّفات جديدة (FR-ED-06.2).
+   */
+  copyLine: (lineId: string, label: string, variantIds: string[]) => void;
   setTool: (tool: EditorTool) => void;
   setDraftCategory: (category: VariantCategory) => void;
 
@@ -251,9 +346,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   zoom: 1,
   pan: { x: 0, y: 0 },
-  filter: { ...DEFAULT_FILTER },
-  showPropertiesPanel: true,
-  showVariantsPanel: true,
+  filter: {
+    ...DEFAULT_FILTER,
+    showLabels: bool(INITIAL_PREFS.showLabels, DEFAULT_FILTER.showLabels),
+    showGrid: bool(INITIAL_PREFS.showGrid, DEFAULT_FILTER.showGrid),
+    showRulers: bool(INITIAL_PREFS.showRulers, DEFAULT_FILTER.showRulers),
+    showAnchors: bool(INITIAL_PREFS.showAnchors, DEFAULT_FILTER.showAnchors),
+  },
+  showPropertiesPanel: bool(INITIAL_PREFS.showPropertiesPanel, true),
+  showVariantsPanel: bool(INITIAL_PREFS.showVariantsPanel, true),
 
   markedPositions: [],
   markedCharacters: [],
@@ -264,6 +365,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   selectedAlternativeId: null,
   selectedBranchId: null,
   clipboard: null,
+  lastLinkDecision: null,
+  pendingWhy: null,
   currentTool: 'select',
   draftCategory: 'FARSH',
 
@@ -886,11 +989,52 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   // ==================== الروابط والأجزاء والترتيب اليدوي ====================
 
+  clearLinkDecision: () => set({ lastLinkDecision: null }),
+  requestWhy: (request) => set({ pendingWhy: request }),
+
   addLink: ({ kind, relation, from, to, notes }) => {
+    const current = get().document;
+    const rejected = (reason: string): LinkDecisionNotice => ({
+      allowed: false,
+      reason,
+      trace: [],
+      appliedRuleNames: [],
+      at: new Date().toISOString(),
+    });
+    if (!current) return rejected('لا مستند مفتوح.');
+
+    // القرار أولا (P-07): فئتا الطرفين إن كانا وجهين، لتقييم مصفوفة الدمج.
+    const categoryOfEndpoint = (endpoint: LinkEndpoint): VariantCategory | undefined => {
+      if (endpoint.type !== 'FACE') return undefined;
+      const variantId = endpoint.id.split('::')[0];
+      return current.variants.find((variant) => variant.id === variantId)?.category;
+    };
+    const policy = resolveLinkPolicy(
+      {
+        kind,
+        relation,
+        from,
+        to,
+        fromCategory: categoryOfEndpoint(from),
+        toCategory: categoryOfEndpoint(to),
+      },
+      loadEngineConfig()
+    );
+    const notice: LinkDecisionNotice = {
+      ...policy.decision,
+      trace: policy.trace,
+      appliedRuleNames: policy.appliedRules.map((rule) => rule.name),
+      at: new Date().toISOString(),
+    };
+    if (!policy.decision.allowed) {
+      set({ lastLinkDecision: notice });
+      return notice;
+    }
+
+    const id = `link-${current.ayahKey}-${Date.now().toString(36)}-${Math.random()
+      .toString(36)
+      .slice(2, 6)}`;
     mutate(set, get, (document) => {
-      const id = `link-${document.ayahKey}-${Date.now().toString(36)}-${Math.random()
-        .toString(36)
-        .slice(2, 6)}`;
       const now = new Date().toISOString();
       const link: TashjeerLink = {
         id,
@@ -910,11 +1054,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           action: 'إنشاء علاقة',
           targetType: linkTargetTypeOf(kind),
           targetId: id,
-          summary: `${relation === 'MERGE' ? 'دمج' : 'ربط'} ${describeEndpoint(from)} مع ${describeEndpoint(to)}`,
+          summary:
+            `${relation === 'MERGE' ? 'دمج' : 'ربط'} ${describeEndpoint(from)} مع ${describeEndpoint(to)}` +
+            (policy.decision.warning ? ` (بخلاف سياسة المحرك)` : ''),
         },
         document
       );
     });
+    const done = { ...notice, linkId: id };
+    set({ lastLinkDecision: done });
+    return done;
   },
 
   updateLink: (linkId, patch) => {
@@ -1270,6 +1419,28 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       if (value) set({ clipboard: { kind: 'SEGMENT', value: structuredClone(value) } });
     }
   },
+  copyFaces: (variantId, faceIds) => {
+    const state = get();
+    if (!state.document) return;
+    const owner = state.document.variants.find((item) => item.id === variantId);
+    if (!owner) return;
+    const wanted = new Set(faceIds);
+    const faces = owner.alternatives.filter((item) => wanted.has(item.id));
+    if (faces.length === 0) return;
+    if (faces.length === 1) {
+      set({ clipboard: { kind: 'FACE', value: structuredClone(faces[0]) } });
+      return;
+    }
+    set({ clipboard: { kind: 'FACES', value: structuredClone(faces), sourceVariantId: variantId } });
+  },
+  copyLine: (lineId, label, variantIds) => {
+    const state = get();
+    if (!state.document) return;
+    const wanted = new Set(variantIds);
+    const variants = state.document.variants.filter((item) => wanted.has(item.id));
+    if (variants.length === 0) return;
+    set({ clipboard: { kind: 'LINE', value: { lineId, label, variants: structuredClone(variants) } } });
+  },
   cutSelection: () => {
     const state = get();
     state.copySelection();
@@ -1302,6 +1473,47 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const id = `face-copy-${suffix}`;
       state.addAlternative(state.selectedVariantId, { ...face, id, isBase: false });
       get().selectAlternative(state.selectedVariantId, id);
+    } else if (clipboard.kind === 'FACES' && state.selectedVariantId) {
+      const targetId = state.selectedVariantId;
+      const faces = structuredClone(clipboard.value).map((face, index) => ({
+        ...face,
+        id: `face-copy-${index + 1}-${suffix}`,
+        isBase: false,
+      }));
+      mutate(
+        set,
+        get,
+        (document) => ({
+          ...document,
+          variants: document.variants.map((variant) =>
+            variant.id === targetId ? { ...variant, alternatives: [...variant.alternatives, ...faces] } : variant
+          ),
+        }),
+        {
+          action: 'لصق أوجه',
+          targetType: 'ALTERNATIVE',
+          targetId: faces.map((face) => face.id).join(','),
+          summary: `لصق المحرر ${faces.length} أوجه في «${state.document.variants.find((item) => item.id === targetId)?.title ?? targetId}»`,
+        }
+      );
+      get().selectAlternative(targetId, faces[faces.length - 1].id);
+    } else if (clipboard.kind === 'LINE') {
+      const copies = clipboard.value.variants.map((source, index) => {
+        const id = `v-copy-${index + 1}-${suffix}`;
+        return {
+          ...structuredClone(source),
+          id,
+          title: `${source.title} — نسخة`,
+          alternatives: source.alternatives.map((item, faceIndex) => ({ ...item, id: `${id}-face-${faceIndex + 1}-${suffix}` })),
+          origin: 'EDITOR' as const,
+          engineSnapshot: undefined,
+          editorModifiedAt: undefined,
+          isGlobalDerived: undefined,
+          globalRuleId: undefined,
+        };
+      });
+      state.addVariantGroup(copies);
+      if (copies.length > 0) get().selectVariant(copies[0].id);
     } else if (clipboard.kind === 'SEGMENT') {
       const segment = clipboard.value;
       const created = state.addSegment({
@@ -1330,7 +1542,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setPan: (pan) => set({ pan }),
   resetView: () => set({ zoom: 1, pan: { x: 0, y: 0 } }),
 
-  setFilter: (patch) => set((state) => ({ filter: { ...state.filter, ...patch } })),
+  setFilter: (patch) => {
+    set((state) => ({ filter: { ...state.filter, ...patch } }));
+    writeWorkspacePrefs(get());
+  },
 
   toggleCategory: (category) => {
     set((state) => {
@@ -1360,9 +1575,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 
-  togglePropertiesPanel: () =>
-    set((state) => ({ showPropertiesPanel: !state.showPropertiesPanel })),
-  toggleVariantsPanel: () => set((state) => ({ showVariantsPanel: !state.showVariantsPanel })),
+  togglePropertiesPanel: () => {
+    set((state) => ({ showPropertiesPanel: !state.showPropertiesPanel }));
+    writeWorkspacePrefs(get());
+  },
+  toggleVariantsPanel: () => {
+    set((state) => ({ showVariantsPanel: !state.showVariantsPanel }));
+    writeWorkspacePrefs(get());
+  },
 
   // ==================== التراجع ====================
 

@@ -19,7 +19,7 @@ import { SelectionBreadcrumb } from '@/components/editor/SelectionBreadcrumb';
 import { ShortcutsDialog } from '@/components/editor/ShortcutsDialog';
 import { useEditorStore } from '@/stores/editor-store';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
-import { exportDocument, importDocuments } from '@/lib/storage/document-store';
+import { describeImportResult, exportDocument, importDocuments } from '@/lib/storage/document-store';
 import { makeAyahKey, parseAyahKey } from '@/data/quran';
 import { formatAyahRef } from '@/lib/utils/arabic-numbers';
 
@@ -63,6 +63,11 @@ export default function EditorPage() {
       ayahKey: Number(params.get('ayah')) || DEFAULT_AYAH_KEY,
       variantId: params.get('variant'),
     });
+    // رابط عميق إلى «لماذا؟» (FR-ES-15): ?why=1 أو ?rule=<معرّف قاعدة استوديو>.
+    const rule = params.get('rule');
+    if (params.get('why') === '1' || rule) {
+      useEditorStore.getState().requestWhy({ ruleId: rule ?? undefined });
+    }
   }, []);
 
   const requestedAyahKey = requestedRoute.ayahKey;
@@ -129,7 +134,7 @@ export default function EditorPage() {
         return;
       }
 
-      showToast(`تم استيراد ${result.imported} مستندا.`);
+      showToast(describeImportResult(result));
 
       // نفتح أول مستند مستورد ليراه المستخدم فورا.
       try {

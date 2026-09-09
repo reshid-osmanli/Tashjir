@@ -362,3 +362,13 @@ svg rect.char-hit:hover {
   stroke: #b45309;
   stroke-width: 1.5;
 }
+
+/* نبضة إحضار السطر المحدد إلى مجال الرؤية (FR-ED-02.4) */
+@keyframes tashjeerPulse {
+  0% { opacity: 0.45; }
+  50% { opacity: 0.12; }
+  100% { opacity: 0; }
+}
+.tashjeer-pulse {
+  animation: tashjeerPulse 1.2s ease-out forwards;
+}

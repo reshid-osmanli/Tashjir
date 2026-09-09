@@ -9,21 +9,32 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { EngineRule, RuleCondition } from '@/lib/tashjeer/model/v8';
 import { proposeCandidateRule, type CorrectionContext } from '@/lib/tashjeer/decision/candidate-rule';
 import { DIFFERENCE_TYPES, DIFFERENCE_TYPE_LABELS } from './labels';
 
 interface CandidateRulesPanelProps {
   onAdopt: (rule: EngineRule) => void;
+  /** تعبئة مسبقة من رابط عميق (صفحة التتبع: «اقتراح قاعدة من هذا التصحيح»). */
+  initial?: { differenceType?: string; relatedType?: string; engineMerged?: boolean; editorWantsMerge?: boolean };
 }
 
-export function CandidateRulesPanel({ onAdopt }: CandidateRulesPanelProps) {
-  const [differenceType, setDifferenceType] = useState('FARSH');
-  const [relatedType, setRelatedType] = useState('MADD');
-  const [engineMerged, setEngineMerged] = useState(true);
-  const [editorWantsMerge, setEditorWantsMerge] = useState(false);
+export function CandidateRulesPanel({ onAdopt, initial }: CandidateRulesPanelProps) {
+  const [differenceType, setDifferenceType] = useState(initial?.differenceType ?? 'FARSH');
+  const [relatedType, setRelatedType] = useState(initial?.relatedType ?? 'MADD');
+  const [engineMerged, setEngineMerged] = useState(initial?.engineMerged ?? true);
+  const [editorWantsMerge, setEditorWantsMerge] = useState(initial?.editorWantsMerge ?? false);
   const [adopted, setAdopted] = useState(false);
+
+  // إن وصل التصحيح من رابط عميق بعد أول عرض، نحدّث الحقول مرة واحدة.
+  useEffect(() => {
+    if (!initial) return;
+    if (initial.differenceType) setDifferenceType(initial.differenceType);
+    if (initial.relatedType) setRelatedType(initial.relatedType);
+    if (initial.engineMerged !== undefined) setEngineMerged(initial.engineMerged);
+    if (initial.editorWantsMerge !== undefined) setEditorWantsMerge(initial.editorWantsMerge);
+  }, [initial]);
 
   const correction: CorrectionContext = useMemo(
     () => ({ differenceType, relatedType, engineMerged, editorWantsMerge }),
