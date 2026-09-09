@@ -9,6 +9,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type {
+  ConditionGroup,
   EngineConfig,
   EngineRule,
   EngineRuleCategory,
@@ -72,6 +73,10 @@ function ruleToDraft(rule: EngineRule | null): {
   hardness: RuleHardness;
   status: RuleStatus;
   conditions: RuleCondition[];
+  /** شروط «أو» (يكفي واحد منها) — FR-ES-03. */
+  anyConditions: RuleCondition[];
+  /** شروط «ليس» (لا يجوز أن يتحقق أي منها) — FR-ES-03. */
+  notConditions: RuleCondition[];
   actions: RuleAction[];
   protected: boolean;
   testCases: TestCase[];
@@ -88,12 +93,16 @@ function ruleToDraft(rule: EngineRule | null): {
       hardness: 'SOFT',
       status: 'DRAFT',
       conditions: [emptyCondition()],
+      anyConditions: [],
+      notConditions: [],
       actions: [{ type: 'PREVENT_MERGE' }],
       protected: false,
       testCases: [],
     };
   }
   const flat = rule.conditions.all ?? [];
+  const onlyLeaves = (items: Array<RuleCondition | ConditionGroup> | undefined): RuleCondition[] =>
+    (items ?? []).filter((c): c is RuleCondition => 'field' in c);
   return {
     id: rule.id,
     name: rule.name,
@@ -105,7 +114,9 @@ function ruleToDraft(rule: EngineRule | null): {
     specificity: rule.specificity,
     hardness: rule.hardness,
     status: rule.status,
-    conditions: flat.length > 0 ? flat.filter((c): c is RuleCondition => 'field' in c) : [emptyCondition()],
+    conditions: flat.length > 0 ? onlyLeaves(flat) : [emptyCondition()],
+    anyConditions: onlyLeaves(rule.conditions.any),
+    notConditions: onlyLeaves(rule.conditions.not),
     actions: rule.actions,
     protected: rule.protected ?? false,
     testCases: rule.testCases ?? [],
@@ -138,9 +149,28 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
   const removeCondition = (index: number) =>
     setDraft((current) => ({ ...current, conditions: current.conditions.filter((_, idx) => idx !== index) }));
 
+  type ConditionBucket = 'anyConditions' | 'notConditions';
+  const updateBucketCondition = (bucket: ConditionBucket, index: number, patch: Partial<RuleCondition>) =>
+    setDraft((current) => ({
+      ...current,
+      [bucket]: current[bucket].map((item, idx) => (idx === index ? { ...item, ...patch } : item)),
+    }));
+  const addBucketCondition = (bucket: ConditionBucket) =>
+    setDraft((current) => ({ ...current, [bucket]: [...current[bucket], emptyCondition()] }));
+  const removeBucketCondition = (bucket: ConditionBucket, index: number) =>
+    setDraft((current) => ({ ...current, [bucket]: current[bucket].filter((_, idx) => idx !== index) }));
+
   const addAction = () => setDraft((current) => ({ ...current, actions: [...current.actions, { type: 'MERGE' }] }));
   const updateAction = (index: number, type: RuleActionType) =>
     setDraft((current) => ({ ...current, actions: current.actions.map((item, idx) => (idx === index ? { type } : item)) }));
+  /** معامل الإجراء: PREVENT_MERGE مع exclusive=true يعني تنافيا (لا يُضربان وجها). */
+  const setActionParam = (index: number, key: string, value: unknown) =>
+    setDraft((current) => ({
+      ...current,
+      actions: current.actions.map((item, idx) =>
+        idx === index ? { ...item, params: { ...(item.params ?? {}), [key]: value } } : item
+      ),
+    }));
   const removeAction = (index: number) =>
     setDraft((current) => ({ ...current, actions: current.actions.filter((_, idx) => idx !== index) }));
 
@@ -168,6 +198,23 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
   const removeTestCase = (index: number) =>
     setDraft((current) => ({ ...current, testCases: current.testCases.filter((_, idx) => idx !== index) }));
 
+  /**
+   * يجمع الشروط في شجرة all/any/not. المجموعات المتداخلة الموجودة أصلا في
+   * القاعدة (غير القابلة للتحرير هنا) تُحفظ كما هي حتى لا يفقدها المنشئ.
+   */
+  const assembleConditions = (): ConditionGroup => {
+    const nested = (items: Array<RuleCondition | ConditionGroup> | undefined): ConditionGroup[] =>
+      (items ?? []).filter((c): c is ConditionGroup => !('field' in c));
+    const group: ConditionGroup = {
+      all: [...draft.conditions.filter((c) => c.field), ...nested(rule?.conditions.all)],
+    };
+    const any = [...draft.anyConditions.filter((c) => c.field), ...nested(rule?.conditions.any)];
+    const not = [...draft.notConditions.filter((c) => c.field), ...nested(rule?.conditions.not)];
+    if (any.length > 0) group.any = any;
+    if (not.length > 0) group.not = not;
+    return group;
+  };
+
   const assembleRule = (): EngineRule => {
     const now = new Date().toISOString();
     return {
@@ -176,7 +223,7 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
       type: draft.type,
       category: draft.category,
       scope: draft.scope,
-      conditions: { all: draft.conditions.filter((c) => c.field) },
+      conditions: assembleConditions(),
       actions: draft.actions,
       priority: draft.priority,
       groupId: draft.groupId,
@@ -319,6 +366,25 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
             </div>
           ))}
         </div>
+
+        <ConditionBucketEditor
+          title="شروط «أو» (OR)"
+          hint="يكفي تحقق شرط واحد منها. تُترك فارغة إن لم تلزم."
+          conditions={draft.anyConditions}
+          onAdd={() => addBucketCondition('anyConditions')}
+          onUpdate={(index, patch) => updateBucketCondition('anyConditions', index, patch)}
+          onRemove={(index) => removeBucketCondition('anyConditions', index)}
+          tone="amber"
+        />
+        <ConditionBucketEditor
+          title="شروط «ليس» (NOT)"
+          hint="لا تُفعَّل القاعدة إن تحقق أي شرط منها."
+          conditions={draft.notConditions}
+          onAdd={() => addBucketCondition('notConditions')}
+          onUpdate={(index, patch) => updateBucketCondition('notConditions', index, patch)}
+          onRemove={(index) => removeBucketCondition('notConditions', index)}
+          tone="rose"
+        />
       </div>
 
       {/* منشئ الإجراءات */}
@@ -337,6 +403,17 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
                 onChange={(value) => updateAction(index, value as RuleActionType)}
                 options={ACTIONS.map((type) => ({ value: type, label: ACTION_LABELS[type] }))}
               />
+              {action.type === 'PREVENT_MERGE' && (
+                <label className="flex items-center gap-1.5 text-xs text-gray-700" title="متنافيان: لا يُضربان وجها في المحرك، لا مجرد فصلهما في سطرين">
+                  <input
+                    type="checkbox"
+                    checked={action.params?.exclusive === true}
+                    onChange={(event) => setActionParam(index, 'exclusive', event.target.checked)}
+                    className="h-3.5 w-3.5 accent-red-600"
+                  />
+                  تنافٍ (لا يُضربان وجها)
+                </label>
+              )}
               <button
                 type="button"
                 onClick={() => removeAction(index)}
@@ -493,5 +570,67 @@ function Select({ value, onChange, options, compact, allowFree }: SelectProps) {
         </option>
       ))}
     </select>
+  );
+}
+
+/** محرر مجموعة شروط فرعية (OR/NOT) بنفس صفوف الشروط — FR-ES-03. */
+function ConditionBucketEditor({
+  title,
+  hint,
+  conditions,
+  onAdd,
+  onUpdate,
+  onRemove,
+  tone,
+}: {
+  title: string;
+  hint: string;
+  conditions: RuleCondition[];
+  onAdd: () => void;
+  onUpdate: (index: number, patch: Partial<RuleCondition>) => void;
+  onRemove: (index: number) => void;
+  tone: 'amber' | 'rose';
+}) {
+  const box = tone === 'amber' ? 'border-amber-200 bg-amber-50/40' : 'border-rose-200 bg-rose-50/40';
+  const button = tone === 'amber' ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-rose-100 text-rose-800 hover:bg-rose-200';
+  return (
+    <div className={`rounded-lg border p-3 ${box}`}>
+      <div className="flex items-center justify-between">
+        <h5 className="text-sm font-semibold text-gray-800">{title}</h5>
+        <button type="button" onClick={onAdd} className={`rounded-lg px-3 py-1 text-xs font-medium ${button}`}>
+          + شرط
+        </button>
+      </div>
+      <p className="mt-0.5 text-xs text-gray-500">{hint}</p>
+      {conditions.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {conditions.map((condition, index) => (
+            <div key={index} className="flex flex-wrap items-center gap-2 rounded-lg bg-white p-2">
+              <Select
+                value={condition.field}
+                onChange={(value) => onUpdate(index, { field: value })}
+                options={CONDITION_FIELDS.map((field) => ({ value: field, label: CONDITION_FIELD_LABELS[field] }))}
+                compact
+              />
+              <Select
+                value={condition.op}
+                onChange={(value) => onUpdate(index, { op: value as RuleCondition['op'] })}
+                options={CONDITION_OPS.map((op) => ({ value: op, label: CONDITION_OP_LABELS[op] }))}
+                compact
+              />
+              {condition.op !== 'exists' && <ConditionValue condition={condition} onChange={(value) => onUpdate(index, { value })} />}
+              <button
+                type="button"
+                onClick={() => onRemove(index)}
+                className="mr-auto rounded px-2 py-1 text-sm text-red-600 hover:bg-red-50"
+                aria-label="حذف الشرط"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

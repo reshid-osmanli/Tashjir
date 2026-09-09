@@ -43,6 +43,7 @@ export function MergeMatrixPanel({ matrix, onAdd, onUpdate, onRemove }: MergeMat
               <th className="px-3 py-2 font-medium">العنصر أ</th>
               <th className="px-3 py-2 font-medium">العنصر ب</th>
               <th className="px-3 py-2 font-medium">الدمج</th>
+              <th className="px-3 py-2 font-medium" title="مشروط: القيمة افتراض، والقواعد المطابقة للسياق تحسم">مشروط</th>
               <th className="px-3 py-2 font-medium">الأولوية</th>
               <th className="px-3 py-2 font-medium">السبب</th>
               <th className="px-3 py-2"></th>
@@ -62,6 +63,22 @@ export function MergeMatrixPanel({ matrix, onAdd, onUpdate, onRemove }: MergeMat
                     }`}
                   >
                     {entry.merge ? 'ادمج' : 'لا تدمج'}
+                  </button>
+                </td>
+                <td className="px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={() => onUpdate(index, { conditional: !entry.conditional })}
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                      entry.conditional ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-500'
+                    }`}
+                    title={
+                      entry.conditional
+                        ? 'مشروط بالسياق: القواعد المطابقة (وقف/وصل/راوٍ...) تحسم، وهذه القيمة افتراض عند غيابها'
+                        : 'غير مشروط: القيمة تُطبَّق دائما ما لم تتعارض قواعد الدمج'
+                    }
+                  >
+                    {entry.conditional ? 'مشروط' : 'مطلق'}
                   </button>
                 </td>
                 <td className="px-3 py-2">

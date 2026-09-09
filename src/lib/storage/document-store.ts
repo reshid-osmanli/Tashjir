@@ -47,8 +47,13 @@ import {
   backupBeforeMigration,
   migrateDocumentToV8,
 } from '@/lib/tashjeer/migration/migrate-v7-v8';
-import type { EngineConfig, TashjeerDocumentV8 } from '@/lib/tashjeer/model/v8';
+import type { DisplayOrderEntry, EngineConfig, TashjeerDocumentV8 } from '@/lib/tashjeer/model/v8';
 import { loadEngineConfig, toCanonicalConfig } from '@/lib/tashjeer/engine-config-store';
+import {
+  readTransmissionCatalog,
+  saveTransmissionCatalog,
+  type TransmissionCatalog,
+} from '@/lib/transmissions/catalog';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 
 /**
@@ -219,6 +224,12 @@ export interface ExportBundle {
   v8?: TashjeerDocumentV8[];
   /** v8: ملف سياسات المحرك المفعّل وقت التصدير بصيغة قانونية مرتّبة. */
   engineConfig?: ReturnType<typeof toCanonicalConfig>;
+  /**
+   * v8 (DM-04): رتب العرض الصريحة للقراء والرواة والطرق وقت التصدير، مرتبة
+   * بالنوع ثم بالمعرّف. بدونها يفقد ملف مستورد على جهاز آخر ترتيب الأعمدة
+   * الذي اعتمده المحقق (Display Order != Creation Order != Name Order).
+   */
+  displayOrder?: DisplayOrderEntry[];
 }
 
 /** خيارات التصدير: تثبيت الطابع الزمني يجعل الملف مستقرا بايتا ببايت (DM-13). */
@@ -227,6 +238,10 @@ export interface ExportOptions {
   engineConfig?: EngineConfig | null;
   /** إدراج الصورة v8 (افتراضيا نعم). */
   includeV8?: boolean;
+  /** إدراج رتب العرض الصريحة للقراء/الرواة/الطرق (افتراضيا نعم) — DM-04. */
+  includeDisplayOrder?: boolean;
+  /** كتالوج بديل لاشتقاق رتب العرض (للاختبارات والتصدير الحتمي). */
+  catalog?: TransmissionCatalog | null;
 }
 
 /**
@@ -282,8 +297,59 @@ export function buildExportBundle(documents: TashjeerDocument[], options: Export
     bundle.v8 = documents.map((document) => toStableV8(document, exportedAt));
   }
   if (engineConfig) bundle.engineConfig = toCanonicalConfig(engineConfig);
+  if (options.includeDisplayOrder !== false) {
+    bundle.displayOrder = displayOrderOfCatalog(options.catalog ?? safeReadCatalog());
+  }
 
   return bundle;
+}
+
+function safeReadCatalog(): TransmissionCatalog | null {
+  if (!isBrowser()) return null;
+  try {
+    return readTransmissionCatalog();
+  } catch {
+    return null;
+  }
+}
+
+/** يشتق قائمة رتب العرض الصريحة من الكتالوج بترتيب حتمي (DM-04، DM-13). */
+export function displayOrderOfCatalog(catalog: TransmissionCatalog | null): DisplayOrderEntry[] {
+  if (!catalog) return [];
+  const entries: DisplayOrderEntry[] = [
+    ...catalog.imams.map((imam) => ({ id: imam.id, kind: 'IMAM' as const, displayOrder: imam.order })),
+    ...catalog.narrators.map((narrator) => ({ id: narrator.id, kind: 'NARRATOR' as const, displayOrder: narrator.order })),
+    ...catalog.paths.map((path) => ({ id: path.id, kind: 'PATH' as const, displayOrder: path.order })),
+  ];
+  const kindRank = { IMAM: 0, NARRATOR: 1, PATH: 2 } as const;
+  return entries.sort((a, b) => kindRank[a.kind] - kindRank[b.kind] || a.id.localeCompare(b.id));
+}
+
+/**
+ * يطبّق رتب عرض مستوردة على الكتالوج المحلي: العناصر المعروفة فقط تتغير
+ * رتبتها، والمجهولة تُتجاهل وتُحصى (لا تُنشأ كيانات من رتبة وحدها).
+ */
+export function applyDisplayOrder(
+  catalog: TransmissionCatalog,
+  entries: DisplayOrderEntry[]
+): { catalog: TransmissionCatalog; applied: number; unknown: number } {
+  const byId = new Map(entries.filter((entry) => typeof entry?.displayOrder === 'number').map((entry) => [entry.id, entry]));
+  let applied = 0;
+  const pick = <T extends { id: string; order: number }>(item: T, kind: DisplayOrderEntry['kind']): T => {
+    const entry = byId.get(item.id);
+    if (!entry || entry.kind !== kind || entry.displayOrder === item.order) return item;
+    applied += 1;
+    return { ...item, order: entry.displayOrder };
+  };
+  const next: TransmissionCatalog = {
+    ...catalog,
+    imams: catalog.imams.map((imam) => pick(imam, 'IMAM')),
+    narrators: catalog.narrators.map((narrator) => pick(narrator, 'NARRATOR')),
+    paths: catalog.paths.map((path) => pick(path, 'PATH')),
+  };
+  const known = new Set([...catalog.imams, ...catalog.narrators, ...catalog.paths].map((item) => item.id));
+  const unknown = entries.filter((entry) => !known.has(entry.id)).length;
+  return { catalog: next, applied, unknown };
 }
 
 function exportDocumentBundle(documents: TashjeerDocument[], options: ExportOptions = {}): string {
@@ -493,6 +559,13 @@ export function importDocuments(json: string, overwrite = false): ImportResult {
   }
   if (Array.isArray(bundle.ruleOccurrences)) {
     upsertOccurrenceOverrides(bundle.ruleOccurrences, bundle.occurrenceLog ?? []);
+  }
+
+  // رتب العرض (DM-04): تُطبَّق على الكيانات المعروفة فقط؛ المجهولة تُذكر.
+  if (Array.isArray(bundle.displayOrder) && bundle.displayOrder.length > 0 && isBrowser()) {
+    const { catalog, applied, unknown } = applyDisplayOrder(readTransmissionCatalog(), bundle.displayOrder);
+    if (applied > 0) saveTransmissionCatalog(catalog);
+    if (unknown > 0) result.warnings.push(`رتب عرض لكيانات غير معروفة محليا تم تجاهلها: ${toArabicDigits(unknown)}.`);
   }
 
   for (const document of bundle.documents) {

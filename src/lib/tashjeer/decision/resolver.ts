@@ -194,6 +194,19 @@ export function decideMerge(
     decision = winner?.actions.some((action) => action.type === 'PREVENT_MERGE') ? false : true;
     reason = `تعارض قواعد الدمج حُسم: ${why}`;
     trace.push({ stage: 'CONFLICT', message: reason, status: 'won' });
+  } else if (matrix.entry?.conditional && (preventRules.length > 0 || allowRules.length > 0)) {
+    // مدخل مشروط بالسياق (FR-ES-05): قيمته افتراض فقط، والقواعد المطابقة
+    // للسياق هي التي تحسم حين تُوجد، حتى بلا تعارض بينها.
+    const deciding = preventRules[0] ?? allowRules[0];
+    decision = preventRules.length === 0;
+    reason = `مدخل مشروط؛ حسمته القاعدة «${deciding.name}»`;
+    trace.push({
+      stage: 'CONFLICT',
+      ruleId: deciding.id,
+      message: reason,
+      status: decision ? 'won' : 'blocked',
+      priority: deciding.priority,
+    });
   }
 
   return {

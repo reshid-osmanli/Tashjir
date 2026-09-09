@@ -186,3 +186,41 @@ describe('التصدير v8 الحتمي', () => {
     expect(parsed.v8[0].corrections[0].id).toBe(`corr-${AYAH_KEY}-variant-legacy-1`);
   });
 });
+
+describe('رتب العرض الصريحة في التصدير والاستيراد (DM-04)', () => {
+  it('يصدّر رتب القراء والرواة والطرق ويعيد تطبيقها عند الاستيراد على الكيانات المعروفة فقط', async () => {
+    const store = await import('@/lib/storage/document-store');
+    const catalogModule = await import('@/lib/transmissions/catalog');
+
+    const bundle = JSON.parse(store.exportAyahDocument(AYAH_KEY, { engineConfig: null }));
+    expect(Array.isArray(bundle.displayOrder)).toBe(true);
+    const catalog = catalogModule.readTransmissionCatalog();
+    expect(bundle.displayOrder).toHaveLength(catalog.imams.length + catalog.narrators.length + catalog.paths.length);
+    // ترتيب حتمي: الأئمة ثم الرواة ثم الطرق، وداخل كل نوع بالمعرّف.
+    const kinds = bundle.displayOrder.map((entry: { kind: string }) => entry.kind);
+    expect(kinds.indexOf('NARRATOR')).toBeGreaterThan(kinds.lastIndexOf('IMAM'));
+
+    const firstNarrator = catalog.narrators[0];
+    const patched = {
+      ...bundle,
+      displayOrder: [
+        { id: firstNarrator.id, kind: 'NARRATOR', displayOrder: 999 },
+        { id: 'narrator-ghost', kind: 'NARRATOR', displayOrder: 1 },
+      ],
+    };
+    const result = store.importDocuments(JSON.stringify(patched), true);
+    const after = catalogModule.readTransmissionCatalog();
+    expect(after.narrators.find((narrator) => narrator.id === firstNarrator.id)?.order).toBe(999);
+    expect(after.narrators.some((narrator) => narrator.id === 'narrator-ghost')).toBe(false);
+    expect(result.warnings.some((warning) => warning.includes('غير معروفة'))).toBe(true);
+  });
+
+  it('applyDisplayOrder دالة نقيّة لا تغيّر ما لم يتغير', async () => {
+    const { applyDisplayOrder, displayOrderOfCatalog } = await import('@/lib/storage/document-store');
+    const { createDefaultTransmissionCatalog } = await import('@/lib/transmissions/catalog');
+    const catalog = createDefaultTransmissionCatalog();
+    const same = applyDisplayOrder(catalog, displayOrderOfCatalog(catalog));
+    expect(same.applied).toBe(0);
+    expect(same.unknown).toBe(0);
+  });
+});

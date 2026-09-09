@@ -23,8 +23,9 @@ import { Dashboard } from '@/components/studio/Dashboard';
 import { RuleTestsPanel } from '@/components/studio/RuleTestsPanel';
 import { CandidateRulesPanel } from '@/components/studio/CandidateRulesPanel';
 import { ProfileComparePanel } from '@/components/studio/ProfileComparePanel';
+import { PublishHistoryPanel } from '@/components/studio/PublishHistoryPanel';
 
-type Section = 'dashboard' | 'rules' | 'merge' | 'priority' | 'why' | 'tests' | 'candidates' | 'compare' | 'io';
+type Section = 'dashboard' | 'rules' | 'merge' | 'priority' | 'why' | 'tests' | 'candidates' | 'compare' | 'publish' | 'io';
 
 const SECTIONS: Array<{ id: Section; label: string; hint: string }> = [
   { id: 'dashboard', label: 'لوحة المعلومات', hint: 'نظرة عامة' },
@@ -35,6 +36,7 @@ const SECTIONS: Array<{ id: Section; label: string; hint: string }> = [
   { id: 'tests', label: 'اختبارات القواعد', hint: 'FR-ES-08' },
   { id: 'candidates', label: 'قاعدة من تصحيح', hint: 'FR-ES-12' },
   { id: 'compare', label: 'مقارنة الملفات', hint: 'FR-ES-11' },
+  { id: 'publish', label: 'النشر والسجل', hint: 'FR-ES-07/14' },
   { id: 'io', label: 'التصدير والاستيراد', hint: 'FR-ES-14' },
 ];
 
@@ -77,9 +79,13 @@ export default function EngineStudioPage() {
     loaded,
     dirty,
     selectedRuleId,
+    savedConfig,
+    versions,
     hydrate,
     persist,
     resetToDefault,
+    rollbackTo,
+    discardChanges,
     setSelectedRule,
     addRule,
     updateRule,
@@ -90,6 +96,8 @@ export default function EngineStudioPage() {
     updateMergeEntry,
     removeMergeEntry,
     setConflictPolicyAction,
+    setExecutionOrderAction,
+    upsertGroup,
     exportText,
     importText,
   } = useEngineStudioStore();
@@ -154,7 +162,16 @@ export default function EngineStudioPage() {
           </button>
           <button
             type="button"
-            onClick={persist}
+            onClick={() => setSection('publish')}
+            disabled={!dirty}
+            className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+            title="تشغيل جاف قبل النشر: ما الذي سيتبدّل؟"
+          >
+            مراجعة قبل النشر
+          </button>
+          <button
+            type="button"
+            onClick={() => persist()}
             disabled={!dirty}
             className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -259,7 +276,18 @@ export default function EngineStudioPage() {
             )}
 
             {section === 'priority' && (
-              <PriorityPipeline config={config} onConflictPolicyChange={setConflictPolicyAction} />
+              <PriorityPipeline
+                config={config}
+                onConflictPolicyChange={setConflictPolicyAction}
+                onExecutionOrderChange={setExecutionOrderAction}
+                onGroupChange={upsertGroup}
+                onRulePriorityChange={setRulePriorityAction}
+                onOpenRule={(ruleId) => {
+                  setSelectedRule(ruleId);
+                  setCreatingNew(false);
+                  setSection('rules');
+                }}
+              />
             )}
 
             {section === 'why' && <WhyTracePlayground config={config} />}
@@ -277,6 +305,23 @@ export default function EngineStudioPage() {
             )}
 
             {section === 'compare' && <ProfileComparePanel config={config} />}
+
+            {section === 'publish' && (
+              <PublishHistoryPanel
+                config={config}
+                savedConfig={savedConfig}
+                dirty={dirty}
+                versions={versions}
+                onPublish={(note) => persist(note)}
+                onDiscard={discardChanges}
+                onRollback={rollbackTo}
+                onOpenRule={(ruleId) => {
+                  setSelectedRule(ruleId);
+                  setCreatingNew(false);
+                  setSection('rules');
+                }}
+              />
+            )}
 
             {section === 'io' && <ExportImportPanel onExport={exportText} onImport={importText} />}
           </div>

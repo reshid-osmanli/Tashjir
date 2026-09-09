@@ -130,7 +130,10 @@ export function saveTransmissionCatalog(catalog: TransmissionCatalog): Transmiss
 
   if (isBrowser()) {
     window.localStorage.setItem(TRANSMISSION_CATALOG_STORAGE_KEY, JSON.stringify(normalized));
-    window.dispatchEvent(new CustomEvent(TRANSMISSION_CATALOG_EVENT, { detail: normalized }));
+    // بعض البيئات (اختبارات/عمال) توفّر localStorage بلا DOM كامل.
+    if (typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(TRANSMISSION_CATALOG_EVENT, { detail: normalized }));
+    }
   }
 
   return normalized;
@@ -235,4 +238,70 @@ function slugFromId(id: string): string {
 
 function isBrowser(): boolean {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+}
+
+// ==================== الترتيب الصريح وتعارضاته (FR-ED-14، DM-04) ====================
+
+/** نتيجة فحص رقم ترتيب مقترح داخل مجموعة أقران. */
+export interface OrderConflict<T extends { id: string; order: number }> {
+  /** العنصر الذي يشغل الرقم نفسه (غير العنصر المعدَّل). */
+  occupant: T;
+  /** الرقم المتنازَع عليه. */
+  order: number;
+}
+
+/** يجد من يشغل رقم الترتيب المقترح بين الأقران، إن وُجد. */
+export function findOrderConflict<T extends { id: string; order: number }>(
+  peers: T[],
+  candidateId: string | undefined,
+  order: number
+): OrderConflict<T> | null {
+  const occupant = peers.find((peer) => peer.id !== candidateId && peer.order === order);
+  return occupant ? { occupant, order } : null;
+}
+
+/**
+ * يُدرج عنصرا في رقم ترتيب معيّن ويزيح من بعده بمقدار واحد حتى لا يتكرر
+ * رقم (إدراج مع إزاحة). العناصر الأخرى تحتفظ بترتيبها النسبي. المعرّفات لا
+ * تتغير أبدا.
+ */
+export function insertWithShift<T extends { id: string; order: number }>(peers: T[], item: T, order: number): T[] {
+  const others = peers.filter((peer) => peer.id !== item.id).sort((a, b) => a.order - b.order);
+  const result: T[] = [];
+  let next = 1;
+  let inserted = false;
+  for (const peer of others) {
+    if (!inserted && next >= order) {
+      result.push({ ...item, order: next });
+      inserted = true;
+      next += 1;
+    }
+    result.push(peer.order === next ? peer : { ...peer, order: next });
+    next += 1;
+  }
+  if (!inserted) result.push({ ...item, order: Math.max(order, next) });
+  return result;
+}
+
+/** يعيد ترقيم الأقران 1..n وفق ترتيب المصفوفة المعطى (بعد سحب وإفلات). */
+export function renumberByPosition<T extends { id: string; order: number }>(ordered: T[]): T[] {
+  return ordered.map((peer, index) => (peer.order === index + 1 ? peer : { ...peer, order: index + 1 }));
+}
+
+/** ينقل عنصرا بين أقرانه إلى فهرس جديد ويرقّم الكل 1..n. */
+export function movePeer<T extends { id: string; order: number }>(peers: T[], id: string, toIndex: number): T[] {
+  const sorted = [...peers].sort((a, b) => a.order - b.order);
+  const from = sorted.findIndex((peer) => peer.id === id);
+  if (from === -1) return peers;
+  const target = Math.max(0, Math.min(sorted.length - 1, toIndex));
+  const next = [...sorted];
+  const [moved] = next.splice(from, 1);
+  next.splice(target, 0, moved);
+  return renumberByPosition(next);
+}
+
+/** يستبدل مجموعة أقران معدَّلة داخل قائمة أكبر (مثل رواة إمام واحد داخل كل الرواة). */
+export function replacePeers<T extends { id: string }>(all: T[], updated: T[]): T[] {
+  const byId = new Map(updated.map((item) => [item.id, item]));
+  return all.map((item) => byId.get(item.id) ?? item);
 }
