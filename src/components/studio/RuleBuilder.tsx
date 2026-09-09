@@ -39,6 +39,7 @@ import {
 } from './labels';
 import { WAQF_WASL_TEMPLATES, type RuleTemplate } from './templates';
 import { previewRuleEdit, summarizePreview } from '@/lib/tashjeer/decision/rule-edit-preview';
+import { confirmAction } from '@/lib/ui/confirm-store';
 
 const RULE_TYPES = Object.keys(RULE_TYPE_LABELS) as EngineRule['type'][];
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as EngineRuleCategory[];
@@ -238,8 +239,30 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
     };
   };
 
-  const handleSave = () => {
-    onSave(assembleRule());
+  // القاعدة المحمية لا تُعدَّل بصمت (P-06): تأكيد كمي يبيّن الأثر قبل الحفظ،
+  // وكذلك أي تعديل يقلب حالة اختبار مرجعية.
+  const handleSave = async () => {
+    const next = assembleRule();
+    const editingProtected = Boolean(rule?.protected);
+    const flipped = preview?.flipped.length ?? 0;
+    if (editingProtected || flipped > 0) {
+      const ok = await confirmAction({
+        title: editingProtected ? 'تعديل قاعدة محمية' : 'تعديل يقلب نتائج مرجعية',
+        message: editingProtected
+          ? `القاعدة «${rule?.name ?? ''}» موسومة محمية. حفظ التعديل يسري على كل القرارات التي تعتمد عليها، ويُسجَّل في سجل الإصدارات ويمكن استرجاع النسخة السابقة منه.`
+          : 'هذا التعديل يغيّر نتيجة حالات اختبار كانت ناجحة. يمكن استرجاع النسخة السابقة من سجل الإصدارات بعد النشر.',
+        impacts: [
+          { label: 'حالة اختبار تنقلب', count: flipped },
+          { label: 'حالة ثابتة', count: preview?.stable ?? 0 },
+          { label: 'قاعدة تعتمد عليها', count: (profile?.rules ?? []).filter((item) => item.dependsOn?.includes(next.id)).length },
+        ],
+        undoable: false,
+        confirmLabel: 'حفظ التعديل',
+        tone: preview?.introducesRegression ? 'danger' : 'default',
+      });
+      if (!ok) return;
+    }
+    onSave(next);
   };
 
   // معاينة أثر التعديل قبل الحفظ (FR-ES-09.4): فقط عند تحرير قاعدة موجودة.
