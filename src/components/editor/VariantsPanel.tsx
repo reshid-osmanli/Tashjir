@@ -8,6 +8,7 @@
 
 'use client';
 
+import { confirmAction } from '@/lib/ui/confirm-store';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 import { documentWindowWords } from '@/lib/tashjeer/reading-window';
@@ -562,20 +563,33 @@ export function VariantsPanel() {
                       }
                     : undefined
                 }
-                onDelete={() => {
-                  if (window.confirm(`حذف الاختلاف «${variant.title}»؟`)) {
-                    deleteVariant(variant.id);
-                  }
+                onDelete={async () => {
+                  const faces = variant.alternatives.filter((alternative) => !alternative.isBase).length;
+                  const links = (document?.links ?? []).filter(
+                    (link) => link.from.id.startsWith(`${variant.id}::`) || link.to.id.startsWith(`${variant.id}::`)
+                  ).length;
+                  const ok = await confirmAction({
+                    title: `حذف الاختلاف «${variant.title}»`,
+                    message: 'يُحذف الموضع بكل أوجهه، وتُزال الروابط اليدوية المتعلقة به.',
+                    impacts: [
+                      { label: 'وجه', count: faces },
+                      { label: 'رابط يدوي', count: links },
+                    ],
+                    undoable: true,
+                    confirmLabel: 'حذف',
+                  });
+                  if (ok) deleteVariant(variant.id);
                 }}
-                onBulkDeleteFaces={(faceIds) => {
+                onBulkDeleteFaces={async (faceIds) => {
                   if (faceIds.length === 0) return;
-                  if (
-                    window.confirm(
-                      `حذف ${toArabicDigits(faceIds.length)} وجهًا دفعة واحدة؟ تتوفر خاصية التراجع بعد الحذف.`
-                    )
-                  ) {
-                    deleteAlternativesBulk(variant.id, faceIds);
-                  }
+                  const ok = await confirmAction({
+                    title: 'حذف أوجه دفعة واحدة',
+                    message: `من الاختلاف «${variant.title}».`,
+                    impacts: [{ label: 'وجه', count: faceIds.length }],
+                    undoable: true,
+                    confirmLabel: 'حذف',
+                  });
+                  if (ok) deleteAlternativesBulk(variant.id, faceIds);
                 }}
               />
             ))}
@@ -725,19 +739,58 @@ function VariantRow({
 }) {
   const drawnAlternatives = variant.alternatives.filter((alternative) => !alternative.isBase);
   const [checkedFaces, setCheckedFaces] = useState<Set<string>>(new Set());
+  const [anchorFaceId, setAnchorFaceId] = useState<string | null>(null);
+  const copyFaces = useEditorStore((state) => state.copyFaces);
+  const listRef = useRef<HTMLUListElement | null>(null);
 
   // إخلاء التحديد المتعدد عند مغادرة هذا الاختلاف حتى لا تبقى علامات معلَّقة.
   useEffect(() => {
-    if (!isSelected) setCheckedFaces(new Set());
+    if (!isSelected) {
+      setCheckedFaces(new Set());
+      setAnchorFaceId(null);
+    }
   }, [isSelected]);
 
   const toggleFaceCheck = (faceId: string) => {
+    setAnchorFaceId(faceId);
     setCheckedFaces((current) => {
       const next = new Set(current);
       if (next.has(faceId)) next.delete(faceId);
       else next.add(faceId);
       return next;
     });
+  };
+
+  /** تحديد مدى بـ Shift: من آخر وجه نُقر إلى هذا الوجه (FR-ED-07.2). */
+  const rangeFaceCheck = (faceId: string) => {
+    const ids = variant.alternatives.map((alternative) => alternative.id);
+    const from = anchorFaceId ? ids.indexOf(anchorFaceId) : -1;
+    const to = ids.indexOf(faceId);
+    if (from === -1 || to === -1) {
+      toggleFaceCheck(faceId);
+      return;
+    }
+    const [start, end] = from <= to ? [from, to] : [to, from];
+    setCheckedFaces((current) => {
+      const next = new Set(current);
+      for (let index = start; index <= end; index += 1) next.add(ids[index]);
+      return next;
+    });
+  };
+
+  /** Ctrl+A داخل قائمة الأوجه يحدد كل الأوجه، وCtrl+C ينسخ المحدد. */
+  const handleFaceListKeyDown = (event: React.KeyboardEvent<HTMLUListElement>) => {
+    const modifier = event.ctrlKey || event.metaKey;
+    if (!modifier) return;
+    if (event.key === 'a' || event.key === 'A') {
+      event.preventDefault();
+      event.stopPropagation();
+      setCheckedFaces(new Set(variant.alternatives.map((alternative) => alternative.id)));
+    } else if ((event.key === 'c' || event.key === 'C') && checkedFaces.size > 0) {
+      event.preventDefault();
+      event.stopPropagation();
+      copyFaces(variant.id, [...checkedFaces]);
+    }
   };
 
   return (
@@ -795,12 +848,26 @@ function VariantRow({
               <option value="WASL_ONLY">وصلا فقط</option>
             </select>
           </label>
-          <ul className="mt-2 space-y-1.5">
+          <ul
+            ref={listRef}
+            className="mt-2 space-y-1.5 rounded outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+            tabIndex={0}
+            onKeyDown={handleFaceListKeyDown}
+            aria-label="أوجه الموضع: Shift للمدى، Ctrl+A للكل، Ctrl+C للنسخ"
+          >
             {variant.alternatives.map((alternative) => (
               <li
                 key={alternative.id}
                 onClick={(event) => {
                   event.stopPropagation();
+                  if (event.shiftKey) {
+                    rangeFaceCheck(alternative.id);
+                    return;
+                  }
+                  if (event.ctrlKey || event.metaKey) {
+                    toggleFaceCheck(alternative.id);
+                    return;
+                  }
                   onSelectAlternative(alternative.id);
                 }}
                 className={`cursor-pointer rounded border bg-white px-2 py-1.5 transition ${
@@ -815,8 +882,17 @@ function VariantRow({
                   <input
                     type="checkbox"
                     checked={checkedFaces.has(alternative.id)}
-                    onClick={(event) => event.stopPropagation()}
-                    onChange={() => toggleFaceCheck(alternative.id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (event.shiftKey) {
+                        event.preventDefault();
+                        rangeFaceCheck(alternative.id);
+                      }
+                    }}
+                    onChange={(event) => {
+                      if ((event.nativeEvent as MouseEvent).shiftKey) return;
+                      toggleFaceCheck(alternative.id);
+                    }}
                     className="h-3.5 w-3.5 shrink-0 accent-rose-600"
                     aria-label={`تحديد الوجه ${alternative.label} للحذف الجماعي`}
                   />
@@ -840,9 +916,25 @@ function VariantRow({
             ))}
           </ul>
           {checkedFaces.size > 0 && (
-            <div className="mt-2 flex items-center justify-between gap-2 rounded border border-rose-200 bg-rose-50 px-2 py-1.5 text-[11px] text-rose-800">
-              <span>محدَّد {toArabicDigits(checkedFaces.size)} وجهًا للحذف الجماعي</span>
-              <div className="flex gap-1.5">
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded border border-rose-200 bg-rose-50 px-2 py-1.5 text-[11px] text-rose-800">
+              <span>محدَّد {toArabicDigits(checkedFaces.size)} من {toArabicDigits(variant.alternatives.length)} وجها</span>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCheckedFaces(new Set(variant.alternatives.map((alternative) => alternative.id)))}
+                  className="rounded border border-rose-300 bg-white px-2 py-0.5 text-rose-700 hover:bg-rose-100"
+                  title="Ctrl+A"
+                >
+                  تحديد الكل
+                </button>
+                <button
+                  type="button"
+                  onClick={() => copyFaces(variant.id, [...checkedFaces])}
+                  className="rounded border border-cyan-300 bg-white px-2 py-0.5 text-cyan-800 hover:bg-cyan-50"
+                  title="Ctrl+C: نسخ الأوجه المحددة للصقها في موضع آخر"
+                >
+                  نسخ المحدد
+                </button>
                 <button
                   type="button"
                   onClick={() => setCheckedFaces(new Set())}

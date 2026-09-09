@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
@@ -48,6 +48,9 @@ const STATUS_OPTIONS: Array<{ value: VerificationStatus; label: string }> = [
 
 export function PropertiesPanel() {
   const [showWhyDialog, setShowWhyDialog] = useState(false);
+  const pendingWhy = useEditorStore((state) => state.pendingWhy);
+  const requestWhy = useEditorStore((state) => state.requestWhy);
+  const [highlightRuleId, setHighlightRuleId] = useState<string | undefined>(undefined);
   const {
     document,
     filter,
@@ -66,6 +69,7 @@ export function PropertiesPanel() {
     setLineOrder,
     resetLineOrder,
     addLink,
+    copyLine,
   } = useEditorStore();
 
   const catalog = useTransmissionCatalog();
@@ -88,6 +92,14 @@ export function PropertiesPanel() {
   const selectedLine =
     classic.lines.find((line) => line.id === selectedBranchId) ??
     classic.lines.find((line) => line.variantId === selectedVariantId);
+
+  // استهلاك طلب «لماذا؟» القادم من رابط عميق حين يصبح الاختلاف محددا.
+  useEffect(() => {
+    if (!pendingWhy || !selectedVariant) return;
+    setHighlightRuleId(pendingWhy.ruleId);
+    setShowWhyDialog(true);
+    requestWhy(null);
+  }, [pendingWhy, selectedVariant, requestWhy]);
 
   if (!document) return null;
 
@@ -251,6 +263,20 @@ export function PropertiesPanel() {
           <Row label="البطاقة" value={selectedLine.label} />
           <Row label="الحكم" value={selectedLine.ruleLabel} />
           <Row label="الفئة" value={CATEGORY_LABELS[selectedLine.category]} />
+          <Row label="الأحكام على السطر" value={toArabicDigits(selectedLine.entries.length)} />
+          <button
+            type="button"
+            onClick={() => {
+              const variantIds = [...new Set(selectedLine.entries.map((entry) => entry.variantId))].filter((id) =>
+                (document?.variants ?? []).some((variant) => variant.id === id)
+              );
+              copyLine(selectedLine.id, selectedLine.label, variantIds);
+            }}
+            className="mt-2 w-full rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-1.5 text-xs font-semibold text-cyan-900 hover:bg-cyan-100"
+            title="ينسخ كل اختلافات هذا السطر بأوجهها؛ اللصق (Ctrl+V) ينشئ نسخا مستقلة بمعرّفات جديدة"
+          >
+            نسخ السطر كاملا
+          </button>
           <SelectedLineOrder
             line={selectedLine}
             classic={classic}
@@ -358,7 +384,14 @@ export function PropertiesPanel() {
       <RelationsPanel />
 
       {showWhyDialog && selectedVariant && (
-        <WhyTraceDialog category={selectedVariant.category} onClose={() => setShowWhyDialog(false)} />
+        <WhyTraceDialog
+          category={selectedVariant.category}
+          highlightRuleId={highlightRuleId}
+          onClose={() => {
+            setShowWhyDialog(false);
+            setHighlightRuleId(undefined);
+          }}
+        />
       )}
     </aside>
   );

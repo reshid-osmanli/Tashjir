@@ -8,6 +8,8 @@
 
 'use client';
 
+import { listGlobalRules } from '@/lib/storage/global-rules-store';
+import { confirmAction } from '@/lib/ui/confirm-store';
 import { useEffect, useState } from 'react';
 import {
   createDefaultStrengthDegrees,
@@ -58,16 +60,20 @@ export function StrengthDegreesManager({ onMessage }: { onMessage?: (message: st
     setDirty(true);
   };
 
-  const remove = (id: string) => {
+  const remove = async (id: string) => {
     const degree = degrees.find((item) => item.id === id);
     if (!degree) return;
-    if (
-      !window.confirm(
-        `حذف درجة «${degree.label}»؟ الأوجه المسنَدة إليها ستصبح بلا درجة حتى تُسنَد إلى غيرها.`
-      )
-    ) {
-      return;
-    }
+    const ok = await confirmAction({
+      title: `حذف درجة «${degree.label}»`,
+      message: 'الأوجه والقواعد المسنَدة إلى هذه الدرجة تصبح بلا درجة حتى تُسنَد إلى غيرها.',
+      impacts: [
+        { label: 'درجة تبقى في السلّم', count: degrees.length - 1 },
+        { label: 'قاعدة عامة تشير إليها', count: countRulesUsingDegree(id) },
+      ],
+      undoable: false,
+      confirmLabel: 'حذف',
+    });
+    if (!ok) return;
     setDegrees((current) =>
       current.filter((item) => item.id !== id).map((item, index) => ({ ...item, rank: index + 1 }))
     );
@@ -87,8 +93,15 @@ export function StrengthDegreesManager({ onMessage }: { onMessage?: (message: st
     onMessage?.(`تم حفظ سلّم الدرجات (${saved.degrees.length} درجات).`);
   };
 
-  const restoreDefaults = () => {
-    if (!window.confirm('استعادة الدرجات الأربع المعهودة؟ سيُستبدل السلّم الحالي.')) return;
+  const restoreDefaults = async () => {
+    const ok = await confirmAction({
+      title: 'استعادة الدرجات الأربع المعهودة',
+      message: 'يُستبدل السلّم الحالي بالسلّم الافتراضي.',
+      impacts: [{ label: 'درجة حالية تُستبدل', count: degrees.length }],
+      undoable: false,
+      confirmLabel: 'استعادة',
+    });
+    if (!ok) return;
     const restored = resetStrengthDegrees();
     setDegrees(restored.degrees);
     setDirty(false);
@@ -279,3 +292,12 @@ function findDuplicates(values: string[]): string[] {
 
 /** يُستعمل في الاختبار السريع للتأكد من عدم كسر السلّم الافتراضي. */
 export const DEFAULT_DEGREE_COUNT = createDefaultStrengthDegrees().degrees.length;
+
+/** كم قاعدة عامة تشير إلى هذه الدرجة (عامة أو لراوٍ بعينه)؟ */
+function countRulesUsingDegree(degreeId: string): number {
+  return listGlobalRules().filter(
+    (rule) =>
+      rule.strengthDegreeId === degreeId ||
+      Object.values(rule.strengthByNarrator ?? {}).includes(degreeId)
+  ).length;
+}

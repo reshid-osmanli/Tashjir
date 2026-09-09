@@ -81,6 +81,18 @@ const DEFAULT_FILTER: ViewFilter = {
   showAnchors: true,
 };
 
+/**
+ * حافظة المحرر (FR-ED-06): عنصر واحد، أو عدة أوجه من موضع واحد، أو سطر كامل
+ * (كل اختلافات السطر بأوجهها). اللصق يولّد معرّفات جديدة دائما ولا يمس الأصل.
+ */
+export type EditorClipboard =
+  | { kind: 'DIFFERENCE'; value: Variant }
+  | { kind: 'FACE'; value: VariantAlternative }
+  | { kind: 'FACES'; value: VariantAlternative[]; sourceVariantId: string }
+  | { kind: 'SEGMENT'; value: LineSegment }
+  | { kind: 'LINE'; value: { lineId: string; label: string; variants: Variant[] } }
+  | null;
+
 /** قرار رابط يدوي كما يُعرض في الواجهة، مع أثره القابل للتفسير. */
 export interface LinkDecisionNotice extends LinkPolicyDecision {
   linkId?: string;
@@ -120,7 +132,7 @@ interface EditorState {
   selectedVariantId: string | null;
   selectedAlternativeId: string | null;
   selectedBranchId: string | null;
-  clipboard: { kind: 'DIFFERENCE'; value: Variant } | { kind: 'FACE'; value: VariantAlternative } | { kind: 'SEGMENT'; value: LineSegment } | null;
+  clipboard: EditorClipboard;
   currentTool: EditorTool;
   /** الفئة المستخدمة عند إنشاء اختلاف جديد */
   draftCategory: VariantCategory;
@@ -187,6 +199,13 @@ interface EditorState {
   lastLinkDecision: LinkDecisionNotice | null;
   clearLinkDecision: () => void;
   /**
+   * طلب فتح حوار «لماذا؟» من رابط عميق (/editor?ayah=&variant=&why=1) أو من
+   * صفحة التتبع؛ لوحة الخصائص تستهلكه وتصفّره. قد يحمل معرّف قاعدة استوديو
+   * لإبرازها في الأثر.
+   */
+  pendingWhy: { ruleId?: string } | null;
+  requestWhy: (request: { ruleId?: string } | null) => void;
+  /**
    * ينشئ علاقة يدوية بين عنصرين: وجهين، سطرين، أو جزء وسطر/قاعدة.
    * يمرّ أولا على Decision Resolver: الرابط المحظور بقاعدة لا يُسجَّل، والمخالف
    * لمصفوفة الدمج يُسجَّل بتحذير (المحرر يقرر). يعيد القرار للمستدعي.
@@ -242,6 +261,13 @@ interface EditorState {
   copySelection: () => void;
   cutSelection: () => void;
   pasteSelection: () => void;
+  /** ينسخ عدة أوجه من موضع واحد (تحديد بالنقر + Shift/Ctrl) — FR-ED-06. */
+  copyFaces: (variantId: string, faceIds: string[]) => void;
+  /**
+   * ينسخ سطرا كاملا: كل الاختلافات التي يمر بها السطر بأوجهها التي تخص
+   * قرّاءه. اللصق ينشئ نسخا مستقلة بمعرّفات جديدة (FR-ED-06.2).
+   */
+  copyLine: (lineId: string, label: string, variantIds: string[]) => void;
   setTool: (tool: EditorTool) => void;
   setDraftCategory: (category: VariantCategory) => void;
 
@@ -286,6 +312,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   selectedBranchId: null,
   clipboard: null,
   lastLinkDecision: null,
+  pendingWhy: null,
   currentTool: 'select',
   draftCategory: 'FARSH',
 
@@ -909,6 +936,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   // ==================== الروابط والأجزاء والترتيب اليدوي ====================
 
   clearLinkDecision: () => set({ lastLinkDecision: null }),
+  requestWhy: (request) => set({ pendingWhy: request }),
 
   addLink: ({ kind, relation, from, to, notes }) => {
     const current = get().document;
@@ -1337,6 +1365,28 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       if (value) set({ clipboard: { kind: 'SEGMENT', value: structuredClone(value) } });
     }
   },
+  copyFaces: (variantId, faceIds) => {
+    const state = get();
+    if (!state.document) return;
+    const owner = state.document.variants.find((item) => item.id === variantId);
+    if (!owner) return;
+    const wanted = new Set(faceIds);
+    const faces = owner.alternatives.filter((item) => wanted.has(item.id));
+    if (faces.length === 0) return;
+    if (faces.length === 1) {
+      set({ clipboard: { kind: 'FACE', value: structuredClone(faces[0]) } });
+      return;
+    }
+    set({ clipboard: { kind: 'FACES', value: structuredClone(faces), sourceVariantId: variantId } });
+  },
+  copyLine: (lineId, label, variantIds) => {
+    const state = get();
+    if (!state.document) return;
+    const wanted = new Set(variantIds);
+    const variants = state.document.variants.filter((item) => wanted.has(item.id));
+    if (variants.length === 0) return;
+    set({ clipboard: { kind: 'LINE', value: { lineId, label, variants: structuredClone(variants) } } });
+  },
   cutSelection: () => {
     const state = get();
     state.copySelection();
@@ -1369,6 +1419,47 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const id = `face-copy-${suffix}`;
       state.addAlternative(state.selectedVariantId, { ...face, id, isBase: false });
       get().selectAlternative(state.selectedVariantId, id);
+    } else if (clipboard.kind === 'FACES' && state.selectedVariantId) {
+      const targetId = state.selectedVariantId;
+      const faces = structuredClone(clipboard.value).map((face, index) => ({
+        ...face,
+        id: `face-copy-${index + 1}-${suffix}`,
+        isBase: false,
+      }));
+      mutate(
+        set,
+        get,
+        (document) => ({
+          ...document,
+          variants: document.variants.map((variant) =>
+            variant.id === targetId ? { ...variant, alternatives: [...variant.alternatives, ...faces] } : variant
+          ),
+        }),
+        {
+          action: 'لصق أوجه',
+          targetType: 'ALTERNATIVE',
+          targetId: faces.map((face) => face.id).join(','),
+          summary: `لصق المحرر ${faces.length} أوجه في «${state.document.variants.find((item) => item.id === targetId)?.title ?? targetId}»`,
+        }
+      );
+      get().selectAlternative(targetId, faces[faces.length - 1].id);
+    } else if (clipboard.kind === 'LINE') {
+      const copies = clipboard.value.variants.map((source, index) => {
+        const id = `v-copy-${index + 1}-${suffix}`;
+        return {
+          ...structuredClone(source),
+          id,
+          title: `${source.title} — نسخة`,
+          alternatives: source.alternatives.map((item, faceIndex) => ({ ...item, id: `${id}-face-${faceIndex + 1}-${suffix}` })),
+          origin: 'EDITOR' as const,
+          engineSnapshot: undefined,
+          editorModifiedAt: undefined,
+          isGlobalDerived: undefined,
+          globalRuleId: undefined,
+        };
+      });
+      state.addVariantGroup(copies);
+      if (copies.length > 0) get().selectVariant(copies[0].id);
     } else if (clipboard.kind === 'SEGMENT') {
       const segment = clipboard.value;
       const created = state.addSegment({

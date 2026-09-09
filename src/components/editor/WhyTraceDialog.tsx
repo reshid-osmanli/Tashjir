@@ -19,9 +19,11 @@ import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 interface WhyTraceDialogProps {
   category: VariantCategory;
   onClose: () => void;
+  /** قاعدة تُبرز في الأثر (من رابط عميق /editor?rule=...). */
+  highlightRuleId?: string;
 }
 
-export function WhyTraceDialog({ category, onClose }: WhyTraceDialogProps) {
+export function WhyTraceDialog({ category, onClose, highlightRuleId }: WhyTraceDialogProps) {
   const { config, hydrate, loaded } = useEngineStudioStore();
   useEffect(() => {
     hydrate();
@@ -85,7 +87,12 @@ export function WhyTraceDialog({ category, onClose }: WhyTraceDialogProps) {
             ) : (
               <ol className="space-y-1.5">
                 {result.trace.map((step, index) => (
-                  <li key={index} className={`flex items-start gap-3 rounded-lg border-r-4 px-3 py-2 text-sm ${TRACE_TONE[step.status]}`}>
+                  <li
+                    key={index}
+                    className={`flex items-start gap-3 rounded-lg border-r-4 px-3 py-2 text-sm ${TRACE_TONE[step.status]} ${
+                      highlightRuleId && step.ruleId === highlightRuleId ? 'ring-2 ring-violet-400' : ''
+                    }`}
+                  >
                     <span className="mt-0.5 font-mono text-xs text-gray-400">{step.stage}</span>
                     <span className="flex-1 text-gray-700">{step.message}</span>
                     {typeof step.priority === 'number' && (
@@ -102,8 +109,18 @@ export function WhyTraceDialog({ category, onClose }: WhyTraceDialogProps) {
               <h3 className="mb-2 font-semibold text-gray-800">قواعد مطابقة فاعلة</h3>
               <ul className="space-y-1">
                 {result.appliedRules.map((rule) => (
-                  <li key={rule.id} className="rounded bg-emerald-50 px-3 py-1.5 text-sm text-emerald-800">
-                    {rule.name} <span className="text-xs opacity-70">(أولوية {toArabicDigits(rule.priority)})</span>
+                  <li
+                    key={rule.id}
+                    className={`flex items-center justify-between gap-2 rounded bg-emerald-50 px-3 py-1.5 text-sm text-emerald-800 ${
+                      highlightRuleId === rule.id ? 'ring-2 ring-violet-400' : ''
+                    }`}
+                  >
+                    <span>
+                      {rule.name} <span className="text-xs opacity-70">(أولوية {toArabicDigits(rule.priority)})</span>
+                    </span>
+                    <a href={`/studio?rule=${encodeURIComponent(rule.id)}`} className="text-xs text-emerald-700 underline-offset-2 hover:underline">
+                      افتح في الاستوديو
+                    </a>
                   </li>
                 ))}
               </ul>

@@ -8,6 +8,7 @@
 
 'use client';
 
+import { confirmAction } from '@/lib/ui/confirm-store';
 import { useEffect, useMemo, useState } from 'react';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-system';
@@ -15,7 +16,7 @@ import { describeScope, resolveScope } from '@/lib/tashjeer/scope';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { useRuleOccurrences } from '@/hooks/useRuleOccurrences';
 import { getSurahOrFirst } from '@/data/quran';
-import { describeGlobalPattern } from '@/lib/quran-logic/global-rule-engine';
+import { describeGlobalPattern, findGlobalRuleMatches } from '@/lib/quran-logic/global-rule-engine';
 import {
   deleteGlobalRule,
   listGlobalRules,
@@ -123,8 +124,20 @@ export function RulesIndexDialog({
     onRulesChanged();
   };
 
-  const removeRule = (rule: GlobalRule) => {
-    if (!window.confirm(`حذف القاعدة العامة «${rule.title}» من المصحف كله؟ يُحذف معها سجل مواضعها.`)) return;
+  const removeRule = async (rule: GlobalRule) => {
+    const stats = occurrenceStats(rule.id);
+    const matches = rule.pattern ? findGlobalRuleMatches(rule, { limit: 5000 }).length : 0;
+    const ok = await confirmAction({
+      title: `حذف القاعدة العامة «${rule.title}»`,
+      message: 'تُحذف من المصحف كله مع سجل مواضعها واستثناءاتها.',
+      impacts: [
+        { label: 'موضع في المصحف', count: matches },
+        { label: 'استثناء موضعي', count: stats.deleted + stats.confirmed + stats.edited },
+      ],
+      undoable: false,
+      confirmLabel: 'حذف',
+    });
+    if (!ok) return;
     deleteGlobalRule(rule.id);
     refresh();
     onRulesChanged();

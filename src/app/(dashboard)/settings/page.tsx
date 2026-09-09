@@ -6,6 +6,8 @@
 
 'use client';
 
+import { toArabicDigits } from '@/lib/utils/arabic-numbers';
+import { confirmAction } from '@/lib/ui/confirm-store';
 import { useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_APP_SETTINGS,
@@ -73,9 +75,19 @@ export default function SettingsPage() {
     setMessage(describeImportResult(result));
   };
 
-  const removeDocument = (entry: DocumentIndexEntry) => {
+  const removeDocument = async (entry: DocumentIndexEntry) => {
     const surahName = getSurahOrFirst(entry.surahNumber).name;
-    if (!window.confirm(`حذف تشجير ${surahName} ${entry.ayahNumber}؟ لا يمكن التراجع.`)) return;
+    const ok = await confirmAction({
+      title: `حذف تشجير ${surahName} ${toArabicDigits(entry.ayahNumber)}`,
+      message: 'يُحذف المستند من هذا المتصفح نهائيا. صدّر نسخة احتياطية أولا إن أردت.',
+      impacts: [
+        { label: 'اختلاف', count: entry.variantsCount },
+        { label: 'خط', count: entry.branchesCount },
+      ],
+      undoable: false,
+      confirmLabel: 'حذف',
+    });
+    if (!ok) return;
 
     deleteDocument(entry.ayahKey);
     setDocuments(listDocuments());

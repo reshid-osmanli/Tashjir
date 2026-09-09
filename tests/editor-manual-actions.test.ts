@@ -171,6 +171,50 @@ describe('إجراءات التصحيح اليدوي', () => {
     expect(updated.alternatives.at(-1)!.id).not.toBe(face.id);
   });
 
+  it('ينسخ عدة أوجه دفعة واحدة ويلصقها بمعرّفات جديدة في خطوة تراجع واحدة', async () => {
+    const useEditorStore = await loadStore();
+    useEditorStore.getState().openAyah(AYAH_KEY);
+    const owner = useEditorStore.getState().document!.variants[0]!;
+    const faceIds = owner.alternatives.map((item) => item.id);
+    const before = owner.alternatives.length;
+
+    useEditorStore.getState().copyFaces(owner.id, faceIds);
+    expect(useEditorStore.getState().clipboard?.kind).toBe(faceIds.length > 1 ? 'FACES' : 'FACE');
+    useEditorStore.getState().selectVariant(owner.id);
+    useEditorStore.getState().pasteSelection();
+
+    const updated = useEditorStore.getState().document!.variants.find((item) => item.id === owner.id)!;
+    expect(updated.alternatives).toHaveLength(before + faceIds.length);
+    const pastedIds = updated.alternatives.slice(before).map((item) => item.id);
+    expect(pastedIds.some((id) => faceIds.includes(id))).toBe(false);
+    // الأوجه الملصوقة لا تكون وجه المصحف أبدا.
+    expect(updated.alternatives.slice(before).every((item) => !item.isBase)).toBe(true);
+
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().document!.variants.find((item) => item.id === owner.id)!.alternatives).toHaveLength(before);
+  });
+
+  it('ينسخ سطرا كاملا (كل اختلافاته) ويلصقه نسخا مستقلة', async () => {
+    const useEditorStore = await loadStore();
+    useEditorStore.getState().openAyah(AYAH_KEY);
+    const variants = useEditorStore.getState().document!.variants;
+    const before = variants.length;
+    const ids = variants.slice(0, Math.min(2, variants.length)).map((item) => item.id);
+
+    useEditorStore.getState().copyLine('combo::x', 'سطر اختبار', ids);
+    expect(useEditorStore.getState().clipboard?.kind).toBe('LINE');
+    useEditorStore.getState().pasteSelection();
+
+    const after = useEditorStore.getState().document!;
+    expect(after.variants).toHaveLength(before + ids.length);
+    const copies = after.variants.filter((item) => item.title.endsWith('— نسخة'));
+    expect(copies).toHaveLength(ids.length);
+    expect(copies.every((item) => item.origin === 'EDITOR' && !ids.includes(item.id))).toBe(true);
+
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().document!.variants).toHaveLength(before);
+  });
+
   it('إضافة اختلاف من المحرر توسم EDITOR وتسجَّل للتتبع', async () => {
     const useEditorStore = await loadStore();
     useEditorStore.getState().openAyah(AYAH_KEY);

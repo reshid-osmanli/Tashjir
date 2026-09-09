@@ -63,6 +63,11 @@ export default function EditorPage() {
       ayahKey: Number(params.get('ayah')) || DEFAULT_AYAH_KEY,
       variantId: params.get('variant'),
     });
+    // رابط عميق إلى «لماذا؟» (FR-ES-15): ?why=1 أو ?rule=<معرّف قاعدة استوديو>.
+    const rule = params.get('rule');
+    if (params.get('why') === '1' || rule) {
+      useEditorStore.getState().requestWhy({ ruleId: rule ?? undefined });
+    }
   }, []);
 
   const requestedAyahKey = requestedRoute.ayahKey;

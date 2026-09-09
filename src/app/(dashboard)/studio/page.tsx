@@ -9,6 +9,7 @@
 
 'use client';
 
+import { confirmAction } from '@/lib/ui/confirm-store';
 import { useEffect, useState } from 'react';
 import type { EngineRule } from '@/lib/tashjeer/model/v8';
 import { useEngineStudioStore } from '@/stores/engine-config-ui-store';
@@ -37,9 +38,39 @@ const SECTIONS: Array<{ id: Section; label: string; hint: string }> = [
   { id: 'io', label: 'التصدير والاستيراد', hint: 'FR-ES-14' },
 ];
 
+/** معاملات الرابط العميق (FR-ES-15): القسم، القاعدة، وتصحيح مسبق التعبئة. */
+interface StudioDeepLink {
+  section?: Section;
+  ruleId?: string;
+  candidate?: { differenceType?: string; relatedType?: string; engineMerged?: boolean; editorWantsMerge?: boolean };
+}
+
+function readDeepLink(): StudioDeepLink {
+  if (typeof window === 'undefined') return {};
+  const params = new URLSearchParams(window.location.search);
+  const section = params.get('section') as Section | null;
+  const ruleId = params.get('rule') ?? undefined;
+  const flag = (key: string): boolean | undefined => {
+    const value = params.get(key);
+    if (value === null) return undefined;
+    return value === '1' || value === 'true';
+  };
+  const differenceType = params.get('differenceType') ?? undefined;
+  const relatedType = params.get('relatedType') ?? undefined;
+  const engineMerged = flag('engineMerged');
+  const editorWantsMerge = flag('editorWantsMerge');
+  const hasCandidate = differenceType || relatedType || engineMerged !== undefined || editorWantsMerge !== undefined;
+  return {
+    section: section && SECTIONS.some((item) => item.id === section) ? section : ruleId ? 'rules' : undefined,
+    ruleId,
+    candidate: hasCandidate ? { differenceType, relatedType, engineMerged, editorWantsMerge } : undefined,
+  };
+}
+
 export default function EngineStudioPage() {
   const [section, setSection] = useState<Section>('dashboard');
   const [creatingNew, setCreatingNew] = useState(false);
+  const [deepLink, setDeepLink] = useState<StudioDeepLink>({});
 
   const {
     config,
@@ -66,6 +97,15 @@ export default function EngineStudioPage() {
   useEffect(() => {
     hydrate();
   }, [hydrate]);
+
+  // الروابط العميقة: /studio?rule=... يفتح القاعدة، و?section=candidates مع
+  // معاملات التصحيح يعبّئ لوحة «قاعدة من تصحيح» (FR-ES-15).
+  useEffect(() => {
+    const link = readDeepLink();
+    setDeepLink(link);
+    if (link.section) setSection(link.section);
+    if (link.ruleId) setSelectedRule(link.ruleId);
+  }, [setSelectedRule]);
 
   const selectedRule = selectedRuleId ? config.rules.find((rule) => rule.id === selectedRuleId) ?? null : null;
   const builderRule = creatingNew ? null : selectedRule;
@@ -95,10 +135,18 @@ export default function EngineStudioPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => {
-              if (window.confirm('إعادة إعداد المحرك إلى سياسات النظام الافتراضية؟ سيُفقد ما لم يُحفظ.')) {
-                resetToDefault();
-              }
+            onClick={async () => {
+              const ok = await confirmAction({
+                title: 'إعادة إعداد المحرك إلى سياسات النظام',
+                message: 'تُستبدل القواعد ومصفوفة الدمج والسياسات الحالية بالافتراضية، ويُفقد ما لم يُحفظ.',
+                impacts: [
+                  { label: 'قاعدة', count: config.rules.length },
+                  { label: 'صف في مصفوفة الدمج', count: config.mergeMatrix.length },
+                ],
+                undoable: false,
+                confirmLabel: 'إعادة الضبط',
+              });
+              if (ok) resetToDefault();
             }}
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
@@ -177,11 +225,23 @@ export default function EngineStudioPage() {
                       rule={selectedRule}
                       onPriority={setRulePriorityAction}
                       onStatus={setRuleStatusAction}
-                      onRemove={(id) => {
-                        if (selectedRule.protected) {
-                          if (!window.confirm('هذه قاعدة محمية. تأكيد الحذف؟')) return;
-                        }
-                        removeRule(id);
+                      onRemove={async (id) => {
+                        const dependents = config.rules.filter(
+                          (rule) => rule.dependsOn?.includes(id) || rule.overrides?.includes(id)
+                        ).length;
+                        const ok = await confirmAction({
+                          title: selectedRule.protected ? 'حذف قاعدة محمية' : `حذف القاعدة «${selectedRule.name}»`,
+                          message: selectedRule.protected
+                            ? 'هذه قاعدة محمية من قواعد النظام؛ حذفها يغيّر سلوك المحرك الافتراضي.'
+                            : 'تُحذف القاعدة من ملف المحرك الحالي.',
+                          impacts: [
+                            { label: 'قاعدة تعتمد عليها', count: dependents },
+                            { label: 'حالة اختبار مرفقة', count: selectedRule.testCases?.length ?? 0 },
+                          ],
+                          undoable: false,
+                          confirmLabel: 'حذف',
+                        });
+                        if (ok) removeRule(id);
                       }}
                     />
                   )}
@@ -208,6 +268,7 @@ export default function EngineStudioPage() {
 
             {section === 'candidates' && (
               <CandidateRulesPanel
+                initial={deepLink.candidate}
                 onAdopt={(rule) => {
                   addRule(rule);
                   setSection('rules');

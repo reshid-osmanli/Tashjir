@@ -6,6 +6,7 @@
 
 'use client';
 
+import { confirmAction } from '@/lib/ui/confirm-store';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { Narrator, ReadingImam, TransmissionPath } from '@/types';
 import {
@@ -115,8 +116,19 @@ export default function AdminPage() {
           onOpenEditor={setEditor}
           onCloseEditor={() => setEditor(null)}
           onPersist={persistCatalog}
-          onReset={() => {
-            if (!window.confirm('إعادة القراء والرواة والطرق إلى بذرة المشروع؟ ستفقد التعديلات المحلية.')) return;
+          onReset={async () => {
+            const ok = await confirmAction({
+              title: 'إعادة كتالوج القراءات إلى بذرة المشروع',
+              message: 'تُفقد التعديلات المحلية على القراء والرواة والطرق وترتيبهم.',
+              impacts: [
+                { label: 'قارئ', count: catalog.imams.length },
+                { label: 'راو', count: catalog.narrators.length },
+                { label: 'طريق', count: catalog.paths.length },
+              ],
+              undoable: false,
+              confirmLabel: 'إعادة',
+            });
+            if (!ok) return;
             setCatalog(resetTransmissionCatalog());
             setMessage('أعيد كتالوج القراءات إلى البذرة الافتراضية.');
             setEditor(null);
@@ -155,11 +167,21 @@ function TransmissionManager({
   const imams = useMemo(() => catalogImamsInOrder(catalog), [catalog]);
   const narrators = useMemo(() => catalogNarratorsInOrder(catalog), [catalog]);
 
-  const removeImam = (imam: ReadingImam) => {
+  const removeImam = async (imam: ReadingImam) => {
     const relatedNarrators = catalog.narrators.filter((narrator) => narrator.imamId === imam.id);
     const relatedIds = new Set(relatedNarrators.map((narrator) => narrator.id));
     const relatedPaths = catalog.paths.filter((path) => relatedIds.has(path.narratorId));
-    if (!window.confirm(`حذف «${imam.name}» مع ${relatedNarrators.length} راو و${relatedPaths.length} طريق؟`)) return;
+    const ok = await confirmAction({
+      title: `حذف القارئ «${imam.name}»`,
+      message: 'يُحذف مع رواته وطرقهم؛ الأوجه المسنَدة إليهم تبقى في المستندات لكن بلا صاحب معروف.',
+      impacts: [
+        { label: 'راو', count: relatedNarrators.length },
+        { label: 'طريق', count: relatedPaths.length },
+      ],
+      undoable: false,
+      confirmLabel: 'حذف',
+    });
+    if (!ok) return;
     onPersist(
       {
         ...catalog,
@@ -172,9 +194,16 @@ function TransmissionManager({
     onCloseEditor();
   };
 
-  const removeNarrator = (narrator: Narrator) => {
+  const removeNarrator = async (narrator: Narrator) => {
     const pathsCount = catalog.paths.filter((path) => path.narratorId === narrator.id).length;
-    if (!window.confirm(`حذف الراوي «${narrator.name}» مع ${pathsCount} طريق؟`)) return;
+    const ok = await confirmAction({
+      title: `حذف الراوي «${narrator.name}»`,
+      message: 'يُحذف مع طرقه.',
+      impacts: [{ label: 'طريق', count: pathsCount }],
+      undoable: false,
+      confirmLabel: 'حذف',
+    });
+    if (!ok) return;
     onPersist(
       {
         ...catalog,
@@ -186,8 +215,15 @@ function TransmissionManager({
     onCloseEditor();
   };
 
-  const removePath = (path: TransmissionPath) => {
-    if (!window.confirm(`حذف الطريق «${path.shortName}»؟`)) return;
+  const removePath = async (path: TransmissionPath) => {
+    const ok = await confirmAction({
+      title: `حذف الطريق «${path.shortName}»`,
+      message: 'الأوجه المخصوصة بهذا الطريق تعود إلى نطاق راويه.',
+      impacts: [{ label: 'طريق', count: 1 }],
+      undoable: false,
+      confirmLabel: 'حذف',
+    });
+    if (!ok) return;
     onPersist(
       { ...catalog, paths: catalog.paths.filter((item) => item.id !== path.id) },
       `تم حذف الطريق ${path.shortName}.`

@@ -19,6 +19,7 @@ import { findGlobalRuleMatches, getEffectiveVariants } from '@/lib/quran-logic/g
 import { loadDocument, listDocuments } from './document-store';
 import { listGlobalRules } from './global-rules-store';
 import { listOccurrenceOverrides } from './rule-occurrences-store';
+import { editorCategoryToStudioType } from '@/lib/tashjeer/decision/editor-bridge';
 
 /** مصدر الموضع كما يظهر في التتبع. */
 export type TrackingSource = 'ENGINE' | 'EDITOR';
@@ -47,6 +48,32 @@ export interface TrackingRow {
   globalRuleTitle?: string;
   /** رتبة الترتيب اليدوية إن ثُبّتت. */
   orderRank?: number;
+  /**
+   * ثلاثية التصحيح (AC-02، DM-11): ما اقترحه المحرك (A)، وما غيّره المحرر
+   * (B)، والنتيجة المعتمدة (Final). تُبنى من لقطة المحرك المحفوظة على
+   * الاختلاف؛ وتغيب إن لم يكن للموضع لقطة (أنشأه المحرر من الصفر).
+   */
+  correction?: CorrectionTriplet;
+}
+
+/** صورة مختصرة لحالة اختلاف في لحظة ما، صالحة للمقارنة والعرض. */
+export interface CorrectionState {
+  title: string;
+  category: VariantCategory;
+  /** الأوجه غير الأساسية بترتيبها: تسمية + نطاق مختصر. */
+  alternatives: Array<{ id: string; label: string; text: string; scopeKind: string }>;
+}
+
+export interface CorrectionTriplet {
+  /** A: اقتراح المحرك كما التُقط قبل أي تعديل. */
+  engine: CorrectionState;
+  /** B: ما بدّله المحرر (الحقول التي تختلف عن A)، أو null إن لم يغيّر شيئا. */
+  editor: { changedFields: string[]; at?: string } | null;
+  /** Final: الحالة المعتمدة الحالية (تساوي A إن لم يعدّل المحرر). */
+  final: CorrectionState;
+  capturedAt: string;
+  /** سياق مختصر لإنشاء قاعدة مرشحة من هذا التصحيح (FR-ES-12). */
+  candidate: { differenceType: string; engineMerged: boolean; editorWantsMerge: boolean } | null;
 }
 
 /** إحصاءات التتبع حسب الفئة والمصدر. */
@@ -280,6 +307,59 @@ function rowForVariant(
       ? rulesById.get(variant.globalRuleId)?.title
       : undefined,
     orderRank: variant.orderRank,
+    correction: correctionTripletOf(variant),
+  };
+}
+
+function correctionStateOf(input: {
+  title: string;
+  category: VariantCategory;
+  alternatives: Variant['alternatives'];
+}): CorrectionState {
+  return {
+    title: input.title,
+    category: input.category,
+    alternatives: input.alternatives
+      .filter((alternative) => !alternative.isBase)
+      .map((alternative) => ({
+        id: alternative.id,
+        label: alternative.label,
+        text: alternative.text,
+        scopeKind: alternative.scope?.kind ?? 'ALL',
+      })),
+  };
+}
+
+/**
+ * يبني ثلاثية A/B/Final من لقطة المحرك. الفروق تُحسب على الحقول المعروضة
+ * فقط (العنوان، الفئة، الأوجه)، وهي ما يهم المراجع في التتبع.
+ */
+export function correctionTripletOf(variant: Variant): CorrectionTriplet | undefined {
+  if (!variant.engineSnapshot) return undefined;
+  const engine = correctionStateOf(variant.engineSnapshot);
+  const final = correctionStateOf(variant);
+
+  const changedFields: string[] = [];
+  if (engine.title !== final.title) changedFields.push('title');
+  if (engine.category !== final.category) changedFields.push('category');
+  if (JSON.stringify(engine.alternatives) !== JSON.stringify(final.alternatives)) changedFields.push('alternatives');
+
+  const changed = changedFields.length > 0;
+  return {
+    engine,
+    editor: changed ? { changedFields, at: variant.editorModifiedAt } : null,
+    final,
+    capturedAt: variant.engineSnapshot.capturedAt,
+    candidate: changed
+      ? {
+          differenceType: editorCategoryToStudioType(final.category),
+          // بلا علاقة مسجَّلة نعدّ التصحيح تغييرا في الوجه لا في الدمج:
+          // المحرك اقترح (A) والمحرر قرّر غيره؛ يُعرض في الاستوديو كمسودة
+          // ويختار المستخدم الإجراء النهائي بنفسه (P-06).
+          engineMerged: true,
+          editorWantsMerge: false,
+        }
+      : null,
   };
 }
 

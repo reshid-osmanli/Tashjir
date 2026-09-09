@@ -5,6 +5,7 @@
 
 'use client';
 
+import { confirmAction } from '@/lib/ui/confirm-store';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ScopePicker } from '@/components/editor/VariantEditor';
@@ -21,7 +22,7 @@ import {
 } from '@/lib/storage/global-rules-store';
 import { listDocuments, loadDocument } from '@/lib/storage/document-store';
 import { getSurahOrFirst } from '@/data/quran';
-import { describeGlobalPattern } from '@/lib/quran-logic/global-rule-engine';
+import { describeGlobalPattern, findGlobalRuleMatches } from '@/lib/quran-logic/global-rule-engine';
 import { RuleOccurrenceReview } from '@/components/editor/RuleOccurrenceReview';
 import { GlobalRuleMetaEditor } from '@/components/editor/GlobalRuleMetaEditor';
 import { StrengthDegreePicker } from '@/components/editor/StrengthDegreePicker';
@@ -239,9 +240,22 @@ export default function VariantsIndexPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          if (!window.confirm(`حذف القاعدة العامة «${item.title}» من المصحف كله؟`)) return;
-                          deleteGlobalRule(item.globalRule!.id);
+                        onClick={async () => {
+                          const rule = item.globalRule!;
+                          const stats = occurrenceStats(rule.id);
+                          const matches = rule.pattern ? findGlobalRuleMatches(rule, { limit: 5000 }).length : 0;
+                          const ok = await confirmAction({
+                            title: `حذف القاعدة العامة «${item.title}»`,
+                            message: 'تُحذف من المصحف كله مع سجل مواضعها واستثناءاتها.',
+                            impacts: [
+                              { label: 'موضع في المصحف', count: matches },
+                              { label: 'استثناء موضعي', count: stats.deleted + stats.confirmed + stats.edited },
+                            ],
+                            undoable: false,
+                            confirmLabel: 'حذف',
+                          });
+                          if (!ok) return;
+                          deleteGlobalRule(rule.id);
                           load();
                         }}
                         className="rounded border border-red-200 px-2.5 py-1.5 text-xs text-red-700 hover:bg-red-50"
