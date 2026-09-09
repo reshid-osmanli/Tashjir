@@ -11,6 +11,7 @@
 import { confirmAction } from '@/lib/ui/confirm-store';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
+import { useWindowedList } from '@/hooks/useWindowedList';
 import { documentWindowWords } from '@/lib/tashjeer/reading-window';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
@@ -127,6 +128,9 @@ export function VariantsPanel() {
       );
     });
   }, [document, listSearch]);
+
+  // تنافذ القائمة للآيات ذات المواضع الكثيرة (NFR-01): يُرسم المرئي فقط.
+  const windowed = useWindowedList(listRef, visibleVariants.length, { estimateHeight: 110, overscan: 5, threshold: 40 });
 
   const activeGlobalRules = useMemo(() => {
     if (!document) return [];
@@ -527,7 +531,13 @@ export function VariantsPanel() {
           </p>
         ) : (
           <ul className="divide-y divide-stone-100">
-            {visibleVariants.map((variant) => (
+            {windowed.active && windowed.topPad > 0 && <li aria-hidden style={{ height: windowed.topPad }} />}
+            {visibleVariants.map((variant, index) => {
+              // خارج النافذة: لا يُرسم إلا الصف المحدد (ليبقى التمرير إليه ممكنا).
+              if (windowed.active && (index < windowed.start || index > windowed.end) && variant.id !== selectedVariantId) {
+                return null;
+              }
+              return (
               <VariantRow
                 key={variant.id}
                 variant={variant}
@@ -535,6 +545,7 @@ export function VariantsPanel() {
                 isSelected={variant.id === selectedVariantId}
                 selectedAlternativeId={variant.id === selectedVariantId ? selectedAlternativeId : null}
                 rowRef={variant.id === selectedVariantId ? selectedRowRef : undefined}
+                onMeasure={windowed.active ? (element) => windowed.measure(index, element) : undefined}
                 onSelect={() => selectVariant(variant.id === selectedVariantId ? null : variant.id)}
                 onSelectAlternative={(alternativeId) => selectAlternative(variant.id, alternativeId)}
                 onRecitationModeChange={(recitationMode) => updateVariant(variant.id, { recitationMode })}
@@ -592,7 +603,9 @@ export function VariantsPanel() {
                   if (ok) deleteAlternativesBulk(variant.id, faceIds);
                 }}
               />
-            ))}
+              );
+            })}
+            {windowed.active && windowed.bottomPad > 0 && <li aria-hidden style={{ height: windowed.bottomPad }} />}
           </ul>
         )}
         </div>
@@ -714,6 +727,7 @@ function VariantRow({
   isSelected,
   selectedAlternativeId,
   rowRef,
+  onMeasure,
   onSelect,
   onSelectAlternative,
   onRecitationModeChange,
@@ -727,6 +741,8 @@ function VariantRow({
   isSelected: boolean;
   selectedAlternativeId: string | null;
   rowRef?: RefObject<HTMLLIElement | null>;
+  /** قياس ارتفاع الصف للتنافذ (اختياري). */
+  onMeasure?: (element: HTMLLIElement | null) => void;
   onSelect: () => void;
   onSelectAlternative: (alternativeId: string) => void;
   onRecitationModeChange: (mode: Variant['recitationMode']) => void;
@@ -794,7 +810,14 @@ function VariantRow({
   };
 
   return (
-    <li ref={rowRef} data-difference-id={variant.id} className={isSelected ? 'bg-emerald-50/60 ring-2 ring-inset ring-emerald-500' : ''}>
+    <li
+      ref={(element) => {
+        if (rowRef) rowRef.current = element;
+        onMeasure?.(element);
+      }}
+      data-difference-id={variant.id}
+      className={isSelected ? 'bg-emerald-50/60 ring-2 ring-inset ring-emerald-500' : ''}
+    >
       <div className="px-4 py-3">
         <button type="button" onClick={onSelect} className="w-full text-start">
           <div className="flex items-start justify-between gap-2">

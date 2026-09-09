@@ -81,6 +81,54 @@ const DEFAULT_FILTER: ViewFilter = {
   showAnchors: true,
 };
 
+// ==================== تفضيلات مساحة العمل (FR-ED-01.4) ====================
+//
+// إظهار اللوحات وخيارات العرض (الشبكة/البطاقات/المساطر) تفضيلات شخصية لا
+// تخص المستند، فتُحفظ محليا وتُستعاد عند فتح المحرر، ولا تدخل في التصدير.
+
+export const WORKSPACE_PREFS_KEY = 'tashjeer:editor-workspace:v1';
+
+interface WorkspacePrefs {
+  showPropertiesPanel: boolean;
+  showVariantsPanel: boolean;
+  showLabels: boolean;
+  showGrid: boolean;
+  showRulers: boolean;
+  showAnchors: boolean;
+}
+
+function readWorkspacePrefs(): Partial<WorkspacePrefs> {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(WORKSPACE_PREFS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Partial<WorkspacePrefs>;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeWorkspacePrefs(state: Pick<EditorState, 'showPropertiesPanel' | 'showVariantsPanel' | 'filter'>): void {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return;
+  const prefs: WorkspacePrefs = {
+    showPropertiesPanel: state.showPropertiesPanel,
+    showVariantsPanel: state.showVariantsPanel,
+    showLabels: state.filter.showLabels,
+    showGrid: state.filter.showGrid,
+    showRulers: state.filter.showRulers,
+    showAnchors: state.filter.showAnchors,
+  };
+  try {
+    window.localStorage.setItem(WORKSPACE_PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    // امتلاء التخزين لا يعطل المحرر.
+  }
+}
+
+const INITIAL_PREFS = readWorkspacePrefs();
+const bool = (value: unknown, fallback: boolean): boolean => (typeof value === 'boolean' ? value : fallback);
+
 /**
  * حافظة المحرر (FR-ED-06): عنصر واحد، أو عدة أوجه من موضع واحد، أو سطر كامل
  * (كل اختلافات السطر بأوجهها). اللصق يولّد معرّفات جديدة دائما ولا يمس الأصل.
@@ -298,9 +346,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   zoom: 1,
   pan: { x: 0, y: 0 },
-  filter: { ...DEFAULT_FILTER },
-  showPropertiesPanel: true,
-  showVariantsPanel: true,
+  filter: {
+    ...DEFAULT_FILTER,
+    showLabels: bool(INITIAL_PREFS.showLabels, DEFAULT_FILTER.showLabels),
+    showGrid: bool(INITIAL_PREFS.showGrid, DEFAULT_FILTER.showGrid),
+    showRulers: bool(INITIAL_PREFS.showRulers, DEFAULT_FILTER.showRulers),
+    showAnchors: bool(INITIAL_PREFS.showAnchors, DEFAULT_FILTER.showAnchors),
+  },
+  showPropertiesPanel: bool(INITIAL_PREFS.showPropertiesPanel, true),
+  showVariantsPanel: bool(INITIAL_PREFS.showVariantsPanel, true),
 
   markedPositions: [],
   markedCharacters: [],
@@ -1488,7 +1542,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setPan: (pan) => set({ pan }),
   resetView: () => set({ zoom: 1, pan: { x: 0, y: 0 } }),
 
-  setFilter: (patch) => set((state) => ({ filter: { ...state.filter, ...patch } })),
+  setFilter: (patch) => {
+    set((state) => ({ filter: { ...state.filter, ...patch } }));
+    writeWorkspacePrefs(get());
+  },
 
   toggleCategory: (category) => {
     set((state) => {
@@ -1518,9 +1575,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 
-  togglePropertiesPanel: () =>
-    set((state) => ({ showPropertiesPanel: !state.showPropertiesPanel })),
-  toggleVariantsPanel: () => set((state) => ({ showVariantsPanel: !state.showVariantsPanel })),
+  togglePropertiesPanel: () => {
+    set((state) => ({ showPropertiesPanel: !state.showPropertiesPanel }));
+    writeWorkspacePrefs(get());
+  },
+  toggleVariantsPanel: () => {
+    set((state) => ({ showVariantsPanel: !state.showVariantsPanel }));
+    writeWorkspacePrefs(get());
+  },
 
   // ==================== التراجع ====================
 
