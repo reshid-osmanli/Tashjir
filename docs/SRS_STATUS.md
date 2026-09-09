@@ -144,26 +144,40 @@
 - اختبارات E2E (Playwright).
 
 ### 4.2 توصيات تكميلية (تحسينية، غير حاجبة)
-- **FR-ED-14:** توحيد `displayOrder` رقمي صريح واحد يقوده كل العرض/الرموز/التصدير
-  مع واجهة إعادة تسلسل في `/admin` (حاليًا حقل `order` متناثر عبر `catalog.ts`
-  و`reader-symbols.ts`). — أعلى قيمة معماريًا بين ما تبقّى.
-- **FR-ED-01:** Virtualization لقوائم 1000+ مشتق إن قيست حاجة أداء فعلية.
-- **AC-03/PH7:** إتمام عرض «الجزء المعزول فقط» وعلامات الابتداء الداخلية إن نُقصت
-  في واجهة معيّنة.
+- **AC-03/PH7:** عرض «الجزء المعزول فقط» كوضع رسم منفصل، وعلامات الابتداء الداخلية
+  بين مقاطع الآية الواحدة، وتكافؤ صفحات المصحف (يحتاج بيانات صفحات مصحف المدينة).
+- **DM-11/DM-12:** `Correction`/`WaqfMark`/`RenderRange` تُشتق في الصورة v8 عند
+  التصدير ولا تُخزَّن ككيانات مستقلة في التخزين المحلي؛ يُنقل ذلك مع الانتقال إلى Prisma.
+- **FR-ED-13:** سجل التراجع يغطي المستند فقط؛ مخازن القواعد العامة والاستثناءات
+  والكتالوج لها تأكيدها الكمي لكن بلا تراجع (موسومة `undoable: false` في الحوار).
 - مراجعة قبول يدوية شاملة لـ AC-01..AC-06 من الواجهة (الوحدة النمطية لا تُغني عنها).
 
-### 4.3 ما أُنجز في هذه الجلسة (تنظيف الجودة — بلا تغيير سلوك)
-- إزالة خمس رموز ميّتة جعلت `eslint` نظيفًا بلا تحذيرات:
-  `MarkedFocusButton` (RecitationControls)، `intersectsSegment` (classic-tashjeer)،
-  `emptyResult` + متغيّر `blocked` (decision/api)، ومعامل `options` (resolver).
-  التحقق: `tsc` نظيف، `eslint` نظيف، **454 اختبارًا ناجحًا كما كانت**.
-- إضافة هذا الملف كأداة تتبّع/حالة.
+### 4.3 ما أُنجز في الجلسات الأخيرة (بندًا بندًا)
+
+| البند | ما أُنجز | الملفات | الاختبارات |
+|---|---|---|---|
+| NFR-04 / AC-04 | استيراد v7 وما قبله يُرحَّل تلقائيًا إلى v8 مع نسخة احتياطية لكل مستند وتقرير ترحيل؛ تصدير v8 حتمي بايتًا | `document-store.ts` (`importDocuments`, `buildExportBundle`, `toStableV8`, `BACKUP_PREFIX`) | `import-migration-v8.test.ts` |
+| FR-EN-01 / P-07 | التنافي وإضافة الروابط في المحرر يمرّان عبر Decision Resolver (جسر `editor-bridge.ts`)، مع إشعار قرار في لوحة العلاقات | `decision/editor-bridge.ts`, `useEngineConfig.ts`, `editor-store.ts`, `RelationsPanel.tsx` | `decision-editor-bridge.test.ts` |
+| AC-02 / DM-11 | ثلاثية التصحيح (المحرك أ ← المحرر ب ← المعتمد) في صفوف التتبع مع رابط «قاعدة من هذا التصحيح» | `tracking-store.ts` (`correctionTripletOf`), `tracking/page.tsx` | `manual-correction.test.ts` |
+| FR-ES-15 | روابط عميقة: `/studio?section=&rule=&differenceType=&engineMerged=&editorWantsMerge=` و`/editor?ayah=&variant=&why=1&rule=` | `studio/page.tsx` (`readDeepLink`), `editor/page.tsx`, `PropertiesPanel.tsx` (`pendingWhy`) | — (واجهة) |
+| FR-ED-04.2 / NFR-05 | حوار تأكيد كمي موحّد لكل عملية مدمّرة (15 موضعًا كانت `window.confirm`)، يبيّن الأثر بالأرقام وهل هي قابلة للتراجع | `lib/ui/confirm-store.ts`, `ui/ConfirmDialogHost.tsx` | `confirm-store.test.ts` |
+| FR-ED-06 / FR-ED-07 | حافظة متعددة: نسخ أوجه مختارة (`FACES`) وسطر كامل (`LINE`)؛ تحديد بالمدى (Shift) والإضافة (Ctrl) وCtrl+A داخل قائمة الأوجه | `editor-store.ts` (`copyFaces`, `copyLine`), `VariantsPanel.tsx`, `PropertiesPanel.tsx` | `editor-manual-actions.test.ts` |
+| FR-ED-04.3 / NFR-06 | سحب باللمس (ضغط مطوّل ثم تحريك) لإعادة ترتيب الأسطر ودمجها بنفس التأكيد | `RelationsPanel.tsx` | — (واجهة) |
+| FR-ES-03 | مجموعات شروط «أو» و«ليس» في منشئ القواعد، ومفتاح «تنافٍ» لإجراء `PREVENT_MERGE` (`params.exclusive`) | `studio/RuleBuilder.tsx` | `decision-editor-bridge.test.ts` |
+| FR-ES-01 / 04 / 06 | سحب لإعادة ترتيب مجموعات الأولوية وقواعدها (إعادة ترقيم صريحة بفجوة ١٠) وسلم التعارض ومراحل التنفيذ | `studio/PriorityPipeline.tsx` (`moveItem`, `renumberPriorities`) | `engine-config-history.test.ts` |
+| FR-ES-05 | مدخل مصفوفة «مشروط»: القاعدة المطابقة للسياق تحسم فوق قيمته الافتراضية | `decision/resolver.ts` (`decideMerge`), `studio/MergeMatrixPanel.tsx` | `engine-config-history.test.ts` |
+| FR-ES-07 / 14 | سجل إصدارات ملف المحرك مع تدقيق التغييرات، استرجاع أي نسخة، وبوابة نشر بتشغيل جاف (اختبارات + مقارنة بالمحفوظ + أثر) | `engine-config-history.ts`, `engine-config-ui-store.ts`, `studio/PublishHistoryPanel.tsx` | `engine-config-history.test.ts` |
+| FR-ED-14 / DM-04 | `displayOrder` للقراء/الرواة/الطرق في حزمة التصدير ويُطبَّق عند الاستيراد؛ تعارض رقم الترتيب في `/admin` يُحل بـ«إدراج مع إزاحة»؛ سحب لإعادة الترتيب | `document-store.ts` (`displayOrderOfCatalog`, `applyDisplayOrder`), `transmissions/catalog.ts`, `admin/page.tsx` | `import-migration-v8.test.ts`, `catalog-order.test.ts` |
+| FR-ED-02.4 | اختيار اختلاف يُحضر سطره إلى مجال الرؤية مع نبضة | `TashjeerCanvas.tsx`, `TashjeerFigure.tsx` | — (واجهة) |
+| FR-ES-10 / 15.4 | «لماذا؟» لكل سطر (أزواج الاختلافات الفعلية على السطر)، وأثر القرار داخل صفوف التتبع | `WhyTraceDialog.tsx` (`DecisionTraceList`), `tracking/page.tsx` | — (يستعمل `resolveMerge`/`resolveDifference` المختبرين) |
+| FR-ED-01.4 / NFR-01 | تفضيلات اللوحات وخيارات العرض تُحفظ محليًا؛ تنافذ قائمة الاختلافات الطويلة | `editor-store.ts` (`WORKSPACE_PREFS_KEY`), `hooks/useWindowedList.ts`, `VariantsPanel.tsx` | — |
+| FR-ED-08.3..08.6 | المعالج الذكي: قوالب جاهزة، أهداف متفرقة، علاقة لكل هدف، نطاق سورة/مدى آيات (`applyRange` في القاعدة العامة يحترمه المطابق) | `SmartCreateWizard.tsx`, `global-rules-store.ts`, `global-rule-engine.ts`, `GlobalRuleMetaEditor.tsx` | `global-rule-apply-range.test.ts` |
 
 ---
 
 ## 5. طريقة إعادة التحقق
 ```bash
-npm test            # 454 ناجحًا / 2 متخطّى
+npm test            # 504 ناجحًا / 2 متخطّى
 npm run typecheck   # tsc --noEmit  نظيف
 npx eslint "src/**/*.{ts,tsx}"   # 0 مشكلة
 npm run build       # البناء الكامل

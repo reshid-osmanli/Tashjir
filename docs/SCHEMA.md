@@ -53,6 +53,22 @@
 }
 ```
 
+### حزمة التصدير (ExportBundle) — الحقول المضافة في v8
+
+| الحقل | المعنى |
+|---|---|
+| `v8[]` | الصورة الموحّدة لكل مستند (تُشتق من `documents` بدالة نقية؛ معرّفات التصحيحات ونطاقات العرض حتمية) |
+| `engineConfig` | ملف سياسات المحرك المفعّل وقت التصدير بصيغة قانونية مرتّبة |
+| `displayOrder[]` | رتب العرض الصريحة للقراء/الرواة/الطرق (`{ id, kind, displayOrder }`) مرتبة بالنوع ثم بالمعرّف (DM-04). عند الاستيراد تُطبَّق على الكيانات المعروفة محليًا فقط؛ المجهولة تُحصى في التحذيرات ولا تُنشأ |
+
+### القاعدة العامة (GlobalRule) — `applyRange`
+
+`applyRange` يقيّد أين تُبحث القاعدة دون تغيير نمطها:
+`{ kind: 'MUSHAF' }` (يُحذف عند الحفظ لأنه الافتراضي) أو
+`{ kind: 'SURAH', surahNumber }` أو `{ kind: 'AYAH_RANGE', fromAyahKey, toAyahKey }`
+(حدّان شاملان، يُطبَّعان تصاعديًا). المطابق `findGlobalRuleMatchesInAyah` يفحص
+`ruleAppliesToAyah` قبل المطابقة.
+
 ## الترحيل v7 → v8 (DM-18، NFR-05)
 
 الدالة `migrateDocumentToV8(doc)` في `src/lib/tashjeer/migration/migrate-v7-v8.ts`
@@ -69,11 +85,26 @@
 | `Variant.engineSnapshot` | `Correction` + `Difference.engineSnapshot` |
 | `Variant.origin` | `Difference.source` (`ENGINE`→`engine`, غيره→`editor`) |
 
+### الاستيراد مع الترحيل التلقائي (NFR-04، AC-04)
+
+`importDocuments(json)` يقبل حزم v7 وما قبلها: كل مستند يحتاج ترحيلًا يُحفظ
+له أولًا نسخة احتياطية في التخزين المحلي بمفتاح يبدأ بـ `BACKUP_PREFIX`، ثم
+يُرحَّل ويُخزَّن. النتيجة `ImportResult` تحمل `migrated[]` (المفتاح الاحتياطي
+لكل مستند والإصدارين) و`warnings[]`. `describeImportResult` يصوغها للمستخدم.
+
 ## حتمية الملف (DM-13، NFR-06)
 
 الترحيل ومولّدات التصدير في هذه المرحلة لا يقدّمان طوابع زمنية متغيّرة في الحقول
 المنطقية، والمعرّفات صريحة والترتيب حسب الرتب لا الإدراج، ليكون Git diff ذا معنى
 (مثل `Rule A priority: 80 → 100`).
+
+## سجل إصدارات ملف المحرك (`tashjeer:engine-config-history:v1`)
+
+مصفوفة `EngineConfigVersion[]` (الأحدث أولًا، حد ٤٠):
+`{ id, seq, createdAt, source: SAVE|ROLLBACK|IMPORT|RESET, note?, restoredFrom?,
+audit: EngineAuditEntry[], stats: { rules, active, matrix }, config }`.
+`audit` يُحسب بـ `diffEngineConfigs(before, after)` ويتجاهل تغيّر الطوابع
+الزمنية ورقم الإصدار وحدهما. الحفظ المطابق لآخر نسخة لا يُضيف شيئًا.
 
 ## ملف إعداد المحرك (EngineConfig — DM-14، FR-ES-14)
 

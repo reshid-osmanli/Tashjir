@@ -337,3 +337,18 @@ Engine Studio، ويُحلّ عبر مكوّن واحد:
 تعديل الرتبة، علامات الوقف، والتجاوزات المحلية. العمليات الدفعية تُتراجع **وحدة
 واحدة** (`transaction`)، ويدعم القفز إلى أي عمق (`jumpTo`) وقوائم اللقطات
 (`snapshotCommand`).
+
+## طبقات أُضيفت مع اكتمال SRS
+
+| الطبقة | الملف | الدور |
+|---|---|---|
+| خدمة التأكيد الكمي | `src/lib/ui/confirm-store.ts` + `src/components/ui/ConfirmDialogHost.tsx` | وعد `confirmAction()` يفتح حوارًا واحدًا مركّبًا في التخطيط؛ كل عملية مدمّرة تمرّ به مع الأثر بالأرقام وعلم التراجع |
+| جسر المحرر إلى المحرك | `src/lib/tashjeer/decision/editor-bridge.ts` + `src/hooks/useEngineConfig.ts` | يحوّل فئات المحرر إلى أنواع الاستوديو ويحسم التنافي وسياسة الروابط عبر Decision Resolver وحده (P-07) |
+| سجل إصدارات المحرك | `src/lib/tashjeer/engine-config-history.ts` | نسخ كاملة مرقّمة مع تدقيق الفروق؛ الاسترجاع يمرّ بمسار الحفظ نفسه |
+| نافذة القوائم | `src/hooks/useWindowedList.ts` | تنافذ عام للقوائم الطويلة بارتفاعات مقيسة |
+| الاستيراد المرحِّل | `src/lib/storage/document-store.ts` (`importDocuments`) | ترحيل تلقائي v7→v8 بنسخة احتياطية وتقرير، وتطبيق `displayOrder` على الكتالوج |
+| الترتيب الصريح للكتالوج | `src/lib/transmissions/catalog.ts` (`findOrderConflict`, `insertWithShift`, `movePeer`) | حل تعارض أرقام الترتيب بالإدراج مع الإزاحة وإعادة الترقيم بعد السحب؛ المعرّفات ثابتة |
+
+**قاعدة ثابتة:** لا منطق قرار في الواجهة. المكونات تستدعي `resolveMerge`،
+`resolveDifference`، `resolveLocusExclusion`، `resolveLinkPolicy`، وتعرض الأثر
+(`DecisionTraceList`) كما جاء.
