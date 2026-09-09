@@ -31,6 +31,10 @@ import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-sys
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import type { VariantCategory } from '@/types';
 import type { VerificationStatus } from '@/types/tashjeer';
+import { DecisionTraceList } from '@/components/editor/WhyTraceDialog';
+import { resolveDifference } from '@/lib/tashjeer/decision/api';
+import { editorCategoryToStudioType } from '@/lib/tashjeer/decision/editor-bridge';
+import { useEngineConfig } from '@/hooks/useEngineConfig';
 
 type SourceFilter = TrackingSource | 'MODIFIED' | 'ALL';
 
@@ -236,6 +240,7 @@ function TrackingRowCard({
       {expanded && (
         <div className="mt-3 rounded-lg border border-stone-100 bg-stone-50/70 p-3">
           {row.correction && <CorrectionTripletView row={row} />}
+          <RowDecisionTrace row={row} />
           <p className="mb-2 text-[11px] font-semibold text-stone-700">
             سجل التصحيح اليدوي (قبل ← بعد)
           </p>
@@ -276,6 +281,65 @@ function TrackingRowCard({
  * ثلاثية A/B/Final (AC-02): اقتراح المحرك، تغيير المحرر، النتيجة المعتمدة،
  * مع زر ينقل التصحيح إلى الاستوديو ليُقترح منه قانون مرشّح (FR-ES-12).
  */
+/**
+ * أثر قرار المحرك لهذا الموضع (Decision Trace في صف التتبع — FR-ES-10):
+ * يُعاد حسابه من ملف المحرك المفعّل الآن عبر Decision Resolver نفسه، فيرى
+ * المحقق أي قاعدة استوجبت الاختلاف وأيها تُركت، دون فتح المحرر.
+ */
+function RowDecisionTrace({ row }: { row: TrackingRow }) {
+  const engineConfig = useEngineConfig();
+  const [open, setOpen] = useState(false);
+  const result = useMemo(
+    () =>
+      resolveDifference(
+        {
+          differenceType: editorCategoryToStudioType(row.category),
+          category: 'DIFFERENCE',
+          source: row.source,
+          globalRuleId: row.globalRuleId,
+        },
+        engineConfig
+      ),
+    [row.category, row.source, row.globalRuleId, engineConfig]
+  );
+  const applied = result.appliedRules.length;
+  return (
+    <div className="mb-3 rounded-lg border border-stone-200 bg-white p-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold text-stone-800">
+          أثر قرار المحرك
+          <span className="mr-1 font-normal text-stone-500">
+            {applied > 0 ? `${toArabicDigits(applied)} قاعدة فاعلة · ${result.decision.reason}` : 'لا قاعدة استوديو تستوجب هذا الاختلاف (قاعدة عامة أو إدخال يدوي)'}
+          </span>
+        </p>
+        <button
+          type="button"
+          onClick={() => setOpen((current) => !current)}
+          className="rounded-md border border-stone-300 bg-white px-2 py-0.5 text-[10.5px] text-stone-700 hover:bg-stone-50"
+        >
+          {open ? 'إخفاء الأثر' : `عرض الأثر (${toArabicDigits(result.trace.length)})`}
+        </button>
+      </div>
+      {open && (
+        <div className="mt-2">
+          <DecisionTraceList trace={result.trace} compact />
+          {result.appliedRules.length > 0 && (
+            <ul className="mt-2 flex flex-wrap gap-1.5">
+              {result.appliedRules.map((rule) => (
+                <li key={rule.id}>
+                  <Link href={`/studio?rule=${encodeURIComponent(rule.id)}`} className="rounded bg-emerald-50 px-2 py-0.5 text-[10.5px] text-emerald-800 hover:bg-emerald-100">
+                    {rule.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CorrectionTripletView({ row }: { row: TrackingRow }) {
   const correction = row.correction;
   if (!correction) return null;

@@ -57,6 +57,7 @@ export function TashjeerFigure({
   characterMarkingActive = false,
   selectedWordId = null,
   selectedVariantId = null,
+  pulseLineId = null,
   hoveredLineId = null,
   onWordClick,
   onCharacterClick,
@@ -90,6 +91,8 @@ export function TashjeerFigure({
   characterMarkingActive?: boolean;
   selectedWordId?: number | null;
   selectedVariantId?: string | null;
+  /** سطر يُنبض لحظيا بعد إحضاره إلى مجال الرؤية (FR-ED-02.4). */
+  pulseLineId?: string | null;
   hoveredLineId?: string | null;
   onWordClick?: (box: WordBox) => void;
   onCharacterClick?: (box: WordBox, characterIndex: number) => void;
@@ -123,7 +126,11 @@ export function TashjeerFigure({
             showMadd={engine.showMaddColumn}
             showRule={engine.showRuleUnderWord && showLabels}
             textBottom={classic.textBottom}
-            isSelected={line.variantId === selectedVariantId}
+            isSelected={
+              selectedVariantId !== null &&
+              (line.variantId === selectedVariantId || line.entries.some((entry) => entry.variantId === selectedVariantId))
+            }
+            isPulsing={line.id === pulseLineId}
             isHovered={line.id === hoveredLineId}
             onClick={() => onLineClick?.(line)}
             onEntryClick={(entry) => onEntryClick?.(line, entry)}
@@ -341,6 +348,7 @@ function ClassicLineShape({
   showRule,
   textBottom,
   isSelected,
+  isPulsing = false,
   isHovered,
   onClick,
   onEntryClick,
@@ -356,6 +364,7 @@ function ClassicLineShape({
   /** أسفل كتلة النص: تبدأ منه الوصلة حتى لا تخترق أسطر الآية الملتفة. */
   textBottom: number;
   isSelected: boolean;
+  isPulsing?: boolean;
   isHovered: boolean;
   onClick: () => void;
   onEntryClick?: (entry: ClassicLineEntry) => void;
@@ -386,6 +395,7 @@ function ClassicLineShape({
       data-line-id={line.id}
       data-lane={line.lane}
       data-entries={entries.length}
+      data-variant-ids={[...new Set([line.variantId, ...entries.map((entry) => entry.variantId)])].join(' ')}
     >
       {/* ممر شفاف عريض لتسهيل النقر على السطر */}
       <rect
@@ -395,6 +405,18 @@ function ClassicLineShape({
         height={18}
         fill="transparent"
       />
+      {isPulsing && (
+        <rect
+          x={Math.min(startX, line.guideStartX) - 6}
+          y={line.rowY - 14}
+          width={Math.max(Math.max(endX, line.guideEndX) - Math.min(startX, line.guideStartX), 1) + 12}
+          height={28}
+          rx={6}
+          fill={color}
+          className="tashjeer-pulse"
+          pointerEvents="none"
+        />
+      )}
 
       {/* الخط التوضيحي بطول الآية كلها. لا نرسمه إلا حين يقصر خط الوجه عن
           الآية (وضع VARIANT_SPAN)، إذ يكون خط الوجه نفسه هو خط الآية في

@@ -114,6 +114,42 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
 
   const focusSegment = document?.readingWindow?.focusSegment ?? null;
 
+  // إحضار المحدَّد إلى مجال الرؤية مع نبضة (FR-ED-02.4): عند اختيار اختلاف
+  // من لوحة الاختلافات أو من رابط عميق، إن كان سطره خارج الإطار المرئي
+  // نحرّك اللوحة إليه دون تغيير التكبير، ثم نُبرزه بنبضة قصيرة.
+  const [pulseLineId, setPulseLineId] = useState<string | null>(null);
+  const lastCenteredVariant = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedVariantId) {
+      lastCenteredVariant.current = null;
+      return;
+    }
+    if (lastCenteredVariant.current === selectedVariantId) return;
+    lastCenteredVariant.current = selectedVariantId;
+    const svg = svgRef.current;
+    const target = svg?.querySelector<SVGGElement>(`[data-line-id][data-variant-ids~="${CSS.escape(selectedVariantId)}"]`);
+    if (!svg || !target) return;
+    const lineId = target.dataset.lineId ?? null;
+    const svgRect = svg.getBoundingClientRect();
+    const rect = target.getBoundingClientRect();
+    const margin = 24;
+    const outside =
+      rect.left < svgRect.left + margin ||
+      rect.right > svgRect.right - margin ||
+      rect.top < svgRect.top + margin ||
+      rect.bottom > svgRect.bottom - margin;
+    if (outside) {
+      const scale = unitsPerPixel();
+      const dx = (svgRect.left + svgRect.width / 2 - (rect.left + rect.width / 2)) * scale;
+      const dy = (svgRect.top + svgRect.height / 2 - (rect.top + rect.height / 2)) * scale;
+      setPan({ x: pan.x + dx, y: pan.y + dy });
+    }
+    setPulseLineId(lineId);
+    const timer = window.setTimeout(() => setPulseLineId(null), 1200);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVariantId, classic.lines.length]);
+
   // يشمل هذا القائمة المحلية والقواعد العامة المشتقة؛ لذلك يتفاعل النقر
   // مع موضع القاعدة العامة كما يتفاعل مع الاختلاف الذي أضيف يدويا.
   const effectiveVariants = useMemo(
@@ -369,6 +405,7 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
             characterMarkingActive={!readOnly && currentTool === 'mark' && markingMode === 'CHARACTERS'}
             selectedWordId={selectedWordId}
             selectedVariantId={selectedVariantId}
+            pulseLineId={pulseLineId}
             hoveredLineId={hoveredLineId}
             onWordClick={handleWordClick}
             onCharacterClick={handleCharacterClick}

@@ -387,6 +387,19 @@ export function PropertiesPanel() {
         <WhyTraceDialog
           category={selectedVariant.category}
           highlightRuleId={highlightRuleId}
+          line={
+            selectedLine
+              ? {
+                  label: selectedLine.label,
+                  entries: selectedLine.entries.map((entry) => ({
+                    variantId: entry.variantId,
+                    title:
+                      effectiveVariants.find((variant) => variant.id === entry.variantId)?.title ?? entry.ruleLabel,
+                    category: entry.category,
+                  })),
+                }
+              : null
+          }
           onClose={() => {
             setShowWhyDialog(false);
             setHighlightRuleId(undefined);
