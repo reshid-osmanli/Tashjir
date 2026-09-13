@@ -81,7 +81,14 @@ export interface VariantEvidence {
 }
 
 /** وجه من أوجه الاختلاف: نص معيّن يقرأ به نطاق معيّن. */
-export interface VariantAlternative {
+export interface CopyProvenance {
+  copiedFrom?: string;
+  source?: 'engine' | 'editor';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface VariantAlternative extends CopyProvenance {
   id: string;
   /** النص المقروء بهذا الوجه (بالتشكيل) */
   text: string;
@@ -402,7 +409,7 @@ export type GlobalRulePattern = GlobalCharacterPattern | GlobalMorphologyPattern
 export type RecitationMode = 'ALWAYS' | 'WAQF_ONLY' | 'WASL_ONLY';
 
 /** اختلاف قرائي مستقل في موضع محدد من الآية. */
-export interface Variant {
+export interface Variant extends CopyProvenance {
   id: string;
   /** معرّف الآية: surah * 1000 + ayah */
   ayahKey: number;
@@ -636,7 +643,7 @@ export function faceEndpointKey(variantId: string, alternativeId: string): strin
 }
 
 /** جزء من سطر: مدى كلمات/حروف مستقل داخل الآية، له روابطه الخاصة. */
-export interface LineSegment {
+export interface LineSegment extends CopyProvenance {
   id: string;
   ayahKey: number;
   title: string;
@@ -844,6 +851,12 @@ export interface TashjeerDocument {
    * واحد يُزحزح المتأثرين تلقائيا (إدخال لا استبدال) فلا يتعطل الترتيب.
    */
   lineOrder?: string[];
+  /** Explicit v8 identities/ranks materialized by editor line operations. */
+  corrections?: import('@/lib/tashjeer/model/v8').Correction[];
+  mergeRecords?: import('@/lib/tashjeer/merge-operations').MergeRecord[];
+  suspendedLinks?: import('@/lib/tashjeer/clipboard').SuspendedLink[];
+  deletedItems?: import('@/lib/tashjeer/bulk-operations').DeletedItems[];
+  lines?: import('@/lib/tashjeer/model/v8').Line[];
   /** روابط المحرر اليدوية: الأوجه المركبة، دمج الأسطر، وربط الأجزاء. */
   links?: TashjeerLink[];
   /** أجزاء الأسطر: مدى كلمات/حروف لكل منها روابطه وقواعده الخاصة. */

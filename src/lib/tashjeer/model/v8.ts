@@ -71,6 +71,7 @@ export interface Locus {
  * هو نفسه VariantAlternative القديم لكن ككيان مستقل له ID صريح ورتبة صريحة.
  */
 export interface Variant {
+  copiedFrom?: EntityId;
   id: EntityId;
   /** نص الوجه المقروء بهذا الوجه (بالتشكيل). */
   text: string;
@@ -147,6 +148,7 @@ export interface Relation {
  * (DM-06)، ورتبة صريحة (DM-04).
  */
 export interface Difference {
+  copiedFrom?: EntityId;
   id: EntityId;
   ayahKey: number;
   /** فئة الاختلاف (أصول/فرش/مدود...). */
@@ -328,6 +330,9 @@ export interface Line {
 
 /** جزء سطر مرتبط بموضع/قاعدة (Line→Segment→Rule). */
 export interface LineSegment {
+  /** Stable references to the differences carried by this segment. */
+  differenceIds?: EntityId[];
+  faceIds?: EntityId[];
   id: EntityId;
   ayahKey: number;
   title: string;
@@ -548,6 +553,9 @@ export interface EngineConfig {
  * renderRanges، engineConfig محتمل.
  */
 export interface TashjeerDocumentV8 {
+  mergeRecords?: import('../merge-operations').MergeRecord[];
+  deletedItems?: import('../bulk-operations').DeletedItems[];
+  suspendedLinks?: import('../clipboard').SuspendedLink[];
   format: 'tashjeer-export';
   schemaVersion: 8;
   exportedAt: string;
