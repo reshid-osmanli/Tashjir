@@ -173,6 +173,63 @@ export function buildCharacterPattern(
 }
 
 /**
+ * يبني نمط قاعدة من كلمات كاملة (لا مدى حروف جزئي).
+ *
+ * يُستعمل حين يكون تحديد المعالج كلماتٍ (لا حروفًا): تُؤخذ كل حروف الكلمات
+ * المحددة قيودًا حرفية حتمية — الكلمة كلها تُطابَق بطولها — فيعمَّم الحكم
+ * نفسه على كل موضع يرد فيه التتابع نفسه، بلا تحليل نحوي احتمالي (NFR-02:
+ * النمط حتمي كما في `buildCharacterPattern`، ويقبل توسيع القيود إلى مجموعات
+ * الحروف ونطاق البحث من الواجهة بعد بنائه).
+ */
+export function buildCharacterPatternForWords(
+  ayahKey: number,
+  startPosition: number,
+  endPosition: number,
+  options: BuildCharacterPatternOptions = {}
+): GlobalCharacterPattern {
+  const from = Math.min(startPosition, endPosition);
+  const to = Math.max(startPosition, endPosition);
+  const words = getAyahWordsByKey(ayahKey);
+  if (words.length === 0) throw new Error('لا توجد كلمات للآية المحددة.');
+  if (from < 1 || to > words.length) throw new Error('مدى الكلمات خارج كلمات الآية.');
+
+  const defaultHarakaMode = options.defaultHarakaMode ?? 'EXACT';
+  const patterns: GlobalWordCharacterPattern[] = [];
+
+  for (let position = from; position <= to; position += 1) {
+    const word = words.find((item) => item.position === position);
+    if (!word) throw new Error(`تعذر العثور على الكلمة رقم ${position}.`);
+    const characters = splitQuranCharacters(word.text);
+    if (characters.length === 0) throw new Error(`الكلمة رقم ${position} بلا حروف مرئية.`);
+    const bounds = { start: 1, end: characters.length };
+    const constraints = characters.map((character, index) => {
+      const characterIndex = index + 1;
+      return {
+        baseLetter: baseLetter(character),
+        letterSet: 'EXACT',
+        marks: marksOf(character),
+        harakaMode: defaultHarakaMode,
+        ...anchorForSelection(characterIndex, characters.length, bounds),
+      } satisfies GlobalCharacterConstraint;
+    });
+    patterns.push({ offset: position - from, constraints, exactLength: characters.length });
+  }
+
+  const lastCharacters = splitQuranCharacters(words.find((item) => item.position === to)!.text);
+  return {
+    kind: 'CHARACTERS',
+    version: 1,
+    wordCount: to - from + 1,
+    words: patterns,
+    sourceAyahKey: ayahKey,
+    sourceRange: {
+      start: { position: from, characterIndex: 1 },
+      end: { position: to, characterIndex: lastCharacters.length },
+    },
+  };
+}
+
+/**
  * يطابق التتابع الحرفي نفسه داخل كلمة واحدة.
  *
  * القاعدة الصوتية (كنون ساكنة قبل حرف إخفاء) تجري بين الكلمتين وتجري في
@@ -600,6 +657,39 @@ export function findGlobalRuleMatches(
   }
 
   return matches;
+}
+
+/** سورة برقمها وعدد آياتها — وحدة التقدم في الفحص غير الحاجب. */
+export interface MushafSurahProgress {
+  surahNumber: number;
+  ayahsCount: number;
+}
+
+/** فهرس سور المصحف بالترتيب (١١٤ سورة) لفحص مرحلي مع مؤشر تقدم. */
+export function mushafSurahIndex(): MushafSurahProgress[] {
+  return SURAHS.map((surah) => ({ surahNumber: surah.number, ayahsCount: surah.ayahsCount }));
+}
+
+/**
+ * يعدّ مواضع قاعدة في سورة واحدة (NFR-02).
+ *
+ * اللبنة التي تبني عليها الواجهة معاينة Dry-run غير حاجبة: تستدعيها سورةً
+ * سورة مع إفساح دورة حدث بين السور (`await` على مهلة صفرية) فيبقى المؤشر
+ * متحركًا ويبقى زر الإلغاء مستجيبًا. يحترم نطاق التطبيق كما يفعل الفحص الكامل.
+ */
+export function countGlobalRuleMatchesInSurah(
+  rule: Pick<GlobalRule, 'id' | 'pattern'> & Partial<Pick<GlobalRule, 'applyRange'>>,
+  surahNumber: number
+): number {
+  if (!rule.pattern) return 0;
+  const surah = SURAHS.find((item) => item.number === surahNumber);
+  if (!surah) return 0;
+  let count = 0;
+  for (let ayahNumber = 1; ayahNumber <= surah.ayahsCount; ayahNumber += 1) {
+    const ayahKey = surah.number * 1000 + ayahNumber;
+    count += findGlobalRuleMatchesInAyah(rule, ayahKey).length;
+  }
+  return count;
 }
 
 /**

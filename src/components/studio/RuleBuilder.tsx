@@ -39,6 +39,11 @@ import {
 } from './labels';
 import { WAQF_WASL_TEMPLATES, type RuleTemplate } from './templates';
 import { previewRuleEdit, summarizePreview } from '@/lib/tashjeer/decision/rule-edit-preview';
+import { resolveDifference, resolveMerge } from '@/lib/tashjeer/decision/api';
+import { getAyah, getAyahCount, getAyahWords, SURAHS } from '@/data/quran';
+import { toArabicDigits } from '@/lib/utils/arabic-numbers';
+import { catalogImamsInOrder, catalogNarratorsInOrder } from '@/lib/transmissions/catalog';
+import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { confirmAction } from '@/lib/ui/confirm-store';
 
 const RULE_TYPES = Object.keys(RULE_TYPE_LABELS) as EngineRule['type'][];
@@ -410,6 +415,9 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
         />
       </div>
 
+      {/* اختبار موضع حقيقي قبل الحفظ — لا يكتب EngineConfig. */}
+      {profile && <RuleDecisionPreview rule={assembleRule()} profile={profile} />}
+
       {/* منشئ الإجراءات */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -527,13 +535,62 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
   );
 }
 
+function RuleDecisionPreview({ rule, profile }: { rule: EngineRule; profile: EngineConfig }) {
+  const [surah, setSurah] = useState(1);
+  const [ayah, setAyah] = useState(1);
+  const [word, setWord] = useState(1);
+  const catalog = useTransmissionCatalog();
+  const readers = catalogImamsInOrder(catalog);
+  const [readerId, setReaderId] = useState('');
+  const [context, setContext] = useState<'WAQF_ONLY' | 'WASL_ONLY' | 'IBTIDA'>('WAQF_ONLY');
+  const [result, setResult] = useState<ReturnType<typeof resolveDifference> | ReturnType<typeof resolveMerge> | null>(null);
+  const ayahData = getAyah(surah, ayah);
+  const words = getAyahWords(surah, ayah);
+
+  const run = () => {
+    if (!ayahData || words.length === 0) return;
+    // المسودة تُختبر في نسخة ذاكرة مفعّلة فقط؛ لا تُحفظ ولا تؤثر في القرارات الرسمية.
+    const testRule: EngineRule = { ...rule, status: 'ACTIVE' };
+    const testProfile: EngineConfig = { ...profile, rules: [...profile.rules.filter((item) => item.id !== testRule.id), testRule] };
+    const position = word === words.length ? 'END_OF_AYAH' : word === 1 ? 'START_OF_AYAH' : 'MIDDLE_OF_AYAH';
+    const ctx = { surahNumber: surah, ayahNumber: ayah, ayahKey: ayahData.key, wordPosition: word, position, readerId, context, differenceType: 'MADD', relatedType: 'TAHQIQ' };
+    if (rule.type === 'MERGE' || rule.category === 'MERGE') setResult(resolveMerge('MADD', 'TAHQIQ', testProfile, ctx));
+    else setResult(resolveDifference(ctx, testProfile));
+  };
+
+  return (
+    <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3">
+      <div>
+        <h4 className="font-semibold text-blue-950">اختبار على موضع حقيقي — Preview / Test</h4>
+        <p className="mt-1 text-xs text-blue-900">اختَر آية وكلمة وشغّل القاعدة عبر Decision API. الاختبار لا يحفظ المسودة ولا يجعلها فاعلة.</p>
+      </div>
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+        <label className="text-xs text-gray-600">السورة<select value={surah} onChange={(event) => { setSurah(Number(event.target.value)); setAyah(1); setWord(1); }} className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm">{SURAHS.map((item) => <option key={item.number} value={item.number}>{toArabicDigits(item.number)} — {item.name}</option>)}</select></label>
+        <label className="text-xs text-gray-600">الآية<input type="number" min={1} max={getAyahCount(surah)} value={ayah} onChange={(event) => { setAyah(Math.max(1, Number(event.target.value) || 1)); setWord(1); }} className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm" /></label>
+        <label className="text-xs text-gray-600">الكلمة<select value={word} onChange={(event) => setWord(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm">{words.map((item) => <option key={item.position} value={item.position}>{toArabicDigits(item.position)} — {item.text}</option>)}</select></label>
+        <label className="text-xs text-gray-600">القارئ<select value={readerId} onChange={(event) => setReaderId(event.target.value)} className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"><option value="">أي قارئ</option>{readers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label className="text-xs text-gray-600">السياق<select value={context} onChange={(event) => setContext(event.target.value as typeof context)} className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"><option value="WAQF_ONLY">وقف</option><option value="WASL_ONLY">وصل</option><option value="IBTIDA">ابتداء</option></select></label>
+      </div>
+      <button type="button" onClick={run} disabled={!ayahData || words.length === 0} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">اختبار الآن</button>
+      {result && (
+        <div className="space-y-2 rounded-lg bg-white p-3 text-sm">
+          <p className="font-semibold text-gray-900">النتيجة: {'merge' in result.decision ? (result.decision.merge ? 'ادمج' : 'لا تدمج') : result.decision.create ? 'أنشئ اختلافًا' : 'لا تنشئ اختلافًا'}</p>
+          <p className="text-xs text-gray-600">{result.decision.reason}</p>
+          <ol className="space-y-1 border-t border-gray-100 pt-2 text-xs text-gray-700">{result.trace.map((step, index) => <li key={index} className="flex gap-2"><span className="font-mono text-gray-400">{step.stage}</span><span>{step.message}</span></li>)}</ol>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** خيار قيمة الشرط: قائمة منسدلة للأنواع المعروفة، وحر لما عداها. */
 function ConditionValue({ condition, onChange }: { condition: RuleCondition; onChange: (value: unknown) => void }) {
+  const catalog = useTransmissionCatalog();
   if (condition.field === 'differenceType' || condition.field === 'relatedType' || condition.field === 'otherType') {
     const options = DIFFERENCE_TYPES.map((type) => ({ value: type, label: DIFFERENCE_TYPE_LABELS[type] }));
-    return <Select value={String(condition.value ?? '')} onChange={onChange} options={options} allowFree compact />;
+    return <Select value={Array.isArray(condition.value) ? String(condition.value[0] ?? '') : String(condition.value ?? '')} onChange={(value) => onChange(condition.op === 'in' || condition.op === 'not-in' ? value.split(/[,،]/).map((item) => item.trim()).filter(Boolean) : value)} options={options} allowFree compact />;
   }
-  if (condition.field === 'sameReader') {
+  if (condition.field === 'sameReader' || condition.field === 'forbiddenWasl') {
     return (
       <Select
         value={condition.value === true ? 'true' : 'false'}
@@ -546,12 +603,27 @@ function ConditionValue({ condition, onChange }: { condition: RuleCondition; onC
       />
     );
   }
+  if (condition.field === 'context') {
+    return <Select value={String(condition.value ?? '')} onChange={onChange} options={[{ value: 'WAQF_ONLY', label: 'وقف' }, { value: 'WASL_ONLY', label: 'وصل' }, { value: 'IBTIDA', label: 'ابتداء' }, { value: 'ALWAYS', label: 'دائمًا' }]} allowFree compact />;
+  }
+  if (condition.field === 'position') {
+    return <Select value={String(condition.value ?? '')} onChange={onChange} options={[{ value: 'START_OF_AYAH', label: 'بداية الآية' }, { value: 'MIDDLE_OF_AYAH', label: 'وسط الآية' }, { value: 'END_OF_AYAH', label: 'نهاية الآية' }, { value: 'WITHIN_WAQF_RANGE', label: 'داخل مدى وقف' }]} allowFree compact />;
+  }
+  if (condition.field === 'readerId') {
+    return <Select value={String(condition.value ?? '')} onChange={onChange} options={[{ value: '', label: 'أي قارئ' }, ...catalogImamsInOrder(catalog).map((item) => ({ value: item.id, label: item.name }))]} allowFree compact />;
+  }
+  if (condition.field === 'narratorId') {
+    return <Select value={String(condition.value ?? '')} onChange={onChange} options={[{ value: '', label: 'أي راوٍ' }, ...catalogNarratorsInOrder(catalog).map((item) => ({ value: item.id, label: item.name }))]} allowFree compact />;
+  }
+  if (condition.field === 'pathId') {
+    return <input type="text" value={String(condition.value ?? '')} onChange={(event) => onChange(event.target.value)} placeholder="معرّف الطريق من الكتالوج" className="w-44 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />;
+  }
   return (
     <input
       type="text"
-      value={String(condition.value ?? '')}
-      onChange={(event) => onChange(event.target.value)}
-      placeholder="القيمة"
+      value={Array.isArray(condition.value) ? condition.value.join('، ') : String(condition.value ?? '')}
+      onChange={(event) => onChange(condition.op === 'in' || condition.op === 'not-in' ? event.target.value.split(/[,،]/).map((item) => item.trim()).filter(Boolean) : event.target.value)}
+      placeholder={condition.op === 'in' || condition.op === 'not-in' ? 'قيمة ١، قيمة ٢' : 'القيمة'}
       className="w-40 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
     />
   );

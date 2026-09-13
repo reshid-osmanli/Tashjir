@@ -6,9 +6,11 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { EngineRule, RuleStatus } from '@/lib/tashjeer/model/v8';
 import { CATEGORY_LABELS, STATUS_LABELS, STATUS_BADGE_CLASSES } from './labels';
+import { ScrollableList } from '@/components/ui/ScrollableList';
+import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 
 type SortKey = 'priority' | 'name' | 'status';
 
@@ -24,6 +26,12 @@ export function RuleExplorer({ rules, selectedRuleId, onSelect, onCreate }: Rule
   const [statusFilter, setStatusFilter] = useState<RuleStatus | 'ALL'>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [sortKey, setSortKey] = useState<SortKey>('priority');
+  // تحميل تدريجي (FR-ED-01/NFR-01): مئات القواعد تُرسم دفعة دفعة بلا تجمد.
+  const [renderLimit, setRenderLimit] = useState(80);
+
+  useEffect(() => {
+    setRenderLimit(80);
+  }, [query, statusFilter, categoryFilter, sortKey]);
 
   const categories = useMemo(() => {
     const set = new Set(rules.map((rule) => rule.category));
@@ -99,13 +107,21 @@ export function RuleExplorer({ rules, selectedRuleId, onSelect, onCreate }: Rule
         </div>
       </div>
 
-      {/* قائمة قابلة للتمرير */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {/* قائمة احترافية قابلة للتمرير (FR-ED-01): رأس ثابت، شريط مرئي،
+          زرا صعود/نزول، وتحميل تدريجي */}
+      <ScrollableList
+        itemCount={filtered.length}
+        ariaLabel="قائمة القواعد"
+        estimateHeight={56}
+        threshold={999999}
+        onNearBottom={() => setRenderLimit((limit) => (limit < filtered.length ? limit + 80 : limit))}
+      >
         {filtered.length === 0 ? (
           <p className="p-6 text-center text-sm text-gray-400">لا قواعد مطابقة.</p>
         ) : (
+          <>
           <ul className="divide-y divide-gray-100">
-            {filtered.map((rule) => (
+            {filtered.slice(0, renderLimit).map((rule) => (
               <li key={rule.id}>
                 <button
                   type="button"
@@ -132,8 +148,18 @@ export function RuleExplorer({ rules, selectedRuleId, onSelect, onCreate }: Rule
               </li>
             ))}
           </ul>
+          {renderLimit < filtered.length && (
+            <button
+              type="button"
+              onClick={() => setRenderLimit((limit) => limit + 80)}
+              className="w-full border-t border-gray-100 py-2.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+            >
+              تحميل المزيد ({toArabicDigits(filtered.length - renderLimit)} متبقيا)
+            </button>
+          )}
+          </>
         )}
-      </div>
+      </ScrollableList>
     </div>
   );
 }

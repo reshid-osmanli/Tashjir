@@ -293,7 +293,7 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="tashjeer-scroll-area flex-1 overflow-y-auto p-5">
           {tab === 'LOG' ? (
             <LogTable log={log} />
           ) : scanning ? (

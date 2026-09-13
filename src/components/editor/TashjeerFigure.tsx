@@ -59,6 +59,10 @@ export function TashjeerFigure({
   selectedVariantId = null,
   pulseLineId = null,
   hoveredLineId = null,
+  /** الأداة النشطة (اختلاف أو وجه) داخل سطر: تُميَّز هي لا سطرها كله. */
+  activeEntry = null,
+  /** أداة (اختلاف داخل سطر) تُنبض لحظيا بعد إحضارها إلى مجال الرؤية. */
+  pulseEntryKey = null,
   onWordClick,
   onCharacterClick,
   onLineClick,
@@ -93,8 +97,12 @@ export function TashjeerFigure({
   selectedVariantId?: string | null;
   /** سطر يُنبض لحظيا بعد إحضاره إلى مجال الرؤية (FR-ED-02.4). */
   pulseLineId?: string | null;
+  /** الأداة النشطة في التحديد الموحّد: اختلاف كله أو وجه بعينه. */
+  activeEntry?: { variantId: string; alternativeId?: string } | null;
+  /** مفتاح أداة تُنبض لحظيا: «variantId::alternativeId». */
+  pulseEntryKey?: string | null;
   hoveredLineId?: string | null;
-  onWordClick?: (box: WordBox) => void;
+  onWordClick?: (box: WordBox, event?: React.MouseEvent) => void;
   onCharacterClick?: (box: WordBox, characterIndex: number) => void;
   onLineClick?: (line: ClassicLine) => void;
   /** النقر على حكم بعينه داخل سطر مركّب: يفتح موضعه لا موضع أول أحكامه. */
@@ -131,6 +139,8 @@ export function TashjeerFigure({
               (line.variantId === selectedVariantId || line.entries.some((entry) => entry.variantId === selectedVariantId))
             }
             isPulsing={line.id === pulseLineId}
+            activeEntry={activeEntry}
+            pulseEntryKey={pulseEntryKey}
             isHovered={line.id === hoveredLineId}
             onClick={() => onLineClick?.(line)}
             onEntryClick={(entry) => onEntryClick?.(line, entry)}
@@ -172,7 +182,7 @@ export function TashjeerFigure({
             coveredCharacterRanges={coveredCharacterRanges}
             characterMarkingActive={characterMarkingActive}
             showAnchors={showAnchors}
-            onClick={() => onWordClick?.(box)}
+            onClick={(event) => onWordClick?.(box, event)}
             onCharacterClick={(characterIndex) => onCharacterClick?.(box, characterIndex)}
           />
         ))}
@@ -208,7 +218,7 @@ function WordShape({
   coveredCharacterRanges: CharacterRange[];
   characterMarkingActive: boolean;
   showAnchors: boolean;
-  onClick: () => void;
+  onClick: (event: React.MouseEvent) => void;
   onCharacterClick: (characterIndex: number) => void;
 }) {
   const cells = characterHitBoxes(box);
@@ -349,6 +359,8 @@ function ClassicLineShape({
   textBottom,
   isSelected,
   isPulsing = false,
+  activeEntry = null,
+  pulseEntryKey = null,
   isHovered,
   onClick,
   onEntryClick,
@@ -365,6 +377,10 @@ function ClassicLineShape({
   textBottom: number;
   isSelected: boolean;
   isPulsing?: boolean;
+  /** الأداة النشطة: تُقارن بأدوات السطر فيُميَّز المطابق وحده. */
+  activeEntry?: { variantId: string; alternativeId?: string } | null;
+  /** مفتاح أداة تُنبض داخل هذا السطر: «variantId::alternativeId». */
+  pulseEntryKey?: string | null;
   isHovered: boolean;
   onClick: () => void;
   onEntryClick?: (entry: ClassicLineEntry) => void;
@@ -456,6 +472,12 @@ function ClassicLineShape({
           strokeWidth={strokeWidth}
           opacity={opacity}
           isSelected={isSelected}
+          isActive={
+            activeEntry != null &&
+            entry.variantId === activeEntry.variantId &&
+            (activeEntry.alternativeId === undefined || entry.alternativeId === activeEntry.alternativeId)
+          }
+          isPulsing={pulseEntryKey === `${entry.variantId}::${entry.alternativeId ?? ''}`}
           showRule={showRule}
           showMadd={showMadd}
           ruleFontSize={ruleFontSize}
@@ -535,6 +557,8 @@ function ClassicEntryShape({
   strokeWidth,
   opacity,
   isSelected,
+  isActive = false,
+  isPulsing = false,
   showRule,
   showMadd,
   ruleFontSize,
@@ -546,6 +570,10 @@ function ClassicEntryShape({
   strokeWidth: number;
   opacity: number;
   isSelected: boolean;
+  /** هل هذا الحكم (الاختلاف/الوجه) هو العنصر النشط في التحديد الموحّد؟ */
+  isActive?: boolean;
+  /** نبضة إحضار لحظية بعد التمرير إليه من لوحة أخرى. */
+  isPulsing?: boolean;
   showRule: boolean;
   showMadd: boolean;
   ruleFontSize: number;
@@ -582,6 +610,41 @@ function ClassicEntryShape({
           : undefined
       }
     >
+      {/* نبضة الإحضار: إطار يومض حول مدى الأداة نفسها لا حول سطرها كله */}
+      {isPulsing &&
+        emphases.map((emphasis, emphasisIndex) => (
+          <rect
+            key={`pulse-${entry.alternativeId}-${emphasisIndex}`}
+            x={Math.min(emphasis.startX, emphasis.labelX) - 8}
+            y={rowY - 16}
+            width={Math.max(emphasis.endX - emphasis.startX, 24) + 16}
+            height={32}
+            rx={7}
+            fill={color}
+            className="tashjeer-pulse"
+            pointerEvents="none"
+          />
+        ))}
+
+      {/* الحكم النشط: إطار بلون التحديد الموحّد + توهج، هو بالذات */}
+      {isActive &&
+        emphases.map((emphasis, emphasisIndex) => (
+          <rect
+            key={`active-${entry.alternativeId}-${emphasisIndex}`}
+            x={Math.min(emphasis.startX, emphasis.labelX) - 7}
+            y={rowY - 15}
+            width={Math.max(emphasis.endX - emphasis.startX, 24) + 14}
+            height={30}
+            rx={6}
+            fill="none"
+            stroke="#059669"
+            strokeWidth={2}
+            strokeDasharray="4 2"
+            filter="url(#branch-glow)"
+            pointerEvents="none"
+          />
+        ))}
+
       {emphases.map((emphasis, emphasisIndex) => (
         <g key={`emphasis-${entry.alternativeId}-${emphasisIndex}`}>
           <line
@@ -590,9 +653,10 @@ function ClassicEntryShape({
             x2={emphasis.endX}
             y2={rowY}
             stroke={color}
-            strokeWidth={strokeWidth + 2.2}
+            strokeWidth={isActive ? strokeWidth + 3.2 : strokeWidth + 2.2}
             strokeLinecap="round"
             opacity={opacity}
+            filter={isActive ? 'url(#branch-glow)' : undefined}
           />
 
           {emphasis.marks.map((mark) => (
@@ -1190,4 +1254,3 @@ function Rulers({ viewBox }: { viewBox: { x: number; y: number; width: number; h
     </g>
   );
 }
-
