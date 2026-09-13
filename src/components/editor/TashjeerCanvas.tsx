@@ -331,7 +331,7 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
   );
 
   const handleWordClick = useCallback(
-    (box: WordBox) => {
+    (box: WordBox, event?: React.MouseEvent) => {
       if (readOnly) {
         selectWord(box.wordId);
         return;
@@ -341,6 +341,13 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
         // في وضع الحروف لا نعتمد النقر العام على الكلمة؛ انقر خلية الحرف
         // الظاهرة فوق النص حتى يبقى التحديد دقيقا ولا يتحول سهوا إلى كلمة.
         if (markingMode === 'WORDS') toggleMarkedPosition(box.position);
+        return;
+      }
+
+      // تحديد متعدد سريع (FR-ED-09/T2): Ctrl+نقر على كلمات متفرقة يعلّمها
+      // دون تبديل الأداة، فتُسند إليها الاختلافات دفعة واحدة من المعالج.
+      if ((event?.ctrlKey || event?.metaKey) && markingMode === 'WORDS') {
+        toggleMarkedPosition(box.position);
         return;
       }
 
