@@ -6,6 +6,17 @@
 // التخطيط بالترتيب المنطقي في واجهة عربية (RTL):
 //   [لوحة الخصائص]  [اللوحة]  [لوحة الاختلافات]
 // والأولوية للوحة الرسم، فهي تأخذ كل المساحة المتبقية.
+//
+// ============================ وضع اللوحات (FR-ED-12) ============================
+//
+// كل شريط ولوحة هنا ملفوف في `PanelFrame`/`PanelGroupFrame`، فيُرسم في التدفق
+// (يأخذ مساحته) أو كطبقة فوقية على حافته (لا يأخذ مساحة وتكشفه الحافة) أو لا
+// يُرسم. القرار كله في `lib/ui/panel-layout` والحالة في `stores/panel-store`،
+// وهذه الصفحة تملك آلة الكشف الواحدة (`usePanelAutoHide`) وتوزّعها بالسياق.
+//
+// والقاعدة التي تحرسها: **الإخفاء لا يزيح التخطيط**. الطبقة الفوقية `absolute`
+// فوق اللوحة المركزية، فلا تتحرك كلمات المصحف ولا أسطر التشجير ولا مواضع
+// البطاقات عند الكشف أو الإخفاء — لا «قفز» مزعج.
 
 'use client';
 
@@ -17,11 +28,15 @@ import { PropertiesPanel } from '@/components/editor/PropertiesPanel';
 import { VariantsPanel } from '@/components/editor/VariantsPanel';
 import { SelectionBreadcrumb } from '@/components/editor/SelectionBreadcrumb';
 import { ShortcutsDialog } from '@/components/editor/ShortcutsDialog';
+import { PanelEdgeHandle, PanelFrame, PanelGroupFrame, PanelSlot, PanelAutoHideProvider } from '@/components/editor/PanelFrame';
 import { useEditorStore } from '@/stores/editor-store';
+import { usePanelStore } from '@/stores/panel-store';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { usePanelAutoHide } from '@/hooks/usePanelAutoHide';
 import { describeImportResult, exportDocument, importDocuments } from '@/lib/storage/document-store';
 import { makeAyahKey, parseAyahKey } from '@/data/quran';
-import { formatAyahRef } from '@/lib/utils/arabic-numbers';
+import { formatAyahRef, toArabicDigits } from '@/lib/utils/arabic-numbers';
+import { countOverlayPanels } from '@/lib/ui/panel-layout';
 
 /** الآية الافتراضية عند فتح المحرر: الفاتحة 4، وفيها اختلاف مشهور. */
 const DEFAULT_AYAH_KEY = makeAyahKey(1, 4);
@@ -33,10 +48,16 @@ export default function EditorPage() {
     variantId: null as string | null,
   });
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [focusMode, setFocusMode] = useState(false);
-  const [revealedEdge, setRevealedEdge] = useState<'top' | 'start' | 'end' | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // منطقة العمل التي تُقاس حوافها: الحاوية كلها لا النافذة، حتى لا تتداخل
+  // الحافة مع قائمة التطبيق الجانبية.
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const panelAutoHide = usePanelAutoHide(workspaceRef);
+  const panelPrefs = usePanelStore((state) => state.prefs);
+  const toggleAutoHide = usePanelStore((state) => state.toggleAutoHide);
+  const overlayCount = countOverlayPanels(panelPrefs);
 
   const {
     document,
@@ -45,8 +66,6 @@ export default function EditorPage() {
     openAyah,
     selectVariant,
     replaceDocument,
-    showPropertiesPanel,
-    showVariantsPanel,
     currentTool,
   } = useEditorStore();
 
@@ -152,103 +171,106 @@ export default function EditorPage() {
   const { surahNumber, ayahNumber } = parseAyahKey(ayahKey);
 
   return (
-    <div className="-m-4 flex h-[calc(100dvh-73px)] flex-col overflow-hidden bg-stone-100 md:-m-6">
-      {(!focusMode || revealedEdge === 'top') && (
-        <div
-          className={focusMode ? 'absolute inset-x-0 top-0 z-40 shadow-xl' : ''}
-          onMouseLeave={() => focusMode && setRevealedEdge(null)}
-        >
-          <EditorToolbar
-            fontSize={fontSize}
-            onFontSizeChange={setFontSize}
-            onExport={handleExport}
-            onImport={handleImportClick}
-            onShowShortcuts={() => setShowShortcuts(true)}
-          />
-          <AyahNavigator ayahKey={ayahKey} onNavigate={openAyah} />
-        </div>
-      )}
-
-      <div className="relative flex min-h-0 flex-1">
-        {showPropertiesPanel && (!focusMode || revealedEdge === 'start') && (
-          <div
-            className={focusMode ? 'absolute inset-y-0 start-0 z-30 shadow-2xl' : 'contents'}
-            onMouseLeave={() => focusMode && setRevealedEdge(null)}
-          >
-            <PropertiesPanel />
-          </div>
-        )}
-
-        <main className="flex min-w-0 flex-1 flex-col">
-          <SelectionBreadcrumb />
-          <div className="min-h-0 flex-1">
-            <TashjeerCanvas fontSize={fontSize} />
-          </div>
-        </main>
-
-        {showVariantsPanel && (!focusMode || revealedEdge === 'end') && (
-          <div
-            className={focusMode ? 'absolute inset-y-0 end-0 z-30 shadow-2xl' : 'contents'}
-            onMouseLeave={() => focusMode && setRevealedEdge(null)}
-          >
-            <VariantsPanel />
-          </div>
-        )}
-
-        {focusMode && (
-          <>
-            <div className="absolute inset-x-16 top-0 z-20 h-2" onMouseEnter={() => setRevealedEdge('top')} />
-            <div className="absolute inset-y-10 start-0 z-20 w-2" onMouseEnter={() => setRevealedEdge('start')} />
-            <div className="absolute inset-y-10 end-0 z-20 w-2" onMouseEnter={() => setRevealedEdge('end')} />
-          </>
-        )}
-      </div>
-
-      {!focusMode && <StatusBar
-        surahNumber={surahNumber}
-        ayahNumber={ayahNumber}
-        tool={currentTool}
-        isDirty={isDirty}
-      />}
-
-      <button
-        type="button"
-        onClick={() => {
-          setFocusMode((value) => !value);
-          setRevealedEdge(null);
-        }}
-        className="fixed bottom-5 end-5 z-50 rounded-full border border-stone-300 bg-stone-900 px-3 py-2 text-[11px] font-medium text-white shadow-xl hover:bg-stone-700"
-        title="إخفاء الأشرطة واللوحات؛ حرّك المؤشر إلى حافة الشاشة لإظهارها مؤقتا"
+    <PanelAutoHideProvider value={panelAutoHide}>
+      <div
+        ref={workspaceRef}
+        className="-m-4 relative flex h-[calc(100dvh-73px)] flex-col overflow-hidden bg-stone-100 md:-m-6"
       >
-        {focusMode ? 'تثبيت الواجهة' : 'وضع التركيز'}
-      </button>
+        {/* الشريط العلوي: لوحتان (الأدوات والآيات) على حافة واحدة فترصّان معا. */}
+        <PanelGroupFrame panels={['toolbar', 'navigator']} overlayClassName="bg-stone-100">
+          <PanelSlot panel="toolbar">
+            <EditorToolbar
+              fontSize={fontSize}
+              onFontSizeChange={setFontSize}
+              onExport={handleExport}
+              onImport={handleImportClick}
+              onShowShortcuts={() => setShowShortcuts(true)}
+            />
+          </PanelSlot>
+          <PanelSlot panel="navigator">
+            <AyahNavigator ayahKey={ayahKey} onNavigate={openAyah} />
+          </PanelSlot>
+        </PanelGroupFrame>
 
-      {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
+        <div className="relative flex min-h-0 flex-1">
+          <PanelFrame panel="properties" overlayClassName="h-full">
+            <PropertiesPanel />
+          </PanelFrame>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="application/json"
-        className="hidden"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) void handleImportFile(file);
-          event.target.value = '';
-        }}
-      />
+          <main className="flex min-w-0 flex-1 flex-col">
+            <PanelFrame panel="breadcrumb">
+              <SelectionBreadcrumb />
+            </PanelFrame>
+            <div className="min-h-0 flex-1">
+              <TashjeerCanvas fontSize={fontSize} />
+            </div>
+          </main>
 
-      {toast && (
-        <div
-          role="status"
-          className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-stone-900 px-4 py-2 text-sm text-white shadow-lg"
-        >
-          {toast}
+          <PanelFrame panel="variants" overlayClassName="h-full">
+            <VariantsPanel />
+          </PanelFrame>
+
+          {/* مقابض عائمة دائمة على كل حافة فيها ما يُكشف: بديل اللمس، وطريقة
+              كشف صريحة لا تعتمد على دقة ملامسة الحافة نفسها. */}
+          <PanelEdgeHandle edge="top" label="إظهار الشريط العلوي" />
+          <PanelEdgeHandle edge="start" label="إظهار اللوحة اليمنى" />
+          <PanelEdgeHandle edge="end" label="إظهار اللوحة اليسرى" />
         </div>
-      )}
 
-      {/* منفذ إعادة تحميل المستند من الخارج، مستخدم في الاختبارات وأدوات التطوير */}
-      <span className="hidden" data-replace-document={typeof replaceDocument} />
-    </div>
+        <PanelFrame panel="statusbar" overlayClassName="bg-white">
+          <StatusBar
+            surahNumber={surahNumber}
+            ayahNumber={ayahNumber}
+            tool={currentTool}
+            isDirty={isDirty}
+          />
+        </PanelFrame>
+
+        <PanelEdgeHandle edge="bottom" label="إظهار شريط الحالة" />
+
+        <button
+          type="button"
+          onClick={toggleAutoHide}
+          aria-pressed={panelPrefs.autoHide}
+          className={`fixed bottom-5 end-5 z-50 rounded-full border px-3 py-2 text-[11px] font-medium shadow-xl transition-colors ${
+            panelPrefs.autoHide
+              ? 'border-emerald-300 bg-emerald-700 text-white hover:bg-emerald-800'
+              : 'border-stone-300 bg-stone-900 text-white hover:bg-stone-700'
+          }`}
+          title="إخفاء الأشرطة واللوحات غير المثبتة؛ تُكشف بملامسة حافة الشاشة أو بالمقابض العائمة (H)"
+        >
+          {panelPrefs.autoHide
+            ? `وضع اللوحات مفعّل${overlayCount > 0 ? ` (${toArabicDigits(overlayCount)} فوقية)` : ''}`
+            : 'وضع إخفاء اللوحات'}
+        </button>
+
+        {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void handleImportFile(file);
+            event.target.value = '';
+          }}
+        />
+
+        {toast && (
+          <div
+            role="status"
+            className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-stone-900 px-4 py-2 text-sm text-white shadow-lg"
+          >
+            {toast}
+          </div>
+        )}
+
+        {/* منفذ إعادة تحميل المستند من الخارج، مستخدم في الاختبارات وأدوات التطوير */}
+        <span className="hidden" data-replace-document={typeof replaceDocument} />
+      </div>
+    </PanelAutoHideProvider>
   );
 }
 

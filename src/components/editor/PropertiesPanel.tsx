@@ -35,6 +35,7 @@ import {
   TextLayoutControls,
 } from './RecitationControls';
 import { RelationsPanel } from './RelationsPanel';
+import { PanelFrame } from './PanelFrame';
 import { OrderRankControl } from './OrderRankControl';
 import { coalesceLineOrder, orderSnapshotOf, shiftLineInOrder } from '@/lib/tashjeer/manual-links';
 import { listGlobalRules } from '@/lib/storage/global-rules-store';
@@ -387,7 +388,11 @@ export function PropertiesPanel() {
       <TextLayoutControls />
       <RecitationControls />
       <ManualLinesControls />
-      <RelationsPanel />
+      {/* لوحة العلاقات لوحة مستقلة في وضع الإخفاء: تُخفى وحدها لتوفير مساحة
+          لوحة الخصائص دون فقد بقية أقسامها (FR-ED-12). */}
+      <PanelFrame panel="relations">
+        <RelationsPanel />
+      </PanelFrame>
 
       {showWhyDialog && selectedVariant && (
         <WhyTraceDialog

@@ -11,6 +11,7 @@
 
 import { useEffect } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
+import { usePanelStore } from '@/stores/panel-store';
 
 /** وصف اختصار واحد، يُعرض في نافذة المساعدة. */
 export interface ShortcutHint {
@@ -39,7 +40,8 @@ export const SHORTCUT_HINTS: ShortcutHint[] = [
   { keys: 'L', description: 'إظهار بطاقات الأوجه' },
   { keys: 'P', description: 'لوحة الخصائص' },
   { keys: 'B', description: 'لوحة الاختلافات' },
-  { keys: 'Esc', description: 'إلغاء التعليم والتحديد' },
+  { keys: 'H', description: 'وضع إخفاء اللوحات: كل لوحة غير مثبتة تصير فوقية تُكشف من حافتها' },
+  { keys: 'Esc', description: 'إلغاء التعليم والتحديد، وإغلاق اللوحة المكشوفة من حافتها' },
 ];
 
 /**
@@ -49,6 +51,9 @@ export const SHORTCUT_HINTS: ShortcutHint[] = [
  */
 export function useKeyboardShortcuts(enabled = true): void {
   const store = useEditorStore();
+  // اللوحات مخزن مستقل: اختصاراتها هنا مع اختصارات المحرر حتى لا تتفرق.
+  const togglePanelVisible = usePanelStore((state) => state.togglePanelVisible);
+  const toggleAutoHide = usePanelStore((state) => state.toggleAutoHide);
 
   useEffect(() => {
     if (!enabled) return;
@@ -120,10 +125,13 @@ export function useKeyboardShortcuts(enabled = true): void {
           store.setFilter({ showLabels: !store.filter.showLabels });
           break;
         case 'p':
-          store.togglePropertiesPanel();
+          togglePanelVisible('properties');
           break;
         case 'b':
-          store.toggleVariantsPanel();
+          togglePanelVisible('variants');
+          break;
+        case 'h':
+          toggleAutoHide();
           break;
         case 'escape':
           store.clearMarks();
@@ -138,7 +146,7 @@ export function useKeyboardShortcuts(enabled = true): void {
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [enabled, store]);
+  }, [enabled, store, togglePanelVisible, toggleAutoHide]);
 }
 
 /** هل المستخدم يكتب الآن في حقل إدخال أو منطقة نص؟ */

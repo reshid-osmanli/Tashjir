@@ -9,6 +9,8 @@
 
 import Link from 'next/link';
 import { useEditorStore, type EditorTool } from '@/stores/editor-store';
+import { usePanelStore } from '@/stores/panel-store';
+import { PanelLayoutMenu } from './PanelLayoutControls';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor } from '@/lib/tashjeer/color-system';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
@@ -59,12 +61,12 @@ export function EditorToolbar({
     canRedo,
     save,
     isDirty,
-    showPropertiesPanel,
-    togglePropertiesPanel,
-    showVariantsPanel,
-    toggleVariantsPanel,
     regenerateBranches,
   } = useEditorStore();
+
+  // اللوحات من مخزنها الواحد (FR-ED-12): الظهور والتثبيت والإخفاء التلقائي.
+  const panelPrefs = usePanelStore((state) => state.prefs);
+  const togglePanelVisible = usePanelStore((state) => state.togglePanelVisible);
 
   // إعدادات المحرك في متناول اليد: تكوين السطر وسطر النص الواحد يُبدَّلان
   // كثيرا أثناء العمل، فلا يُطلب من المحقق فتح لوحة التحكم لكل تبديل.
@@ -260,19 +262,20 @@ export function EditorToolbar({
       {/* اليسار: اللوحات والحفظ */}
       <div className="ms-auto flex items-center gap-2">
         <ToggleButton
-          active={showVariantsPanel}
+          active={panelPrefs.panels.variants.visible}
           title="لوحة الاختلافات (B)"
-          onClick={toggleVariantsPanel}
+          onClick={() => togglePanelVisible('variants')}
         >
           الاختلافات
         </ToggleButton>
         <ToggleButton
-          active={showPropertiesPanel}
+          active={panelPrefs.panels.properties.visible}
           title="لوحة الخصائص (P)"
-          onClick={togglePropertiesPanel}
+          onClick={() => togglePanelVisible('properties')}
         >
           الخصائص
         </ToggleButton>
+        <PanelLayoutMenu />
 
         <Divider />
 

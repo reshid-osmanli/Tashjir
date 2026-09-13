@@ -83,14 +83,21 @@ const DEFAULT_FILTER: ViewFilter = {
 
 // ==================== تفضيلات مساحة العمل (FR-ED-01.4) ====================
 //
-// إظهار اللوحات وخيارات العرض (الشبكة/البطاقات/المساطر) تفضيلات شخصية لا
-// تخص المستند، فتُحفظ محليا وتُستعاد عند فتح المحرر، ولا تدخل في التصدير.
+// خيارات العرض (الشبكة/البطاقات/المساطر) تفضيلات شخصية لا تخص المستند،
+// فتُحفظ محليا وتُستعاد عند فتح المحرر، ولا تدخل في التصدير.
+//
+// **إظهار اللوحات لم يعد هنا.** انتقل في الحزمة ١٠ (FR-ED-12) إلى مخزن واحد
+// `stores/panel-store` يغطي كل الأشرطة واللوحات مع التثبيت والإخفاء التلقائي؛
+// وبقاء المفتاحين القديمين هنا يعني مصدرين للحقيقة يتعارضان. المفاتيح القديمة
+// ما زالت تُقرأ مرة واحدة للترحيل اللطيف (panel-layout.migrateLegacyPanelVisibility).
 
 export const WORKSPACE_PREFS_KEY = 'tashjeer:editor-workspace:v1';
 
 interface WorkspacePrefs {
-  showPropertiesPanel: boolean;
-  showVariantsPanel: boolean;
+  /** @deprecated انتقل إلى `stores/panel-store`؛ لا يُكتب بعد الآن، ويُقرأ مرة واحدة للترحيل اللطيف. */
+  showPropertiesPanel?: boolean;
+  /** @deprecated انتقل إلى `stores/panel-store`؛ لا يُكتب بعد الآن، ويُقرأ مرة واحدة للترحيل اللطيف. */
+  showVariantsPanel?: boolean;
   showLabels: boolean;
   showGrid: boolean;
   showRulers: boolean;
@@ -109,11 +116,9 @@ function readWorkspacePrefs(): Partial<WorkspacePrefs> {
   }
 }
 
-function writeWorkspacePrefs(state: Pick<EditorState, 'showPropertiesPanel' | 'showVariantsPanel' | 'filter'>): void {
+function writeWorkspacePrefs(state: Pick<EditorState, 'filter'>): void {
   if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return;
   const prefs: WorkspacePrefs = {
-    showPropertiesPanel: state.showPropertiesPanel,
-    showVariantsPanel: state.showVariantsPanel,
     showLabels: state.filter.showLabels,
     showGrid: state.filter.showGrid,
     showRulers: state.filter.showRulers,
@@ -164,8 +169,6 @@ interface EditorState {
   zoom: number;
   pan: { x: number; y: number };
   filter: ViewFilter;
-  showPropertiesPanel: boolean;
-  showVariantsPanel: boolean;
 
   // ---------- التحديد ----------
   /** الكلمات المعلّمة استعدادا لإنشاء اختلاف */
@@ -328,8 +331,6 @@ interface EditorState {
   setFilter: (patch: Partial<ViewFilter>) => void;
   toggleCategory: (category: VariantCategory) => void;
   toggleNarrator: (narratorId: string) => void;
-  togglePropertiesPanel: () => void;
-  toggleVariantsPanel: () => void;
 
   // ---------- التراجع ----------
   undo: () => void;
@@ -353,8 +354,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     showRulers: bool(INITIAL_PREFS.showRulers, DEFAULT_FILTER.showRulers),
     showAnchors: bool(INITIAL_PREFS.showAnchors, DEFAULT_FILTER.showAnchors),
   },
-  showPropertiesPanel: bool(INITIAL_PREFS.showPropertiesPanel, true),
-  showVariantsPanel: bool(INITIAL_PREFS.showVariantsPanel, true),
 
   markedPositions: [],
   markedCharacters: [],
@@ -1573,15 +1572,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         },
       };
     });
-  },
-
-  togglePropertiesPanel: () => {
-    set((state) => ({ showPropertiesPanel: !state.showPropertiesPanel }));
-    writeWorkspacePrefs(get());
-  },
-  toggleVariantsPanel: () => {
-    set((state) => ({ showVariantsPanel: !state.showVariantsPanel }));
-    writeWorkspacePrefs(get());
   },
 
   // ==================== التراجع ====================

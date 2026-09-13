@@ -129,7 +129,31 @@ interface VariantEditorProps {
 
 ### 1.7 ShortcutsDialog
 
-نافذة الاختصارات. مصدر قائمتها هو `SHORTCUT_HINTS` في ملف الاختصارات نفسه، حتى لا يتفرق التوثيق عن السلوك.
+نافذة الاختصارات. مصدر قائمتها هو `SHORTCUT_HINTS` في ملف الاختصارات نفسه، حتى لا يتفرق التوثيق عن السلوك — ومنها `H` (وضع إخفاء اللوحات) و`P`/`B` (لوحة الخصائص/الاختلافات) و`Esc` (يغلق اللوحة المكشوفة من حافتها أولًا).
+
+---
+
+### 1.8 عائلة `PanelFrame` — أغلفة اللوحات (FR-ED-12)
+
+`src/components/editor/PanelFrame.tsx`. **لا منطق تخطيط فيها**؛ تقرأ حالة
+`stores/panel-store` وقواعد `lib/ui/panel-layout.ts` وترسم بحسبها:
+
+| المكوّن | الدور |
+|---------|-------|
+| `PanelAutoHideProvider` | سياق يوزّع نتيجة `usePanelAutoHide` على اللوحات بلا إعادة ربط |
+| `PanelFrame panel="properties"` | غلاف لوحة واحدة: `flow` (بـ`display: contents` فلا يضيف صندوقًا ولا يكسر flex) أو `overlay` (طبقة `absolute` بـ`transform` على حافتها، **لا تزيح التخطيط**) أو لا يُرسم |
+| `PanelGroupFrame panels={['toolbar','navigator']}` | يرصّ لوحات الحافة الواحدة في طبقة فوقية واحدة حتى لا تتراكب |
+| `PanelSlot panel="navigator"` | داخل المجموعة: يحرس رسم اللوحة المخفية وحدها |
+| `PanelEdgeHandle edge="start"` | مقبض عائم على الحافة (بديل اللمس وكشف صريح)، يظهر وهي مغلقة فقط |
+
+---
+
+### 1.9 `PanelLayoutMenu` و`PanelLayoutSettings`
+
+`src/components/editor/PanelLayoutControls.tsx`. قائمتان بنفس المصدر: الأولى
+مدمجة في شريط أدوات المحرر (إظهار/إخفاء وتثبيت لكل لوحة)، والثانية بطاقة
+`/settings` (تشغيل الوضع + منزلقات منطقة الحافة وتأخيري الظهور والإخفاء +
+جدول اللوحات + استعادة الافتراضي).
 
 ---
 
@@ -163,9 +187,25 @@ useAyahTashjeer(document, filter, options) => {
 useKeyboardShortcuts(enabled?: boolean): void
 ```
 
-يربط 14 اختصارا بإجراءات المخزن. **يتجاهل الاختصارات إذا كان المستخدم يكتب في حقل إدخال**، حتى لا يحذف زر `E` خطا بينما هو يكتب وصف وجه.
+يربط 21 اختصارا بإجراءات المخازن (مخزن المحرر ومخزن اللوحات). **يتجاهل الاختصارات إذا كان المستخدم يكتب في حقل إدخال**، حتى لا يحذف زر `E` خطا بينما هو يكتب وصف وجه.
 
 يصدّر `SHORTCUT_HINTS` لعرضها في نافذة المساعدة.
+
+### 2.3 usePanelAutoHide
+
+`src/hooks/usePanelAutoHide.ts`
+
+```typescript
+usePanelAutoHide(containerRef: RefObject<HTMLElement | null>): PanelAutoHide
+// { enabled, revealedEdge, isOpen(id), overlayPanelsOn(edge),
+//   panelHandlers(id), revealNow(edge), holdPanel(id), hideNow() }
+```
+
+يشغّل آلة الكشف (`EdgeRevealController`) داخل **منطقة المحرر** لا النافذة، حتى
+لا تتداخل الحافة مع قائمة التطبيق الجانبية. الكشف يُحسب من إحداثيات المؤشر
+(`edgeZoneForPoint`) فلا عناصر شفافة فوق المحتوى تسرق النقرات، وقياس الحاوية
+مخزَّن مؤقتًا (يُبطَل عند resize/scroll/تغيّر التفضيلات) حتى لا تُجبَر إعادة
+حساب التخطيط عند كل `pointermove`.
 
 ---
 

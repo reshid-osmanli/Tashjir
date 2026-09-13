@@ -6,7 +6,9 @@
 > لمعرفة «ما الخطوات المتبقية». أساس التقدير أدناه هو **فحص الكود والاختبارات** عند
 > الالتزام `arena/01a06855-tashjir` (قبل هذا الفرع مباشرة `main`).
 >
-> - الاختبارات: **454 ناجحًا | 2 متخطّى** في 40 ملفًّا (Vitest).
+> - الاختبارات: **454 ناجحًا | 2 متخطّى** في 40 ملفًّا (Vitest) وقت ذلك الفحص،
+>   وصارت بعد الحزمة 10 (فرع `arena/01a09b2a-tashjir`): **571 ناجحًا | 2 متخطّى**
+>   في 49 ملفًّا (48 ناجحًا وملف متخطّى).
 > - البناء: `npm run build` ناجح (17 مسارًا مُولَّدًا).
 > - الفحص الأنماطي: `tsc --noEmit` نظيف، و`eslint` نظيف (بلا تحذيرات بعد التنظيف).
 >
@@ -31,7 +33,7 @@
 | التعميم والاستقلال المحلي (PH6) | **منفَّذ** | `global-rule-engine.ts` + `rule-occurrences-store.ts` + `GlobalRuleBuilder.tsx` |
 | الوقف/الوصل/ممنوع الوصل (PH7) | **منفَّذ** (جزئي بالواجهة) | `reading-window.ts` + `tests/editor-forbidden-wasl.test.ts` |
 | التتبع وحلقة التعلّم (PH8) | **منفَّذ** | صفحة `/tracking` + `tracking-store.ts` + `candidate-rule.ts` |
-| الترتيب الصريح وإخفاء اللوحات (PH9) | **منفَّذ** (متناثر) | `DisplayOrderEntry` في v8 + `focusMode/revealedEdge` في المحرر |
+| الترتيب الصريح وإخفاء اللوحات (PH9) | **منفَّذ** (موحَّد — الحزمة 10) | `tashjeer/display-order.ts` + تبويب «ترتيب الظهور» في `/admin`؛ `lib/ui/panel-layout.ts` + `stores/panel-store.ts` + `hooks/usePanelAutoHide.ts` |
 | الاحتراف النهائي/Playground (PH10) | **منفَّذ** | `studio/*` + `rule-test-runner`/`profile-compare`/`rule-edit-preview` |
 
 ---
@@ -106,14 +108,29 @@
 - القاعدة المرشّحة / Create Rule from Correction: `src/lib/tashjeer/decision/candidate-rule.ts`
   + `src/components/studio/CandidateRulesPanel.tsx`. الاختبار: `tests/candidate-rule.test.ts`.
 
-### PH9 — الترتيب الصريح + إخفاء اللوحات (FR-ED-12، 14)
-- `DisplayOrderEntry` معرَّف في `model/v8.ts`؛ وترتيب الأئمة/الرواة/الطرق عبر حقل
-  `order` في `catalog.ts` و`reader-symbols.ts`/`ordering.ts`.
-- إخفاء/إظهار اللوحات بالحواف + التثبيت: `focusMode`/`revealedEdge` في صفحة
-  `src/app/(dashboard)/editor/page.tsx`.
-- **ملاحظة:** «displayOrder صريح موحّد على كل الواجهات مع واجهة إعادة تسلسل في
-  /admin» لم أرَ تطبيقًا موحّدًا كاملًا يقرأه كل العرض/الترميز؛ يستند العرض الحالي
-  إلى `order` في الكتالوج. بند قابل للترميز مستقبلًا لفرض DM-04 في كل المسارات.
+### PH9 — الترتيب الصريح + إخفاء اللوحات (FR-ED-12، 14) — ✅ منجزة (الحزمة 10)
+- **FR-ED-14:** مصدر وحيد للترتيب في `src/lib/tashjeer/display-order.ts` (رقم
+  صريح لكل إمام/راوٍ/طريق، وكسر تعادل **بالمعرّف** لا بالاسم). تقرأ منه كل
+  الواجهات: `reader-symbols.ts`، `scope.ts`، `combination-engine.ts`،
+  `classic-tashjeer.ts`، `symbols.ts`، `/quran`، `/variants`، `/tracking`،
+  `/readers`، `/qiraat`، وحزمة التصدير. واجهة إعادة التسلسل: تبويب «ترتيب
+  الظهور» في `/admin` (`DisplayOrderManager`) — رقم صريح قابل للتحرير، سحب
+  يعيد الترقيم ١..ن، وتعارض يُفضّ بـ«إدراج مع إزاحة» بعد تأكيد كمي.
+  الترحيل اللطيف: `catalog.ts` بإصدار ٢ + `migrateLegacyDisplayOrders` +
+  `auditStoredCatalog` (يعبّئ الأرقام من ترتيب الطيبة القائم).
+  الاختبارات: `tests/display-order.test.ts` (٢٥) مع `catalog-order.test.ts`
+  و`import-migration-v8.test.ts`. التفصيل في `docs/TRANSMISSIONS.md`.
+- **FR-ED-12:** وضع إخفاء اللوحات بديلًا عن `focusMode`/`revealedEdge` المحلية
+  القديمة: `src/lib/ui/panel-layout.ts` (ثماني لوحات، ثلاث حالات
+  hidden/flow/overlay، منطق مناطق الحافة، آلة الكشف `EdgeRevealController`)،
+  `src/stores/panel-store.ts` (تفضيل محفوظ في `tashjeer:panels:v1` + تثبيت لكل
+  لوحة + ترحيل لطيف من `tashjeer:editor-workspace:v1`)،
+  `src/hooks/usePanelAutoHide.ts`، `src/components/editor/PanelFrame.tsx`،
+  `src/components/editor/PanelLayoutControls.tsx`، و`src/components/layout/AppShell.tsx`
+  (قائمة التطبيق كلوحة). الطبقة الفوقية `absolute` بـ`transform` فلا إزاحة
+  للتخطيط. الضبط من `/editor` (زر عائم، قائمة «اللوحات»، مقابض الحواف، `H`،
+  `Esc`) ومن `/settings` (بطاقة «اللوحات ووضع الإخفاء»).
+  الاختبارات: `tests/panel-layout.test.ts` (٤٢). التفصيل في `docs/EDITOR.md` §7.6.
 
 ### PH10 — Playground/Sandbox/Compare/Dashboard (FR-ES-07..09، 11..13)
 - اختبارات قواعد + انحدار: `rule-test-runner.test.ts`، `rule-edit-preview.test.ts`.
@@ -167,17 +184,18 @@
 | FR-ES-01 / 04 / 06 | سحب لإعادة ترتيب مجموعات الأولوية وقواعدها (إعادة ترقيم صريحة بفجوة ١٠) وسلم التعارض ومراحل التنفيذ | `studio/PriorityPipeline.tsx` (`moveItem`, `renumberPriorities`) | `engine-config-history.test.ts` |
 | FR-ES-05 | مدخل مصفوفة «مشروط»: القاعدة المطابقة للسياق تحسم فوق قيمته الافتراضية | `decision/resolver.ts` (`decideMerge`), `studio/MergeMatrixPanel.tsx` | `engine-config-history.test.ts` |
 | FR-ES-07 / 14 | سجل إصدارات ملف المحرك مع تدقيق التغييرات، استرجاع أي نسخة، وبوابة نشر بتشغيل جاف (اختبارات + مقارنة بالمحفوظ + أثر) | `engine-config-history.ts`, `engine-config-ui-store.ts`, `studio/PublishHistoryPanel.tsx` | `engine-config-history.test.ts` |
-| FR-ED-14 / DM-04 | `displayOrder` للقراء/الرواة/الطرق في حزمة التصدير ويُطبَّق عند الاستيراد؛ تعارض رقم الترتيب في `/admin` يُحل بـ«إدراج مع إزاحة»؛ سحب لإعادة الترتيب | `document-store.ts` (`displayOrderOfCatalog`, `applyDisplayOrder`), `transmissions/catalog.ts`, `admin/page.tsx` | `import-migration-v8.test.ts`, `catalog-order.test.ts` |
+| FR-ED-14 / DM-04 / DM-17 | رقم `displayOrder` صريح **واحد** لكل قارئ/راوٍ/طريق يحكم الظهور في كل الواجهات وفي التصدير (كسر التعادل بالمعرّف لا بالاسم)؛ تبويب «ترتيب الظهور» في `/admin` برقم قابل للتحرير وسحب يعيد الترقيم وتعارض يُحل بـ«إدراج مع إزاحة» بعد تأكيد كمي؛ ترحيل لطيف يعبّئ الأرقام من ترتيب الطيبة | `tashjeer/display-order.ts`, `document-store.ts` (`displayOrderOfCatalog`, `applyDisplayOrder`), `transmissions/catalog.ts` (`migrateLegacyDisplayOrders`, `auditStoredCatalog`, `insertWithShift`), `admin/page.tsx` (`DisplayOrderManager`) | `display-order.test.ts`, `import-migration-v8.test.ts`, `catalog-order.test.ts` |
+| FR-ED-12 / NFR-03 | وضع إخفاء اللوحات: ثمانٍ (شريط الأدوات، مستعرض الآيات، الخصائص، العلاقات، الاختلافات، شريط المسار، شريط الحالة، قائمة التطبيق) تُخفى فتُكشف بملامسة الحافة **طبقة فوقية بلا إزاحة للتخطيط**، وتُخفى تلقائيًا عند الابتعاد إلا المثبتة (تثبيت محفوظ لكل لوحة)؛ منطقة حافة ١٤px وتأخير ظهور ٩٠ms وإخفاء ٤٢٠ms بلا وميض ولا فتح عرضي؛ لمس: نقرة على الحافة + مقابض عائمة؛ `H`/`Esc` موثقة في نافذة الاختصارات؛ ضبط في `/settings` و`/editor`؛ يعمل على 1366×768 و1024×625 | `lib/ui/panel-layout.ts`, `stores/panel-store.ts`, `hooks/usePanelAutoHide.ts`, `editor/PanelFrame.tsx`, `editor/PanelLayoutControls.tsx`, `layout/AppShell.tsx`, `editor/page.tsx` | `panel-layout.test.ts` |
 | FR-ED-02.4 | اختيار اختلاف يُحضر سطره إلى مجال الرؤية مع نبضة | `TashjeerCanvas.tsx`, `TashjeerFigure.tsx` | — (واجهة) |
 | FR-ES-10 / 15.4 | «لماذا؟» لكل سطر (أزواج الاختلافات الفعلية على السطر)، وأثر القرار داخل صفوف التتبع | `WhyTraceDialog.tsx` (`DecisionTraceList`), `tracking/page.tsx` | — (يستعمل `resolveMerge`/`resolveDifference` المختبرين) |
-| FR-ED-01.4 / NFR-01 | تفضيلات اللوحات وخيارات العرض تُحفظ محليًا؛ تنافذ قائمة الاختلافات الطويلة | `editor-store.ts` (`WORKSPACE_PREFS_KEY`), `hooks/useWindowedList.ts`, `VariantsPanel.tsx` | — |
+| FR-ED-01.4 / NFR-01 | تفضيلات اللوحات وخيارات العرض تُحفظ محليًا؛ تنافذ قائمة الاختلافات الطويلة (إظهار/إخفاء اللوحات انتقل إلى `tashjeer:panels:v1` مع ترحيل لطيف من المفتاح القديم) | `editor-store.ts` (`WORKSPACE_PREFS_KEY`), `stores/panel-store.ts` (`PANEL_LAYOUT_STORAGE_KEY`), `hooks/useWindowedList.ts`, `VariantsPanel.tsx` | `panel-layout.test.ts` |
 | FR-ED-08.3..08.6 | المعالج الذكي: قوالب جاهزة، أهداف متفرقة، علاقة لكل هدف، نطاق سورة/مدى آيات (`applyRange` في القاعدة العامة يحترمه المطابق) | `SmartCreateWizard.tsx`, `global-rules-store.ts`, `global-rule-engine.ts`, `GlobalRuleMetaEditor.tsx` | `global-rule-apply-range.test.ts` |
 
 ---
 
 ## 5. طريقة إعادة التحقق
 ```bash
-npm test            # 504 ناجحًا / 2 متخطّى
+npm test            # 571 ناجحًا / 2 متخطّى (49 ملفًّا)
 npm run typecheck   # tsc --noEmit  نظيف
 npx eslint "src/**/*.{ts,tsx}"   # 0 مشكلة
 npm run build       # البناء الكامل
