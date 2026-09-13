@@ -80,6 +80,51 @@ export type EditorTool =
   /** حذف عنصر بالنقر عليه */
   | 'erase';
 
+// ==================== سياق التحديد الموحّد (FR-ED-02) ====================
+//
+// «العنصر المحدد الآن» حقل `selection` أعلاه: مصدر حقيقة واحد تقرأه وتكتبه
+// كل اللوحات. الكتابة تمر من مساعد واحد (`selectionWrite`) يحدّث الحقل،
+// ويحتفظ بآخر تحديد صالح للعرض الرمادي، ويرفع طلب تركيز برقم متزايد تتفيعل
+// له اللوحة (تمرير + تمييز ≤ 300ms) وكل اللوحات المفتوحة.
+
+/** طلب تركيز واحد: كل كتابة تحديد تزيد `token` بمقدار واحد. */
+export interface SelectionFocus {
+  token: number;
+  /** هل يُطلب وضع العنصر في منتصف منطقة الرؤية حيثما أمكن؟ */
+  center: boolean;
+  /** زمن الطلب، لقياس الالتزام بحد 300ms في التنقيح. */
+  at: number;
+}
+
+/** خيارات كتابة التحديد الموحّدة. */
+export interface SelectionWriteOptions {
+  /** اجعل العنصر في منتصف الرؤية حيثما أمكن (افتراضيا true عند تحديد عنصر). */
+  center?: boolean;
+}
+
+const INITIAL_SELECTION_FOCUS: SelectionFocus = { token: 0, center: false, at: 0 };
+
+/**
+ * الكتابة المركزية للتحديد — «قرار واحد في مكان واحد». كل إجراءات
+ * select* تعود إليها، فلا لوحة تحتفظ بتحديد محلي مناقض ولا منطق مكرر.
+ */
+function selectionWrite(
+  state: Pick<EditorState, 'selection' | 'selectionFocus'>,
+  selection: EditorSelection | null,
+  options?: SelectionWriteOptions
+): Pick<EditorState, 'selection' | 'lastSelection' | 'selectionFocus'> {
+  return {
+    selection,
+    // التحديد الجديد يصير «الأخير الصالح»؛ وعند التنظيف تبقى القديمة للعرض الرمادي.
+    lastSelection: selection ?? state.selection,
+    selectionFocus: {
+      token: state.selectionFocus.token + 1,
+      center: options?.center ?? selection !== null,
+      at: Date.now(),
+    },
+  };
+}
+
 /** الحد الأقصى للقطات التراجع، لتفادي استهلاك الذاكرة. */
 const MAX_HISTORY = 60;
 
@@ -176,6 +221,17 @@ interface EditorState {
   markingMode: MarkingMode;
   /** المصدر الوحيد للتحديد بين المحرر وكل اللوحات. */
   selection: EditorSelection | null;
+  /**
+   * آخر تحديد صالح: يبقى بعد تنظيف تحديد عنصر حُذف حتى تُعرض سلسلة سياقه
+   * رمادية بدل فراغ مفاجئ (قرار محسوم: تنظيف آمن بلا فقدان السياق).
+   */
+  lastSelection: EditorSelection | null;
+  /**
+   * طلب التركيز الموحّد (FR-ED-02.3): رقمه يزداد مع كل كتابة تحديد، فتتفاعل
+   * اللوحة وكل اللوحات حتى لو لم يتغير العنصر نفسه. حالة واجهة صِرفة: لا
+   * يدخل المستند ولا التصدير ولا التراجع.
+   */
+  selectionFocus: SelectionFocus;
   selectedWordId: number | null;
   selectedVariantId: string | null;
   selectedAlternativeId: string | null;
@@ -311,6 +367,12 @@ interface EditorState {
   selectSegment: (segmentId: string | null) => void;
   selectLine: (lineId: string, differenceId?: string, position?: number) => void;
   selectBranch: (branchId: string | null) => void;
+  /**
+   * الكتابة الموحّدة للتحديد لأنواع لا يملكها إجراء مخصص (حرف، موضع، وجه
+   * مركب، علامة وقف، قاعدة استوديو). كل اللوحات تستعملها عبر واجهة
+   * `lib/editor/selection-store.ts` حتى يبقى القرار في مكان واحد.
+   */
+  setSelection: (selection: EditorSelection | null, options?: SelectionWriteOptions) => void;
   copySelection: () => void;
   cutSelection: () => void;
   pasteSelection: () => void;
@@ -367,6 +429,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   markedCharacters: [],
   markingMode: 'WORDS',
   selection: null,
+  lastSelection: null,
+  selectionFocus: INITIAL_SELECTION_FOCUS,
   selectedWordId: null,
   selectedVariantId: null,
   selectedAlternativeId: null,
@@ -386,7 +450,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const document = loadOrCreateDocument(ayahKey);
     const withBranches = withRegeneratedBranches(document);
 
-    set({
+    set((state) => ({
       document: withBranches,
       multiSelection: null,
       isDirty: false,
@@ -394,12 +458,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       future: [],
       markedPositions: [],
       markedCharacters: [],
-      selection: null,
+      ...selectionWrite(state, null, { center: false }),
+      // سلسلة «آخر تحديد» تخص آيتها؛ بفتح آية أخرى يُصفَّر كليا فلا يُعرض
+      // تحديد قديم تحت مرجع آية جديدة.
+      lastSelection: null,
       selectedWordId: null,
       selectedVariantId: null,
       selectedAlternativeId: null,
       selectedBranchId: null,
-    });
+    }));
   },
 
   resetAyah: () => {
@@ -415,7 +482,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       isDirty: true,
       markedPositions: [],
       markedCharacters: [],
-      selection: null,
+      ...selectionWrite(state, null, { center: false }),
+      lastSelection: null,
       selectedVariantId: null,
       selectedAlternativeId: null,
       selectedBranchId: null,
@@ -662,7 +730,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         document
       );
     });
-    set({ selection: null, selectedVariantId: null, selectedAlternativeId: null, selectedBranchId: null });
+    // تنظيف آمن للتحديد الموحّد: يبقى آخر تحديد صالح للعرض الرمادي (قرار محسوم).
+    set((state) => ({
+      ...selectionWrite(state, null, { center: false }),
+      selectedVariantId: null,
+      selectedAlternativeId: null,
+      selectedBranchId: null,
+    }));
   },
 
   addAlternative: (variantId, alternative) => {
@@ -723,23 +797,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 
-  deleteAlternative: (variantId, alternativeId) => get().deleteAlternativesBulk(variantId, [alternativeId]),
 
-  requestDeleteItems: async (selection) => {
-    const before = get().document;
-    if (!before) return false;
-    const impact = deletionImpact(before, selection);
-    if (!impact.count) return false;
-    const accepted = await confirmAction({
-      title: `حذف ${toArabicDigits(impact.count)} ${selection.kind === 'FACE' ? 'أوجه' : 'اختلافات'}؟`,
-      message: 'تؤرشف العناصر وعلاقاتها. العلاقات التالية ستفقد مرجعها من العرض ويمكن استعادتها بالتراجع.',
-      impacts: [{ label: selection.kind === 'FACE' ? 'أوجه' : 'اختلافات', count: impact.count }, { label: 'علاقات متأثرة', count: impact.links.length }],
-      undoable: true, confirmLabel: 'تأكيد الحذف',
-    });
-    if (!accepted || get().document !== before) return false;
-    if (selection.kind === 'FACE' && selection.ownerId) get().deleteAlternativesBulk(selection.ownerId, selection.ids);
-    else if (selection.kind === 'DIFFERENCE') get().deleteVariantsBulk(selection.ids);
-    return true;
   },
 
   deleteAlternativesBulk: (variantId, alternativeIds) => {
@@ -753,12 +811,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   deleteVariantsBulk: (variantIds) => {
-    mutate(set, get, (document) => deleteItems(document, { kind: 'DIFFERENCE', ids: variantIds }), {
-      action: 'حذف جماعي للاختلافات', targetType: 'VARIANT', targetId: variantIds.join(','),
-      summary: `حذف المحرر ${toArabicDigits(variantIds.length)} اختلافات دفعة واحدة`,
-      changes: [{ field: 'variants', before: get().document?.variants.filter((item) => variantIds.includes(item.id)), after: [] }],
-    });
-    set({ multiSelection: null, selection: null, selectedVariantId: null, selectedAlternativeId: null });
+
   },
 
   setVariantOrderRank: (variantId, rank) => {
@@ -1194,6 +1247,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         document
       );
     });
+    // تحديد جزء محذوف يُنظَّف بأمان مع إبقاء سلسلة السياق الأخيرة (قرار محسوم).
+    set((state) =>
+      state.selection?.kind === 'SEGMENT' && state.selection.id === segmentId
+        ? selectionWrite(state, null, { center: false })
+        : {}
+    );
   },
 
   setLineOrder: (order, rendered) => {
@@ -1262,6 +1321,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ...document,
       boundaries: document.boundaries.filter((boundary) => boundary.id !== boundaryId),
     }));
+    set((state) =>
+      state.selection?.kind === 'WAQF_MARK' && state.selection.id === boundaryId
+        ? selectionWrite(state, null, { center: false })
+        : {}
+    );
   },
 
   setLinkNextAyah: (linked) => {
@@ -1358,62 +1422,77 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setMarkingMode: (mode) => set({ markingMode: mode, markedPositions: [], markedCharacters: [] }),
   selectWord: (wordId) => {
     const word = wordId ? documentWindowWords(get().document).find((item) => item.id === wordId) : undefined;
-    set({
-      multiSelection: null,      selection: wordId ? { kind: 'WORD', id: String(wordId), position: word?.position } : null,
+
       selectedWordId: wordId,
       selectedAlternativeId: null,
-    });
+    }));
   },
   selectVariant: (variantId) => {
     const currentDocument = get().document;
     const variant = variantId && currentDocument
       ? getEffectiveVariants(currentDocument).find((item) => item.id === variantId)
       : undefined;
-    set({
-      multiSelection: null,      selection: variantId
-        ? { kind: variant?.isGlobalDerived ? 'RULE' : 'DIFFERENCE', id: variantId, differenceId: variantId, position: variant?.startPosition }
-        : null,
+
       selectedVariantId: variantId,
       selectedAlternativeId: null,
       selectedBranchId: null,
-    });
+    }));
   },
   selectAlternative: (variantId, alternativeId) => {
     const currentDocument = get().document;
     const variant = currentDocument
       ? getEffectiveVariants(currentDocument).find((item) => item.id === variantId)
       : undefined;
-    set({
-      multiSelection: null,      selection: { kind: 'FACE', id: alternativeId, differenceId: variantId, faceId: alternativeId, position: variant?.startPosition },
+
       selectedVariantId: variantId,
       selectedAlternativeId: alternativeId,
       selectedBranchId: null,
-    });
+    }));
   },
   selectSegment: (segmentId) => {
     const segment = get().document?.segments?.find((item) => item.id === segmentId);
-    set({
-      multiSelection: null,      selection: segmentId ? { kind: 'SEGMENT', id: segmentId, position: segment?.startPosition } : null,
+
       selectedVariantId: null,
       selectedAlternativeId: null,
       selectedBranchId: null,
-    });
+    }));
   },
-  selectLine: (lineId, differenceId, position) => set({
-    multiSelection: null,
-    selection: { kind: 'LINE', id: lineId, lineId, differenceId, position },
+
     selectedVariantId: differenceId ?? null,
     selectedAlternativeId: null,
     selectedBranchId: lineId,
-  }),
+  })),
   selectBranch: (branchId) => set((state) => ({
     selectedBranchId: branchId,
-    selection: branchId
-      ? { kind: 'LINE', id: branchId, lineId: branchId, differenceId: state.selectedVariantId ?? undefined }
-      : state.selectedVariantId
-        ? { kind: 'DIFFERENCE', id: state.selectedVariantId, differenceId: state.selectedVariantId }
-        : null,
+    ...selectionWrite(
+      state,
+      branchId
+        ? { kind: 'LINE', id: branchId, lineId: branchId, differenceId: state.selectedVariantId ?? undefined }
+        : state.selectedVariantId
+          ? { kind: 'DIFFERENCE', id: state.selectedVariantId, differenceId: state.selectedVariantId }
+          : null
+    ),
   })),
+  setSelection: (selection, options) =>
+    set((state) => ({
+      ...selectionWrite(state, selection, options),
+      // مرايا التوافق مع اللوحات القائمة تُشتق هنا من كتابة واحدة، فلا لوحة
+      // تحتفظ بتحديد محلي مناقض (القرار في مكان واحد).
+      ...(selection?.kind === 'WORD'
+        ? { selectedWordId: Number(selection.id) }
+        : selection?.kind === 'CHARACTER' && selection.wordId
+          ? { selectedWordId: selection.wordId }
+          : {}),
+      ...(selection?.kind === 'DIFFERENCE' || selection?.kind === 'RULE'
+        ? { selectedVariantId: selection.id, selectedAlternativeId: null, selectedBranchId: null }
+        : {}),
+      ...(selection?.kind === 'FACE'
+        ? { selectedVariantId: selection.differenceId ?? null, selectedAlternativeId: selection.faceId ?? selection.id, selectedBranchId: null }
+        : {}),
+      ...(selection?.kind === 'LINE'
+        ? { selectedVariantId: selection.differenceId ?? null, selectedAlternativeId: null, selectedBranchId: selection.lineId ?? selection.id }
+        : {}),
+    })),
   copySelection: () => {
     const state = get();
     set({ clipboard: null }); const doc = state.document; const selection = state.selection;

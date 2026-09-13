@@ -874,7 +874,21 @@ export interface TashjeerDocument {
 // ==================== سياق التحديد الموحد ====================
 
 /** كل اللوحات والمحرر تتشارك هذا المرجع؛ لا تحتفظ أي لوحة بتحديد مستقل. */
-export type EditorSelectionKind = 'WORD' | 'LINE' | 'SEGMENT' | 'DIFFERENCE' | 'FACE' | 'RULE';
+/**
+ * أنواع التحديد الموحّد (FR-ED-02): كل عنصر في المحرر قابل للتحديد المستقل
+ * عبر السياق الموحّد، فلا لوحة تحتفظ بتحديد محلي مناقض.
+ */
+export type EditorSelectionKind =
+  | 'WORD'
+  | 'CHARACTER'
+  | 'LOCUS'
+  | 'LINE'
+  | 'SEGMENT'
+  | 'DIFFERENCE'
+  | 'FACE'
+  | 'RULE'
+  | 'COMPOSITE_FACE'
+  | 'WAQF_MARK';
 
 export interface EditorSelection {
   kind: EditorSelectionKind;
@@ -887,6 +901,10 @@ export interface EditorSelection {
   lineId?: string;
   /** موضع يساعد المحرر على كشف العنصر وتمريره إلى مجال الرؤية. */
   position?: number;
+  /** الكلمة الحاضنة عند تحديد حرف. */
+  wordId?: number;
+  /** ترتيب الحرف داخل كلمته عند تحديد حرف. */
+  characterIndex?: number;
 }
 
 // ==================== خيارات العرض ====================

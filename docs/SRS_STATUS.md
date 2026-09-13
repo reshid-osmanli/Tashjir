@@ -62,13 +62,28 @@
 | سياسة القرار الافتراضية | `src/lib/tashjeer/decision/policy.ts` (`DEFAULT_SYSTEM_PROFILE`) |
 | التوثيق | `docs/ENGINE_STUDIO.md` |
 
-### PH2 — التحديد الموحّد والقوائم (FR-ED-01، 02)
-- **FR-ED-02 (سياق موحّد):** `src/lib/tashjeer/selection-context.ts`، شريط السياق
-  `SelectionBreadcrumb.tsx`، لوحة التفاصيل `PropertiesPanel.tsx`، وبذور التحديد
-  `editor-store.ts` (`setSelection`/breadcrumb). الاختبار: `tests/selection-context.test.ts`.
-- **FR-ED-01 (قوائم قابلة للتمرير):** حاويات `overflow-y-auto` في لوحات الأوجه/
-  العلاقات/الأسطر؛ الرأس Sticky في اللوحات. بند واجهة: يتطلب مراجعة قبول يدوية
-  للأداء مع 1000+ عنصر (لم توجد Virtualization).
+### PH2 — التحديد الموحّد والقوائم (FR-ED-01، 02) — مكتملة (الحزمة 03)
+- **FR-ED-02 (سياق موحّد):** مصدر الحقيقة الواحد حقل `selection` في
+  `editor-store.ts` مع الكاتبة المركزية `selectionWrite` (آخر تحديد صالح
+  `lastSelection` + طلب تركيز متزايد `selectionFocus`). الواجهة الموحّدة
+  `src/lib/editor/selection-store.ts` (`selectElement`/`useSelectionFocus`/
+  محدد الهدف وحساب التمركز النقي)، الوصف والسلسلة `selection-context.ts`،
+  شريط السياق `SelectionBreadcrumb.tsx` (رمادي للعنصر المحذوف)، لوحة التفاصيل
+  `SelectionDetailsPanel.tsx` (معرّف/رتبة/آية/صفحة/قواعد/علاقات/أجزاء/مصدر/حالة)،
+  قائمة السياق `SelectionContextMenu.tsx` بأوامر ممكَّنة من
+  `selection-commands.ts`، بطاقة التوجيه `SelectionFocusCard.tsx`، وبروتوكول
+  التركيز في اللوحة (تمرير + نبضة على الأداة نفسها + بطاقة، ≤ 300ms، AC-06).
+  الاختبارات: `selection-context.test.ts`، `selection-store.test.ts`،
+  `selection-focus.test.ts`.
+- **FR-ED-01 (قوائم قابلة للتمرير):** الغلاف الموحّد
+  `src/components/ui/ScrollableList.tsx` (رأس ثابت، شريط تمرير مرئي دائمًا،
+  زرا صعود/نزول بضغط مستمر، زر عودة لأعلى، تمرير بالعجلة/اللمس/الأسهم،
+  Scroll Into View في منتصف الرؤية للتحديد الموحّد). مطبَّق على قائمة
+  الاختلافات ثم العلاقات (الترتيب/الروابط/الأجزاء)، فهرس القواعد
+  (`RulesIndexDialog`)، تتبع المواضع، ومستكشف القواعد في الاستوديو.
+  النواة `hooks/windowed-list-core.ts` + تنافذ `useWindowedList` وتحميل
+  تدريجي بديل للصفوف المعقدة. الاختبار: `windowed-list-performance.test.ts`
+  (2000 عنصر: نوافذ صحيحة + تمركز + 120 خطوة تمرير + تصفية 1000).
 
 ### PH3 — السحب والحافظة والحذف الجماعي (FR-ED-04..07)
 - **FR-ED-04 (سحب لإعادة الترتيب مع تأكيد):** `LineOrderEditor` في
@@ -130,7 +145,7 @@
 | AC-03 الوقف/الوصل | منفَّذ جزئيًا | أعمق فجوة بند الواجهة — توصية PH7 يدويًا |
 | AC-04 الحافظة الجزئية | منفَّذ | `editor-manual-actions.test.ts` |
 | AC-05 إعادة الترتيب بالسحب | منفَّذ | `manual-links.test.ts` + UI |
-| AC-06 التحديد الموحّد | منفَّذ | `selection-context.test.ts` + لوحات المحرر |
+| AC-06 التحديد الموحّد | منفَّذ (الحزمة 03) | النقر على «السطر ٢٥» في لوحة العلاقات يجعل اللوحة تنتقل إليه وتميّزه خلال ≤ 300ms (`selection-focus.test.ts` + بروتوكول `selectionFocus`)، ولوحة التفاصيل تعرض معرّفاته، وكل اللوحات المفتوحة تميّز العنصر نفسه |
 
 ---
 
@@ -172,6 +187,8 @@
 | FR-ES-10 / 15.4 | «لماذا؟» لكل سطر (أزواج الاختلافات الفعلية على السطر)، وأثر القرار داخل صفوف التتبع | `WhyTraceDialog.tsx` (`DecisionTraceList`), `tracking/page.tsx` | — (يستعمل `resolveMerge`/`resolveDifference` المختبرين) |
 | FR-ED-01.4 / NFR-01 | تفضيلات اللوحات وخيارات العرض تُحفظ محليًا؛ تنافذ قائمة الاختلافات الطويلة | `editor-store.ts` (`WORKSPACE_PREFS_KEY`), `hooks/useWindowedList.ts`, `VariantsPanel.tsx` | — |
 | FR-ED-08.3..08.6 | المعالج الذكي: قوالب جاهزة، أهداف متفرقة، علاقة لكل هدف، نطاق سورة/مدى آيات (`applyRange` في القاعدة العامة يحترمه المطابق) | `SmartCreateWizard.tsx`, `global-rules-store.ts`, `global-rule-engine.ts`, `GlobalRuleMetaEditor.tsx` | `global-rule-apply-range.test.ts` |
+| FR-ED-02 (الحزمة 03) | تحديد موحّد عبر كل اللوحات: كاتبة مركزية + طلب تركيز + أنواع موسعة (حرف/موضع/وجه مركب/علامة وقف)، لوحة تفاصيل، قائمة سياق، تنظيف آمن بآخر سلسلة رمادية، تركيز اللوحة ≤ 300ms على الأداة نفسها لا سطرها | `editor-store.ts` (`selectionWrite`), `lib/editor/selection-store.ts`, `selection-commands.ts`, `SelectionDetailsPanel.tsx`, `SelectionContextMenu.tsx`, `SelectionFocusCard.tsx`, `TashjeerCanvas.tsx`, `TashjeerFigure.tsx`, `RelationsPanel.tsx` | `selection-store.test.ts`, `selection-focus.test.ts`, `selection-context.test.ts` |
+| FR-ED-01 / NFR-01 (الحزمة 03) | القائمة الطويلة الاحترافية الموحّدة: رأس ثابت، شريط مرئي، زرا صعود/نزول بضغط مستمر، عودة لأعلى، Scroll Into View بمنتصف الرؤية، تنافذ/تحميل تدريجي — قائمة 2000 بتمرير سلس | `ui/ScrollableList.tsx`, `windowed-list-core.ts`, `useWindowedList.ts`, `VariantsPanel.tsx`, `RulesIndexDialog.tsx`, `RelationsPanel.tsx`, `RuleExplorer.tsx` | `windowed-list-performance.test.ts` |
 
 ---
 
