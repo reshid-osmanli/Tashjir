@@ -12,9 +12,10 @@ import type {
   VariantEvidence,
   VerificationStatus,
 } from '@/types/tashjeer';
-import { clearRuleOccurrences } from './rule-occurrences-store';
+import { clearRuleOccurrences, exportOccurrenceData, restoreOccurrenceData } from './rule-occurrences-store';
 
 const GLOBAL_RULES_KEY = 'tashjeer:global-rules:v1';
+export const GLOBAL_RULES_EVENT = 'tashjeer:global-rules-change';
 
 /**
  * نطاق تطبيق القاعدة على المصحف (FR-ED-08.6): غيابه يعني المصحف كله؛
@@ -72,6 +73,12 @@ export interface GlobalRule {
   status: VerificationStatus;
   /** إبقاء القاعدة في السجل مع إيقاف تطبيقها المؤقت. */
   isActive: boolean;
+  /**
+   * معرّف دفعة الإنشاء (FR-ED-10/DM-08): قواعد متعددة الأنواع أُنشئت معًا
+   * تشترك في هذا المعرّف ليعرف التراجع أنها وحدة واحدة، مع بقاء كل قاعدة
+   * مستقلة في التحرير والحذف اللاحقين.
+   */
+  createBatchId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -98,6 +105,88 @@ export function saveGlobalRule(rule: Omit<GlobalRule, 'createdAt' | 'updatedAt'>
 }
 
 /**
+ * يحفظ دفعة قواعد (أنواع متعددة من معالج واحد) كمجموعة واحدة:
+ * وسم دفعي مشترك + إدراج رتبي يحافظ على الترتيب الصريح (DM-08).
+ *
+ * تُحجز الرتب الجديدة أولا بإزاحة المشغولة، ثم تُدرج القواعد بالترتيب
+ * المعطى، فتبقى (تحقيق=1، أصول=2، فرش=3) متجاورة دائما.
+ */
+export function saveGlobalRuleBatch(
+  inputs: Array<Omit<GlobalRule, 'createdAt' | 'updatedAt'> & Partial<Pick<GlobalRule, 'createdAt' | 'createBatchId'>>>,
+  options?: { startRank?: number },
+): { rules: GlobalRule[]; batchId: string } {
+  const batchId = createGlobalRuleBatchId();
+  if (inputs.length === 0) return { rules: [], batchId };
+
+  const now = new Date().toISOString();
+  const rules = readRules();
+
+  // أول رتبة متاحة بعد الرتب المحجوزة، ما لم يطلب المعالج رتبة صريحة.
+  const ranked = rules
+    .filter((rule) => typeof rule.orderRank === 'number')
+    .sort((first, second) => (first.orderRank ?? 0) - (second.orderRank ?? 0));
+  const explicitStart = options?.startRank !== undefined ? Math.max(1, Math.round(options.startRank)) : undefined;
+  const startRank = explicitStart ?? ranked.length + 1;
+
+  // إزاحة كل من يقع عند خانات الكتلة الجديدة فما بعدها.
+  let cursor = startRank + inputs.length;
+  const displaced = ranked.filter((rule) => (rule.orderRank ?? 0) >= startRank);
+  for (const rule of displaced) {
+    rule.orderRank = cursor;
+    cursor += 1;
+  }
+
+  const saved: GlobalRule[] = inputs.map((input, index) => {
+    const existing = rules.find((item) => item.id === input.id);
+    return normalizeRule({
+      ...input,
+      createBatchId: input.createBatchId ?? batchId,
+      orderRank: startRank + index,
+      title: input.title.trim(),
+      createdAt: existing?.createdAt ?? input.createdAt ?? now,
+      updatedAt: now,
+    });
+  });
+
+  const savedIds = new Set(saved.map((rule) => rule.id));
+  writeRules([...rules.filter((item) => !savedIds.has(item.id)), ...saved]);
+  return { rules: saved, batchId };
+}
+
+/** لقطة كاملة للقواعد العامة تُستخدم في التراجع الموحد (FR-ED-10). */
+export function exportGlobalRulesSnapshot(): GlobalRule[] {
+  return readRules().map((rule) => ({ ...rule }));
+}
+
+/** يستعيد لقطة قواعد سابقة (تراجع/إعادة). */
+export function restoreGlobalRulesSnapshot(snapshot: GlobalRule[]): void {
+  writeRules(snapshot.map(normalizeRule));
+}
+
+/**
+ * لقطة حذف قاعدة أمّ مع كل ما سُجِّل على مواضعها، للتراجع الموحد
+ * (FR-ED-10/T3): القاعدة نفسها + كل الاستثناءات المسجلة عليها.
+ */
+export interface GlobalRuleDeletionSnapshot {
+  rule: GlobalRule;
+  occurrences: ReturnType<typeof exportOccurrenceData>;
+}
+
+export function captureGlobalRuleDeletion(ruleId: string): GlobalRuleDeletionSnapshot | null {
+  const rule = readRules().find((item) => item.id === ruleId);
+  if (!rule) return null;
+  return { rule: { ...rule }, occurrences: exportOccurrenceData() };
+}
+
+export function restoreGlobalRuleDeletion(snapshot: GlobalRuleDeletionSnapshot): void {
+  const rules = readRules();
+  if (!rules.some((item) => item.id === snapshot.rule.id)) {
+    writeRules([...rules, normalizeRule(snapshot.rule)]);
+  }
+  restoreOccurrenceData(snapshot.occurrences);
+}
+
+/**
  * يحذف القاعدة العامة من المصحف كله، ومعها كل ما سُجِّل على مواضعها.
  *
  * حذف القاعدة كلها غير حذف موضع منها: هذا يمحو الحكم من المصحف، وذاك
@@ -106,6 +195,62 @@ export function saveGlobalRule(rule: Omit<GlobalRule, 'createdAt' | 'updatedAt'>
 export function deleteGlobalRule(id: string): void {
   writeRules(readRules().filter((rule) => rule.id !== id));
   clearRuleOccurrences(id);
+}
+
+/**
+ * يحفظ عدة قواعد عامة في عملية ذرية واحدة (كله أو لا شيء) — FR-ED-08 الخطوة 6.
+ *
+ * يتحقق من القواعد كلها أولًا (عنوان + نمط صالح)، ثم يكتب مرة واحدة؛ فإن
+ * فشل عنصر واحد رُفضت الدفعة كلها ولم يُكتب شيء، فلا تبقى نصف مجموعة.
+ * يُرجع القواعد المحفوظة مرتبة كما أُدخلت (رتب الأنواع: ١، ٢، ٣…).
+ */
+export function saveGlobalRulesBatch(
+  rules: Array<Omit<GlobalRule, 'createdAt' | 'updatedAt'> & Partial<Pick<GlobalRule, 'createdAt'>>>
+): GlobalRule[] {
+  if (rules.length === 0) return [];
+  const now = new Date().toISOString();
+  const current = readRules();
+  const seen = new Set(current.map((rule) => rule.id));
+
+  // التحقق أولًا من الدفعة كلها قبل أي كتابة (الذرية).
+  for (const rule of rules) {
+    if (!rule || typeof rule.id !== 'string' || !rule.id.trim()) {
+      throw new Error('قاعدة بلا معرّف في الدفعة — رُفضت الدفعة كلها ولم يُحفظ شيء.');
+    }
+    if (!rule.title || !rule.title.trim()) {
+      throw new Error('قاعدة بلا عنوان في الدفعة — رُفضت الدفعة كلها ولم يُحفظ شيء.');
+    }
+    if (!rule.pattern || !isValidPattern(rule.pattern)) {
+      throw new Error(`القاعدة «${rule.title.trim()}» بلا نمط صالح — رُفضت الدفعة كلها ولم يُحفظ شيء.`);
+    }
+    if (seen.has(rule.id)) {
+      throw new Error(`معرّف مكرر في الدفعة («${rule.id}») — رُفضت الدفعة كلها ولم يُحفظ شيء.`);
+    }
+    seen.add(rule.id);
+  }
+
+  const saved = rules.map((rule) =>
+    normalizeRule({
+      ...rule,
+      title: rule.title.trim(),
+      createdAt: rule.createdAt ?? now,
+      updatedAt: now,
+    })
+  );
+  const savedIds = new Set(saved.map((rule) => rule.id));
+  writeRules([...current.filter((rule) => !savedIds.has(rule.id)), ...saved]);
+  return saved;
+}
+
+/**
+ * يحذف دفعة قواعد كاملة بكتابة واحدة (تراجع جماعي عن إنشاء دفعي).
+ * تُمسح معها استثناءات مواضعها، فلا تبقى بيانات يتيمة.
+ */
+export function deleteGlobalRulesBatch(ids: string[]): void {
+  if (ids.length === 0) return;
+  const doomed = new Set(ids);
+  writeRules(readRules().filter((rule) => !doomed.has(rule.id)));
+  for (const id of doomed) clearRuleOccurrences(id);
 }
 
 /**
@@ -183,6 +328,11 @@ export function createGlobalRuleId(): string {
   return `global-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** معرّف دفعة إنشاء (FR-ED-10/DM-08): يميز قواعد أُنشئت معًا. */
+export function createGlobalRuleBatchId(): string {
+  return `gbatch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function readRules(): GlobalRule[] {
   if (!isBrowser()) return [];
 
@@ -199,6 +349,9 @@ function readRules(): GlobalRule[] {
 function writeRules(rules: GlobalRule[]): void {
   if (!isBrowser()) return;
   window.localStorage.setItem(GLOBAL_RULES_KEY, JSON.stringify(rules));
+  if (typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+    window.dispatchEvent(new CustomEvent(GLOBAL_RULES_EVENT, { detail: rules.length }));
+  }
 }
 
 function isValidRule(value: unknown): value is GlobalRule {

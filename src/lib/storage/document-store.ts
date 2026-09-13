@@ -696,6 +696,11 @@ function migrateDocument(document: TashjeerDocument): TashjeerDocument {
     // v7: حقول التحكم اليدوي. المستندات القديمة تبدأ فارغة الجيوب: لا روابط
     // ولا ترتيبا يدويا، فيعمل المحرك كما كان ثم يضيف المحرر تصحيحاته.
     lineOrder: sanitizeIdList(document.lineOrder),
+    lines: Array.isArray(document.lines) ? document.lines : undefined,
+    mergeRecords: Array.isArray(document.mergeRecords) ? document.mergeRecords : undefined,
+    corrections: Array.isArray(document.corrections) ? document.corrections : undefined,
+    suspendedLinks: Array.isArray(document.suspendedLinks) ? document.suspendedLinks : undefined,
+    deletedItems: Array.isArray(document.deletedItems) ? document.deletedItems : undefined,
     links: (Array.isArray(document.links) ? document.links : []).filter(isValidLink),
     segments: (Array.isArray(document.segments) ? document.segments : []).filter(isValidSegment),
     editLog: (Array.isArray(document.editLog) ? document.editLog : []).filter(isValidEditEntry),

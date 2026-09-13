@@ -8,9 +8,16 @@ import { layoutAyah } from '@/lib/tashjeer/layout-engine';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { catalogNarratorsInOrder } from '@/lib/transmissions/catalog';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
+import { useGlobalRules } from '@/hooks/useGlobalRules';
+import { useRuleOccurrences } from '@/hooks/useRuleOccurrences';
 import { useEditorStore } from '@/stores/editor-store';
 import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
+import {
+  listOccurrenceOverrides,
+  overrideById,
+} from '@/lib/storage/rule-occurrences-store';
 import { OrderRankControl } from './OrderRankControl';
+import { LocalOverrideEditor } from './LocalOverrideEditor';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { buildReadingPlan } from '@/lib/tashjeer/reading-plan';
 import { normalizeScope, resolveScope } from '@/lib/tashjeer/scope';
@@ -598,7 +605,19 @@ export function TashjeerOrderControls() {
     setEffectiveOrderRank,
     moveAlternative,
     resetAlternativeOrder,
+    addVariant,
+    setDerivedLocalOverride,
+    clearDerivedLocalOverride,
+    deleteDerivedOccurrence,
+    restoreDerivedOccurrence,
   } = useEditorStore();
+  const { rules } = useGlobalRules();
+  const occurrences = useRuleOccurrences();
+  const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
+  const [deletingVariantId, setDeletingVariantId] = useState<string | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
+
+  const ruleById = useMemo(() => new Map(rules.map((rule) => [rule.id, rule])), [rules]);
 
   const ordered = useMemo(() => {
     if (!document) return [];
@@ -616,7 +635,45 @@ export function TashjeerOrderControls() {
     });
   }, [document]);
 
+  // المواضع المحذوفة في هذه الآية وحدها، ليعيدها المحقق دون مغادرة اللوحة.
+  const deletedInAyah = useMemo(() => {
+    if (!document) return [];
+    void occurrences.key;
+    return listOccurrenceOverrides()
+      .filter((item) => item.state === 'DELETED' && item.ayahKey === document.ayahKey)
+      .sort((first, second) => second.updatedAt.localeCompare(first.updatedAt));
+  }, [document, occurrences.key]);
+
   if (!document) return null;
+
+  const editingVariant = editingVariantId
+    ? ordered.find((variant) => variant.id === editingVariantId) ?? null
+    : null;
+  const editingRule = editingVariant?.globalRuleId ? ruleById.get(editingVariant.globalRuleId) ?? null : null;
+
+  /** ينسخ موضعًا مشتقًا اختلافًا محليًا مستقلًا قابلًا للتحرير الحر. */
+  const copyDerivedAsLocal = (variantId: string) => {
+    const variant = ordered.find((item) => item.id === variantId);
+    if (!variant || !variant.isGlobalDerived) return;
+    const face = variant.alternatives[0];
+    if (!face) return;
+    const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    addVariant({
+      id: `local-${stamp}`,
+      category: variant.category,
+      title: face.text,
+      startPosition: variant.startPosition,
+      endPosition: variant.endPosition,
+      targetKind: variant.targetKind,
+      characterRange: variant.characterRange,
+      loci: variant.loci,
+      status: 'DRAFT',
+      description: variant.description,
+      sourceRef: variant.sourceRef,
+      orderRank: variant.orderRank,
+      alternatives: [{ ...face, id: `local-${stamp}-alt` }],
+    });
+  };
 
   return (
     <Section title="ترتيب التشجير في هذه الآية">
@@ -641,6 +698,10 @@ export function TashjeerOrderControls() {
             ];
             const isSelected = variant.id === selectedVariantId;
 
+            const isDerived = Boolean(variant.isGlobalDerived);
+            const rule = variant.globalRuleId ? ruleById.get(variant.globalRuleId) : undefined;
+            const isDeleting = deletingVariantId === variant.id;
+
             return (
               <li
                 key={variant.id}
@@ -650,7 +711,7 @@ export function TashjeerOrderControls() {
               >
                 <div className="flex items-center gap-1.5">
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-stone-700 text-[10px] font-bold text-white">
-                    {index + 1}
+                    {toArabicDigits(index + 1)}
                   </span>
                   <button
                     type="button"
@@ -662,10 +723,23 @@ export function TashjeerOrderControls() {
                   </button>
                   <span className="shrink-0 text-[10px] text-stone-500">
                     {variant.startPosition === variant.endPosition
-                      ? `ك${variant.startPosition}`
-                      : `ك${variant.startPosition}–${variant.endPosition}`}
+                      ? `ك${toArabicDigits(variant.startPosition)}`
+                      : `ك${toArabicDigits(variant.startPosition)}–${toArabicDigits(variant.endPosition)}`}
                   </span>
                 </div>
+
+                {isDerived && (
+                  <div className="mt-1 flex flex-wrap items-center gap-1">
+                    <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[9px] font-medium text-stone-600">
+                      قاعدة عامة{rule ? ` · ${rule.title}` : ''}
+                    </span>
+                    {variant.hasLocalOverride && (
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-900">
+                        متجاوز محليًا
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 <div className="mt-1.5">
                   <OrderRankControl
@@ -680,6 +754,85 @@ export function TashjeerOrderControls() {
                   />
                 </div>
 
+                {isDerived && (
+                  <div className="mt-1.5 border-t border-stone-100 pt-1.5">
+                    {isDeleting ? (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] text-stone-600">
+                          حذف هذا الموضع وحده من الآية — القاعدة باقية في سائر المصحف، والحذف
+                          قابل للتراجع.
+                        </p>
+                        <input
+                          value={deleteReason}
+                          onChange={(event) => setDeleteReason(event.target.value)}
+                          placeholder="سبب الحذف (يُحفظ في السجل)"
+                          className="w-full rounded border border-stone-300 px-2 py-1 text-[10px]"
+                        />
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              deleteDerivedOccurrence(variant.id, deleteReason);
+                              setDeletingVariantId(null);
+                              setDeleteReason('');
+                            }}
+                            className="rounded bg-rose-700 px-2 py-1 text-[10px] font-bold text-white hover:bg-rose-800"
+                          >
+                            تأكيد حذف الموضع
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDeletingVariantId(null);
+                              setDeleteReason('');
+                            }}
+                            className="rounded border border-stone-300 px-2 py-1 text-[10px] text-stone-600 hover:bg-stone-50"
+                          >
+                            تراجع
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditingVariantId(variant.id)}
+                          disabled={!rule}
+                          title={rule ? 'تحرير قيم هذا الموضع وحده' : 'القاعدة الأمّ غير موجودة'}
+                          className="rounded border border-stone-200 px-1.5 py-0.5 text-[10px] text-stone-700 hover:bg-stone-50 disabled:opacity-40"
+                        >
+                          تحرير محلي
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeletingVariantId(variant.id)}
+                          className="rounded border border-stone-200 px-1.5 py-0.5 text-[10px] text-rose-700 hover:bg-rose-50"
+                        >
+                          حذف موضعي
+                        </button>
+                        {variant.hasLocalOverride && (
+                          <button
+                            type="button"
+                            onClick={() => clearDerivedLocalOverride(variant.id)}
+                            title="محو الترقيع والتخصيصات والعودة إلى قيم القاعدة الأمّ"
+                            className="rounded border border-amber-300 px-1.5 py-0.5 text-[10px] text-amber-900 hover:bg-amber-50"
+                          >
+                            إلغاء التجاوز
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => copyDerivedAsLocal(variant.id)}
+                          title="نسخ الموضع اختلافًا محليًا مستقلًا قابلًا للتحرير الحر"
+                          className="rounded border border-stone-200 px-1.5 py-0.5 text-[10px] text-stone-700 hover:bg-stone-50"
+                        >
+                          نسخ مستقل
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {sequence.length > 1 && (
                   <ul className="mt-1.5 space-y-1 border-t border-stone-100 pt-1.5">
                     {sequence.map((alternativeId, alternativeIndex) => {
@@ -693,7 +846,7 @@ export function TashjeerOrderControls() {
                       return (
                         <li key={alternativeId} className="flex items-center gap-1">
                           <span className="w-3 shrink-0 text-[9px] text-stone-400">
-                            {alternativeIndex + 1}
+                            {toArabicDigits(alternativeIndex + 1)}
                           </span>
                           <span className="min-w-0 flex-1 truncate text-[10px] text-stone-700">
                             {alternative.ruleLabel || alternative.label || alternative.text}
@@ -737,6 +890,51 @@ export function TashjeerOrderControls() {
             );
           })}
         </ol>
+      )}
+
+      {deletedInAyah.length > 0 && (
+        <div className="mt-3 rounded border border-stone-200 bg-stone-50 p-2">
+          <p className="mb-1.5 text-[11px] font-bold text-stone-700">
+            مواضع محذوفة في هذه الآية ({toArabicDigits(deletedInAyah.length)})
+          </p>
+          <ul className="space-y-1">
+            {deletedInAyah.map((item) => {
+              const rule = ruleById.get(item.ruleId);
+              return (
+                <li key={item.id} className="flex items-center gap-1.5 text-[10px]">
+                  <span className="min-w-0 flex-1 truncate text-stone-600">
+                    {rule ? rule.title : item.ruleId} · {item.matchedText ?? '—'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => restoreDerivedOccurrence(item.id)}
+                    className="shrink-0 rounded border border-emerald-300 px-1.5 py-0.5 text-emerald-800 hover:bg-emerald-50"
+                  >
+                    إرجاع
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {editingVariant && editingRule && (
+        <LocalOverrideEditor
+          variant={editingVariant}
+          rule={editingRule}
+          currentPatch={overrideById(editingVariant.id)?.patch}
+          originalText={
+            overrideById(editingVariant.id)?.matchedText ??
+            editingVariant.alternatives[0]?.text ??
+            ''
+          }
+          onSave={(patch) => {
+            setDerivedLocalOverride(editingVariant.id, patch);
+            setEditingVariantId(null);
+          }}
+          onClose={() => setEditingVariantId(null)}
+        />
       )}
     </Section>
   );

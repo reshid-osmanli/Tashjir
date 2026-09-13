@@ -8,6 +8,8 @@
 'use client';
 
 import Link from 'next/link';
+import { ClipboardControls } from './ClipboardControls';
+import { HistoryControls } from './HistoryControls';
 import { useEditorStore, type EditorTool } from '@/stores/editor-store';
 import { usePanelStore } from '@/stores/panel-store';
 import { PanelLayoutMenu } from './PanelLayoutControls';
@@ -122,6 +124,9 @@ export function EditorToolbar({
       </Group>
 
       <Divider />
+
+      <ClipboardControls />
+      <HistoryControls />
 
       {/* العرض */}
       <Group label="العرض">

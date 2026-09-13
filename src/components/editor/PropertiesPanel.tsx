@@ -37,6 +37,7 @@ import {
 import { RelationsPanel } from './RelationsPanel';
 import { PanelFrame } from './PanelFrame';
 import { OrderRankControl } from './OrderRankControl';
+import { SelectionDetailsPanel } from './SelectionDetailsPanel';
 import { coalesceLineOrder, orderSnapshotOf, shiftLineInOrder } from '@/lib/tashjeer/manual-links';
 import { listGlobalRules } from '@/lib/storage/global-rules-store';
 import { faceEndpointKey } from '@/types/tashjeer';
@@ -110,6 +111,9 @@ export function PropertiesPanel() {
 
   return (
     <aside className="flex h-full w-[320px] shrink-0 flex-col overflow-y-auto border-e border-stone-200 bg-white">
+      {/* تفاصيل العنصر المحدد: مصدر الحقيقة هو التحديد الموحّد (FR-ED-02.4) */}
+      <SelectionDetailsPanel classic={classic} onRequestWhy={() => setShowWhyDialog(true)} />
+
       {/* حالة المستند */}
       <Section title="المستند">
         <Row label="الموضع" value={`${document.surahNumber}:${document.ayahNumber}`} />

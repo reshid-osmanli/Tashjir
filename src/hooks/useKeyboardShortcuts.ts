@@ -9,6 +9,7 @@
 
 'use client';
 
+import { useConfirmStore } from '@/lib/ui/confirm-store';
 import { useEffect } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 import { usePanelStore } from '@/stores/panel-store';
@@ -25,10 +26,7 @@ export const SHORTCUT_HINTS: ShortcutHint[] = [
   { keys: 'M', description: 'أداة تعليم الكلمات' },
   { keys: 'E', description: 'أداة المسح' },
   { keys: 'Ctrl + S', description: 'حفظ المستند' },
-  { keys: 'Ctrl + C / X / V', description: 'نسخ أو قص أو لصق الاختلاف/الوجه/الجزء المحدد' },
-  { keys: 'Shift + نقر', description: 'تحديد مدى من الأوجه في قائمة الموضع' },
-  { keys: 'Ctrl + نقر', description: 'إضافة وجه إلى التحديد المتعدد أو إزالته' },
-  { keys: 'Ctrl + A', description: 'تحديد كل أوجه الموضع (داخل قائمة الأوجه)' },
+
   { keys: 'Ctrl + Z', description: 'تراجع' },
   { keys: 'Ctrl + Shift + Z', description: 'إعادة' },
   { keys: 'Ctrl + =', description: 'تكبير' },
@@ -59,7 +57,7 @@ export function useKeyboardShortcuts(enabled = true): void {
     if (!enabled) return;
 
     const handler = (event: KeyboardEvent) => {
-      if (isTypingTarget(event.target)) return;
+      if (event.defaultPrevented || useConfirmStore.getState().pending || isTypingTarget(event.target)) return;
 
       const withModifier = event.ctrlKey || event.metaKey;
 
@@ -79,7 +77,7 @@ export function useKeyboardShortcuts(enabled = true): void {
             return;
           case 'v':
             event.preventDefault();
-            store.pasteSelection();
+            void store.requestPasteSelection();
             return;
           case 'z':
             event.preventDefault();
@@ -132,6 +130,9 @@ export function useKeyboardShortcuts(enabled = true): void {
           break;
         case 'h':
           toggleAutoHide();
+          break;
+        case 'n':
+          store.requestSmartWizard();
           break;
         case 'escape':
           store.clearMarks();

@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type WheelEvent } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
+import { selectElement } from '@/lib/editor/selection-store';
 import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
 import {
   CATEGORY_LABELS,
@@ -30,9 +31,17 @@ import { useEngineConfig } from '@/hooks/useEngineConfig';
 import { useStrengthDegrees } from '@/hooks/useStrengthDegrees';
 import { useRuleOccurrences } from '@/hooks/useRuleOccurrences';
 import { parseAyahKey } from '@/data/quran';
+import {
+  computeFocusPan,
+  isRectOutsideViewport,
+  selectionTargetSelector,
+  toMeasuredRect,
+} from '@/lib/editor/selection-store';
+import { SelectionContextMenu, type ContextMenuState } from './SelectionContextMenu';
+import { SelectionFocusCard } from './SelectionFocusCard';
 import type { ClassicLine, ClassicReaderChip } from '@/lib/tashjeer/classic-tashjeer';
 import type { VariantCategory } from '@/types';
-import type { WordBox } from '@/types/tashjeer';
+import type { EditorSelection, WordBox } from '@/types/tashjeer';
 import type { TransmissionCatalog } from '@/lib/transmissions/catalog';
 
 interface TashjeerCanvasProps {
@@ -114,42 +123,6 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
 
   const focusSegment = document?.readingWindow?.focusSegment ?? null;
 
-  // إحضار المحدَّد إلى مجال الرؤية مع نبضة (FR-ED-02.4): عند اختيار اختلاف
-  // من لوحة الاختلافات أو من رابط عميق، إن كان سطره خارج الإطار المرئي
-  // نحرّك اللوحة إليه دون تغيير التكبير، ثم نُبرزه بنبضة قصيرة.
-  const [pulseLineId, setPulseLineId] = useState<string | null>(null);
-  const lastCenteredVariant = useRef<string | null>(null);
-  useEffect(() => {
-    if (!selectedVariantId) {
-      lastCenteredVariant.current = null;
-      return;
-    }
-    if (lastCenteredVariant.current === selectedVariantId) return;
-    lastCenteredVariant.current = selectedVariantId;
-    const svg = svgRef.current;
-    const target = svg?.querySelector<SVGGElement>(`[data-line-id][data-variant-ids~="${CSS.escape(selectedVariantId)}"]`);
-    if (!svg || !target) return;
-    const lineId = target.dataset.lineId ?? null;
-    const svgRect = svg.getBoundingClientRect();
-    const rect = target.getBoundingClientRect();
-    const margin = 24;
-    const outside =
-      rect.left < svgRect.left + margin ||
-      rect.right > svgRect.right - margin ||
-      rect.top < svgRect.top + margin ||
-      rect.bottom > svgRect.bottom - margin;
-    if (outside) {
-      const scale = unitsPerPixel();
-      const dx = (svgRect.left + svgRect.width / 2 - (rect.left + rect.width / 2)) * scale;
-      const dy = (svgRect.top + svgRect.height / 2 - (rect.top + rect.height / 2)) * scale;
-      setPan({ x: pan.x + dx, y: pan.y + dy });
-    }
-    setPulseLineId(lineId);
-    const timer = window.setTimeout(() => setPulseLineId(null), 1200);
-    return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedVariantId, classic.lines.length]);
-
   // يشمل هذا القائمة المحلية والقواعد العامة المشتقة؛ لذلك يتفاعل النقر
   // مع موضع القاعدة العامة كما يتفاعل مع الاختلاف الذي أضيف يدويا.
   const effectiveVariants = useMemo(
@@ -172,6 +145,100 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     if (!rect || rect.width === 0) return 1;
     return viewBox.width / rect.width;
   }, [viewBox.width]);
+
+  // ==================== بروتوكول التركيز الموحّد (FR-ED-02.3, AC-06) ====================
+  //
+  // كل كتابة تحديد (من أي لوحة: الاختلافات، العلاقات، الترتيب، التتبع،
+  // أو اللوحة نفسها) ترفع طلب تركيز برقم متزايد في المخزن. هنا تُستهلك:
+  // يُكشف عنصر اللوحة المقابل للتحديد (محدّد CSS من selection-store)، فإن
+  // كان خارج الإطار حُرّكت اللوحة إليه بلا تغيير التكبير — أو وُضع في منتصف
+  // الرؤية إن طُلب ذلك — ثم نُبض العنصر (السطر أو الأداة نفسها) ونعرض بطاقة
+  // معلومات مصغرة. الزمن المستهدف ≤ 300ms (FOCUS_BUDGET_MS).
+  const selection = useEditorStore((state) => state.selection);
+  const selectionFocus = useEditorStore((state) => state.selectionFocus);
+  const [pulseLineId, setPulseLineId] = useState<string | null>(null);
+  const [pulseEntryKey, setPulseEntryKey] = useState<string | null>(null);
+  const [focusCard, setFocusCard] = useState<EditorSelection | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const pulseTimer = useRef<number | null>(null);
+  const lastHandledToken = useRef(0);
+  const pendingToken = useRef<number | null>(null);
+
+  // الأداة النشطة في التحديد الموحّد: وجه بعينه، أو اختلاف كله بأوجهه على
+  // كل أسطره — يُبرَز هو بالذات لا سطره كله (FR-ED-02.5).
+  const activeEntry: { variantId: string; alternativeId?: string } | null =
+    selection?.kind === 'FACE'
+      ? { variantId: selection.differenceId ?? '', alternativeId: selection.faceId ?? selection.id }
+      : selection?.kind === 'DIFFERENCE'
+        ? { variantId: selection.differenceId ?? selection.id }
+        : null;
+
+
+  const applyFocus = useCallback(
+    (center: boolean): boolean => {
+      const svg = svgRef.current;
+      if (!svg || !selection) return false;
+      const selector = selectionTargetSelector(selection, document?.ayahKey);
+      const target = selector ? svg.querySelector<SVGGElement>(selector) : null;
+      if (!target) return false;
+
+      const svgRect = svg.getBoundingClientRect();
+      const rect = target.getBoundingClientRect();
+      const margin = 24;
+      const outside = isRectOutsideViewport(toMeasuredRect(rect), toMeasuredRect(svgRect), margin);
+      if (outside || center) {
+        const scale = unitsPerPixel();
+        const next = computeFocusPan(
+          { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+          { x: svgRect.left + svgRect.width / 2, y: svgRect.top + svgRect.height / 2 },
+          scale,
+          useEditorStore.getState().pan
+        );
+        setPan(next);
+      }
+
+      // النبضة على العنصر المحدد بالذات: أداة (اختلاف/وجه) تُنبض هي، وإلا
+      // يُنبض سطرها أو الكلمة المقصودة.
+      if (selection.kind === 'FACE' && selection.differenceId) {
+        setPulseEntryKey(`${selection.differenceId}::${selection.faceId ?? selection.id}`);
+      } else if (selection.kind === 'DIFFERENCE' || selection.kind === 'RULE') {
+        const lineEl = svg.querySelector<SVGGElement>(`[data-line-id][data-variant-ids~="${CSS.escape(selection.differenceId ?? selection.id)}"]`);
+        setPulseLineId(lineEl?.dataset.lineId ?? null);
+      } else {
+        const lineEl = target.closest<SVGGElement>('[data-line-id]');
+        setPulseLineId(lineEl?.dataset.lineId ?? null);
+      }
+      setFocusCard(selection);
+      if (pulseTimer.current !== null) window.clearTimeout(pulseTimer.current);
+      pulseTimer.current = window.setTimeout(() => {
+        setPulseLineId(null);
+        setPulseEntryKey(null);
+        setFocusCard(null);
+        pulseTimer.current = null;
+      }, 2200);
+      return true;
+    },
+    [document?.ayahKey, selection, setPan, unitsPerPixel]
+  );
+
+  useEffect(() => {
+    if (selectionFocus.token === lastHandledToken.current) return;
+    lastHandledToken.current = selectionFocus.token;
+    if (!selection) {
+      setFocusCard(null);
+      return;
+    }
+    const applied = applyFocus(selectionFocus.center);
+    pendingToken.current = applied ? null : selectionFocus.token;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectionFocus.token, selection]);
+
+  // تأخر الرسم: إن لم يكن عنصر التحديد مرسومًا بعد (فتح آية جديدة من رابط
+  // عميق) يُعاد المحاولة حين تجهز أسطر المحرك.
+  useEffect(() => {
+    if (pendingToken.current === null || pendingToken.current !== lastHandledToken.current) return;
+    if (applyFocus(false)) pendingToken.current = null;
+  }, [classic.lines.length, applyFocus]);
 
   /**
    * التكبير عند مؤشر الفأرة لا عند رأس اللوحة.
@@ -235,8 +302,36 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     panState.current = null;
   }, []);
 
+  /** الزر الأيمن على أي عنصر: يحدده ويفتح قائمة أوامره (FR-ED-02.6). */
+  const handleContextMenu = useCallback(
+    (event: ReactMouseEvent<SVGSVGElement>) => {
+      if (readOnly) return;
+      event.preventDefault();
+      const target = (event.target as Element).closest<SVGGElement>('[data-word-id],[data-line-id],[data-entry-variant]');
+      if (!target) return;
+      // كشف نوع العنصر من سماته: أداة ← اختلاف/وجه، سطر، كلمة.
+      const entryVariant = target.dataset.entryVariant;
+      const entryAlternative = target.dataset.entryAlternative;
+      const lineId = target.dataset.lineId;
+      const wordId = target.dataset.wordId;
+      if (entryVariant) {
+        if (entryAlternative) selectAlternative(entryVariant, entryAlternative);
+        else selectVariant(entryVariant);
+      } else if (lineId) {
+        const variantId = target.dataset.variantIds?.split(' ')[0];
+        selectLine(lineId, variantId);
+      } else if (wordId) {
+        selectWord(Number(wordId));
+      } else {
+        return;
+      }
+      setContextMenu({ x: event.clientX, y: event.clientY });
+    },
+    [readOnly, selectAlternative, selectLine, selectVariant, selectWord]
+  );
+
   const handleWordClick = useCallback(
-    (box: WordBox) => {
+    (box: WordBox, event?: React.MouseEvent) => {
       if (readOnly) {
         selectWord(box.wordId);
         return;
@@ -246,6 +341,13 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
         // في وضع الحروف لا نعتمد النقر العام على الكلمة؛ انقر خلية الحرف
         // الظاهرة فوق النص حتى يبقى التحديد دقيقا ولا يتحول سهوا إلى كلمة.
         if (markingMode === 'WORDS') toggleMarkedPosition(box.position);
+        return;
+      }
+
+      // تحديد متعدد سريع (FR-ED-09/T2): Ctrl+نقر على كلمات متفرقة يعلّمها
+      // دون تبديل الأداة، فتُسند إليها الاختلافات دفعة واحدة من المعالج.
+      if ((event?.ctrlKey || event?.metaKey) && markingMode === 'WORDS') {
+        toggleMarkedPosition(box.position);
         return;
       }
 
@@ -272,9 +374,16 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     (box: WordBox, characterIndex: number) => {
       if (readOnly || currentTool !== 'mark' || markingMode !== 'CHARACTERS') return;
       toggleMarkedCharacter({ position: box.position, characterIndex });
-      selectWord(box.wordId);
+      // الحرف نفسه هو العنصر النشط في التحديد الموحّد (لا كلمته فقط).
+      selectElement({
+        kind: 'CHARACTER',
+        id: `${box.wordId}:${characterIndex}`,
+        wordId: box.wordId,
+        position: box.position,
+        characterIndex,
+      });
     },
-    [currentTool, markingMode, readOnly, selectWord, toggleMarkedCharacter]
+    [currentTool, markingMode, readOnly, toggleMarkedCharacter]
   );
 
   const handleLineClick = useCallback(
@@ -361,6 +470,7 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
         onMouseMove={handleMouseMove}
         onMouseUp={endPan}
         onMouseLeave={endPan}
+        onContextMenu={handleContextMenu}
       >
         <defs>
           <filter id="branch-glow" x="-20%" y="-20%" width="140%" height="140%">
@@ -406,6 +516,8 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
             selectedWordId={selectedWordId}
             selectedVariantId={selectedVariantId}
             pulseLineId={pulseLineId}
+            activeEntry={activeEntry}
+            pulseEntryKey={pulseEntryKey}
             hoveredLineId={hoveredLineId}
             onWordClick={handleWordClick}
             onCharacterClick={handleCharacterClick}
@@ -419,6 +531,19 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
       </svg>
 
       <CanvasLegend characterMarkingActive={!readOnly && currentTool === 'mark' && markingMode === 'CHARACTERS'} />
+
+      {/* بطاقة معلومات مصغرة للعنصر المُوجَّه إليه، أعلى اللوحة (FR-ED-02.3) */}
+      {focusCard && (
+        <SelectionFocusCard
+          selection={focusCard}
+          onClose={() => {
+            setFocusCard(null);
+            if (pulseTimer.current !== null) window.clearTimeout(pulseTimer.current);
+          }}
+        />
+      )}
+
+      <SelectionContextMenu state={contextMenu} onClose={() => setContextMenu(null)} />
 
       <button
         type="button"

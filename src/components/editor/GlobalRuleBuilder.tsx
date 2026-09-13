@@ -7,6 +7,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useEditorStore } from '@/stores/editor-store';
 import { getAyahWordsByKey, getAyahByKey, getSurahOrFirst } from '@/data/quran';
 import { characterCount } from '@/lib/quran-logic/characters';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
@@ -21,6 +22,7 @@ import {
 } from '@/lib/quran-logic/global-rule-engine';
 import {
   createGlobalRuleId,
+  listGlobalRules,
   saveGlobalRule,
   setGlobalRuleOrderRank,
   type GlobalRule,
@@ -106,6 +108,7 @@ export function GlobalRuleBuilder({
   onSaved,
 }: GlobalRuleBuilderProps) {
   const catalog = useTransmissionCatalog();
+  const transactExternal = useEditorStore((state) => state.transactExternal);
   const [kind, setKind] = useState<GlobalRulePattern['kind']>(initialKind);
   const [characterPattern, setCharacterPattern] = useState<GlobalCharacterPattern | null>(() => {
     if (!characterRange) return null;
@@ -234,26 +237,44 @@ export function GlobalRuleBuilder({
       return;
     }
 
-    const saved = saveGlobalRule({
-      id: createGlobalRuleId(),
-      title,
-      category,
-      scope,
-      ruleLabel: ruleLabel.trim() || undefined,
-      maddHarakat: maddHarakat === '' ? undefined : Number(maddHarakat),
-      pattern,
-      strengthDegreeId,
-      strengthByNarrator: pruneStrengthMap(strengthByNarrator, resolveScope(scope, catalog)),
-      description: description.trim() || undefined,
-      sourceRef: sourceRef.trim() || undefined,
-      orderRank: orderRank === '' ? undefined : Math.max(1, Math.round(Number(orderRank))),
-      evidences: [],
-      status,
-      isActive,
-    });
-    // ضبط الرتبة عبر المضبّط الرسمي يعيد ترقيم القواعد المتأثرة تلقائيا.
-    if (saved.orderRank) setGlobalRuleOrderRank(saved.id, saved.orderRank);
-    onSaved(saved, matches.length);
+    const ruleId = createGlobalRuleId();
+    transactExternal(
+      {
+        action: 'إنشاء قاعدة عامة',
+        targetType: 'RULE',
+        targetId: ruleId,
+        category,
+        summary: `إنشاء القاعدة العامة «${title.trim()}» من المحرر`,
+      },
+      () => {
+        const saved = saveGlobalRule({
+          id: ruleId,
+          title,
+          category,
+          scope,
+          ruleLabel: ruleLabel.trim() || undefined,
+          maddHarakat: maddHarakat === '' ? undefined : Number(maddHarakat),
+          pattern,
+          strengthDegreeId,
+          strengthByNarrator: pruneStrengthMap(strengthByNarrator, resolveScope(scope, catalog)),
+          description: description.trim() || undefined,
+          sourceRef: sourceRef.trim() || undefined,
+          orderRank: orderRank === '' ? undefined : Math.max(1, Math.round(Number(orderRank))),
+          evidences: [],
+          status,
+          isActive,
+        });
+        // ضبط الرتبة عبر المضبّط الرسمي يعيد ترقيم القواعد المتأثرة تلقائيا.
+        if (saved.orderRank) setGlobalRuleOrderRank(saved.id, saved.orderRank);
+      }
+    );
+    // تُقرأ القاعدة المحفوظة بعد المعاملة (بما فيها إعادة الترقيم).
+    const refreshed = listGlobalRules().find((rule) => rule.id === ruleId);
+    if (!refreshed) {
+      setError('تعذّر قراءة القاعدة بعد حفظها.');
+      return;
+    }
+    onSaved(refreshed, matches.length);
   };
 
   return (
