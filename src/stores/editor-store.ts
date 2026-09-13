@@ -412,6 +412,12 @@ interface EditorState {
   setMarkingMode: (mode: MarkingMode) => void;
   selectWord: (wordId: number | null) => void;
   selectVariant: (variantId: string | null) => void;
+  /**
+   * تحديد قاعدة عامة ككيان مستقل (FR-ED-15): نفس الـID الذي تستعمله كل
+   * الواجهات (قائمة الاختلافات، التتبع، الفهرس). لا يمس selectedVariantId
+   * كيلا يُفقد اختلاف محدد آخر.
+   */
+  selectRule: (ruleId: string | null) => void;
   selectAlternative: (variantId: string, alternativeId: string) => void;
   selectSegment: (segmentId: string | null) => void;
   selectLine: (lineId: string, differenceId?: string, position?: number) => void;
@@ -849,7 +855,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 
-
+  deleteAlternative: (variantId, alternativeId) => {
+    const selection: MultiSelection = { kind: 'FACE', ownerId: variantId, ids: [alternativeId] };
+    const owner = get().document?.variants.find((item) => item.id === variantId);
+    const face = owner?.alternatives.find((item) => item.id === alternativeId);
+    mutate(set, get, (document) => deleteItems(document, selection), {
+      action: 'حذف وجه',
+      targetType: 'ALTERNATIVE',
+      targetId: alternativeId,
+      category: owner?.category,
+      summary: `حذف المحرر وجها («${face?.label ?? alternativeId}») من «${owner?.title ?? variantId}»`,
+    });
+    set({ multiSelection: null, selection: null, selectedAlternativeId: null });
   },
 
   deleteAlternativesBulk: (variantId, alternativeIds) => {
@@ -863,7 +880,115 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   deleteVariantsBulk: (variantIds) => {
+    if (variantIds.length === 0) return;
+    const doomed = new Set(variantIds);
+    mutate(
+      set,
+      get,
+      (document) => {
+        const removed = document.variants.filter((variant) => doomed.has(variant.id));
+        const links = variantIds.reduce(
+          (current, id) => pruneLinksForVariant(current, id),
+          document.links ?? []
+        );
+        return withLoggedEdit(
+          {
+            ...document,
+            variants: document.variants.filter((variant) => !doomed.has(variant.id)),
+            branches: document.branches.filter((branch) => !doomed.has(branch.variantId)),
+            links,
+          },
+          {
+            action: 'حذف جماعي للاختلافات',
+            targetType: 'VARIANT',
+            targetId: variantIds.join(','),
+            category: removed[0]?.category,
+            summary: `حذف المحرر ${toArabicDigits(variantIds.length)} اختلافًا دفعة واحدة`,
+          },
+          document
+        );
+      },
+    );
+    set((state) => ({
+      ...selectionWrite(
+        state,
+        state.selectedVariantId && doomed.has(state.selectedVariantId) ? null : state.selection,
+        { center: false }
+      ),
+      selectedVariantId: state.selectedVariantId && doomed.has(state.selectedVariantId) ? null : state.selectedVariantId,
+      selectedAlternativeId: state.selectedVariantId && doomed.has(state.selectedVariantId) ? null : state.selectedAlternativeId,
+    }));
+  },
 
+  /**
+   * بوابة الحذف الموحّدة (FR-ED-04.2/NFR-05): تأكيد كمي بالأثر الحقيقي
+   * (اختلافات/أوجه/روابط)، ثم تنفيذ ذري داخل التراجع. ترجع false عند الإلغاء.
+   */
+  requestDeleteItems: (selection) => {
+    const document = get().document;
+    if (!document) return Promise.resolve(false);
+    const impact = deletionImpact(document, selection);
+    if (impact.count === 0) return Promise.resolve(false);
+    const category =
+      selection.kind === 'DIFFERENCE'
+        ? impact.differences[0]?.category
+        : document.variants.find((item) => item.id === selection.ownerId)?.category;
+    const headCount = selection.kind === 'DIFFERENCE' ? impact.differences.length : impact.faces.length;
+    const impacts =
+      selection.kind === 'DIFFERENCE'
+        ? [
+            { label: 'اختلاف', count: impact.differences.length },
+            { label: 'رابط يدوي', count: impact.links.length },
+            { label: 'وجه', count: impact.faces.length },
+          ]
+        : [
+            { label: 'وجه', count: impact.faces.length },
+            { label: 'رابط يدوي', count: impact.links.length },
+          ];
+    return confirmAction({
+      title:
+        selection.kind === 'DIFFERENCE'
+          ? `حذف ${toArabicDigits(headCount)} اختلافات؟`
+          : `حذف ${toArabicDigits(headCount)} أوجه؟`,
+      message:
+        selection.kind === 'DIFFERENCE'
+          ? 'يُحذف كل اختلاف بما يليه من أوجه وخطوط، وتُزال الروابط اليدوية المتصلة.'
+          : `تُحذف الأوجه من الاختلاف «${document.variants.find((item) => item.id === selection.ownerId)?.title ?? ''}» مع ما يتعلق بها من روابط.`,
+      impacts,
+      undoable: true,
+      confirmLabel: 'حذف',
+      tone: 'danger',
+    }).then((ok) => {
+      if (!ok) return false;
+      mutate(set, get, (current) => deleteItems(current, selection), {
+        action: selection.kind === 'DIFFERENCE' ? 'حذف اختلافات' : 'حذف أوجه',
+        targetType: selection.kind === 'DIFFERENCE' ? 'VARIANT' : 'ALTERNATIVE',
+        targetId: selection.ids.join(','),
+        category,
+        summary: `حذف المحرر ${toArabicDigits(impact.count)} عنصرًا (${impact.differences.length} اختلافًا و${impact.faces.length} وجهًا)`,
+      });
+      set((state) => ({
+        multiSelection: null,
+        ...selectionWrite(
+          state,
+          state.selection &&
+          ((selection.kind === 'DIFFERENCE' && selection.ids.includes(state.selection.id)) ||
+            (selection.kind === 'FACE' && state.selection.kind === 'FACE' && state.selection.differenceId === selection.ownerId && selection.ids.includes(state.selection.faceId ?? state.selection.id)))
+            ? null
+            : state.selection,
+          { center: false }
+        ),
+        selectedVariantId:
+          selection.kind === 'DIFFERENCE' && state.selectedVariantId && selection.ids.includes(state.selectedVariantId)
+            ? null
+            : state.selectedVariantId,
+        selectedAlternativeId:
+          selection.kind === 'FACE' && state.selectedAlternativeId && selection.ids.includes(state.selectedAlternativeId)
+            ? null
+            : state.selectedAlternativeId,
+      }));
+      return true;
+    });
   },
 
   setVariantOrderRank: (variantId, rank) => {
@@ -1022,34 +1147,62 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   moveAlternative: (variantId, alternativeId, delta) => {
-    mutate(set, get, (document) => ({
-      ...document,
-      variants: document.variants.map((variant) => {
-        if (variant.id !== variantId) return variant;
+    // نقل وجه داخل موضعه عملية يدوية تُتبع (الحزم 04–08): تسجَّل في سجل
+    // التعديل حتى يراها التتبع الموحّد كحدث «نقل».
+    mutate(set, get, (document) => {
+      const owner = document.variants.find((variant) => variant.id === variantId);
+      if (!owner) return document;
 
-        // نبني الترتيب الصريح من الترتيب الظاهر الآن، ثم ننقل الوجه فيه.
-        // هكذا لا يقفز بقية الأوجه عند أول نقلة يدوية.
-        const current = orderedAlternativeIds(variant);
-        const index = current.indexOf(alternativeId);
-        if (index === -1) return variant;
+      // نبني الترتيب الصريح من الترتيب الظاهر الآن، ثم ننقل الوجه فيه.
+      // هكذا لا يقفز بقية الأوجه عند أول نقلة يدوية.
+      const current = orderedAlternativeIds(owner);
+      const index = current.indexOf(alternativeId);
+      const target = index + delta;
+      if (index === -1 || target < 0 || target >= current.length) return document;
 
-        const target = index + delta;
-        if (target < 0 || target >= current.length) return variant;
-
-        const next = [...current];
-        [next[index], next[target]] = [next[target], next[index]];
-        return { ...variant, alternativeOrder: next };
-      }),
-    }));
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      const face = owner.alternatives.find((item) => item.id === alternativeId);
+      return withLoggedEdit(
+        {
+          ...document,
+          variants: document.variants.map((variant) =>
+            variant.id === variantId ? { ...variant, alternativeOrder: next } : variant
+          ),
+        },
+        {
+          action: 'نقل وجه داخل الموضع',
+          targetType: 'ALTERNATIVE_ORDER',
+          targetId: variantId,
+          category: owner.category,
+          summary: `نقل المحرر الوجه «${face?.label ?? alternativeId}» داخل الموضع «${owner.title}»`,
+        },
+        document
+      );
+    });
   },
 
   resetAlternativeOrder: (variantId) => {
-    mutate(set, get, (document) => ({
-      ...document,
-      variants: document.variants.map((variant) =>
-        variant.id === variantId ? { ...variant, alternativeOrder: undefined } : variant
-      ),
-    }));
+    mutate(set, get, (document) => {
+      const owner = document.variants.find((variant) => variant.id === variantId);
+      if (!owner || !owner.alternativeOrder) return document;
+      return withLoggedEdit(
+        {
+          ...document,
+          variants: document.variants.map((variant) =>
+            variant.id === variantId ? { ...variant, alternativeOrder: undefined } : variant
+          ),
+        },
+        {
+          action: 'إعادة ترتيب الأوجه إلى قاعدة المحرك',
+          targetType: 'ALTERNATIVE_ORDER',
+          targetId: variantId,
+          category: owner.category,
+          summary: `أعاد المحرر ترتيب أوجه «${owner.title}» إلى قاعدة المحرك`,
+        },
+        document
+      );
+    });
   },
 
   // ==================== الخطوط ====================
@@ -1447,26 +1600,68 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   // ==================== الوقف والابتداء وتخطيط النص ====================
 
   addBoundary: (boundary) => {
+    // علامات الوقف/الوصل أحداث تتبع (الحزم 04–08): تسجَّل في سجل التعديل
+    // بفئة WAQF حتى تظهر في التتبع الموحّد وتصنّف معه.
     mutate(set, get, (document) => ({
       ...document,
       boundaries: [...document.boundaries, boundary].sort((first, second) => first.position - second.position),
-    }));
+    }), {
+      action: boundaryActionLabel(boundary.kind),
+      targetType: 'BOUNDARY',
+      targetId: boundary.id,
+      category: 'WAQF',
+      summary: `${boundaryActionLabel(boundary.kind)} عند الكلمة ${boundary.position}`,
+    });
   },
 
   updateBoundary: (boundaryId, patch) => {
-    mutate(set, get, (document) => ({
-      ...document,
-      boundaries: document.boundaries
-        .map((boundary) => (boundary.id === boundaryId ? { ...boundary, ...patch } : boundary))
-        .sort((first, second) => first.position - second.position),
-    }));
+    mutate(set, get, (document) => {
+      const before = document.boundaries.find((boundary) => boundary.id === boundaryId);
+      if (!before) return document;
+      return withLoggedEdit(
+        {
+          ...document,
+          boundaries: document.boundaries
+            .map((boundary) => (boundary.id === boundaryId ? { ...boundary, ...patch } : boundary))
+            .sort((first, second) => first.position - second.position),
+        },
+        {
+          action: 'تعديل علامة وقف/وصل',
+          targetType: 'BOUNDARY',
+          targetId: boundaryId,
+          category: 'WAQF',
+          summary: `تعديل علامة (${boundaryLabelOf(before.kind)}) عند الكلمة ${before.position}: ${Object.keys(patch).join('، ')}`,
+          changes: Object.entries(patch).map(([field, after]) => ({
+            field,
+            before: (before as unknown as Record<string, unknown>)[field],
+            after,
+          })),
+        },
+        document
+      );
+    });
   },
 
   deleteBoundary: (boundaryId) => {
-    mutate(set, get, (document) => ({
-      ...document,
-      boundaries: document.boundaries.filter((boundary) => boundary.id !== boundaryId),
-    }));
+    mutate(set, get, (document) => {
+      const before = document.boundaries.find((boundary) => boundary.id === boundaryId);
+      if (!before) return document;
+      return withLoggedEdit(
+        {
+          ...document,
+          boundaries: document.boundaries.filter((boundary) => boundary.id !== boundaryId),
+        },
+        {
+          action: 'حذف علامة وقف/وصل',
+          targetType: 'BOUNDARY',
+          targetId: boundaryId,
+          category: 'WAQF',
+          summary: `حذف المحرر علامة (${boundaryLabelOf(before.kind)}) عند الكلمة ${before.position}`,
+        },
+        document
+      );
+    });
+    // المحذوف قد يكون المحدد الحالي (WAQF_MARK): يُصفَّر التحديد معه.
     set((state) =>
       state.selection?.kind === 'WAQF_MARK' && state.selection.id === boundaryId
         ? selectionWrite(state, null, { center: false })
@@ -1475,6 +1670,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   setLinkNextAyah: (linked) => {
+    // وصل/فك وصل نافذة القراءة حدث تتبع (الحزم 04–08): يسجَّل بفئة WAQF.
+    const targetId = String(get().document?.ayahKey ?? '');
     mutate(set, get, (document) => {
       const baseWordsCount = documentWindowWords({
         ...document,
@@ -1493,11 +1690,20 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           focusSegment: accepted ? (document.readingWindow?.focusSegment ?? null) : null,
         },
       };
+    }, {
+      action: linked ? 'وصل الآية بالآية التالية' : 'فك وصل الآية عن التالية',
+      targetType: 'WINDOW',
+      targetId,
+      category: 'WAQF',
+      summary: linked
+        ? 'وصل المحرر الآية بالآية التالية في نافذة عمل واحدة'
+        : 'فك المحرر وصل الآية عن الآية التالية',
     });
     set({ selectedWordId: null, markedPositions: [], markedCharacters: [] });
   },
 
   setFocusSegment: (segment) => {
+    const targetId = String(get().document?.ayahKey ?? '');
     mutate(set, get, (document) => ({
       ...document,
       readingWindow: {
@@ -1509,7 +1715,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             }
           : null,
       },
-    }));
+    }), {
+      action: segment ? 'حصر التشجير في مقطع' : 'إلغاء حصر المقطع',
+      targetType: 'WINDOW',
+      targetId,
+      category: 'WAQF',
+      summary: segment
+        ? `حصر المحرر التشجير في المقطع ${segment.startPosition}–${segment.endPosition}`
+        : 'أعاد المحرر تشجير الآية كاملة بلا حصر',
+    });
   },
 
   toggleForcedLineBreak: (position) => {
@@ -1568,7 +1782,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setMarkingMode: (mode) => set({ markingMode: mode, markedPositions: [], markedCharacters: [] }),
   selectWord: (wordId) => {
     const word = wordId ? documentWindowWords(get().document).find((item) => item.id === wordId) : undefined;
-
+    set((state) => ({
+      ...selectionWrite(state, wordId ? { kind: 'WORD', id: String(wordId), position: word?.position } : null),
       selectedWordId: wordId,
       selectedAlternativeId: null,
     }));
@@ -1578,18 +1793,37 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const variant = variantId && currentDocument
       ? getEffectiveVariants(currentDocument).find((item) => item.id === variantId)
       : undefined;
-
+    set((state) => ({
+      ...selectionWrite(
+        state,
+        variantId
+          ? { kind: variant?.isGlobalDerived ? 'RULE' : 'DIFFERENCE', id: variantId, differenceId: variantId, position: variant?.startPosition }
+          : null
+      ),
       selectedVariantId: variantId,
       selectedAlternativeId: null,
       selectedBranchId: null,
     }));
+  },
+  selectRule: (ruleId) => {
+    set({
+      selection: ruleId ? { kind: 'RULE', id: ruleId } : null,
+      selectedVariantId: null,
+      selectedAlternativeId: null,
+      selectedBranchId: null,
+      selectedWordId: null,
+    });
   },
   selectAlternative: (variantId, alternativeId) => {
     const currentDocument = get().document;
     const variant = currentDocument
       ? getEffectiveVariants(currentDocument).find((item) => item.id === variantId)
       : undefined;
-
+    set((state) => ({
+      ...selectionWrite(
+        state,
+        { kind: 'FACE', id: alternativeId, differenceId: variantId, faceId: alternativeId, position: variant?.startPosition }
+      ),
       selectedVariantId: variantId,
       selectedAlternativeId: alternativeId,
       selectedBranchId: null,
@@ -1597,17 +1831,23 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
   selectSegment: (segmentId) => {
     const segment = get().document?.segments?.find((item) => item.id === segmentId);
-
+    set((state) => ({
+      ...selectionWrite(
+        state,
+        segmentId ? { kind: 'SEGMENT', id: segmentId, position: segment?.startPosition } : null
+      ),
       selectedVariantId: null,
       selectedAlternativeId: null,
       selectedBranchId: null,
     }));
   },
-
-    selectedVariantId: differenceId ?? null,
-    selectedAlternativeId: null,
-    selectedBranchId: lineId,
-  })),
+  selectLine: (lineId, differenceId, position) =>
+    set((state) => ({
+      ...selectionWrite(state, { kind: 'LINE', id: lineId, lineId, differenceId, position }),
+      selectedVariantId: differenceId ?? null,
+      selectedAlternativeId: null,
+      selectedBranchId: lineId,
+    })),
   selectBranch: (branchId) => set((state) => ({
     selectedBranchId: branchId,
     ...selectionWrite(
@@ -1781,7 +2021,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const currentEntry = captureHistoryEntry(document);
     const restored = restoreHistoryEntry(entry);
     set({
-
+      document: restored,
       past: past.slice(0, -1),
       future: [currentEntry, ...get().future].slice(0, MAX_HISTORY),
       isDirty: true,
@@ -1796,7 +2036,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const currentEntry = captureHistoryEntry(document);
     const restored = restoreHistoryEntry(entry);
     set({
-
+      document: restored,
       future: future.slice(1),
       past: pushHistory(get().past, currentEntry),
       isDirty: true,
@@ -1869,7 +2109,9 @@ function captureHistoryEntry(document: TashjeerDocument): EditorHistoryEntry {
 function restoreHistoryEntry(entry: EditorHistoryEntry): TashjeerDocument {
   restoreOccurrenceData(entry.occurrences);
   restoreGlobalRulesSnapshot(entry.globalRules);
-  return withRegeneratedBranches(entry.document);
+  // الاستعادة حرفية: اللقطة هي الحالة كما كانت لحظة الالتقاط، وإعادة توليد
+  // الخطوط هنا يفسد مقارنة «ما قبل/بعد» ويتعارض مع التراجع الحتمي.
+  return entry.document;
 }
 
 /** يلحق سطر سجل تعديل بالمستند إن كان التعديل حقيقيا (تغيرت بياناته). */
@@ -1980,6 +2222,34 @@ function describeEndpoint(endpoint?: import('@/types/tashjeer').LinkEndpoint): s
 
 function shortenId(id: string): string {
   return id.length > 40 ? `${id.slice(0, 37)}…` : id;
+}
+
+/** اسم فعل تسجيل علامة وقف/وصل حسب نوعها، لسجل التعديل والتتبع. */
+function boundaryActionLabel(kind: RecitationBoundary['kind']): string {
+  switch (kind) {
+    case 'WAQF':
+      return 'إضافة علامة وقف';
+    case 'IBTIDA':
+      return 'إضافة علامة ابتداء';
+    case 'WASL':
+      return 'إضافة علامة وصل';
+    default:
+      return 'إضافة حاجز ممنوع وصل';
+  }
+}
+
+/** تسمية مختصرة لنوع علامة، لتظهر في ملخصات السجل. */
+function boundaryLabelOf(kind: RecitationBoundary['kind']): string {
+  switch (kind) {
+    case 'WAQF':
+      return 'وقف';
+    case 'IBTIDA':
+      return 'ابتداء';
+    case 'WASL':
+      return 'وصل';
+    default:
+      return 'ممنوع وصل';
+  }
 }
 
 /** يزيل روابط وجه اختفى اختلافه، فلا تبقى علاقات تشير إلى معدوم. */

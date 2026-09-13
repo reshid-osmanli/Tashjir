@@ -90,6 +90,8 @@ export interface CandidatePattern {
   key: string;
   differenceType: string;
   relatedType?: string;
+  /** قرار المحرك في هذا النمط (A) — للتعبئة الدقيقة في منشئ القواعد. */
+  engineMerged: boolean;
   editorWantsMerge: boolean;
   count: number;
   rule: EngineRule;
@@ -119,6 +121,7 @@ export function detectRecurringPatterns(
       key,
       differenceType: first.differenceType,
       relatedType: first.relatedType,
+      engineMerged: first.engineMerged,
       editorWantsMerge: first.editorWantsMerge,
       count: list.length,
       rule: proposeCandidateRule(first),

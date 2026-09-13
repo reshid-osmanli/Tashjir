@@ -62,6 +62,8 @@ type IndexRow = {
   variantId?: string;
   targetText: string;
   globalRule?: GlobalRule;
+  /** عدد مواضع القاعدة المشتقة في المصحف كله (FR-ES-15: «المواضع المتأثرة»). */
+  matchCount?: number;
 };
 
 const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS) as VariantCategory[];
@@ -318,6 +320,18 @@ export function RulesIndexDialog({
                           التطبيق: {describeGlobalPattern(row.globalRule.pattern)}
                         </p>
                       )}
+                      {typeof row.matchCount === 'number' && row.matchCount > 0 && (
+                        <p className="mt-1 text-[10px] text-violet-800">
+                          المواضع المتأثرة: {toArabicDigits(row.matchCount)} موضعا في المصحف —{' '}
+                          <button
+                            type="button"
+                            onClick={() => setReviewingRule(row.globalRule ?? null)}
+                            className="text-violet-700 underline-offset-2 hover:underline"
+                          >
+                            افتح المواضع المتأثرة
+                          </button>
+                        </p>
+                      )}
                       {row.globalRule?.pattern && <RuleStats ruleId={row.globalRule.id} refreshKey={occurrences.key} />}
                     </div>
 
@@ -393,10 +407,10 @@ export function RulesIndexDialog({
         <RuleOccurrenceReview
           rule={reviewingRule}
           startAtAyahKey={currentAyahKey}
-          onOpenInEditor={(ayahKey) => {
+          onOpenInEditor={(ayahKey, variantId) => {
             setReviewingRule(null);
             onRulesChanged();
-            onNavigate(ayahKey);
+            onNavigate(ayahKey, variantId);
             onClose();
           }}
           onClose={() => {
@@ -470,6 +484,8 @@ function readIndexRows(): IndexRow[] {
       isActive: rule.isActive,
       targetText: rule.ruleLabel || 'قاعدة عامة للمصحف كله',
       globalRule: rule,
+      // المواضع المتأثرة (FR-ES-15): تُحسب من النمط نفسه بلا تخزين مكرر.
+      matchCount: rule.pattern ? findGlobalRuleMatches(rule, { limit: 100000 }).length : 0,
     })
   );
 

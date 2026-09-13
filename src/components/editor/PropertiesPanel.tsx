@@ -24,6 +24,13 @@ import { getCategoryColor, getImamColor } from '@/lib/tashjeer/color-system';
 import { describeScope, getFullNarratorName, resolveScope } from '@/lib/tashjeer/scope';
 import { StatusBadge } from './VariantsPanel';
 import { WhyTraceDialog } from './WhyTraceDialog';
+import { GlobalRuleMetaEditor } from './GlobalRuleMetaEditor';
+import { RuleOccurrenceReview } from './RuleOccurrenceReview';
+import { describeGlobalPattern } from '@/lib/quran-logic/global-rule-engine';
+import { listGlobalRules, saveGlobalRule, type GlobalRule } from '@/lib/storage/global-rules-store';
+import { correctionTripletOf } from '@/lib/storage/tracking-store';
+import { resolveDifference } from '@/lib/tashjeer/decision/api';
+import { editorCategoryToStudioType } from '@/lib/tashjeer/decision/editor-bridge';
 import {
   ManualLinesControls,
   RecitationControls,
@@ -34,7 +41,6 @@ import { RelationsPanel } from './RelationsPanel';
 import { OrderRankControl } from './OrderRankControl';
 import { SelectionDetailsPanel } from './SelectionDetailsPanel';
 import { coalesceLineOrder, orderSnapshotOf, shiftLineInOrder } from '@/lib/tashjeer/manual-links';
-import { listGlobalRules } from '@/lib/storage/global-rules-store';
 import { faceEndpointKey } from '@/types/tashjeer';
 import type { VariantCategory } from '@/types';
 import type { TashjeerLinkRelation, VerificationStatus } from '@/types/tashjeer';
@@ -52,9 +58,13 @@ export function PropertiesPanel() {
   const pendingWhy = useEditorStore((state) => state.pendingWhy);
   const requestWhy = useEditorStore((state) => state.requestWhy);
   const [highlightRuleId, setHighlightRuleId] = useState<string | undefined>(undefined);
+  // حوارا القاعدة العامة ككيان مستقل (تحرير/تتبع المواضع) من التحديد الموحد.
+  const [editingRuleEntity, setEditingRuleEntity] = useState<GlobalRule | null>(null);
+  const [reviewingRuleEntity, setReviewingRuleEntity] = useState<GlobalRule | null>(null);
   const {
     document,
     filter,
+    selection,
     selectedWordId,
     selectedVariantId,
     selectedBranchId,
@@ -71,6 +81,7 @@ export function PropertiesPanel() {
     resetLineOrder,
     addLink,
     copyLine,
+    refreshDerivedBranches,
   } = useEditorStore();
 
   const catalog = useTransmissionCatalog();
@@ -93,6 +104,62 @@ export function PropertiesPanel() {
   const selectedLine =
     classic.lines.find((line) => line.id === selectedBranchId) ??
     classic.lines.find((line) => line.variantId === selectedVariantId);
+
+  // القاعدة العامة ككيان مستقل (FR-ED-15): تحديد من أي واجهة (kind RULE)
+  // يعرض هنا نفس المعرّف ونفس بيانات القاعدة.
+  const selectedRuleEntity = useMemo<GlobalRule | null>(() => {
+    if (!selection || selection.kind !== 'RULE') return null;
+    return listGlobalRules().find((rule) => rule.id === selection.id) ?? null;
+  }, [selection]);
+
+  // تصحيح الموضع المحدد (Engine/Editor/Final) — أساس زر «أنشئ قاعدة من التصحيح».
+  const selectedCorrection = useMemo(
+    () => (selectedVariant ? correctionTripletOf(selectedVariant) : undefined),
+    [selectedVariant]
+  );
+
+  // الربط الثنائي محرر↔استوديو (FR-ES-15.1): يفتح القاعدة التي استوجبت هذا
+  // الموضع فعلا عبر Decision Resolver نفسه، أو قسم القواعد إن لم يوجد.
+  const studioRuleHref = useMemo(() => {
+    const target = selectedRuleEntity
+      ? { category: selectedRuleEntity.category, source: 'engine' as const, globalRuleId: selectedRuleEntity.id }
+      : selectedVariant
+        ? {
+            category: selectedVariant.category,
+            source: (selectedVariant.isGlobalDerived || selectedVariant.origin !== 'EDITOR'
+              ? 'engine'
+              : 'editor') as 'engine' | 'editor',
+            globalRuleId: selectedVariant.globalRuleId,
+          }
+        : null;
+    if (!target) return '/studio';
+    const result = resolveDifference(
+      {
+        differenceType: editorCategoryToStudioType(target.category),
+        category: 'DIFFERENCE',
+        source: target.source,
+        globalRuleId: target.globalRuleId,
+      },
+      engineConfig
+    );
+    const rule = result.appliedRules[0];
+    return rule ? `/studio?rule=${encodeURIComponent(rule.id)}` : '/studio?section=rules';
+  }, [selectedRuleEntity, selectedVariant, engineConfig]);
+
+  // «أنشئ قاعدة من التصحيح» (FR-ES-12.4): يفتح الاستوديو مُعبأ من سياق
+  // التصحيح نفسه — لا يُنشأ شيء قبل الحفظ اليدوي (P-06).
+  const candidateRuleHref = useMemo(() => {
+    if (!selectedCorrection?.candidate || !selectedVariant) return null;
+    const params = new URLSearchParams({
+      section: 'candidates',
+      differenceType: selectedCorrection.candidate.differenceType,
+      engineMerged: selectedCorrection.candidate.engineMerged ? '1' : '0',
+      editorWantsMerge: selectedCorrection.candidate.editorWantsMerge ? '1' : '0',
+      ayah: String(document?.ayahKey ?? 0),
+      variant: selectedVariant.id,
+    });
+    return `/studio?${params.toString()}`;
+  }, [selectedCorrection, selectedVariant, document?.ayahKey]);
 
   // استهلاك طلب «لماذا؟» القادم من رابط عميق حين يصبح الاختلاف محددا.
   useEffect(() => {
@@ -249,14 +316,79 @@ export function PropertiesPanel() {
             >
               لماذا؟
             </button>
+            <a
+              href={studioRuleHref}
+              className="w-full rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-center text-xs font-semibold text-emerald-900 hover:bg-emerald-100"
+              title="افتح القاعدة/القرار المرتبط بهذا الموضع مباشرة في استوديو المحرك"
+            >
+              في الاستوديو
+            </a>
+          </div>
+          {candidateRuleHref && (
+            <a
+              href={candidateRuleHref}
+              className="mt-2 block w-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-center text-xs font-semibold text-amber-900 hover:bg-amber-100"
+              title="يفتح منشئ قواعد الاستوديو مُعبأ باقتراحات من سياق هذا التصحيح (قارئ/سياق/نوع) — لا يُنشأ شيء قبل الحفظ اليدوي"
+            >
+              ← أنشئ قاعدة من هذا التصحيح
+            </a>
+          )}
+        </Section>
+      )}
+
+      {/* القاعدة العامة كعنصر مستقل محدد (FR-ED-15): نفس الـID في كل الواجهات */}
+      {selectedRuleEntity && (
+        <Section title="القاعدة العامة (عنصر مستقل)">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-sm font-medium text-stone-900">{selectedRuleEntity.title}</span>
+            <StatusBadge status={selectedRuleEntity.status} />
+          </div>
+          <Row label="الفئة" value={CATEGORY_LABELS[selectedRuleEntity.category]} />
+          <Row label="الحالة" value={selectedRuleEntity.isActive ? 'نشطة' : 'موقوفة'} />
+          <Row label="النطاق" value={describeScope(selectedRuleEntity.scope, { catalog })} />
+          {typeof selectedRuleEntity.orderRank === 'number' && (
+            <Row label="ترتيب السطر" value={toArabicDigits(selectedRuleEntity.orderRank)} />
+          )}
+          {selectedRuleEntity.pattern && (
+            <p className="mt-2 text-[11px] text-violet-700">النمط: {describeGlobalPattern(selectedRuleEntity.pattern)}</p>
+          )}
+          <p className="mt-1 text-[10px] text-stone-400" dir="ltr" title="نفس المعرّف في قائمة الاختلافات والتتبع والفهرس والاستوديو">
+            {selectedRuleEntity.id}
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => window.location.assign('/studio')}
-              className="w-full rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-100"
+              onClick={() => setEditingRuleEntity(selectedRuleEntity)}
+              className="w-full rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-900 hover:bg-violet-100"
+              title="تعديل القاعدة؛ ينعكس على كل مواضعها غير المتجاوزة محليا"
+            >
+              تحرير القاعدة
+            </button>
+            <button
+              type="button"
+              onClick={() => setReviewingRuleEntity(selectedRuleEntity)}
+              className="w-full rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-900 hover:bg-violet-100"
+              title="المواضع المتأثرة في المصحف كله — اختيار موضع يفتح المحرر محددا عليه"
+            >
+              المواضع المتأثرة
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                saveGlobalRule({ ...selectedRuleEntity, isActive: !selectedRuleEntity.isActive });
+                refreshDerivedBranches();
+              }}
+              className="w-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+            >
+              {selectedRuleEntity.isActive ? 'إيقاف القاعدة' : 'تفعيل القاعدة'}
+            </button>
+            <a
+              href={studioRuleHref}
+              className="w-full rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-center text-xs font-semibold text-emerald-900 hover:bg-emerald-100"
               title="افتح القاعدة/السياسة المرتبطة في استوديو المحرك"
             >
               في الاستوديو
-            </button>
+            </a>
           </div>
         </Section>
       )}
@@ -386,6 +518,34 @@ export function PropertiesPanel() {
       <RecitationControls />
       <ManualLinesControls />
       <RelationsPanel />
+
+      {editingRuleEntity && (
+        <GlobalRuleMetaEditor
+          rule={editingRuleEntity}
+          onClose={() => setEditingRuleEntity(null)}
+          onSaved={() => {
+            setEditingRuleEntity(null);
+            refreshDerivedBranches();
+          }}
+        />
+      )}
+
+      {reviewingRuleEntity && (
+        <RuleOccurrenceReview
+          rule={reviewingRuleEntity}
+          startAtAyahKey={document.ayahKey}
+          onOpenInEditor={(ayahKey, variantId) => {
+            setReviewingRuleEntity(null);
+            refreshDerivedBranches();
+            useEditorStore.getState().openAyah(ayahKey);
+            if (variantId) useEditorStore.getState().selectVariant(variantId);
+          }}
+          onClose={() => {
+            setReviewingRuleEntity(null);
+            refreshDerivedBranches();
+          }}
+        />
+      )}
 
       {showWhyDialog && selectedVariant && (
         <WhyTraceDialog

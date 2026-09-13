@@ -31,6 +31,7 @@ export default function EditorPage() {
   const [requestedRoute, setRequestedRoute] = useState({
     ayahKey: DEFAULT_AYAH_KEY,
     variantId: null as string | null,
+    ruleId: null as string | null,
   });
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
@@ -44,6 +45,7 @@ export default function EditorPage() {
     selectedVariantId,
     openAyah,
     selectVariant,
+    selectRule,
     replaceDocument,
     showPropertiesPanel,
     showVariantsPanel,
@@ -56,29 +58,33 @@ export default function EditorPage() {
   // فتح الآية المطلوبة من المصحف/فهرس الاختلافات، أو الفاتحة 4 افتراضيا.
   // الرابط يحمل الآية لأن الانتقال من أي صفحة يجب ألا يعيد المحرر إلى المثال.
   // القراءة من location داخل effect بدلا من useSearchParams تجعل صفحة المحرر
-  // قابلة للبناء الساكن أيضا. الرابط ما زال يدعم ?ayah=...&variant=....
+  // قابلة للبناء الساكن أيضا. الرابط يدعم ?ayah=...&variant=... و?rule=global-...
+  // (تحديد قاعدة عامة كعنصر مستقل — FR-ED-15) و?rule=<معرّف قاعدة استوديو>&why=1.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const rule = params.get('rule');
+    // معرّف القاعدة العامة يبدأ بـ global- فيُحدَّد كيانا مستقلا في المحرر؛
+    // أما معرّف قاعدة الاستوديو فيُمرَّر لبروزها في أثر «لماذا؟».
     setRequestedRoute({
       ayahKey: Number(params.get('ayah')) || DEFAULT_AYAH_KEY,
       variantId: params.get('variant'),
+      ruleId: rule && rule.startsWith('global-') ? rule : null,
     });
-    // رابط عميق إلى «لماذا؟» (FR-ES-15): ?why=1 أو ?rule=<معرّف قاعدة استوديو>.
-    const rule = params.get('rule');
-    if (params.get('why') === '1' || rule) {
+    if (params.get('why') === '1' || (rule && !rule.startsWith('global-'))) {
       useEditorStore.getState().requestWhy({ ruleId: rule ?? undefined });
     }
   }, []);
 
   const requestedAyahKey = requestedRoute.ayahKey;
   const requestedVariantId = requestedRoute.variantId;
+  const requestedRuleId = requestedRoute.ruleId;
   const appliedRouteRef = useRef<string | null>(null);
   useEffect(() => {
-    const routeKey = `${requestedAyahKey}:${requestedVariantId ?? ''}`;
+    const routeKey = `${requestedAyahKey}:${requestedVariantId ?? ''}:${requestedRuleId ?? ''}`;
     if (appliedRouteRef.current === routeKey) return;
     appliedRouteRef.current = routeKey;
     if (!document || document.ayahKey !== requestedAyahKey) openAyah(requestedAyahKey);
-  }, [document, openAyah, requestedAyahKey, requestedVariantId]);
+  }, [document, openAyah, requestedAyahKey, requestedVariantId, requestedRuleId]);
 
   useEffect(() => {
     // يشمل الاختلافات المحفوظة والمشتقة من القواعد العامة (معرّفها global:...).
@@ -86,6 +92,13 @@ export default function EditorPage() {
       selectVariant(requestedVariantId);
     }
   }, [document, requestedAyahKey, requestedVariantId, selectVariant, selectedVariantId]);
+
+  // تحديد القاعدة العامة كعنصر مستقل (FR-ED-15/P-09): نفس الـID من كل الواجهات.
+  useEffect(() => {
+    if (document?.ayahKey === requestedAyahKey && requestedRuleId) {
+      selectRule(requestedRuleId);
+    }
+  }, [document, requestedAyahKey, requestedRuleId, selectRule]);
 
   // تحذير المتصفح عند مغادرة الصفحة مع وجود تعديلات غير محفوظة.
   useEffect(() => {

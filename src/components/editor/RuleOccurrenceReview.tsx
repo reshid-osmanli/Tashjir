@@ -42,10 +42,11 @@ interface RuleOccurrenceReviewProps {
   /** اسم الآية المفتوحة في المحرر، ليبدأ الاستعراض منها إن كانت من المواضع. */
   startAtAyahKey?: number;
   /**
-   * فتح آية الموضع داخل المحرر نفسه دون إعادة تحميل الصفحة. عند غيابه
+   * فتح آية الموضع داخل المحرر نفسه دون إعادة تحميل الصفحة، مع تحديد الموضع
+   * المشتق نفسه في التحديد الموحد (معرّفه = معرّف الموضع). عند غياب الدالة
    * (كصفحة الفهرس المستقلة) يُستعمل رابط عادي إلى المحرر.
    */
-  onOpenInEditor?: (ayahKey: number) => void;
+  onOpenInEditor?: (ayahKey: number, variantId?: string) => void;
 }
 
 type OccurrenceFilter = 'ALL' | 'PENDING' | 'CONFIRMED' | 'DELETED' | 'EDITED';
@@ -402,7 +403,7 @@ function OccurrenceCard({
   onConfirm: () => void;
   onStrengthChange: (next: { degreeId?: string; byNarrator?: ReaderStrengthMap }) => void;
   onOrderRankChange: (rank: number | null) => void;
-  onOpenInEditor?: (ayahKey: number) => void;
+  onOpenInEditor?: (ayahKey: number, variantId?: string) => void;
   rule: GlobalRule;
   degreeLabel?: string;
 }) {
@@ -437,16 +438,17 @@ function OccurrenceCard({
           {surah && ayah && (onOpenInEditor ? (
             <button
               type="button"
-              onClick={() => onOpenInEditor(ayah.key)}
+              onClick={() => onOpenInEditor(ayah.key, override?.id ?? occurrenceIdFor(rule.id, match))}
               className="rounded border border-stone-300 bg-white px-2 py-1 text-emerald-800 hover:bg-emerald-50"
-              title="فتح الآية في المحرر مباشرة دون مغادرة الجلسة"
+              title="فتح الآية في المحرر مباشرة والموضع نفسه محددا في التحديد الموحد"
             >
               فتح في المحرر: {surah.name} {ayah.ayahNumber}
             </button>
           ) : (
             <a
-              href={`/editor?ayah=${ayah.key}`}
+              href={`/editor?ayah=${ayah.key}&variant=${encodeURIComponent(override?.id ?? occurrenceIdFor(rule.id, match))}`}
               className="rounded border border-stone-300 bg-white px-2 py-1 text-emerald-800 hover:bg-emerald-50"
+              title="فتح الآية والموضع نفسه محددا في المحرر"
             >
               فتح في المحرر: {surah.name} {ayah.ayahNumber}
             </a>
