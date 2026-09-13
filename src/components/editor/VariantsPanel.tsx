@@ -8,7 +8,7 @@
 
 'use client';
 
-import { confirmAction } from '@/lib/ui/confirm-store';
+import { selectRange } from '@/lib/tashjeer/multi-selection';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 import { ScrollableList } from '@/components/ui/ScrollableList';
@@ -44,8 +44,9 @@ export function VariantsPanel() {
     setDraftCategory,
     selectVariant,
     selectAlternative,
-    deleteVariant,
-    deleteAlternativesBulk,
+    multiSelection,
+    setMultiSelection,
+    requestDeleteItems,
     updateVariant,
     clearMarks,
     addVariant,
@@ -126,6 +127,7 @@ export function VariantsPanel() {
       );
     });
   }, [document, listSearch]);
+
 
   const activeGlobalRules = useMemo(() => {
     if (!document) return [];
@@ -465,44 +467,13 @@ export function VariantsPanel() {
         )}
       </section>
 
-      {/* قائمة الاختلافات: القائمة الطويلة الاحترافية الموحّدة (FR-ED-01):
-          رأس ثابت للبحث، شريط تمرير مرئي، زرا صعود/نزول بضغط مستمر، زر
-          العودة لأعلى، وتنافذ للقوائم 1000+ (NFR-01)، وتمرير تلقائي إلى
-          العنصر المحدد من أي لوحة في منتصف الرؤية (التحديد الموحّد). */}
-      <ScrollableList
-        itemCount={visibleVariants.length}
-        ariaLabel="قائمة الاختلافات القابلة للتمرير"
-        estimateHeight={110}
-        threshold={40}
-        activeIndex={
-          selectedVariantId ? visibleVariants.findIndex((variant) => variant.id === selectedVariantId) : undefined
-        }
-        header={
-          <div className="px-3 py-2">
-            <label className="block text-[10px] font-medium text-stone-500">بحث وتصفية فورية</label>
-            <input
-              type="search"
-              value={listSearch}
-              onChange={(event) => setListSearch(event.target.value)}
-              placeholder="النص، الفئة، المصدر، الحالة…"
-              className="mt-1 w-full rounded border border-stone-300 px-2 py-1 text-[11px] focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-            {listSearch.trim() && (
-              <button type="button" onClick={() => setListSearch('')} className="mt-1 text-[10px] text-emerald-700 hover:underline">
-                إلغاء البحث
-              </button>
-            )}
-          </div>
-        }
-        emptyState={
+
           <p className="px-4 py-6 text-center text-xs text-stone-500">
             {document.variants.length === 0
               ? 'لا توجد اختلافات مسجّلة في هذه الآية بعد.'
               : 'لا نتائج مطابقة للبحث أو التصفية.'}
           </p>
-        }
-        renderWindow={(range) => (
-          <ul className="divide-y divide-stone-100">
+
             {visibleVariants.map((variant, index) => {
               // خارج النافذة: لا يُرسم إلا الصف المحدد (ليبقى التمرير إليه ممكنا).
               if (range.active && (index < range.start || index > range.end) && variant.id !== selectedVariantId) {
@@ -516,8 +487,7 @@ export function VariantsPanel() {
                 isSelected={variant.id === selectedVariantId}
                 selectedAlternativeId={variant.id === selectedVariantId ? selectedAlternativeId : null}
                 rowRef={variant.id === selectedVariantId ? selectedRowRef : undefined}
-                onMeasure={range.active ? (element) => range.measure(index, element) : undefined}
-                onSelect={() => selectVariant(variant.id === selectedVariantId ? null : variant.id)}
+
                 onSelectAlternative={(alternativeId) => selectAlternative(variant.id, alternativeId)}
                 onRecitationModeChange={(recitationMode) => updateVariant(variant.id, { recitationMode })}
                 onEdit={() => setEditingVariantId(variant.id)}
@@ -545,34 +515,8 @@ export function VariantsPanel() {
                       }
                     : undefined
                 }
-                onDelete={async () => {
-                  const faces = variant.alternatives.filter((alternative) => !alternative.isBase).length;
-                  const links = (document?.links ?? []).filter(
-                    (link) => link.from.id.startsWith(`${variant.id}::`) || link.to.id.startsWith(`${variant.id}::`)
-                  ).length;
-                  const ok = await confirmAction({
-                    title: `حذف الاختلاف «${variant.title}»`,
-                    message: 'يُحذف الموضع بكل أوجهه، وتُزال الروابط اليدوية المتعلقة به.',
-                    impacts: [
-                      { label: 'وجه', count: faces },
-                      { label: 'رابط يدوي', count: links },
-                    ],
-                    undoable: true,
-                    confirmLabel: 'حذف',
-                  });
-                  if (ok) deleteVariant(variant.id);
-                }}
-                onBulkDeleteFaces={async (faceIds) => {
-                  if (faceIds.length === 0) return;
-                  const ok = await confirmAction({
-                    title: 'حذف أوجه دفعة واحدة',
-                    message: `من الاختلاف «${variant.title}».`,
-                    impacts: [{ label: 'وجه', count: faceIds.length }],
-                    undoable: true,
-                    confirmLabel: 'حذف',
-                  });
-                  if (ok) deleteAlternativesBulk(variant.id, faceIds);
-                }}
+                onDelete={() => void requestDeleteItems({ kind: 'DIFFERENCE', ids: [variant.id] })}
+                onBulkDeleteFaces={(faceIds) => requestDeleteItems({ kind: 'FACE', ownerId: variant.id, ids: faceIds })}
               />
               );
             })}
@@ -688,6 +632,7 @@ function VariantRow({
   rowRef,
   onMeasure,
   onSelect,
+  isChecked,
   onSelectAlternative,
   onRecitationModeChange,
   onEdit,
@@ -702,7 +647,8 @@ function VariantRow({
   rowRef?: RefObject<HTMLLIElement | null>;
   /** قياس ارتفاع الصف للتنافذ (اختياري). */
   onMeasure?: (element: HTMLLIElement | null) => void;
-  onSelect: () => void;
+  isChecked?: boolean;
+  onSelect: (event: React.MouseEvent) => void;
   onSelectAlternative: (alternativeId: string) => void;
   onRecitationModeChange: (mode: Variant['recitationMode']) => void;
   onEdit: () => void;
@@ -710,48 +656,21 @@ function VariantRow({
   onGeneralize?: () => void;
   onDelete: () => void;
   /** يحذف الأوجه المحددة دفعة واحدة (FR-ED-07). */
-  onBulkDeleteFaces: (faceIds: string[]) => void;
+  onBulkDeleteFaces: (faceIds: string[]) => Promise<boolean>;
 }) {
   const drawnAlternatives = variant.alternatives.filter((alternative) => !alternative.isBase);
-  const [checkedFaces, setCheckedFaces] = useState<Set<string>>(new Set());
-  const [anchorFaceId, setAnchorFaceId] = useState<string | null>(null);
+  const multi = useEditorStore((state) => state.multiSelection);
+  const setMulti = useEditorStore((state) => state.setMultiSelection);
+  const checkedFaces = new Set(multi?.kind === 'FACE' && multi.ownerId === variant.id ? multi.ids : []);
+  const setCheckedFaces = (faces: Set<string>) => setMulti({ kind: 'FACE', ownerId: variant.id, ids: [...faces], anchor: multi?.anchor });
   const copyFaces = useEditorStore((state) => state.copyFaces);
   const listRef = useRef<HTMLUListElement | null>(null);
-
-  // إخلاء التحديد المتعدد عند مغادرة هذا الاختلاف حتى لا تبقى علامات معلَّقة.
-  useEffect(() => {
-    if (!isSelected) {
-      setCheckedFaces(new Set());
-      setAnchorFaceId(null);
-    }
-  }, [isSelected]);
-
-  const toggleFaceCheck = (faceId: string) => {
-    setAnchorFaceId(faceId);
-    setCheckedFaces((current) => {
-      const next = new Set(current);
-      if (next.has(faceId)) next.delete(faceId);
-      else next.add(faceId);
-      return next;
-    });
+  const chooseFace = (faceId: string, modifiers: { shift?: boolean; toggle?: boolean }) => {
+    onSelectAlternative(faceId);
+    setMulti(selectRange(multi?.kind === 'FACE' && multi.ownerId === variant.id ? multi : { kind: 'FACE', ownerId: variant.id, ids: [] }, faceId, variant.alternatives.map((face) => face.id), modifiers));
   };
-
-  /** تحديد مدى بـ Shift: من آخر وجه نُقر إلى هذا الوجه (FR-ED-07.2). */
-  const rangeFaceCheck = (faceId: string) => {
-    const ids = variant.alternatives.map((alternative) => alternative.id);
-    const from = anchorFaceId ? ids.indexOf(anchorFaceId) : -1;
-    const to = ids.indexOf(faceId);
-    if (from === -1 || to === -1) {
-      toggleFaceCheck(faceId);
-      return;
-    }
-    const [start, end] = from <= to ? [from, to] : [to, from];
-    setCheckedFaces((current) => {
-      const next = new Set(current);
-      for (let index = start; index <= end; index += 1) next.add(ids[index]);
-      return next;
-    });
-  };
+  const toggleFaceCheck = (faceId: string) => chooseFace(faceId, { toggle: true });
+  const rangeFaceCheck = (faceId: string) => chooseFace(faceId, { shift: true });
 
   /** Ctrl+A داخل قائمة الأوجه يحدد كل الأوجه، وCtrl+C ينسخ المحدد. */
   const handleFaceListKeyDown = (event: React.KeyboardEvent<HTMLUListElement>) => {
@@ -761,6 +680,9 @@ function VariantRow({
       event.preventDefault();
       event.stopPropagation();
       setCheckedFaces(new Set(variant.alternatives.map((alternative) => alternative.id)));
+    } else if (event.key.toLowerCase() === 'x' && checkedFaces.size > 0) {
+      event.preventDefault(); event.stopPropagation();
+      useEditorStore.getState().cutSelection();
     } else if ((event.key === 'c' || event.key === 'C') && checkedFaces.size > 0) {
       event.preventDefault();
       event.stopPropagation();
@@ -775,7 +697,7 @@ function VariantRow({
         onMeasure?.(element);
       }}
       data-difference-id={variant.id}
-      className={isSelected ? 'selection-row-active' : ''}
+
     >
       <div className="px-4 py-3">
         <button type="button" onClick={onSelect} className="w-full text-start">
@@ -850,13 +772,14 @@ function VariantRow({
                     toggleFaceCheck(alternative.id);
                     return;
                   }
-                  onSelectAlternative(alternative.id);
+                  chooseFace(alternative.id, {});
                 }}
                 className={`cursor-pointer rounded border bg-white px-2 py-1.5 transition ${
                   alternative.id === selectedAlternativeId
                     ? 'border-cyan-600 ring-2 ring-cyan-200'
                     : 'border-stone-200 hover:border-cyan-300'
                 }`}
+                data-selected={checkedFaces.has(alternative.id)}
                 data-face-id={alternative.id}
                 title="انقر لتحديد هذا الوجه؛ يمكن نسخه أو قصه ثم لصقه في اختلاف آخر. أو ضع علامة للحذف الجماعي."
               >
@@ -926,9 +849,8 @@ function VariantRow({
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    onBulkDeleteFaces([...checkedFaces]);
-                    setCheckedFaces(new Set());
+                  onClick={async () => {
+                    if (await onBulkDeleteFaces([...checkedFaces])) setCheckedFaces(new Set());
                   }}
                   className="rounded bg-rose-600 px-2 py-0.5 font-medium text-white hover:bg-rose-700"
                 >
