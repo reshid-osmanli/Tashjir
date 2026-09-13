@@ -94,7 +94,7 @@ export function TashjeerFigure({
   /** سطر يُنبض لحظيا بعد إحضاره إلى مجال الرؤية (FR-ED-02.4). */
   pulseLineId?: string | null;
   hoveredLineId?: string | null;
-  onWordClick?: (box: WordBox) => void;
+  onWordClick?: (box: WordBox, event?: React.MouseEvent) => void;
   onCharacterClick?: (box: WordBox, characterIndex: number) => void;
   onLineClick?: (line: ClassicLine) => void;
   /** النقر على حكم بعينه داخل سطر مركّب: يفتح موضعه لا موضع أول أحكامه. */
@@ -172,7 +172,7 @@ export function TashjeerFigure({
             coveredCharacterRanges={coveredCharacterRanges}
             characterMarkingActive={characterMarkingActive}
             showAnchors={showAnchors}
-            onClick={() => onWordClick?.(box)}
+            onClick={(event) => onWordClick?.(box, event)}
             onCharacterClick={(characterIndex) => onCharacterClick?.(box, characterIndex)}
           />
         ))}
@@ -208,7 +208,7 @@ function WordShape({
   coveredCharacterRanges: CharacterRange[];
   characterMarkingActive: boolean;
   showAnchors: boolean;
-  onClick: () => void;
+  onClick: (event: React.MouseEvent) => void;
   onCharacterClick: (characterIndex: number) => void;
 }) {
   const cells = characterHitBoxes(box);
@@ -1190,4 +1190,3 @@ function Rulers({ viewBox }: { viewBox: { x: number; y: number; width: number; h
     </g>
   );
 }
-

@@ -25,8 +25,9 @@ export const SHORTCUT_HINTS: ShortcutHint[] = [
   { keys: 'E', description: 'أداة المسح' },
   { keys: 'Ctrl + S', description: 'حفظ المستند' },
   { keys: 'Ctrl + C / X / V', description: 'نسخ أو قص أو لصق الاختلاف/الوجه/الجزء المحدد' },
+  { keys: 'N', description: 'المعالج الذكي الموحّد (باب الإنشاء الواحد)' },
   { keys: 'Shift + نقر', description: 'تحديد مدى من الأوجه في قائمة الموضع' },
-  { keys: 'Ctrl + نقر', description: 'إضافة وجه إلى التحديد المتعدد أو إزالته' },
+  { keys: 'Ctrl + نقر', description: 'إضافة وجه إلى التحديد المتعدد أو إزالته — وعلى اللوحة: تعليم كلمة دون تبديل الأداة' },
   { keys: 'Ctrl + A', description: 'تحديد كل أوجه الموضع (داخل قائمة الأوجه)' },
   { keys: 'Ctrl + Z', description: 'تراجع' },
   { keys: 'Ctrl + Shift + Z', description: 'إعادة' },
@@ -124,6 +125,9 @@ export function useKeyboardShortcuts(enabled = true): void {
           break;
         case 'b':
           store.toggleVariantsPanel();
+          break;
+        case 'n':
+          store.requestSmartWizard();
           break;
         case 'escape':
           store.clearMarks();

@@ -109,6 +109,62 @@ export function deleteGlobalRule(id: string): void {
 }
 
 /**
+ * يحفظ عدة قواعد عامة في عملية ذرية واحدة (كله أو لا شيء) — FR-ED-08 الخطوة 6.
+ *
+ * يتحقق من القواعد كلها أولًا (عنوان + نمط صالح)، ثم يكتب مرة واحدة؛ فإن
+ * فشل عنصر واحد رُفضت الدفعة كلها ولم يُكتب شيء، فلا تبقى نصف مجموعة.
+ * يُرجع القواعد المحفوظة مرتبة كما أُدخلت (رتب الأنواع: ١، ٢، ٣…).
+ */
+export function saveGlobalRulesBatch(
+  rules: Array<Omit<GlobalRule, 'createdAt' | 'updatedAt'> & Partial<Pick<GlobalRule, 'createdAt'>>>
+): GlobalRule[] {
+  if (rules.length === 0) return [];
+  const now = new Date().toISOString();
+  const current = readRules();
+  const seen = new Set(current.map((rule) => rule.id));
+
+  // التحقق أولًا من الدفعة كلها قبل أي كتابة (الذرية).
+  for (const rule of rules) {
+    if (!rule || typeof rule.id !== 'string' || !rule.id.trim()) {
+      throw new Error('قاعدة بلا معرّف في الدفعة — رُفضت الدفعة كلها ولم يُحفظ شيء.');
+    }
+    if (!rule.title || !rule.title.trim()) {
+      throw new Error('قاعدة بلا عنوان في الدفعة — رُفضت الدفعة كلها ولم يُحفظ شيء.');
+    }
+    if (!rule.pattern || !isValidPattern(rule.pattern)) {
+      throw new Error(`القاعدة «${rule.title.trim()}» بلا نمط صالح — رُفضت الدفعة كلها ولم يُحفظ شيء.`);
+    }
+    if (seen.has(rule.id)) {
+      throw new Error(`معرّف مكرر في الدفعة («${rule.id}») — رُفضت الدفعة كلها ولم يُحفظ شيء.`);
+    }
+    seen.add(rule.id);
+  }
+
+  const saved = rules.map((rule) =>
+    normalizeRule({
+      ...rule,
+      title: rule.title.trim(),
+      createdAt: rule.createdAt ?? now,
+      updatedAt: now,
+    })
+  );
+  const savedIds = new Set(saved.map((rule) => rule.id));
+  writeRules([...current.filter((rule) => !savedIds.has(rule.id)), ...saved]);
+  return saved;
+}
+
+/**
+ * يحذف دفعة قواعد كاملة بكتابة واحدة (تراجع جماعي عن إنشاء دفعي).
+ * تُمسح معها استثناءات مواضعها، فلا تبقى بيانات يتيمة.
+ */
+export function deleteGlobalRulesBatch(ids: string[]): void {
+  if (ids.length === 0) return;
+  const doomed = new Set(ids);
+  writeRules(readRules().filter((rule) => !doomed.has(rule.id)));
+  for (const id of doomed) clearRuleOccurrences(id);
+}
+
+/**
  * يثبّت رقم ترتيب السطر لقاعدة عامة، ويعيد ترقيم رتب بقية القواعد تلقائيا.
  *
  * الإدراج لا الاستبدال: قاعدة تأخذ رتبة مشغولة تزيح صاحبتها ومن بعدها
