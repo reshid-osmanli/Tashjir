@@ -10,15 +10,7 @@
 // بلا أثر. وكل قرار يمرّ عبر Decision Resolver الموجود (P-07).
 
 import { create } from 'zustand';
-import type {
-  EngineConfig,
-  EngineRule,
-  EngineRuleVersion,
-  MergeMatrixEntry,
-  PriorityGroup,
-  ConflictPolicyStep,
-  StudioAuditEntry,
-} from '@/lib/tashjeer/model/v8';
+
 import {
   loadEngineConfig,
   saveEngineConfig,
@@ -31,6 +23,9 @@ import {
   addMergeMatrixEntry,
   updateMergeMatrixEntry,
   removeMergeMatrixEntry,
+  addRelationPolicy,
+  updateRelationPolicy,
+  removeRelationPolicy,
   setConflictPolicy,
   setExecutionOrder,
   upsertPriorityGroup,
@@ -133,6 +128,9 @@ interface EngineStudioState {
   addMergeEntry: (entry: MergeMatrixEntry) => void;
   updateMergeEntry: (index: number, patch: Partial<MergeMatrixEntry>) => void;
   removeMergeEntry: (index: number) => void;
+  addRelationEntry: (entry: RelationPolicyEntry) => void;
+  updateRelationEntry: (index: number, patch: Partial<RelationPolicyEntry>) => void;
+  removeRelationEntry: (index: number) => void;
 
   setConflictPolicyAction: (policy: ConflictPolicyStep[]) => void;
   setExecutionOrderAction: (order: string[]) => void;
@@ -142,6 +140,7 @@ interface EngineStudioState {
   /** يشغّل اختبارات القواعد ويسجّل التشغيل في التدقيق (FR-ES-08.4). */
   runTests: (meta?: GovernanceMeta) => ProfileTestReport;
   exportText: () => string;
+  previewImport: (text: string) => { valid: boolean; errors: string[]; warnings: string[] };
   importText: (text: string) => { valid: boolean; errors: string[]; warnings: string[] };
   /** تصدير حزمة الحوكمة: الإعداد + الإصدارات + التدقيق + ملخّص الاختبارات. */
   exportBundleText: () => string;
@@ -377,6 +376,11 @@ export const useEngineStudioStore = create<EngineStudioState>((set, get) => ({
     set((state) => ({ config: updateMergeMatrixEntry(state.config, index, patch), dirty: true })),
   removeMergeEntry: (index) =>
     set((state) => ({ config: removeMergeMatrixEntry(state.config, index), dirty: true })),
+  addRelationEntry: (entry) => set((state) => ({ config: addRelationPolicy(state.config, entry), dirty: true })),
+  updateRelationEntry: (index, patch) =>
+    set((state) => ({ config: updateRelationPolicy(state.config, index, patch), dirty: true })),
+  removeRelationEntry: (index) =>
+    set((state) => ({ config: removeRelationPolicy(state.config, index), dirty: true })),
 
   setConflictPolicyAction: (policy) =>
     set((state) => ({ config: setConflictPolicy(state.config, policy), dirty: true })),
@@ -404,12 +408,17 @@ export const useEngineStudioStore = create<EngineStudioState>((set, get) => ({
     const kind = detectStudioImport(text);
     if (kind === 'GOVERNANCE') return get().importBundleText(text);
     const { config, validation } = importEngineConfigText(text);
-    if (validation.valid) {
+    const currentIds = new Set(get().config.rules.map((rule) => rule.id));
+    const collisions = config.rules.filter((rule) => currentIds.has(rule.id)).length;
+    const result = collisions > 0
+      ? { ...validation, warnings: [...validation.warnings, `تعارض استيراد: ${collisions} معرّف قاعدة سيستبدل نظيره في المسودة الحالية`] }
+      : validation;
+    if (result.valid) {
       // الاستيراد لا يُنشر تلقائيا: يبقى «غير محفوظ» حتى يمرّ ببوابة النشر.
       recordProfileAction('PROFILE_IMPORTED', config);
       set({ config, dirty: true, selectedRuleId: null, ...governanceState(config) });
     }
-    return { valid: validation.valid, errors: validation.errors, warnings: validation.warnings };
+    return { valid: result.valid, errors: result.errors, warnings: result.warnings };
   },
 
   exportBundleText: () => {

@@ -45,6 +45,7 @@ import type {
 } from '@/types/tashjeer';
 import { listGlobalRules, ruleAppliesToAyah, type GlobalRule } from '@/lib/storage/global-rules-store';
 import {
+  hasLocalOverride,
   occurrenceIdFor,
   occurrenceOverrideMap,
   type RuleOccurrenceOverride,
@@ -168,6 +169,63 @@ export function buildCharacterPattern(
     words: patterns,
     sourceAyahKey: ayahKey,
     sourceRange: normalizedRange,
+  };
+}
+
+/**
+ * يبني نمط قاعدة من كلمات كاملة (لا مدى حروف جزئي).
+ *
+ * يُستعمل حين يكون تحديد المعالج كلماتٍ (لا حروفًا): تُؤخذ كل حروف الكلمات
+ * المحددة قيودًا حرفية حتمية — الكلمة كلها تُطابَق بطولها — فيعمَّم الحكم
+ * نفسه على كل موضع يرد فيه التتابع نفسه، بلا تحليل نحوي احتمالي (NFR-02:
+ * النمط حتمي كما في `buildCharacterPattern`، ويقبل توسيع القيود إلى مجموعات
+ * الحروف ونطاق البحث من الواجهة بعد بنائه).
+ */
+export function buildCharacterPatternForWords(
+  ayahKey: number,
+  startPosition: number,
+  endPosition: number,
+  options: BuildCharacterPatternOptions = {}
+): GlobalCharacterPattern {
+  const from = Math.min(startPosition, endPosition);
+  const to = Math.max(startPosition, endPosition);
+  const words = getAyahWordsByKey(ayahKey);
+  if (words.length === 0) throw new Error('لا توجد كلمات للآية المحددة.');
+  if (from < 1 || to > words.length) throw new Error('مدى الكلمات خارج كلمات الآية.');
+
+  const defaultHarakaMode = options.defaultHarakaMode ?? 'EXACT';
+  const patterns: GlobalWordCharacterPattern[] = [];
+
+  for (let position = from; position <= to; position += 1) {
+    const word = words.find((item) => item.position === position);
+    if (!word) throw new Error(`تعذر العثور على الكلمة رقم ${position}.`);
+    const characters = splitQuranCharacters(word.text);
+    if (characters.length === 0) throw new Error(`الكلمة رقم ${position} بلا حروف مرئية.`);
+    const bounds = { start: 1, end: characters.length };
+    const constraints = characters.map((character, index) => {
+      const characterIndex = index + 1;
+      return {
+        baseLetter: baseLetter(character),
+        letterSet: 'EXACT',
+        marks: marksOf(character),
+        harakaMode: defaultHarakaMode,
+        ...anchorForSelection(characterIndex, characters.length, bounds),
+      } satisfies GlobalCharacterConstraint;
+    });
+    patterns.push({ offset: position - from, constraints, exactLength: characters.length });
+  }
+
+  const lastCharacters = splitQuranCharacters(words.find((item) => item.position === to)!.text);
+  return {
+    kind: 'CHARACTERS',
+    version: 1,
+    wordCount: to - from + 1,
+    words: patterns,
+    sourceAyahKey: ayahKey,
+    sourceRange: {
+      start: { position: from, characterIndex: 1 },
+      end: { position: to, characterIndex: lastCharacters.length },
+    },
   };
 }
 
@@ -601,6 +659,39 @@ export function findGlobalRuleMatches(
   return matches;
 }
 
+/** سورة برقمها وعدد آياتها — وحدة التقدم في الفحص غير الحاجب. */
+export interface MushafSurahProgress {
+  surahNumber: number;
+  ayahsCount: number;
+}
+
+/** فهرس سور المصحف بالترتيب (١١٤ سورة) لفحص مرحلي مع مؤشر تقدم. */
+export function mushafSurahIndex(): MushafSurahProgress[] {
+  return SURAHS.map((surah) => ({ surahNumber: surah.number, ayahsCount: surah.ayahsCount }));
+}
+
+/**
+ * يعدّ مواضع قاعدة في سورة واحدة (NFR-02).
+ *
+ * اللبنة التي تبني عليها الواجهة معاينة Dry-run غير حاجبة: تستدعيها سورةً
+ * سورة مع إفساح دورة حدث بين السور (`await` على مهلة صفرية) فيبقى المؤشر
+ * متحركًا ويبقى زر الإلغاء مستجيبًا. يحترم نطاق التطبيق كما يفعل الفحص الكامل.
+ */
+export function countGlobalRuleMatchesInSurah(
+  rule: Pick<GlobalRule, 'id' | 'pattern'> & Partial<Pick<GlobalRule, 'applyRange'>>,
+  surahNumber: number
+): number {
+  if (!rule.pattern) return 0;
+  const surah = SURAHS.find((item) => item.number === surahNumber);
+  if (!surah) return 0;
+  let count = 0;
+  for (let ayahNumber = 1; ayahNumber <= surah.ayahsCount; ayahNumber += 1) {
+    const ayahKey = surah.number * 1000 + ayahNumber;
+    count += findGlobalRuleMatchesInAyah(rule, ayahKey).length;
+  }
+  return count;
+}
+
 /**
  * يضيف مواضع القواعد العامة النشطة إلى اختلافات آية دون حفظ نسخ مكررة.
  *
@@ -629,7 +720,9 @@ export function getEffectiveVariants(document: TashjeerDocument): Variant[] {
  */
 export function matchFromDerivedVariant(variant: Variant): GlobalRuleMatch | null {
   if (!variant.isGlobalDerived || !variant.globalRuleId || !variant.characterRange) return null;
-  const separator = variant.title.indexOf(' · ');
+  // النص المطابَق مُلحق آخر العنوان؛ الأخير لا الأول، فقد يحمل العنوان
+  // المرقَّع محليًا الفاصل نفسه (FR-ED-10).
+  const separator = variant.title.lastIndexOf(' · ');
   return {
     ruleId: variant.globalRuleId,
     ayahKey: variant.ayahKey,
@@ -640,18 +733,27 @@ export function matchFromDerivedVariant(variant: Variant): GlobalRuleMatch | nul
   };
 }
 
-/** يحول نتيجة المطابقة إلى اختلاف مشتق يفهمه محرك التشجير الحالي. */
+/**
+ * يحول نتيجة المطابقة إلى اختلاف مشتق يفهمه محرك التشجير الحالي.
+ *
+ * التجاوز المحلي (FR-ED-10) طبقة فوق الاشتقاق: كل حقل مرقَّع يُعرض
+ * بدل قيمة القاعدة الأمّ في هذا الموضع وحده، والمعرّف ثابت لا يتغير
+ * بالترقيع فيبقى مفتاح الاستثناء والسجل واحدًا.
+ */
 export function variantFromGlobalMatch(
   rule: GlobalRule,
   match: GlobalRuleMatch,
   override?: RuleOccurrenceOverride
 ): Variant {
   const id = occurrenceIdFor(rule.id, match);
+  const patch = override?.patch;
+  const title = patch?.title?.trim() ? patch.title.trim() : rule.title;
+  const matchedText = patch?.text ? patch.text : match.matchedText;
   return {
     id,
     ayahKey: match.ayahKey ?? 0,
-    category: rule.category,
-    title: `${rule.title} · ${match.matchedText}`,
+    category: patch?.category ?? rule.category,
+    title: `${title} · ${matchedText}`,
     startPosition: match.startPosition,
     endPosition: match.endPosition,
     targetKind: 'CHARACTERS',
@@ -659,21 +761,22 @@ export function variantFromGlobalMatch(
     status: rule.status,
     isGlobalDerived: true,
     globalRuleId: rule.id,
+    hasLocalOverride: hasLocalOverride(override),
     // المحرك مصدر هذا الموضع؛ التصحيح اليدوي يظهر في سجل التعديل والتتبع.
     origin: 'ENGINE',
     // رتبة ترتيب السطر: تخصيص الموضع يسبق رتبة القاعدة العامة.
     orderRank: override?.orderRank ?? rule.orderRank,
-    description: rule.description,
-    sourceRef: rule.sourceRef,
+    description: patch?.description ?? rule.description,
+    sourceRef: patch?.sourceRef ?? rule.sourceRef,
     alternatives: [
       {
         id: `${id}:alternative`,
-        text: match.matchedText,
-        label: rule.ruleLabel || rule.title,
-        scope: rule.scope,
-        ruleLabel: rule.ruleLabel,
-        maddHarakat: rule.maddHarakat,
-        notes: rule.description,
+        text: matchedText,
+        label: patch?.label ?? patch?.ruleLabel ?? rule.ruleLabel ?? title,
+        scope: patch?.scope ?? rule.scope,
+        ruleLabel: patch?.ruleLabel ?? rule.ruleLabel,
+        maddHarakat: patch?.maddHarakat ?? rule.maddHarakat,
+        notes: patch?.notes ?? rule.description,
         evidences: rule.evidences,
         // تخصيص الموضع يسبق درجة القاعدة، فقد يرجّح المحقق الوجه هنا
         // ويؤخّره هناك بحسب السياق.

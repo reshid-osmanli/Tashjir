@@ -17,6 +17,7 @@ import type {
   EngineRule,
   PriorityGroup,
   MergeMatrixEntry,
+  RelationPolicyEntry,
   ConflictPolicyStep,
   SpecificityLevel,
   RuleSource,
@@ -30,6 +31,7 @@ import {
   DEFAULT_CONFLICT_POLICY,
   DEFAULT_EXECUTION_ORDER,
   DEFAULT_MERGE_MATRIX,
+  DEFAULT_RELATION_POLICIES,
 } from '@/lib/tashjeer/decision/policy';
 
 export const ENGINE_CONFIG_STORAGE_KEY = 'tashjeer:engine-config:v1';
@@ -99,7 +101,21 @@ function sortPriorityGroups(groups: PriorityGroup[]): PriorityGroup[] {
 
 /** يرتّب مصفوفة الدمج بمفتاح مستقر (a ثم b) حتى لا يقفز سطر بلا سبب. */
 function sortMergeMatrix(matrix: MergeMatrixEntry[]): MergeMatrixEntry[] {
-  return [...matrix].sort((a, b) => a.a.localeCompare(b.a) || a.b.localeCompare(b.b));
+  return [...matrix].sort(
+    (a, b) =>
+      a.a.localeCompare(b.a) ||
+      a.b.localeCompare(b.b) ||
+      b.priority - a.priority ||
+      Number(a.merge) - Number(b.merge) ||
+      a.reason.localeCompare(b.reason, 'ar')
+  );
+}
+
+/** يرتّب سياسات العلاقات حتميا حتى يبقى التصدير قابلا للمقارنة. */
+function sortRelationPolicies(relations: RelationPolicyEntry[]): RelationPolicyEntry[] {
+  return [...relations].sort(
+    (a, b) => a.a.localeCompare(b.a) || a.b.localeCompare(b.b) || b.priority - a.priority || a.id.localeCompare(b.id, 'ar')
+  );
 }
 
 /** يرتّب القواعد بمعرّفها المستقر، فيبقى كل سطر في مكانه عند تعديل قيمة. */
@@ -119,6 +135,7 @@ export function toCanonicalConfig(config: EngineConfig): {
   conflictPolicy: ConflictPolicyStep[];
   executionOrder: string[];
   mergeMatrix: MergeMatrixEntry[];
+  relations: RelationPolicyEntry[];
   contexts: EngineConfig['contexts'];
 } {
   return {
@@ -129,17 +146,66 @@ export function toCanonicalConfig(config: EngineConfig): {
     conflictPolicy: [...config.conflictPolicy],
     executionOrder: [...config.executionOrder],
     mergeMatrix: sortMergeMatrix(config.mergeMatrix),
-    contexts: config.contexts,
+    relations: sortRelationPolicies(config.relations ?? []),
+    contexts: {
+      waqf: [...config.contexts.waqf].sort(),
+      wasl: [...config.contexts.wasl].sort(),
+      ibtida: [...config.contexts.ibtida].sort(),
+      forbiddenConnection: [...config.contexts.forbiddenConnection].sort(),
+    },
+  };
+}
+
+/** بنية المجلد المنطقية عند مشاركة الملف مع Git (FR-ES-14). */
+export interface EngineConfigExportBundle {
+  'schema-version': typeof ENGINE_CONFIG_SCHEMA_VERSION;
+  policies: { profile: string; conflictPolicy: ConflictPolicyStep[]; executionOrder: string[] };
+  rules: CanonicalEngineRule[];
+  priorities: { groups: PriorityGroup[] };
+  relations: RelationPolicyEntry[];
+  contexts: EngineConfig['contexts'];
+  'merge-policies': MergeMatrixEntry[];
+}
+
+/** يحوّل الملف المسطح إلى حزمة تصدير منظمة، مع بقاء EngineConfig الداخلي متوافقا. */
+export function toExportBundle(config: EngineConfig): EngineConfigExportBundle {
+  const canonical = toCanonicalConfig(config);
+  return {
+    'schema-version': canonical.schemaVersion,
+    policies: { profile: canonical.profile, conflictPolicy: canonical.conflictPolicy, executionOrder: canonical.executionOrder },
+    rules: canonical.rules,
+    priorities: { groups: canonical.priorityGroups },
+    relations: canonical.relations,
+    contexts: canonical.contexts,
+    'merge-policies': canonical.mergeMatrix,
   };
 }
 
 /**
  * يُسلسل ملف المحرك نصًا حتميًا صديقًا لـ Git (DM-13).
  * تكرار التصدير لنفس المدخلات يعطي الخرج نفسه بايتًا، فيظهر Git فرقًا دقيقًا
- * عند تعديل قاعدة واحدة.
+ * عند تعديل قاعدة واحدة. يستخدم المسار القديم المسطح للتوافق؛
+ * `toExportBundle` هو الشكل المنظم المخصص للمشاركة/الإصدار.
  */
 export function serializeEngineConfig(config: EngineConfig): string {
-  return JSON.stringify(toCanonicalConfig(config), null, 2) + '\n';
+  return JSON.stringify(toExportBundle(config), null, 2) + '\n';
+}
+
+/** يبقى هذا الاسم صريحا لمن يحتاج شكل الحزمة في طبقة التكامل. */
+export const serializeEngineConfigBundle = serializeEngineConfig;
+
+function fromExportBundle(value: Partial<EngineConfigExportBundle>): Partial<EngineConfig> {
+  return {
+    schemaVersion: value['schema-version'],
+    profile: value.policies?.profile,
+    priorityGroups: value.priorities?.groups,
+    rules: value.rules as unknown as EngineRule[] | undefined,
+    conflictPolicy: value.policies?.conflictPolicy,
+    executionOrder: value.policies?.executionOrder,
+    mergeMatrix: value['merge-policies'],
+    relations: value.relations,
+    contexts: value.contexts,
+  };
 }
 
 // ==================== الفحص والاستيراد ====================
@@ -172,7 +238,10 @@ export function validateEngineConfig(config: unknown): EngineConfigValidation {
   if (!config || typeof config !== 'object') {
     return { valid: false, errors: ['ملف المحرك ليس كائنًا صالحًا'], warnings };
   }
-  const cfg = config as Partial<EngineConfig>;
+  const cfg =
+    config && typeof config === 'object' && 'schema-version' in config
+      ? fromExportBundle(config as Partial<EngineConfigExportBundle>)
+      : (config as Partial<EngineConfig>);
 
   if (cfg.schemaVersion !== ENGINE_CONFIG_SCHEMA_VERSION) {
     errors.push(`إصدار المخطط غير متوافق: متوقع ${ENGINE_CONFIG_SCHEMA_VERSION}`);
@@ -198,6 +267,17 @@ export function validateEngineConfig(config: unknown): EngineConfigValidation {
 
   const knownGroups = new Set((cfg.priorityGroups ?? []).map((group) => group?.id));
   const ruleIds = new Set<string>();
+
+  const groupIds = new Set<string>();
+  for (const group of cfg.priorityGroups ?? []) {
+    if (!group || typeof group.id !== 'string' || !group.id.trim()) {
+      errors.push('مجموعة أولوية بلا معرّف');
+      continue;
+    }
+    if (groupIds.has(group.id)) errors.push(`معرّف مجموعة مكرر: ${group.id}`);
+    groupIds.add(group.id);
+    if (!Number.isFinite(group.order)) errors.push(`ترتيب مجموعة غير صالح: ${group.id}`);
+  }
 
   for (const raw of cfg.rules ?? []) {
     if (!raw || typeof raw !== 'object') {
@@ -233,6 +313,17 @@ export function validateEngineConfig(config: unknown): EngineConfigValidation {
     if (rule.groupId && knownGroups.size > 0 && !knownGroups.has(rule.groupId)) {
       warnings.push(`القاعدة «${rule.id}» تنتمي لمجموعة غير معرفة: ${rule.groupId}`);
     }
+  }
+
+  const relationIds = new Set<string>();
+  for (const relation of cfg.relations ?? []) {
+    if (!relation || typeof relation !== 'object' || typeof relation.id !== 'string' || !relation.id.trim()) {
+      errors.push('سياسة علاقة بلا معرّف');
+      continue;
+    }
+    if (relationIds.has(relation.id)) errors.push(`معرّف سياسة علاقة مكرر: ${relation.id}`);
+    relationIds.add(relation.id);
+    if (!Number.isFinite(relation.priority)) errors.push(`أولوية علاقة غير صالحة: ${relation.id}`);
   }
 
   return { valid: errors.length === 0, errors, warnings };
@@ -296,6 +387,9 @@ export function normalizeEngineConfig(value: Partial<EngineConfig> | null | unde
     mergeMatrix: Array.isArray(value.mergeMatrix)
       ? sortMergeMatrix(value.mergeMatrix as MergeMatrixEntry[])
       : base.mergeMatrix,
+    relations: Array.isArray(value.relations)
+      ? sortRelationPolicies(value.relations as RelationPolicyEntry[])
+      : base.relations ?? [],
     contexts: value.contexts ?? base.contexts,
   };
 }
@@ -321,8 +415,10 @@ export function importEngineConfigText(text: string): EngineConfigImportResult {
       validation: { valid: false, errors: ['النص ليس JSON صالحًا'], warnings: [] },
     };
   }
-  const validation = validateEngineConfig(parsed);
-  const config = normalizeEngineConfig(parsed as Partial<EngineConfig>);
+  const isBundle = Boolean(parsed && typeof parsed === 'object' && 'schema-version' in parsed);
+  const flat = isBundle ? fromExportBundle(parsed as Partial<EngineConfigExportBundle>) : (parsed as Partial<EngineConfig>);
+  const validation = validateEngineConfig(flat);
+  const config = normalizeEngineConfig(flat);
   return { config, validation };
 }
 
@@ -400,9 +496,31 @@ export function removeEngineRule(config: EngineConfig, ruleId: string): EngineCo
   return { ...config, rules: config.rules.filter((rule) => rule.id !== ruleId) };
 }
 
-/** يثبّت أولوية قاعدة صراحةً (FR-ES-01). */
+/**
+ * يثبّت أولوية قاعدة صراحةً (FR-ES-01).
+ * إذا احتل الرقم قاعدة أخرى في المجموعة نفسها تُزاح القواعد اللاحقة خطوة واحدة؛
+ * لا يبقى تعارض صامت، ولا تتغير المعرّفات (P-03).
+ */
 export function setRulePriority(config: EngineConfig, ruleId: string, priority: number): EngineConfig {
-  return updateEngineRule(config, ruleId, { priority: Math.round(priority) });
+  const target = config.rules.find((rule) => rule.id === ruleId);
+  if (!target) return config;
+  const nextPriority = Number.isFinite(priority) ? Math.round(priority) : target.priority;
+  const peers = config.rules
+    .filter((rule) => rule.id !== ruleId && rule.groupId === target.groupId)
+    .filter((rule) => rule.priority >= nextPriority)
+    .sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id, 'ar'));
+  const shifted = new Map(peers.map((rule) => [rule.id, rule.priority + 1]));
+  const now = new Date().toISOString();
+  return {
+    ...config,
+    rules: config.rules.map((rule) => {
+      if (rule.id === ruleId) return { ...rule, priority: nextPriority, updatedAt: now, version: rule.version + 1 };
+      const shiftedPriority = shifted.get(rule.id);
+      return shiftedPriority === undefined
+        ? rule
+        : { ...rule, priority: shiftedPriority, updatedAt: now, version: rule.version + 1 };
+    }),
+  };
 }
 
 /** يغيّر حالة قاعدة (FR-ES-07). */
@@ -438,6 +556,23 @@ export function removeMergeMatrixEntry(config: EngineConfig, index: number): Eng
   return { ...config, mergeMatrix: config.mergeMatrix.filter((_, idx) => idx !== index) };
 }
 
+// ==================== عمليات العلاقات (نقيّة) ====================
+
+export function addRelationPolicy(config: EngineConfig, entry: RelationPolicyEntry): EngineConfig {
+  return { ...config, relations: [...(config.relations ?? []), entry] };
+}
+
+export function updateRelationPolicy(config: EngineConfig, index: number, patch: Partial<RelationPolicyEntry>): EngineConfig {
+  return {
+    ...config,
+    relations: (config.relations ?? []).map((entry, idx) => (idx === index ? { ...entry, ...patch } : entry)),
+  };
+}
+
+export function removeRelationPolicy(config: EngineConfig, index: number): EngineConfig {
+  return { ...config, relations: (config.relations ?? []).filter((_, idx) => idx !== index) };
+}
+
 // ==================== عمليات السياسة (نقيّة) ====================
 
 /** يضبط سلم حل التعارض (FR-ES-06). */
@@ -466,5 +601,6 @@ export {
   DEFAULT_CONFLICT_POLICY,
   DEFAULT_EXECUTION_ORDER,
   DEFAULT_MERGE_MATRIX,
+  DEFAULT_RELATION_POLICIES,
   createDefaultEngineConfig,
 };

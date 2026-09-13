@@ -12,14 +12,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { computeWindow, type WindowComputation } from './windowed-list-core';
 
-export interface WindowedRange {
-  /** أول فهرس يُرسم وآخره (شامل). */
-  start: number;
-  end: number;
-  /** ارتفاع الحشو قبل المدى وبعده بالبكسل. */
-  topPad: number;
-  bottomPad: number;
+export interface WindowedRange extends WindowComputation {
   /** يسجّل ارتفاع صف مقيس. */
   measure: (index: number, element: HTMLElement | null) => void;
   /** هل التنافذ فعّال أصلا (القائمة أطول من العتبة)؟ */
@@ -81,25 +76,8 @@ export function useWindowedList(
     if (!active) {
       return { start: 0, end: count - 1, topPad: 0, bottomPad: 0, measure, active: false };
     }
-    // أول صف يلامس أعلى النافذة، ثم آخر صف يلامس أسفلها.
-    let offset = 0;
-    let first = 0;
-    while (first < count && offset + heightOf(first) < scrollTop) {
-      offset += heightOf(first);
-      first += 1;
-    }
-    let last = first;
-    let covered = offset;
-    while (last < count - 1 && covered + heightOf(last) < scrollTop + viewport) {
-      covered += heightOf(last);
-      last += 1;
-    }
-    const start = Math.max(0, first - overscan);
-    const end = Math.min(count - 1, last + overscan);
-    let topPad = 0;
-    for (let index = 0; index < start; index += 1) topPad += heightOf(index);
-    let bottomPad = 0;
-    for (let index = end + 1; index < count; index += 1) bottomPad += heightOf(index);
-    return { start, end, topPad, bottomPad, measure, active: true };
+    // الحساب نفسه نقي ومشترك مع الاختبارات (windowed-list-core.ts).
+    const window = computeWindow({ scrollTop, viewport, count, heightOf, overscan });
+    return { ...window, measure, active: true };
   }, [active, count, heightOf, measure, overscan, scrollTop, viewport]);
 }

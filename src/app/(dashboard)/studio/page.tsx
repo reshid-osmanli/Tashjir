@@ -31,24 +31,7 @@ import { RuleTestsPanel } from '@/components/studio/RuleTestsPanel';
 import { CandidateRulesPanel } from '@/components/studio/CandidateRulesPanel';
 import { ProfileComparePanel } from '@/components/studio/ProfileComparePanel';
 import { PublishHistoryPanel } from '@/components/studio/PublishHistoryPanel';
-import { AuditTrailPanel } from '@/components/studio/AuditTrailPanel';
-import { RuleDependencyGraph } from '@/components/studio/RuleDependencyGraph';
-import { STATUS_LABELS } from '@/components/studio/labels';
-import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 
-type Section =
-  | 'dashboard'
-  | 'rules'
-  | 'merge'
-  | 'priority'
-  | 'why'
-  | 'tests'
-  | 'graph'
-  | 'audit'
-  | 'candidates'
-  | 'compare'
-  | 'publish'
-  | 'io';
 
 const SECTIONS: Array<{ id: Section; label: string; hint: string }> = [
   { id: 'dashboard', label: 'لوحة المعلومات', hint: 'نظرة عامة' },
@@ -63,6 +46,7 @@ const SECTIONS: Array<{ id: Section; label: string; hint: string }> = [
   { id: 'compare', label: 'مقارنة الملفات', hint: 'FR-ES-11' },
   { id: 'publish', label: 'النشر والسجل', hint: 'FR-ES-07/14' },
   { id: 'io', label: 'التصدير والاستيراد', hint: 'FR-ES-14' },
+  { id: 'settings', label: 'إعدادات سلوك المحرك', hint: 'FR-EN-01' },
 ];
 
 /** معاملات الرابط العميق (FR-ES-15): القسم، القاعدة، وتصحيح مسبق التعبئة. */
@@ -134,11 +118,15 @@ export default function EngineStudioPage() {
     addMergeEntry,
     updateMergeEntry,
     removeMergeEntry,
+    addRelationEntry,
+    updateRelationEntry,
+    removeRelationEntry,
     setConflictPolicyAction,
     setExecutionOrderAction,
     upsertGroup,
     runTests,
     exportText,
+    previewImport,
     importText,
     exportBundleText,
   } = useEngineStudioStore();
@@ -551,6 +539,10 @@ export default function EngineStudioPage() {
                 onAdd={addMergeEntry}
                 onUpdate={updateMergeEntry}
                 onRemove={removeMergeEntry}
+                relations={config.relations ?? []}
+                onAddRelation={addRelationEntry}
+                onUpdateRelation={updateRelationEntry}
+                onRemoveRelation={removeRelationEntry}
               />
             )}
 
@@ -649,21 +641,7 @@ export default function EngineStudioPage() {
               />
             )}
 
-            {section === 'io' && (
-              <ExportImportPanel
-                onExport={exportText}
-                onImport={(text) => {
-                  const result = importText(text);
-                  setNotice(
-                    result.valid
-                      ? { kind: 'ok', text: 'استُورد الملف بنجاح؛ احفظ لتثبيته (وسُجّل الاستيراد في التدقيق).' }
-                      : { kind: 'err', text: result.errors[0] ?? 'فشل الاستيراد.' }
-                  );
-                  return result;
-                }}
-                onExportBundle={handleExportBundle}
-              />
-            )}
+
           </div>
         </div>
       )}

@@ -14,11 +14,14 @@ import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-sys
 import { describeScope, resolveScope } from '@/lib/tashjeer/scope';
 import { readTransmissionCatalog } from '@/lib/transmissions/catalog';
 import {
+  captureGlobalRuleDeletion,
   createGlobalRuleId,
   deleteGlobalRule,
   listGlobalRules,
+  restoreGlobalRuleDeletion,
   saveGlobalRule,
   type GlobalRule,
+  type GlobalRuleDeletionSnapshot,
 } from '@/lib/storage/global-rules-store';
 import { listDocuments, loadDocument } from '@/lib/storage/document-store';
 import { getSurahOrFirst } from '@/data/quran';
@@ -27,7 +30,7 @@ import { RuleOccurrenceReview } from '@/components/editor/RuleOccurrenceReview';
 import { GlobalRuleMetaEditor } from '@/components/editor/GlobalRuleMetaEditor';
 import { StrengthDegreePicker } from '@/components/editor/StrengthDegreePicker';
 import { pruneStrengthMap } from '@/lib/tashjeer/strength-degrees';
-import { occurrenceStats } from '@/lib/storage/rule-occurrences-store';
+import { listOccurrenceOverrides, occurrenceStats } from '@/lib/storage/rule-occurrences-store';
 import type { VariantCategory } from '@/types';
 import type { ReaderStrengthMap, ReadingScope, Variant, VerificationStatus } from '@/types/tashjeer';
 
@@ -71,6 +74,9 @@ export default function VariantsIndexPage() {
   const [editingRule, setEditingRule] = useState<GlobalRule | null>(null);
   const [showRuleForm, setShowRuleForm] = useState(false);
   const [reviewingRule, setReviewingRule] = useState<GlobalRule | null>(null);
+  // آخر قاعدة حُذفت من هذه الصفحة مع استثناءاتها، لزر التراجع المباشر
+  // (صفحة المكتبة بلا مستند مفتوح، فلا يشملها تراجع المحرر الموحد).
+  const [lastDeleted, setLastDeleted] = useState<GlobalRuleDeletionSnapshot | null>(null);
   const catalog = useMemo(() => readTransmissionCatalog(), []);
 
   const load = () => setItems(readIndexedVariants());
@@ -123,6 +129,25 @@ export default function VariantsIndexPage() {
           + قاعدة عامة للمصحف
         </button>
       </header>
+
+      {lastDeleted && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+          <p className="text-xs text-amber-900">
+            حُذفت القاعدة «{lastDeleted.rule.title}» مع ما سُجِّل على مواضعها.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              restoreGlobalRuleDeletion(lastDeleted);
+              setLastDeleted(null);
+              load();
+            }}
+            className="rounded border border-amber-400 bg-white px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100"
+          >
+            تراجع عن الحذف
+          </button>
+        </div>
+      )}
 
       <section className="rounded-xl border border-stone-200 bg-white p-4">
         <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_150px_150px_150px_190px]">
@@ -244,17 +269,21 @@ export default function VariantsIndexPage() {
                           const rule = item.globalRule!;
                           const stats = occurrenceStats(rule.id);
                           const matches = rule.pattern ? findGlobalRuleMatches(rule, { limit: 5000 }).length : 0;
+                          const overrideCount = listOccurrenceOverrides(rule.id).length;
                           const ok = await confirmAction({
                             title: `حذف القاعدة العامة «${item.title}»`,
-                            message: 'تُحذف من المصحف كله مع سجل مواضعها واستثناءاتها.',
+                            message:
+                              'حذف الأمّ يمحو الحكم من المصحف كله مع كل ما سُجِّل على مواضعها. لحذف موضع واحد دون المساس بسائر المواضع، استعمل الحذف الموضعي من تتبع المواضع.',
                             impacts: [
-                              { label: 'موضع في المصحف', count: matches },
-                              { label: 'استثناء موضعي', count: stats.deleted + stats.confirmed + stats.edited },
+                              { label: 'موضع مشتق في المصحف', count: matches },
+                              { label: 'استثناء موضعي مسجَّل', count: overrideCount },
+                              { label: 'منها معدَّل محليًا', count: stats.edited },
                             ],
-                            undoable: false,
-                            confirmLabel: 'حذف',
+                            undoable: true,
+                            confirmLabel: 'حذف القاعدة كلها',
                           });
                           if (!ok) return;
+                          setLastDeleted(captureGlobalRuleDeletion(rule.id));
                           deleteGlobalRule(rule.id);
                           load();
                         }}

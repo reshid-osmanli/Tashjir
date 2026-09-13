@@ -10,7 +10,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { describeGlobalPattern } from '@/lib/quran-logic/global-rule-engine';
 import { resolveScope } from '@/lib/tashjeer/scope';
@@ -23,6 +23,9 @@ import {
   type GlobalRule,
   type GlobalRuleApplyRange,
 } from '@/lib/storage/global-rules-store';
+import { occurrenceStats } from '@/lib/storage/rule-occurrences-store';
+import { confirmAction } from '@/lib/ui/confirm-store';
+import { useEditorStore } from '@/stores/editor-store';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { ScopePicker } from './VariantEditor';
 import { StrengthDegreePicker } from './StrengthDegreePicker';
@@ -79,8 +82,12 @@ export function GlobalRuleMetaEditor({
     rule.strengthByNarrator
   );
   const [error, setError] = useState('');
+  const transactExternal = useEditorStore((state) => state.transactExternal);
+  // المواضع المتجاوَزة محليًا لا يطالها تحرير الأمّ (التجاوز يغلب)؛ تُحصى
+  // مرة واحدة عند الفتح لأن سجل الاستثناءات لا يتغير من هذه النافذة.
+  const overrideStats = useMemo(() => occurrenceStats(rule.id), [rule.id]);
 
-  const save = () => {
+  const save = async () => {
     if (!title.trim()) {
       setError('اكتب عنوان القاعدة العامة.');
       return;
@@ -90,34 +97,63 @@ export function GlobalRuleMetaEditor({
       setError('اختر قارئا أو راويا واحدا على الأقل لهذه القاعدة.');
       return;
     }
-    const saved = saveGlobalRule({
-      ...rule,
-      title,
-      category,
-      scope,
-      ruleLabel: ruleLabel.trim() || undefined,
-      maddHarakat: maddHarakat === '' ? undefined : Number(maddHarakat),
-      description: description.trim() || undefined,
-      sourceRef: sourceRef.trim() || undefined,
-      strengthDegreeId,
-      // ما خُصِّص لراوٍ خرج من نطاق القاعدة لا يُحفظ، فلا تبقى تخصيصات معلّقة.
-      strengthByNarrator: pruneStrengthMap(strengthByNarrator, narratorIds),
-      status,
-      isActive,
-      applyRange:
-        applyKind === 'SURAH'
-          ? { kind: 'SURAH', surahNumber: Math.max(1, applySurah) }
-          : applyKind === 'AYAH_RANGE'
-            ? {
-                kind: 'AYAH_RANGE',
-                fromAyahKey: Math.max(1, applySurah) * 1000 + Math.max(1, applyFrom),
-                toAyahKey: Math.max(1, applySurah) * 1000 + Math.max(1, applyTo),
-              }
-            : undefined,
-    });
-    // ترتيب السطر يضبط بالمضبّط المخصص له: إدراج بإزاحة المتأثرين تلقائيا.
-    const wantedRank = orderRank === '' ? null : Math.max(1, Math.round(Number(orderRank)));
-    setGlobalRuleOrderRank(saved.id, wantedRank);
+    const affected = overrideStats.deleted + overrideStats.edited;
+    if (affected > 0) {
+      const undoable = useEditorStore.getState().document !== null;
+      const ok = await confirmAction({
+        title: `تحرير القاعدة «${rule.title}» وعليها تجاوزات محلية`,
+        message:
+          'التجاوز المحلي يغلب تعديل الأمّ في مواضعه: هذه المواضع لن تتغير مهما حررت هنا حتى تُلغي تجاوزها.',
+        impacts: [
+          { label: 'موضعًا لن يطاله التحرير', count: affected },
+          { label: 'منها معدَّل محليًا', count: overrideStats.edited },
+          { label: 'منها محذوف موضعيًا', count: overrideStats.deleted },
+        ],
+        undoable,
+        confirmLabel: 'تحرير الأمّ رغم ذلك',
+      });
+      if (!ok) return;
+    }
+    let saved: GlobalRule = rule;
+    transactExternal(
+      {
+        action: 'تحرير قاعدة عامة',
+        targetType: 'RULE',
+        targetId: rule.id,
+        category,
+        summary: `تحرير بيانات القاعدة العامة «${title.trim()}»${affected > 0 ? ` (${affected} موضعًا متجاوزًا لن يتغير)` : ''}`,
+      },
+      () => {
+        saved = saveGlobalRule({
+          ...rule,
+          title,
+          category,
+          scope,
+          ruleLabel: ruleLabel.trim() || undefined,
+          maddHarakat: maddHarakat === '' ? undefined : Number(maddHarakat),
+          description: description.trim() || undefined,
+          sourceRef: sourceRef.trim() || undefined,
+          strengthDegreeId,
+          // ما خُصِّص لراوٍ خرج من نطاق القاعدة لا يُحفظ، فلا تبقى تخصيصات معلّقة.
+          strengthByNarrator: pruneStrengthMap(strengthByNarrator, narratorIds),
+          status,
+          isActive,
+          applyRange:
+            applyKind === 'SURAH'
+              ? { kind: 'SURAH', surahNumber: Math.max(1, applySurah) }
+              : applyKind === 'AYAH_RANGE'
+                ? {
+                    kind: 'AYAH_RANGE',
+                    fromAyahKey: Math.max(1, applySurah) * 1000 + Math.max(1, applyFrom),
+                    toAyahKey: Math.max(1, applySurah) * 1000 + Math.max(1, applyTo),
+                  }
+                : undefined,
+        });
+        // ترتيب السطر يضبط بالمضبّط المخصص له: إدراج بإزاحة المتأثرين تلقائيا.
+        const wantedRank = orderRank === '' ? null : Math.max(1, Math.round(Number(orderRank)));
+        setGlobalRuleOrderRank(saved.id, wantedRank);
+      }
+    );
     onSaved(saved);
   };
 
@@ -145,6 +181,14 @@ export function GlobalRuleMetaEditor({
             إغلاق
           </button>
         </div>
+
+        {overrideStats.deleted + overrideStats.edited > 0 && (
+          <p className="mt-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+            تنبيه: على هذه القاعدة {toArabicDigits(overrideStats.edited)} موضعًا معدَّلًا محليًا و
+            {toArabicDigits(overrideStats.deleted)} محذوفًا موضعيًا — التجاوز المحلي يغلب تحرير
+            الأمّ، فهذه المواضع لن تتغير هنا.
+          </p>
+        )}
 
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <Field label="عنوان القاعدة">

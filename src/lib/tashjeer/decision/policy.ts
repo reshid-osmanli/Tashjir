@@ -14,6 +14,7 @@ import type {
   MergeMatrixEntry,
   ConflictPolicyStep,
   SpecificityLevel,
+  RelationPolicyEntry,
 } from '@/lib/tashjeer/model/v8';
 
 /** مجموعات الأولوية الافتراضية (FR-ES-01، ملحق ب). */
@@ -60,6 +61,9 @@ export const DEFAULT_MERGE_MATRIX: MergeMatrixEntry[] = [
   { a: 'FARSH', b: 'TAHQIQ', merge: false, priority: 100, reason: 'مستقلان' },
   { a: 'MADD', b: 'MADD', merge: false, priority: 90, reason: 'متنافيان (مد ٢ ومد ٤)' },
 ];
+
+/** علاقات النظام الافتراضية: لا تُنشأ علاقة تلقائيا خارج هذه السياسة. */
+export const DEFAULT_RELATION_POLICIES: RelationPolicyEntry[] = [];
 
 /**
  * قواعد النظام الافتراضية: تعبّر عن السلوك الحالي للمحرك بصيغة EngineRule
@@ -190,6 +194,7 @@ export const DEFAULT_SYSTEM_PROFILE: EngineConfig = {
   conflictPolicy: DEFAULT_CONFLICT_POLICY,
   executionOrder: DEFAULT_EXECUTION_ORDER,
   mergeMatrix: DEFAULT_MERGE_MATRIX,
+  relations: DEFAULT_RELATION_POLICIES,
   contexts: { waqf: [], wasl: [], ibtida: [], forbiddenConnection: [] },
 };
 
@@ -200,6 +205,7 @@ export function createDefaultEngineConfig(profile = 'default'): EngineConfig {
     profile,
     rules: DEFAULT_SYSTEM_RULES.map((rule) => ({ ...rule })),
     mergeMatrix: DEFAULT_MERGE_MATRIX.map((entry) => ({ ...entry })),
+    relations: DEFAULT_RELATION_POLICIES.map((entry) => ({ ...entry })),
     priorityGroups: DEFAULT_PRIORITY_GROUPS.map((group) => ({ ...group })),
     contexts: { waqf: [], wasl: [], ibtida: [], forbiddenConnection: [] },
   };
@@ -215,7 +221,7 @@ export interface DecisionContext {
   narratorId?: string;
   pathId?: string;
   sameReader?: boolean;
-  context?: 'ALWAYS' | 'WAQF_ONLY' | 'WASL_ONLY';
+  context?: 'ALWAYS' | 'WAQF_ONLY' | 'WASL_ONLY' | 'IBTIDA';
   position?: string;
   scope?: string;
   specificityLevel?: SpecificityLevel;

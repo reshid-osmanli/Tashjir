@@ -16,17 +16,21 @@ import { describeScope, resolveScope } from '@/lib/tashjeer/scope';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { useRuleOccurrences } from '@/hooks/useRuleOccurrences';
 import { getSurahOrFirst } from '@/data/quran';
+import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { describeGlobalPattern, findGlobalRuleMatches } from '@/lib/quran-logic/global-rule-engine';
 import {
   deleteGlobalRule,
+  GLOBAL_RULES_EVENT,
   listGlobalRules,
   saveGlobalRule,
   type GlobalRule,
 } from '@/lib/storage/global-rules-store';
+import { useEditorStore } from '@/stores/editor-store';
 import { listDocuments, loadDocument } from '@/lib/storage/document-store';
-import { occurrenceStats } from '@/lib/storage/rule-occurrences-store';
+import { listOccurrenceOverrides, occurrenceStats } from '@/lib/storage/rule-occurrences-store';
 import { RuleOccurrenceReview } from './RuleOccurrenceReview';
 import { GlobalRuleMetaEditor } from './GlobalRuleMetaEditor';
+import { ScrollableList } from '@/components/ui/ScrollableList';
 import { StatusBadge } from './VariantsPanel';
 import type { VariantCategory } from '@/types';
 import type { ReadingScope, Variant, VerificationStatus } from '@/types/tashjeer';
@@ -78,8 +82,19 @@ export function RulesIndexDialog({
   const [readerId, setReaderId] = useState('');
   const [reviewingRule, setReviewingRule] = useState<GlobalRule | null>(null);
   const [editingRule, setEditingRule] = useState<GlobalRule | null>(null);
+  // تحميل تدريجي (NFR-01): الفهرس قد يبلغ آلاف الصفوف، فيُرسم أول دفعة فقط
+  // ويُحمَّل الباقي عند اقتراب التمرير من الأسفل — بلا تجمد ملحوظ.
+  const [renderLimit, setRenderLimit] = useState(60);
 
   const refresh = () => setVersion((current) => current + 1);
+  const transactExternal = useEditorStore((state) => state.transactExternal);
+
+  // التراجع عن حذف قاعدة أو تحريرها يعيدها إلى المخزن؛ نستمع لحدث القواعد
+  // ليتحدث الفهرس دون إغلاق وإعادة فتح.
+  useEffect(() => {
+    window.addEventListener(GLOBAL_RULES_EVENT, refresh);
+    return () => window.removeEventListener(GLOBAL_RULES_EVENT, refresh);
+  }, []);
 
   const rows = useMemo(() => {
     void version;
@@ -109,6 +124,11 @@ export function RulesIndexDialog({
     });
   }, [catalog, category, query, readerId, rows, type]);
 
+  // تغيير التصفية يعيد العدّاد إلى الدفعة الأولى.
+  useEffect(() => {
+    setRenderLimit(60);
+  }, [category, query, readerId, type]);
+
   // Escape يغلق الفهرس، إلا إذا كانت نافذة تتبع أو تحرير فوقه فهي أولى.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -119,7 +139,16 @@ export function RulesIndexDialog({
   }, [editingRule, onClose, reviewingRule]);
 
   const toggleActive = (rule: GlobalRule) => {
-    saveGlobalRule({ ...rule, isActive: !rule.isActive });
+    transactExternal(
+      {
+        action: rule.isActive ? 'إيقاف قاعدة عامة' : 'تفعيل قاعدة عامة',
+        targetType: 'RULE',
+        targetId: rule.id,
+        category: rule.category,
+        summary: `${rule.isActive ? 'إيقاف' : 'تفعيل'} القاعدة العامة «${rule.title}» في المصحف كله`,
+      },
+      () => saveGlobalRule({ ...rule, isActive: !rule.isActive })
+    );
     refresh();
     onRulesChanged();
   };
@@ -127,18 +156,31 @@ export function RulesIndexDialog({
   const removeRule = async (rule: GlobalRule) => {
     const stats = occurrenceStats(rule.id);
     const matches = rule.pattern ? findGlobalRuleMatches(rule, { limit: 5000 }).length : 0;
+    const overrideCount = listOccurrenceOverrides(rule.id).length;
     const ok = await confirmAction({
       title: `حذف القاعدة العامة «${rule.title}»`,
-      message: 'تُحذف من المصحف كله مع سجل مواضعها واستثناءاتها.',
+      message:
+        'حذف الأمّ يمحو الحكم من المصحف كله مع كل ما سُجِّل على مواضعها. لحذف موضع واحد دون المساس بسائر المواضع، استعمل الحذف الموضعي من تتبع المواضع.',
       impacts: [
-        { label: 'موضع في المصحف', count: matches },
-        { label: 'استثناء موضعي', count: stats.deleted + stats.confirmed + stats.edited },
+        { label: 'موضع مشتق في المصحف', count: matches },
+        { label: 'استثناء موضعي مسجَّل', count: overrideCount },
+        { label: 'منها محذوف موضعيًا', count: stats.deleted },
+        { label: 'منها معدَّل محليًا', count: stats.edited },
       ],
-      undoable: false,
-      confirmLabel: 'حذف',
+      undoable: true,
+      confirmLabel: 'حذف القاعدة كلها',
     });
     if (!ok) return;
-    deleteGlobalRule(rule.id);
+    transactExternal(
+      {
+        action: 'حذف قاعدة عامة',
+        targetType: 'RULE',
+        targetId: rule.id,
+        category: rule.category,
+        summary: `حذف القاعدة العامة «${rule.title}» من المصحف كله مع ${overrideCount} استثناء موضعي`,
+      },
+      () => deleteGlobalRule(rule.id)
+    );
     refresh();
     onRulesChanged();
   };
@@ -211,14 +253,22 @@ export function RulesIndexDialog({
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4">
+        <ScrollableList
+          itemCount={visible.length}
+          ariaLabel="نتائج فهرس القواعد والاختلافات"
+          estimateHeight={120}
+          threshold={999999}
+          contentClassName="p-4"
+          onNearBottom={() => setRenderLimit((limit) => (limit < visible.length ? limit + 60 : limit))}
+        >
           {visible.length === 0 ? (
             <p className="rounded border border-dashed border-stone-300 bg-stone-50 px-4 py-10 text-center text-xs text-stone-500">
               لا توجد نتائج توافق هذه التصفية. أنشئ قاعدة من تحديد الحروف أو اختلافا من الكلمات المعلّمة.
             </p>
           ) : (
+            <>
             <ul className="space-y-2">
-              {visible.map((row) => (
+              {visible.slice(0, renderLimit).map((row) => (
                 <li key={row.key} className="rounded-lg border border-stone-200 p-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -325,8 +375,18 @@ export function RulesIndexDialog({
                 </li>
               ))}
             </ul>
+            {renderLimit < visible.length && (
+              <button
+                type="button"
+                onClick={() => setRenderLimit((limit) => limit + 60)}
+                className="mt-3 w-full rounded border border-stone-300 bg-white px-3 py-2 text-[11px] font-medium text-stone-700 hover:bg-stone-50"
+              >
+                تحميل المزيد ({toArabicDigits(visible.length - renderLimit)} متبقيا)
+              </button>
+            )}
+            </>
           )}
-        </div>
+        </ScrollableList>
       </div>
 
       {reviewingRule && (

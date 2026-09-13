@@ -139,27 +139,35 @@ export const CONDITION_OP_LABELS: Record<string, string> = {
 
 /** الحقول المتاحة في منشئ الشروط (FR-ES-03). */
 export const CONDITION_FIELDS = [
-  'differenceType',
-  'relatedType',
-  'otherType',
   'readerId',
   'narratorId',
   'pathId',
-  'sameReader',
+  'category',
+  'differenceType',
+  'relatedType',
+  'otherType',
   'context',
   'position',
+  'forbiddenWasl',
+  'morphologicalCategory',
+  'literalPattern',
+  'sameReader',
 ] as const;
 
 export const CONDITION_FIELD_LABELS: Record<string, string> = {
-  differenceType: 'نوع الاختلاف',
-  relatedType: 'النوع المرتبط',
-  otherType: 'النوع الآخر',
   readerId: 'القارئ',
   narratorId: 'الراوي',
   pathId: 'الطريق',
-  sameReader: 'نفس القارئ',
-  context: 'السياق',
+  category: 'الفئة',
+  differenceType: 'نوع الاختلاف',
+  relatedType: 'النوع المرتبط',
+  otherType: 'النوع الآخر',
+  context: 'السياق (وقف/وصل/ابتداء)',
   position: 'الموضع',
+  forbiddenWasl: 'ممنوع الوصل',
+  morphologicalCategory: 'الفئة الصرفية',
+  literalPattern: 'النمط الحرفي',
+  sameReader: 'نفس القارئ',
 };
 
 /** ألوان حالة القاعدة لشارة الحالة. */

@@ -11,6 +11,7 @@ import { useState } from 'react';
 
 interface ExportImportPanelProps {
   onExport: () => string;
+  onPreviewImport: (text: string) => { valid: boolean; errors: string[]; warnings: string[] };
   onImport: (text: string) => { valid: boolean; errors: string[]; warnings: string[] };
   /**
    * تصدير حزمة الحوكمة: الإعداد + سلاسل إصدارات القواعد + سجل التدقيق + ملخّص
@@ -19,9 +20,10 @@ interface ExportImportPanelProps {
   onExportBundle?: () => void;
 }
 
-export function ExportImportPanel({ onExport, onImport, onExportBundle }: ExportImportPanelProps) {
+
   const [text, setText] = useState('');
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; messages: string[] } | null>(null);
+  const [validated, setValidated] = useState(false);
 
   const handleExport = () => {
     setText(onExport());
@@ -38,10 +40,21 @@ export function ExportImportPanel({ onExport, onImport, onExportBundle }: Export
     }
   };
 
+  const handlePreview = () => {
+    const result = onPreviewImport(text);
+    setValidated(result.valid);
+    if (result.valid) {
+      setFeedback({ kind: 'ok', messages: [...(result.warnings ?? []), 'الفحص سليم. راجع النص ثم اضغط «تطبيق الاستيراد»؛ لم يُغيّر الملف بعد.'] });
+    } else {
+      setFeedback({ kind: 'err', messages: result.errors.length > 0 ? result.errors : ['فشل فحص الاستيراد.'] });
+    }
+  };
+
   const handleImport = () => {
     const result = onImport(text);
+    setValidated(false);
     if (result.valid) {
-      setFeedback({ kind: 'ok', messages: ['استورد الإعداد بنجاح. احفظ لتثبيته.'] });
+      setFeedback({ kind: 'ok', messages: ['استورد الإعداد بنجاح كمسودة غير محفوظة. راجع بوابة النشر قبل التثبيت.'] });
     } else {
       setFeedback({ kind: 'err', messages: result.errors.length > 0 ? result.errors : ['فشل الاستيراد.'] });
     }
@@ -65,28 +78,10 @@ export function ExportImportPanel({ onExport, onImport, onExportBundle }: Export
         <button type="button" onClick={handleCopy} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
           نسخ النص
         </button>
-        <button type="button" onClick={handleImport} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-          استيراد من النص
+        <button type="button" onClick={handlePreview} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          فحص ومعاينة الاستيراد
         </button>
-        {onExportBundle && (
-          <button
-            type="button"
-            onClick={() => {
-              onExportBundle();
-              setFeedback({
-                kind: 'ok',
-                messages: [
-                  'صُدِّرت حزمة الحوكمة: ملف الإعداد + سلاسل إصدارات القواعد + سجل التدقيق + ملخّص اختبارات القواعد.',
-                  'الاستيراد من النص يقبل الحزمة كذلك: يعيد الإعداد والسجلين معها (جولة كاملة).',
-                ],
-              });
-            }}
-            className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100"
-            title="تصدير الحزمة الكاملة مع الإصدارات وسجل التدقيق"
-          >
-            تصدير حزمة الحوكمة
-          </button>
-        )}
+
       </div>
 
       {feedback && (
