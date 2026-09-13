@@ -27,6 +27,8 @@ import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor } from '@/lib/tashjeer/color-system';
 import { shiftLineInOrder, orderSnapshotOf, coalesceLineOrder } from '@/lib/tashjeer/manual-links';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
+import { ScrollableList } from '@/components/ui/ScrollableList';
+import { selectElement } from '@/lib/editor/selection-store';
 import type { VariantCategory } from '@/types';
 import type {
   LinkEndpoint,
@@ -243,10 +245,16 @@ function FaceSelect({
   onChange: (value: string) => void;
   label: string;
 }) {
+  // اختيار وجه من لوحة العلاقات يجعله هو العنصر النشط عالميًا (FR-ED-02).
+  const handleChange = (key: string) => {
+    onChange(key);
+    const [variantId, alternativeId] = key.split('::');
+    if (variantId && alternativeId) selectElement({ kind: 'FACE', id: alternativeId, differenceId: variantId, faceId: alternativeId });
+  };
   return (
     <label className="block">
       <span className="mb-0.5 block text-[10px] font-medium text-stone-600">{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="input h-8 py-0 text-[11px]">
+      <select value={value} onChange={(event) => handleChange(event.target.value)} className="input h-8 py-0 text-[11px]">
         <option value="">— اختر وجها —</option>
         {faces.map((face) => (
           <option key={face.key} value={face.key}>
@@ -323,10 +331,17 @@ function LineSelect({
   onChange: (value: string) => void;
   label: string;
 }) {
+  // اختيار سطر من لوحة العلاقات يجعله هو العنصر النشط عالميًا: تنتقل اللوحة
+  // إليه وتميّزه، وتميّزه كل اللوحات المفتوحة (AC-06).
+  const handleChange = (lineId: string) => {
+    onChange(lineId);
+    const line = lines.find((item) => item.id === lineId);
+    if (line) selectElement({ kind: 'LINE', id: line.id, lineId: line.id, differenceId: line.variantId, position: line.startPosition });
+  };
   return (
     <label className="block">
       <span className="mb-0.5 block text-[10px] font-medium text-stone-600">{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="input h-8 py-0 text-[11px]">
+      <select value={value} onChange={(event) => handleChange(event.target.value)} className="input h-8 py-0 text-[11px]">
         <option value="">— اختر سطرا —</option>
         {lines.map((line, index) => (
           <option key={line.id} value={line.id}>
@@ -480,7 +495,16 @@ function SegmentEditor({ classic }: { classic: ClassicTashjeer }) {
           </button>
         </div>
         {targetType === 'LINE' ? (
-          <select value={targetId} onChange={(event) => setTargetId(event.target.value)} className="input h-8 py-0 text-[11px]">
+          <select
+            value={targetId}
+            onChange={(event) => {
+              setTargetId(event.target.value);
+              // معاينة السطر الهدف في اللوحة وكل اللوحات (التحديد الموحّد).
+              const line = classic.lines.find((item) => item.id === event.target.value);
+              if (line) selectElement({ kind: 'LINE', id: line.id, lineId: line.id, differenceId: line.variantId, position: line.startPosition });
+            }}
+            className="input h-8 py-0 text-[11px]"
+          >
             <option value="">— بلا رابط الآن —</option>
             {classic.lines.map((line, index) => (
               <option key={line.id} value={line.id}>
@@ -489,7 +513,14 @@ function SegmentEditor({ classic }: { classic: ClassicTashjeer }) {
             ))}
           </select>
         ) : (
-          <select value={targetId} onChange={(event) => setTargetId(event.target.value)} className="input h-8 py-0 text-[11px]">
+          <select
+            value={targetId}
+            onChange={(event) => {
+              setTargetId(event.target.value);
+              if (event.target.value) selectElement({ kind: 'DIFFERENCE', id: event.target.value, differenceId: event.target.value });
+            }}
+            className="input h-8 py-0 text-[11px]"
+          >
             <option value="">— بلا رابط الآن —</option>
             {variants.map((variant) => (
               <option key={variant.id} value={variant.id}>
@@ -522,6 +553,11 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
   const moveLineInOrder = useEditorStore((state) => state.moveLineInOrder);
   const resetLineOrder = useEditorStore((state) => state.resetLineOrder);
   const addLink = useEditorStore((state) => state.addLink);
+  // التحديد الموحّد: النقر على سطر هنا يجعله هو العنصر النشط عالميًا، فتنتقل
+  // اللوحة إليه وتميّزه خلال ≤ 300ms (AC-06: «السطر ٢٥» مثال ملزم).
+  const selectedLineId = useEditorStore((state) =>
+    state.selection?.kind === 'LINE' ? state.selection.lineId ?? state.selection.id : state.selectedBranchId
+  );
 
   // الترتيب الجاري: ما حفظه المستند إن وجد، مكمَّلا بأسطر المحرك الحالية.
   const savedOrder = document?.lineOrder;
@@ -721,9 +757,18 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
         )}
       </div>
 
+      {/* قائمة احترافية (FR-ED-01): شريط تمرير مرئي وزرا صعود/نزول بضغط
+          مستمر وزر عودة لأعلى — بلا تنافذ لأن السحب يحتاج كل الصفوف مثبتة. */}
+      <ScrollableList
+        itemCount={orderedLines.length}
+        ariaLabel="قائمة ترتيب الأسطر"
+        estimateHeight={34}
+        threshold={999999}
+        className="max-h-72"
+      >
       <ol
         ref={listRef}
-        className={`max-h-72 space-y-1 overflow-y-auto ${touchDrag.current ? 'touch-none' : ''}`}
+        className={`space-y-1 ${touchDrag.current ? 'touch-none' : ''}`}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
@@ -742,6 +787,17 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
               <div
                 data-order-line-id={line.id}
                 data-order-index={index}
+                onClick={() => {
+                  // أثناء السحب لا يُحدَّد شيء؛ بعد الإفلات النقر = تحديد عالمي.
+                  if (draggingId || mergeDragId || touchDrag.current) return;
+                  selectElement({
+                    kind: 'LINE',
+                    id: line.id,
+                    lineId: line.id,
+                    differenceId: line.variantId,
+                    position: line.startPosition,
+                  });
+                }}
                 className={`flex items-center gap-1.5 rounded border bg-white px-2 py-1.5 transition ${
                   isTouchMergeTarget
                     ? 'border-violet-600 bg-violet-100 ring-2 ring-violet-300'
@@ -749,8 +805,11 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
                       ? 'border-violet-400 bg-violet-50'
                       : isDragging
                         ? 'border-emerald-400 opacity-50'
-                        : 'border-stone-100'
+                        : selectedLineId === line.id
+                          ? 'selection-row-active cursor-pointer'
+                          : 'border-stone-100 cursor-pointer hover:border-stone-300'
                 }`}
+                title="انقر لتحديد هذا السطر عالميًا: تنتقل إليه اللوحة وتميّزه كل اللوحات"
                 draggable
                 onDragStart={(event) => {
                   setDraggingId(line.id);
@@ -852,15 +911,37 @@ function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
                   {toArabicDigits(line.linkIds?.length ?? 0)} رابطا
                 </span>
               )}
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  selectElement({
+                    kind: 'LINE',
+                    id: line.id,
+                    lineId: line.id,
+                    differenceId: line.variantId,
+                    position: line.startPosition,
+                  });
+                }}
+                className={`shrink-0 rounded border px-1.5 py-0.5 text-[9px] ${
+                  selectedLineId === line.id
+                    ? 'border-emerald-600 bg-emerald-600 text-white'
+                    : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                }`}
+                title="إظهار هذا السطر في اللوحة مع تمييزه (التحديد الموحّد)"
+              >
+                عرض
+              </button>
               </div>
             </li>
           );
         })}
       </ol>
+      </ScrollableList>
 
       <p className="mt-2 text-[10px] leading-relaxed text-stone-500">
         تغيير رقم سطر يُزحزح الصفوف المتأثرة تلقائيا (إدخال لا استبدال)، فلا يتلف الترتيب ولا
-        العلاقات المرتبطة بالأسطر.
+        العلاقات المرتبطة بالأسطر. النقر على السطر يحدده عالميًا فينتقل إليه اللوحة.
       </p>
     </div>
   );
@@ -892,6 +973,7 @@ function LinksList({
   const deleteLink = useEditorStore((state) => state.deleteLink);
   const updateLink = useEditorStore((state) => state.updateLink);
   const deleteSegment = useEditorStore((state) => state.deleteSegment);
+  const selection = useEditorStore((state) => state.selection);
   const segmentTitles = new Map(segments.map((segment) => [segment.id, segment.title]));
 
   if (links.length === 0 && segments.length === 0) return null;
@@ -902,6 +984,29 @@ function LinksList({
     }
     return `${endpoint.type === 'FACE' ? 'وجه' : endpoint.type === 'LINE' ? 'سطر' : 'قاعدة'} ${shortId(endpoint.id)}`;
   };
+
+  /** النقر على طرف علاقة يجعله هو العنصر النشط عالميًا (FR-ED-02.3). */
+  const selectEndpoint = (endpoint: LinkEndpoint) => {
+    if (endpoint.type === 'FACE') {
+      const [variantId, alternativeId] = endpoint.id.split('::');
+      if (variantId && alternativeId) {
+        selectElement({ kind: 'FACE', id: alternativeId, differenceId: variantId, faceId: alternativeId });
+        return;
+      }
+    }
+    if (endpoint.type === 'LINE') {
+      selectElement({ kind: 'LINE', id: endpoint.id, lineId: endpoint.id });
+      return;
+    }
+    if (endpoint.type === 'SEGMENT') {
+      selectElement({ kind: 'SEGMENT', id: endpoint.id });
+      return;
+    }
+    selectElement({ kind: 'RULE', id: endpoint.id, differenceId: endpoint.id });
+  };
+  const endpointIsSelected = (endpoint: LinkEndpoint): boolean =>
+    selection?.id === endpoint.id ||
+    (selection?.kind === 'FACE' && endpoint.type === 'FACE' && selection.faceId !== undefined && endpoint.id.endsWith(`::${selection.faceId}`));
 
   return (
     <div className="mt-3 rounded-md border border-stone-200 bg-stone-50/60 p-2.5">
@@ -914,14 +1019,35 @@ function LinksList({
             classic.appliedLinkIds.merge.includes(link.id) ||
             classic.appliedLinkIds.reference.includes(link.id);
           return (
-            <li key={link.id} className="rounded border border-stone-200 bg-white px-2 py-1.5">
+            <li
+              key={link.id}
+              className={`rounded border bg-white px-2 py-1.5 ${
+                selection?.kind === 'COMPOSITE_FACE' && selection.id === link.id ? 'selection-row-active' : 'border-stone-200'
+              }`}
+            >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[10.5px] font-medium text-stone-800">
                     {KIND_LABELS[link.kind]} · {RELATION_LABELS[link.relation]}
                   </p>
                   <p className="truncate text-[10px] text-stone-600" title={`${describe(link.from)} → ${describe(link.to)}`}>
-                    {describe(link.from)} ← {describe(link.to)}
+                    <button
+                      type="button"
+                      onClick={() => selectEndpoint(link.from)}
+                      className={`rounded px-0.5 hover:underline ${endpointIsSelected(link.from) ? 'bg-emerald-100 text-emerald-800' : ''}`}
+                      title="تحديد هذا الطرف عالميًا: تنتقل إليه اللوحة"
+                    >
+                      {describe(link.from)}
+                    </button>
+                    {' ← '}
+                    <button
+                      type="button"
+                      onClick={() => selectEndpoint(link.to)}
+                      className={`rounded px-0.5 hover:underline ${endpointIsSelected(link.to) ? 'bg-emerald-100 text-emerald-800' : ''}`}
+                      title="تحديد هذا الطرف عالميًا: تنتقل إليه اللوحة"
+                    >
+                      {describe(link.to)}
+                    </button>
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
@@ -967,12 +1093,22 @@ function LinksList({
         })}
 
         {segments.map((segment) => (
-          <li key={segment.id} className="rounded border border-stone-200 bg-white px-2 py-1.5">
+          <li
+            key={segment.id}
+            className={`rounded border bg-white px-2 py-1.5 ${
+              selection?.kind === 'SEGMENT' && selection.id === segment.id ? 'selection-row-active' : 'border-stone-200'
+            }`}
+          >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-[10.5px] font-medium text-stone-800">
+                <button
+                  type="button"
+                  onClick={() => selectElement({ kind: 'SEGMENT', id: segment.id, position: segment.startPosition })}
+                  className="text-start text-[10.5px] font-medium text-stone-800 hover:underline"
+                  title="تحديد هذا الجزء عالميًا: تنتقل إليه اللوحة"
+                >
                   جزء: {segment.title}
-                </p>
+                </button>
                 <p className="text-[10px] text-stone-600">
                   الكلمات {toArabicDigits(segment.startPosition)}–{toArabicDigits(segment.endPosition)}
                   {segment.characterRange

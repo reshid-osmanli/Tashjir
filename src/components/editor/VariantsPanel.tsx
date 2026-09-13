@@ -11,7 +11,7 @@
 import { confirmAction } from '@/lib/ui/confirm-store';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
-import { useWindowedList } from '@/hooks/useWindowedList';
+import { ScrollableList } from '@/components/ui/ScrollableList';
 import { documentWindowWords } from '@/lib/tashjeer/reading-window';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
@@ -67,10 +67,8 @@ export function VariantsPanel() {
   const [batchCategories, setBatchCategories] = useState<VariantCategory[]>(['USUL', 'FARSH', 'MADUD']);
   const [showSmartWizard, setShowSmartWizard] = useState(false);
   const [listSearch, setListSearch] = useState('');
-  const listRef = useRef<HTMLDivElement>(null);
+  // مرجع الصف المحدد: يُرسم دائمًا حتى خارج نافذة التنافذ ليعمل التمرير إليه.
   const selectedRowRef = useRef<HTMLLIElement>(null);
-  const [canScrollUp, setCanScrollUp] = useState(false);
-  const [canScrollDown, setCanScrollDown] = useState(false);
   // استثناءات المواضع كلها: تغيّرها يعيد حساب عدّادات هذه اللوحة فورا.
   const occurrences = useRuleOccurrences();
   const catalog = useTransmissionCatalog();
@@ -129,9 +127,6 @@ export function VariantsPanel() {
     });
   }, [document, listSearch]);
 
-  // تنافذ القائمة للآيات ذات المواضع الكثيرة (NFR-01): يُرسم المرئي فقط.
-  const windowed = useWindowedList(listRef, visibleVariants.length, { estimateHeight: 110, overscan: 5, threshold: 40 });
-
   const activeGlobalRules = useMemo(() => {
     if (!document) return [];
     // المفتاح ضمن الاعتماديات ليُعاد العدّ بعد حذف موضع أو إرجاعه.
@@ -148,26 +143,6 @@ export function VariantsPanel() {
       .filter((item) => item.matches.length > 0);
   }, [document, occurrences.key]);
 
-  useEffect(() => {
-    selectedRowRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, [selectedVariantId]);
-
-  useEffect(() => {
-    const element = listRef.current;
-    if (!element) return;
-    const update = () => {
-      setCanScrollUp(element.scrollTop > 2);
-      setCanScrollDown(element.scrollTop + element.clientHeight < element.scrollHeight - 2);
-    };
-    update();
-    element.addEventListener('scroll', update, { passive: true });
-    const observer = new ResizeObserver(update);
-    observer.observe(element);
-    return () => {
-      element.removeEventListener('scroll', update);
-      observer.disconnect();
-    };
-  }, [document?.variants.length]);
 
   if (!document) return null;
 
@@ -490,51 +465,47 @@ export function VariantsPanel() {
         )}
       </section>
 
-      {/* قائمة الاختلافات: مساحة مستقلة لا تدفع اللوحة خارج الشاشة. */}
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <div className="sticky top-0 z-10 border-b border-stone-200 bg-white px-3 py-2">
-          <label className="block text-[10px] font-medium text-stone-500">بحث وتصفية فورية</label>
-          <input
-            type="search"
-            value={listSearch}
-            onChange={(event) => setListSearch(event.target.value)}
-            placeholder="النص، الفئة، المصدر، الحالة…"
-            className="mt-1 w-full rounded border border-stone-300 px-2 py-1 text-[11px] focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
-          {listSearch.trim() && (
-            <button type="button" onClick={() => setListSearch('')} className="mt-1 text-[10px] text-emerald-700 hover:underline">
-              إلغاء البحث
-            </button>
-          )}
-        </div>
-        {canScrollUp && (
-          <button
-            type="button"
-            onClick={() => listRef.current?.scrollBy({ top: -320, behavior: 'smooth' })}
-            className="absolute start-1/2 top-1 z-20 -translate-x-1/2 rounded-full border border-stone-300 bg-white/95 px-4 py-0.5 text-xs shadow-md hover:bg-stone-50"
-            aria-label="الصعود في قائمة الاختلافات"
-          >
-            ↑
-          </button>
-        )}
-        <div
-          ref={listRef}
-          className="min-h-0 flex-1 overscroll-contain overflow-y-scroll scroll-smooth pb-10 pt-1 [scrollbar-gutter:stable] touch-pan-y"
-          tabIndex={0}
-          aria-label="قائمة الاختلافات القابلة للتمرير"
-        >
-        {visibleVariants.length === 0 ? (
+      {/* قائمة الاختلافات: القائمة الطويلة الاحترافية الموحّدة (FR-ED-01):
+          رأس ثابت للبحث، شريط تمرير مرئي، زرا صعود/نزول بضغط مستمر، زر
+          العودة لأعلى، وتنافذ للقوائم 1000+ (NFR-01)، وتمرير تلقائي إلى
+          العنصر المحدد من أي لوحة في منتصف الرؤية (التحديد الموحّد). */}
+      <ScrollableList
+        itemCount={visibleVariants.length}
+        ariaLabel="قائمة الاختلافات القابلة للتمرير"
+        estimateHeight={110}
+        threshold={40}
+        activeIndex={
+          selectedVariantId ? visibleVariants.findIndex((variant) => variant.id === selectedVariantId) : undefined
+        }
+        header={
+          <div className="px-3 py-2">
+            <label className="block text-[10px] font-medium text-stone-500">بحث وتصفية فورية</label>
+            <input
+              type="search"
+              value={listSearch}
+              onChange={(event) => setListSearch(event.target.value)}
+              placeholder="النص، الفئة، المصدر، الحالة…"
+              className="mt-1 w-full rounded border border-stone-300 px-2 py-1 text-[11px] focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+            {listSearch.trim() && (
+              <button type="button" onClick={() => setListSearch('')} className="mt-1 text-[10px] text-emerald-700 hover:underline">
+                إلغاء البحث
+              </button>
+            )}
+          </div>
+        }
+        emptyState={
           <p className="px-4 py-6 text-center text-xs text-stone-500">
             {document.variants.length === 0
               ? 'لا توجد اختلافات مسجّلة في هذه الآية بعد.'
               : 'لا نتائج مطابقة للبحث أو التصفية.'}
           </p>
-        ) : (
+        }
+        renderWindow={(range) => (
           <ul className="divide-y divide-stone-100">
-            {windowed.active && windowed.topPad > 0 && <li aria-hidden style={{ height: windowed.topPad }} />}
             {visibleVariants.map((variant, index) => {
               // خارج النافذة: لا يُرسم إلا الصف المحدد (ليبقى التمرير إليه ممكنا).
-              if (windowed.active && (index < windowed.start || index > windowed.end) && variant.id !== selectedVariantId) {
+              if (range.active && (index < range.start || index > range.end) && variant.id !== selectedVariantId) {
                 return null;
               }
               return (
@@ -545,7 +516,7 @@ export function VariantsPanel() {
                 isSelected={variant.id === selectedVariantId}
                 selectedAlternativeId={variant.id === selectedVariantId ? selectedAlternativeId : null}
                 rowRef={variant.id === selectedVariantId ? selectedRowRef : undefined}
-                onMeasure={windowed.active ? (element) => windowed.measure(index, element) : undefined}
+                onMeasure={range.active ? (element) => range.measure(index, element) : undefined}
                 onSelect={() => selectVariant(variant.id === selectedVariantId ? null : variant.id)}
                 onSelectAlternative={(alternativeId) => selectAlternative(variant.id, alternativeId)}
                 onRecitationModeChange={(recitationMode) => updateVariant(variant.id, { recitationMode })}
@@ -605,21 +576,9 @@ export function VariantsPanel() {
               />
               );
             })}
-            {windowed.active && windowed.bottomPad > 0 && <li aria-hidden style={{ height: windowed.bottomPad }} />}
           </ul>
         )}
-        </div>
-        {canScrollDown && (
-          <button
-            type="button"
-            onClick={() => listRef.current?.scrollBy({ top: 320, behavior: 'smooth' })}
-            className="absolute bottom-1 start-1/2 z-20 -translate-x-1/2 rounded-full border border-stone-300 bg-white/95 px-4 py-0.5 text-xs shadow-md hover:bg-stone-50"
-            aria-label="النزول في قائمة الاختلافات"
-          >
-            ↓
-          </button>
-        )}
-      </div>
+      />
 
       {editingVariant && (
         <VariantEditor
@@ -816,7 +775,7 @@ function VariantRow({
         onMeasure?.(element);
       }}
       data-difference-id={variant.id}
-      className={isSelected ? 'bg-emerald-50/60 ring-2 ring-inset ring-emerald-500' : ''}
+      className={isSelected ? 'selection-row-active' : ''}
     >
       <div className="px-4 py-3">
         <button type="button" onClick={onSelect} className="w-full text-start">
