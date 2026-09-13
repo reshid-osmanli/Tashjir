@@ -116,7 +116,9 @@ npm run data:quran  # إعادة توليد بيانات المصحف
 - **منشئ القواعد بلا كود**: شرط ← إجراء، بأولوية وخصوصية وحالة وإصدار (FR-ES-02/03).
 - **مصفوفة الدمج**: جدول رسومي يقرر متى يُدمج عنصران ومتى لا (مد+تحقيق=ادمج، فرش+مد=لا تدمج) (FR-ES-05).
 - **الأولويات والأنابيب**: مجموعات الأولوية، سلم حل التعارض، وترتيب التنفيذ (FR-ES-01/04/06).
-- **ساحة لماذا؟**: أي قرار يسأل «لماذا؟» فيعرض القواعد المطابقة والفائزة وأثر القرار (FR-ES-10).
+- **ساحة لماذا؟ + Testing Playground**: موضع من المصحف ← Test Engine ← Input/Rules/Conflicts/Merge/Final عبر Decision API (FR-ES-09/10).
+- **Dry Run / Impact / Live Preview / Sandbox / Profiles**: تشغيل جاف بأرقام سبعة، أثر التعديل، Before/After، مسودة لا تمس الرسم حتى الاعتماد، ومقارنة Default/Experimental/Testing/Legacy/Reference (Improved/Regressed).
+- **لوحة المعلومات**: Usage/Quality وصفية لا تغيّر النتيجة تلقائيًا.
 - **تصدير حتمي صديق لـ Git**: نفس الإعداد يعطي نفس النص بايتًا، فيظهر Git فرقًا دقيقًا (DM-13).
 - كل القرارات تمرّ عبر Decision Resolver واحد (لا منطق مكرر — P-07).
 
@@ -171,7 +173,7 @@ npm run data:quran  # إعادة توليد بيانات المصحف
 
 ### ✅ الاختبارات
 
-454 اختبارا تغطي منطق المجال كاملا، منها 22 اختبارا في `tests/classic-layout.test.ts` تحرس شكل الشجرة نفسه: نزول كل الأسطر تحت النص، واستقلال المسارات، وامتداد السطر، وترتيب المواضع والأوجه، وسلامة الآية الطويلة الملتفة، وسطر «جمهور» عند الاتفاق، والخط التوضيحي، واقتران كل رمز بصاحبه. ويضاف إليها `tests/combination-engine.test.ts` لأوجه القراءة المركّبة وترتيب الأمة، و`tests/loci.test.ts` للمواضع المنفصلة وتنافي أوجه الموضع الواحد، و`tests/manual-links.test.ts` لروابط التصحيح اليدوي (دمج الأوجه والأسطر وربط الأجزاء والترتيب بإزاحة المتأثرين)، و`tests/manual-correction.test.ts` لرتب ترتيب القواعد والتتبع، و`tests/editor-manual-actions.test.ts` لإجراءات التصحيح داخل مخزن المحرر، و`tests/reader-symbols.test.ts` لرموز الأئمة والرواة وأسماء الطرق، و`tests/reading-window.test.ts` للسطر الواحد ودقة مواضع الحروف ووصل الآيتين، و`tests/figure-render.test.ts` لناتج الرسم نفسه، و`tests/decision-resolver.test.ts` و`tests/model-v8.test.ts` و`tests/migrate-v7-v8.test.ts` و`tests/command-log.test.ts` لنموذج v8 وحلّ القرار والترحيل وسجل التراجع، و`tests/engine-config-store.test.ts` لطبقة سياسات المحرك والتسلسل الحتمي الصديق لـ Git، و`tests/smart-create.ts` و`tests/smart-create-store.test.ts` لمعالج الإنشاء الذكي وتطبيقه على المستند في معاملة واحدة. انظر `docs/EDITOR.md` §8.
+اختبارات Vitest تغطي منطق المجال كاملا، منها 22 اختبارا في `tests/classic-layout.test.ts` تحرس شكل الشجرة نفسه: نزول كل الأسطر تحت النص، واستقلال المسارات، وامتداد السطر، وترتيب المواضع والأوجه، وسلامة الآية الطويلة الملتفة، وسطر «جمهور» عند الاتفاق، والخط التوضيحي، واقتران كل رمز بصاحبه. ويضاف إليها `tests/combination-engine.test.ts` لأوجه القراءة المركّبة وترتيب الأمة، و`tests/loci.test.ts` للمواضع المنفصلة وتنافي أوجه الموضع الواحد، و`tests/manual-links.test.ts` لروابط التصحيح اليدوي (دمج الأوجه والأسطر وربط الأجزاء والترتيب بإزاحة المتأثرين)، و`tests/manual-correction.test.ts` لرتب ترتيب القواعد والتتبع، و`tests/editor-manual-actions.test.ts` لإجراءات التصحيح داخل مخزن المحرر، و`tests/reader-symbols.test.ts` لرموز الأئمة والرواة وأسماء الطرق، و`tests/reading-window.test.ts` للسطر الواحد ودقة مواضع الحروف ووصل الآيتين، و`tests/figure-render.test.ts` لناتج الرسم نفسه، و`tests/decision-resolver.test.ts` و`tests/model-v8.test.ts` و`tests/migrate-v7-v8.test.ts` و`tests/command-log.test.ts` لنموذج v8 وحلّ القرار والترحيل وسجل التراجع، و`tests/engine-config-store.test.ts` لطبقة سياسات المحرك والتسلسل الحتمي الصديق لـ Git، و`tests/smart-create.ts` و`tests/smart-create-store.test.ts` لمعالج الإنشاء الذكي وتطبيقه على المستند في معاملة واحدة. انظر `docs/EDITOR.md` §8.
 
 ---
 

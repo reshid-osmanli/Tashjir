@@ -24,18 +24,23 @@ import { RuleTestsPanel } from '@/components/studio/RuleTestsPanel';
 import { CandidateRulesPanel } from '@/components/studio/CandidateRulesPanel';
 import { ProfileComparePanel } from '@/components/studio/ProfileComparePanel';
 import { PublishHistoryPanel } from '@/components/studio/PublishHistoryPanel';
+import { TestingPlayground } from '@/components/studio/TestingPlayground';
+import { DryRunPanel } from '@/components/studio/DryRunPanel';
+import { ProfilesPanel } from '@/components/studio/ProfilesPanel';
+import { SandboxWorkflow } from '@/components/studio/SandboxWorkflow';
 
-type Section = 'dashboard' | 'rules' | 'merge' | 'priority' | 'why' | 'tests' | 'candidates' | 'compare' | 'publish' | 'io';
+type Section = 'dashboard' | 'rules' | 'merge' | 'priority' | 'why' | 'tests' | 'candidates' | 'compare' | 'sandbox' | 'publish' | 'io';
 
 const SECTIONS: Array<{ id: Section; label: string; hint: string }> = [
   { id: 'dashboard', label: 'لوحة المعلومات', hint: 'نظرة عامة' },
   { id: 'rules', label: 'القواعد ومنشئها', hint: 'FR-ES-02/03/07' },
   { id: 'merge', label: 'مصفوفة الدمج', hint: 'FR-ES-05' },
   { id: 'priority', label: 'الأولويات والأنابيب', hint: 'FR-ES-01/04/06' },
-  { id: 'why', label: 'ساحة لماذا؟', hint: 'FR-ES-09/10' },
+  { id: 'why', label: 'ساحة الاختبار', hint: 'FR-ES-09/10' },
   { id: 'tests', label: 'اختبارات القواعد', hint: 'FR-ES-08' },
   { id: 'candidates', label: 'قاعدة من تصحيح', hint: 'FR-ES-12' },
-  { id: 'compare', label: 'مقارنة الملفات', hint: 'FR-ES-11' },
+  { id: 'compare', label: 'الملفات والمقارنة', hint: 'FR-ES-11' },
+  { id: 'sandbox', label: 'ساندبوكس واعتماد', hint: 'FR-ES-11.2' },
   { id: 'publish', label: 'النشر والسجل', hint: 'FR-ES-07/14' },
   { id: 'io', label: 'التصدير والاستيراد', hint: 'FR-ES-14' },
 ];
@@ -83,6 +88,7 @@ export default function EngineStudioPage() {
     versions,
     hydrate,
     persist,
+    applyImported,
     resetToDefault,
     rollbackTo,
     discardChanges,
@@ -290,7 +296,19 @@ export default function EngineStudioPage() {
               />
             )}
 
-            {section === 'why' && <WhyTracePlayground config={config} />}
+            {section === 'why' && (
+              <div className="space-y-4">
+                <TestingPlayground config={config} />
+                <WhyTracePlayground config={config} />
+                <DryRunPanel
+                  config={config}
+                  rule={selectedRule}
+                  onApply={() => {
+                    if (selectedRule) setRuleStatusAction(selectedRule.id, 'ACTIVE');
+                  }}
+                />
+              </div>
+            )}
 
             {section === 'tests' && <RuleTestsPanel config={config} />}
 
@@ -304,7 +322,16 @@ export default function EngineStudioPage() {
               />
             )}
 
-            {section === 'compare' && <ProfileComparePanel config={config} />}
+            {section === 'compare' && (
+              <div className="space-y-4">
+                <ProfilesPanel config={config} onLoadProfile={applyImported} />
+                <ProfileComparePanel config={config} />
+              </div>
+            )}
+
+            {section === 'sandbox' && (
+              <SandboxWorkflow config={config} rule={selectedRule} onStatus={setRuleStatusAction} />
+            )}
 
             {section === 'publish' && (
               <PublishHistoryPanel

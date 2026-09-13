@@ -44,12 +44,28 @@ export function sortRulesByPrecedence(rules: EngineRule[]): EngineRule[] {
   });
 }
 
+/**
+ * هل القاعدة حيّة في المسار الرسمي؟ المسودة والتجريبية والمعطّلة لا تمسّ
+ * الرسم المعتمد حتى الاعتماد (FR-ES-11.2 — Sandbox).
+ */
+export function isOfficiallyLive(rule: EngineRule): boolean {
+  return rule.status === 'ACTIVE';
+}
+
+export interface MatchRulesOptions {
+  /** افتراضيًا القواعد النشطة فقط. مسار الساندبوكس يمرّر DRAFT/EXPERIMENTAL. */
+  includeStatuses?: EngineRule['status'][];
+}
+
 /** يُرجع القواعد المطابقة لسياق القرار، مرتبة بحسب الأسبقية. */
 export function matchRules(
   profile: EngineConfig,
-  ctx: DecisionContext
+  ctx: DecisionContext,
+  options: MatchRulesOptions = {}
 ): { matched: EngineRule[]; evaluated: Array<{ rule: EngineRule; matched: boolean }> } {
-  const evaluated = profile.rules.map((rule) => ({
+  const allowed = options.includeStatuses ?? ['ACTIVE'];
+  const candidates = profile.rules.filter((rule) => allowed.includes(rule.status));
+  const evaluated = candidates.map((rule) => ({
     rule,
     matched: evaluateGroup(rule.conditions, ctx),
   }));

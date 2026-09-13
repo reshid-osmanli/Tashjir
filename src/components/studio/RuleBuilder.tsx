@@ -39,6 +39,7 @@ import {
 } from './labels';
 import { WAQF_WASL_TEMPLATES, type RuleTemplate } from './templates';
 import { previewRuleEdit, summarizePreview } from '@/lib/tashjeer/decision/rule-edit-preview';
+import { analyzeRuleImpact, livePreviewMerge } from '@/lib/tashjeer/decision/impact-analysis';
 import { confirmAction } from '@/lib/ui/confirm-store';
 
 const RULE_TYPES = Object.keys(RULE_TYPE_LABELS) as EngineRule['type'][];
@@ -272,6 +273,17 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, rule, profile]);
 
+  const impact = useMemo(() => {
+    if (!rule || !profile) return null;
+    return analyzeRuleImpact(profile, rule);
+  }, [rule, profile]);
+
+  const live = useMemo(() => {
+    if (!rule || !profile) return null;
+    return livePreviewMerge(profile, rule, assembleRule(), 'MADD', 'TAHQIQ');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, rule, profile]);
+
   return (
     <div className="space-y-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
@@ -499,6 +511,19 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
           حفظ القاعدة
         </button>
       </div>
+
+      {impact && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-medium">تحليل الأثر قبل التعديل</p>
+          <p className="mt-1">{impact.warning}</p>
+        </div>
+      )}
+      {live && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          <p className="font-medium">Live Preview (مد+تحقيق)</p>
+          <p className="mt-1">قبل: {live.before ? 'دمج' : 'فصل'} · بعد: {live.after ? 'دمج' : 'فصل'}</p>
+        </div>
+      )}
 
       {/* معاينة أثر التعديل قبل الحفظ (FR-ES-09.4) */}
       {preview && (

@@ -339,6 +339,22 @@ GET /api/readers/[readerId]
 
 ---
 
+## Decision API (مكتبة نقيّة — ليست HTTP)
+
+الواجهات في `src/lib/tashjeer/decision/api.ts` وملحقات الحزمة 12:
+
+| الدالة | الدور |
+|---|---|
+| `resolveMerge` / `resolveDifference` / `resolveOrder` / `resolveVariant` / `resolveConnection` | قرار + أثر |
+| `testEngineAtPosition` | ساحة الاختبار |
+| `dryRunRule` | تشغيل جاف (قراءة فقط) |
+| `analyzeRuleImpact` / `livePreviewMerge` | أثر التعديل ومعاينة حيّة |
+| `compareProfiles` / `rerunEngine` | مقارنة الملفات وإعادة التشغيل |
+| `officialProfile` / `sandboxProfile` | عزل المسودة عن الرسم الرسمي |
+| `computeDashboardStats` | مؤشرات وصفية |
+
+---
+
 ## التوثيق التفاعلي
 
 يمكن الوصول لتوثيق Swagger عبر:

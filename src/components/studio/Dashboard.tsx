@@ -9,7 +9,9 @@
 import { useMemo } from 'react';
 import type { EngineConfig, RuleStatus } from '@/lib/tashjeer/model/v8';
 import { auditProfile } from '@/lib/tashjeer/decision/profile-audit';
+import { computeDashboardStats } from '@/lib/tashjeer/decision/rule-usage';
 import { STATUS_LABELS } from './labels';
+import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 
 interface DashboardProps {
   config: EngineConfig;
@@ -33,6 +35,7 @@ export function Dashboard({ config }: DashboardProps) {
   }, [config]);
 
   const audit = useMemo(() => auditProfile(config), [config]);
+  const dash = useMemo(() => computeDashboardStats(config), [config]);
 
   return (
     <div className="space-y-6">
@@ -42,6 +45,34 @@ export function Dashboard({ config }: DashboardProps) {
         <StatCard label="صفوف مصفوفة الدمج" value={stats.mergeEntries} tone="blue" />
         <StatCard label="مشكلات في الفحص" value={audit.issueCount} tone={audit.issueCount > 0 ? 'amber' : 'emerald'} />
       </div>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <StatCard label="تعارضات" value={dash.conflicts} tone={dash.conflicts > 0 ? 'amber' : 'emerald'} />
+        <StatCard label="أخطاء اختبار" value={dash.engineErrors} tone={dash.engineErrors > 0 ? 'amber' : 'emerald'} />
+        <StatCard label="تصحيحات يدوية" value={dash.manualCorrections} tone="blue" />
+        <StatCard label="مرشّحات (مسودة)" value={dash.candidates} tone="blue" />
+      </div>
+      <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+        مؤشرات جودة وصفية لا تغيّر النتيجة تلقائيًا: الدقة {toArabicDigits(String(Math.round(dash.quality.accuracyAgainstReference * 100)))}٪ · معدل التصحيح {toArabicDigits(String(Math.round(dash.quality.correctionRate * 100)))}٪ · معدل التعارض {toArabicDigits(String(Math.round(dash.quality.conflictRate * 100)))}٪ · الاستخدام {toArabicDigits(String(dash.quality.usageCount))}
+      </p>
+      {dash.usage.length > 0 && (
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h3 className="mb-3 font-bold text-gray-900">استخدام القواعد</h3>
+          <ul className="space-y-1 text-sm">
+            {dash.usage.map((item) => {
+              const rule = config.rules.find((entry) => entry.id === item.ruleId);
+              return (
+                <li key={item.ruleId} className="flex flex-wrap justify-between gap-2 rounded bg-gray-50 px-3 py-1.5">
+                  <span>{rule?.name ?? item.ruleId}</span>
+                  <span className="text-gray-500">
+                    Used: {toArabicDigits(String(item.used))} · Correct: {toArabicDigits(String(item.correct))} · Corrected:{' '}
+                    {toArabicDigits(String(item.corrected))} · Conflict: {toArabicDigits(String(item.conflict))}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       {audit.issueCount > 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm">

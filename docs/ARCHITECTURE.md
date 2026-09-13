@@ -352,3 +352,44 @@ Engine Studio، ويُحلّ عبر مكوّن واحد:
 **قاعدة ثابتة:** لا منطق قرار في الواجهة. المكونات تستدعي `resolveMerge`،
 `resolveDifference`، `resolveLocusExclusion`، `resolveLinkPolicy`، وتعرض الأثر
 (`DecisionTraceList`) كما جاء.
+
+---
+
+## حدود التهيئة (FR-EN-06) — قائمة مراجعة نهائية
+
+كل قرار **قابل للتغيير علميًا** يعيش في Policy Layer ويُدار من `/studio`. كل ما هو
+**تنفيذ خوارزمي** يبقى كودًا. لا «كل شيء إعدادات» ولا «قرارات مبعثرة في الكود».
+
+### ما يُدار من الاستوديو (Policy)
+
+| القرار | أين |
+|---|---|
+| أولويات القواعد ومجموعاتها | `priorityGroups` + `EngineRule.priority` |
+| الدمج / منع الدمج / التنافي | `mergeMatrix` + إجراءات MERGE / PREVENT_MERGE |
+| الشروط والسياقات والاستثناءات | `EngineRule.conditions` + `contexts` |
+| حل التعارض | `conflictPolicy` |
+| ترتيب التنفيذ | `executionOrder` |
+| حالة القاعدة وسير الاعتماد | `status`: Draft → … → Active → Deprecated |
+| ملفات المحرك (Profiles) | Default / Experimental / Testing / Legacy / Reference |
+
+### ما يبقى كودًا (Execution)
+
+| الخوارزمية | الملف |
+|---|---|
+| قياس الكلمات وتخطيط RTL | `layout-engine.ts` |
+| ضرب الأوجه وبناء التراكيب | `combination-engine.ts` |
+| توليد الأسطر الكلاسيكية | `classic-tashjeer.ts` |
+| ملء المسارات والرموز | `reader-symbols.ts` |
+| مطابقة القواعد الحرفية على الرسم | `global-rule-engine.ts` |
+| Decision Resolver نفسه | `decision/resolver.ts` — محرّك حل لا سياسة |
+
+### ثوابت متبقية في الكود وسبب بقائها
+
+| الثابت | السبب |
+|---|---|
+| `SPECIFICITY_RANK` | سلّم خصوصية ثابت للمنهج وليس خلافًا علميًا. |
+| مجموعات حروف التجويد (`HURUF_*`) | مادة رسم عثماني حتمية، ليست سياسة دمج. |
+| معرّفات الكلمات `سورة×1000000+…` | حتمية التخزين لا قرارًا علميًا. |
+| حد سجل الإصدارات (٤٠) | قيد أداء تخزين محلي. |
+
+المؤشرات (Usage/Quality) وصفية ولا تغيّر النتيجة تلقائيًا.

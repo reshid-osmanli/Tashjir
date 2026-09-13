@@ -184,8 +184,16 @@ Deprecated) موثَّقان بالإصدار (FR-ES-07).
 - الربط الثنائي مع المحرر: روابط عميقة في الاتجاهين، «لماذا؟» لكل سطر، أثر
   القرار في صفوف التتبع، و«قاعدة من هذا التصحيح» من ثلاثية التصحيح (FR-ES-15).
 
+## ساحة الاختبار وSandbox وProfiles (الحزمة 12)
+
+- **Testing Playground** (`/studio` → ساحة الاختبار): موضع (زوج أنواع) ← Test Engine ← Input/Rules/Conflicts/Merge/Variants/Final عبر Decision API فقط.
+- **Dry Run**: الأرقام السبعة Matched/Create/Modify/Merge/Skip/Conflicts/Forbidden ثم Cancel / Review / Apply — بلا كتابة حتى Apply.
+- **Impact Analysis + Live Preview**: قبل تعديل قاعدة مستخدمة تُعرض أعداد المواضع والاختلافات والعلاقات والتصحيحات، وBefore/After حي.
+- **Sandbox**: Draft لا تمسّ الرسم الرسمي (`officialProfile` مقابل `sandboxProfile`) حتى Draft → Test → Preview → Compare → Approve → Activate. Active → Deprecated دون حذف.
+- **Profiles**: Default / Experimental / Testing / Legacy / Reference مع مقارنة Changed/Same/Improved/Regressed وروابط فتح في المحرر.
+- **إعادة تشغيل المحرك** على آية/سورة/الكل مع تقرير قبل/بعد والحفاظ على القرارات البشرية (P-06).
+- **Dashboard**: Usage `Used/Correct/Corrected/Conflict` ومؤشرات جودة وصفية لا تغيّر النتيجة.
+
 ## ما يلي
 
-- ملفات متعددة (Profiles) قابلة للتبديل وحفظها منفصلة (FR-ES-11 التبديل).
-- Live Preview على المصحف كاملًا وإحصاءات استخدام القواعد على بيانات حقيقية (FR-ES-09/13).
-- Reference Validation وError Explorer (FR-ES-12.1/.2).
+- إدخال المادة العلمية تحقيقًا بشريًا (خارج نطاق التنفيذ).
