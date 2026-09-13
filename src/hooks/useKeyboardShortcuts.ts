@@ -9,6 +9,7 @@
 
 'use client';
 
+import { useConfirmStore } from '@/lib/ui/confirm-store';
 import { useEffect } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 
@@ -24,10 +25,12 @@ export const SHORTCUT_HINTS: ShortcutHint[] = [
   { keys: 'M', description: 'أداة تعليم الكلمات' },
   { keys: 'E', description: 'أداة المسح' },
   { keys: 'Ctrl + S', description: 'حفظ المستند' },
-  { keys: 'Ctrl + C / X / V', description: 'نسخ أو قص أو لصق الاختلاف/الوجه/الجزء المحدد' },
-  { keys: 'Shift + نقر', description: 'تحديد مدى من الأوجه في قائمة الموضع' },
-  { keys: 'Ctrl + نقر', description: 'إضافة وجه إلى التحديد المتعدد أو إزالته' },
-  { keys: 'Ctrl + A', description: 'تحديد كل أوجه الموضع (داخل قائمة الأوجه)' },
+  { keys: 'Ctrl + C / X / V', description: 'نسخ الاختلافات/الأوجه/الأجزاء؛ X لنقل الأوجه بعد لصق مؤكد' },
+  { keys: 'Shift + نقر', description: 'تحديد مدى في قائمة الأوجه أو الاختلافات' },
+  { keys: 'Ctrl + نقر', description: 'إضافة عنصر للتحديد المتعدد أو إزالته في قائمة الأوجه/الاختلافات' },
+  { keys: 'Ctrl + A', description: 'تحديد كل عناصر القائمة الحالية (الأوجه أو الاختلافات المصفّاة)' },
+  { keys: 'Alt + ↑ / ↓', description: 'نقل السطر المركّز في لوحة الترتيب مع تأكيد' },
+  { keys: 'ضغط مطوّل ٣٥٠ مللي ثانية', description: 'سحب السطر أو مقبض الدمج؛ Esc للإلغاء' },
   { keys: 'Ctrl + Z', description: 'تراجع' },
   { keys: 'Ctrl + Shift + Z', description: 'إعادة' },
   { keys: 'Ctrl + =', description: 'تكبير' },
@@ -54,7 +57,7 @@ export function useKeyboardShortcuts(enabled = true): void {
     if (!enabled) return;
 
     const handler = (event: KeyboardEvent) => {
-      if (isTypingTarget(event.target)) return;
+      if (event.defaultPrevented || useConfirmStore.getState().pending || isTypingTarget(event.target)) return;
 
       const withModifier = event.ctrlKey || event.metaKey;
 
@@ -74,7 +77,7 @@ export function useKeyboardShortcuts(enabled = true): void {
             return;
           case 'v':
             event.preventDefault();
-            store.pasteSelection();
+            void store.requestPasteSelection();
             return;
           case 'z':
             event.preventDefault();
