@@ -8,6 +8,8 @@
 'use client';
 
 import Link from 'next/link';
+import { ClipboardControls } from './ClipboardControls';
+import { HistoryControls } from './HistoryControls';
 import { useEditorStore, type EditorTool } from '@/stores/editor-store';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor } from '@/lib/tashjeer/color-system';
@@ -120,6 +122,9 @@ export function EditorToolbar({
       </Group>
 
       <Divider />
+
+      <ClipboardControls />
+      <HistoryControls />
 
       {/* العرض */}
       <Group label="العرض">

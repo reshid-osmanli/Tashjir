@@ -15,7 +15,7 @@
 'use client';
 
 import { confirmAction } from '@/lib/ui/confirm-store';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
 import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
@@ -24,9 +24,10 @@ import { useEngineSettings } from '@/hooks/useEngineSettings';
 import { useEngineConfig } from '@/hooks/useEngineConfig';
 import { useStrengthDegrees } from '@/hooks/useStrengthDegrees';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
-import { getCategoryColor } from '@/lib/tashjeer/color-system';
-import { shiftLineInOrder, orderSnapshotOf, coalesceLineOrder } from '@/lib/tashjeer/manual-links';
+import { LineOrderEditor } from './LineOrderEditor';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
+import { ScrollableList } from '@/components/ui/ScrollableList';
+import { selectElement } from '@/lib/editor/selection-store';
 import type { VariantCategory } from '@/types';
 import type {
   LinkEndpoint,
@@ -243,10 +244,16 @@ function FaceSelect({
   onChange: (value: string) => void;
   label: string;
 }) {
+  // اختيار وجه من لوحة العلاقات يجعله هو العنصر النشط عالميًا (FR-ED-02).
+  const handleChange = (key: string) => {
+    onChange(key);
+    const [variantId, alternativeId] = key.split('::');
+    if (variantId && alternativeId) selectElement({ kind: 'FACE', id: alternativeId, differenceId: variantId, faceId: alternativeId });
+  };
   return (
     <label className="block">
       <span className="mb-0.5 block text-[10px] font-medium text-stone-600">{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="input h-8 py-0 text-[11px]">
+      <select value={value} onChange={(event) => handleChange(event.target.value)} className="input h-8 py-0 text-[11px]">
         <option value="">— اختر وجها —</option>
         {faces.map((face) => (
           <option key={face.key} value={face.key}>
@@ -323,10 +330,17 @@ function LineSelect({
   onChange: (value: string) => void;
   label: string;
 }) {
+  // اختيار سطر من لوحة العلاقات يجعله هو العنصر النشط عالميًا: تنتقل اللوحة
+  // إليه وتميّزه، وتميّزه كل اللوحات المفتوحة (AC-06).
+  const handleChange = (lineId: string) => {
+    onChange(lineId);
+    const line = lines.find((item) => item.id === lineId);
+    if (line) selectElement({ kind: 'LINE', id: line.id, lineId: line.id, differenceId: line.variantId, position: line.startPosition });
+  };
   return (
     <label className="block">
       <span className="mb-0.5 block text-[10px] font-medium text-stone-600">{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="input h-8 py-0 text-[11px]">
+      <select value={value} onChange={(event) => handleChange(event.target.value)} className="input h-8 py-0 text-[11px]">
         <option value="">— اختر سطرا —</option>
         {lines.map((line, index) => (
           <option key={line.id} value={line.id}>
@@ -480,7 +494,16 @@ function SegmentEditor({ classic }: { classic: ClassicTashjeer }) {
           </button>
         </div>
         {targetType === 'LINE' ? (
-          <select value={targetId} onChange={(event) => setTargetId(event.target.value)} className="input h-8 py-0 text-[11px]">
+          <select
+            value={targetId}
+            onChange={(event) => {
+              setTargetId(event.target.value);
+              // معاينة السطر الهدف في اللوحة وكل اللوحات (التحديد الموحّد).
+              const line = classic.lines.find((item) => item.id === event.target.value);
+              if (line) selectElement({ kind: 'LINE', id: line.id, lineId: line.id, differenceId: line.variantId, position: line.startPosition });
+            }}
+            className="input h-8 py-0 text-[11px]"
+          >
             <option value="">— بلا رابط الآن —</option>
             {classic.lines.map((line, index) => (
               <option key={line.id} value={line.id}>
@@ -489,7 +512,14 @@ function SegmentEditor({ classic }: { classic: ClassicTashjeer }) {
             ))}
           </select>
         ) : (
-          <select value={targetId} onChange={(event) => setTargetId(event.target.value)} className="input h-8 py-0 text-[11px]">
+          <select
+            value={targetId}
+            onChange={(event) => {
+              setTargetId(event.target.value);
+              if (event.target.value) selectElement({ kind: 'DIFFERENCE', id: event.target.value, differenceId: event.target.value });
+            }}
+            className="input h-8 py-0 text-[11px]"
+          >
             <option value="">— بلا رابط الآن —</option>
             {variants.map((variant) => (
               <option key={variant.id} value={variant.id}>
@@ -514,357 +544,6 @@ function SegmentEditor({ classic }: { classic: ClassicTashjeer }) {
   );
 }
 
-// ==================== ترتيب الأسطر اليدوي ====================
-
-function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
-  const document = useEditorStore((state) => state.document);
-  const setLineOrder = useEditorStore((state) => state.setLineOrder);
-  const moveLineInOrder = useEditorStore((state) => state.moveLineInOrder);
-  const resetLineOrder = useEditorStore((state) => state.resetLineOrder);
-  const addLink = useEditorStore((state) => state.addLink);
-
-  // الترتيب الجاري: ما حفظه المستند إن وجد، مكمَّلا بأسطر المحرك الحالية.
-  const savedOrder = document?.lineOrder;
-  const engineOrder = useMemo(() => orderSnapshotOf(classic.lines), [classic.lines]);
-  const hasManualOrder = (savedOrder?.length ?? 0) > 0;
-  const workingOrder = useMemo(
-    () => coalesceLineOrder(hasManualOrder ? savedOrder : undefined, engineOrder),
-    [hasManualOrder, savedOrder, engineOrder]
-  );
-
-  // عرض بترتيب العمل حتى تطابق مؤشرات السحب مواضع العرض الفعلية (FR-ED-04).
-  const lineById = useMemo(() => new Map(classic.lines.map((line) => [line.id, line])), [classic.lines]);
-  const orderedLines = useMemo(
-    () =>
-      workingOrder
-        .map((id) => lineById.get(id))
-        .filter((line): line is ClassicTashjeer['lines'][number] => Boolean(line)),
-    [workingOrder, lineById]
-  );
-
-  // حالة السحب: المعرّف المسحوب، وموضع مؤشر الإدراج.
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dropIndex, setDropIndex] = useState<number | null>(null);
-  // سحب الدمج: مقبض مخصص يُسحب فوق سطر آخر لدمجهما (FR-ED-05).
-  const [mergeDragId, setMergeDragId] = useState<string | null>(null);
-
-  const clearDrag = () => {
-    setDraggingId(null);
-    setDropIndex(null);
-    setMergeDragId(null);
-  };
-
-  // السحب باللمس (FR-ED-04.3، NFR-06): HTML5 DnD لا يعمل على أغلب شاشات
-  // اللمس، فنوفّر مسارا بديلا بأحداث المؤشر: ضغط مطوّل يبدأ السحب، والحركة
-  // تحدّد موضع الإدراج، والرفع يمرّ بنفس التأكيد الكمي.
-  const listRef = useRef<HTMLOListElement | null>(null);
-  const longPressTimer = useRef<number | null>(null);
-  const touchDrag = useRef<{ mode: 'ORDER' | 'MERGE'; lineId: string } | null>(null);
-  const [touchTargetId, setTouchTargetId] = useState<string | null>(null);
-
-  const cancelLongPress = () => {
-    if (longPressTimer.current !== null) {
-      window.clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-
-  const beginTouchDrag = (mode: 'ORDER' | 'MERGE', lineId: string) => {
-    touchDrag.current = { mode, lineId };
-    if (mode === 'ORDER') {
-      setDraggingId(lineId);
-      setMergeDragId(null);
-    } else {
-      setMergeDragId(lineId);
-      setDraggingId(null);
-    }
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      try {
-        navigator.vibrate?.(15);
-      } catch {
-        // بعض المتصفحات تمنع الاهتزاز بلا إيماءة؛ لا يهم.
-      }
-    }
-  };
-
-  const handlePointerDown = (event: React.PointerEvent, mode: 'ORDER' | 'MERGE', lineId: string) => {
-    if (event.pointerType === 'mouse') return; // الفأرة تستعمل HTML5 DnD كما كان.
-    cancelLongPress();
-    longPressTimer.current = window.setTimeout(() => beginTouchDrag(mode, lineId), 350);
-  };
-
-  const handlePointerMove = (event: React.PointerEvent) => {
-    if (!touchDrag.current) {
-      // حركة قبل انتهاء الضغط المطوّل = تمرير عادي، لا سحب.
-      cancelLongPress();
-      return;
-    }
-    event.preventDefault();
-    const element = window.document.elementFromPoint(event.clientX, event.clientY);
-    const row = element?.closest<HTMLElement>('[data-order-line-id]');
-    if (!row) return;
-    const lineId = row.dataset.orderLineId ?? null;
-    const index = Number(row.dataset.orderIndex ?? -1);
-    if (touchDrag.current.mode === 'MERGE') {
-      setTouchTargetId(lineId && lineId !== touchDrag.current.lineId ? lineId : null);
-      return;
-    }
-    if (index < 0) return;
-    const rect = row.getBoundingClientRect();
-    const before = event.clientY < rect.top + rect.height / 2;
-    setDropIndex(before ? index : index + 1);
-  };
-
-  const handlePointerUp = () => {
-    cancelLongPress();
-    const active = touchDrag.current;
-    touchDrag.current = null;
-    if (!active) return;
-    if (active.mode === 'MERGE') {
-      const target = touchTargetId;
-      setTouchTargetId(null);
-      if (target) commitMerge(target);
-      else clearDrag();
-      return;
-    }
-    if (dropIndex !== null) commitDrop(dropIndex);
-    else clearDrag();
-  };
-
-  useEffect(() => cancelLongPress, []);
-
-  /** ملخّص موجز للسطر لرسالة التأكيد. */
-  const lineSummary = (id: string): string => {
-    const line = lineById.get(id);
-    return line ? `${line.label}` : id;
-  };
-
-  /** ينفّذ النقل بعد تأكيد كمي (FR-ED-04.2)، ولا يغيّر شيئًا عند الإلغاء. */
-  const commitDrop = (targetIndex: number) => {
-    if (!draggingId) {
-      clearDrag();
-      return;
-    }
-    const fromIndex = workingOrder.indexOf(draggingId);
-    if (fromIndex === -1 || fromIndex === targetIndex || fromIndex === targetIndex - 1) {
-      clearDrag();
-      return;
-    }
-    const before = targetIndex > 0 ? lineSummary(workingOrder[targetIndex - 1]) : null;
-    const after = targetIndex < workingOrder.length ? lineSummary(workingOrder[targetIndex]) : null;
-    const positionHint = before && after ? `بين «${before}» و«${after}»` : before ? `بعد «${before}»` : after ? `قبل «${after}»` : 'في الطرف';
-    const movingId = draggingId;
-    clearDrag();
-    void confirmAction({
-      title: `نقل السطر «${lineSummary(movingId)}»`,
-      message: `إلى هذا الموضع (${positionHint}). يُثبَّت الترتيب يدويا ويسبق ترتيب المحرك.`,
-      impacts: [{ label: 'سطر يتغير ترتيبه', count: Math.abs(targetIndex - fromIndex) }],
-      undoable: true,
-      confirmLabel: 'نقل',
-      tone: 'default',
-    }).then((confirmed) => {
-      if (confirmed) moveLineInOrder(workingOrder, movingId, targetIndex);
-    });
-  };
-
-  /** ينفّذ دمج سطرين بعد تأكيد، فوق نموذج البيانات الموحّد (Relation: MERGE) — FR-ED-05. */
-  const commitMerge = (toId: string) => {
-    const fromId = mergeDragId;
-    clearDrag();
-    if (!fromId || fromId === toId) return;
-    void confirmAction({
-      title: 'دمج سطرين في سطر واحد',
-      message: `«${lineSummary(fromId)}» مع «${lineSummary(toId)}». يُسجَّل الدمج علاقة يدوية يمكن فكّها.`,
-      impacts: [{ label: 'سطر يُدمج', count: 2 }],
-      undoable: true,
-      confirmLabel: 'دمج',
-      tone: 'default',
-    }).then((confirmed) => {
-      if (!confirmed) return;
-      addLink({
-        kind: 'LINE_TO_LINE',
-        relation: 'MERGE',
-        from: { type: 'LINE', id: fromId },
-        to: { type: 'LINE', id: toId },
-        notes: 'دمج بالسحب من المحرر',
-      });
-    });
-  };
-
-  const orderForIndex = (lineId: string): number => {
-    const index = workingOrder.indexOf(lineId);
-    return index === -1 ? engineOrder.indexOf(lineId) + 1 : index + 1;
-  };
-
-  if (classic.lines.length === 0) {
-    return (
-      <p className="rounded border border-dashed border-stone-300 bg-stone-50 px-3 py-3 text-[11px] text-stone-600">
-        لا أسطر معروضة في هذه الآية بعد.
-      </p>
-    );
-  }
-
-  return (
-    <div className="rounded-md border border-stone-200 p-2.5">
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-[10px] font-semibold text-stone-700">
-          {hasManualOrder ? 'ترتيب يدوي مثبَّت' : 'ترتيب المحرك (لم يُعدَّل)'}
-        </p>
-        {hasManualOrder && (
-          <button
-            type="button"
-            onClick={resetLineOrder}
-            className="rounded border border-stone-300 px-2 py-0.5 text-[10px] text-stone-600 hover:bg-stone-50"
-          >
-            عودة لترتيب المحرك
-          </button>
-        )}
-      </div>
-
-      <ol
-        ref={listRef}
-        className={`max-h-72 space-y-1 overflow-y-auto ${touchDrag.current ? 'touch-none' : ''}`}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-      >
-        {orderedLines.map((line, index) => {
-          const currentOrder = orderForIndex(line.id);
-          const isDragging = draggingId === line.id;
-          const isMergeTarget = Boolean(mergeDragId) && mergeDragId !== line.id;
-          const isTouchMergeTarget = touchTargetId === line.id;
-          const showIndicatorBefore = dropIndex === index && !mergeDragId;
-          return (
-            <li key={line.id}>
-              {showIndicatorBefore && (
-                <div className="mb-0.5 h-0.5 rounded-full bg-emerald-500" aria-hidden />
-              )}
-              <div
-                data-order-line-id={line.id}
-                data-order-index={index}
-                className={`flex items-center gap-1.5 rounded border bg-white px-2 py-1.5 transition ${
-                  isTouchMergeTarget
-                    ? 'border-violet-600 bg-violet-100 ring-2 ring-violet-300'
-                    : isMergeTarget
-                      ? 'border-violet-400 bg-violet-50'
-                      : isDragging
-                        ? 'border-emerald-400 opacity-50'
-                        : 'border-stone-100'
-                }`}
-                draggable
-                onDragStart={(event) => {
-                  setDraggingId(line.id);
-                  event.dataTransfer.effectAllowed = 'move';
-                  event.dataTransfer.setData('text/plain', line.id);
-                }}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  event.dataTransfer.dropEffect = mergeDragId ? 'link' : 'move';
-                  if (mergeDragId) return;
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  const before = event.clientY < rect.top + rect.height / 2;
-                  setDropIndex(before ? index : index + 1);
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  if (mergeDragId) {
-                    commitMerge(line.id);
-                    return;
-                  }
-                  commitDrop(dropIndex ?? index);
-                }}
-                onDragEnd={clearDrag}
-              >
-              <span
-                className="cursor-grab shrink-0 select-none text-stone-300 hover:text-stone-500 active:cursor-grabbing"
-                title="اسحب لإعادة الترتيب (مع تأكيد). على اللمس: اضغط مطوّلا ثم حرّك"
-                aria-hidden
-                onPointerDown={(event) => handlePointerDown(event, 'ORDER', line.id)}
-                onPointerLeave={() => {
-                  if (!touchDrag.current) cancelLongPress();
-                }}
-              >
-                ⠿
-              </span>
-              <span
-                className="cursor-grab shrink-0 select-none text-violet-400 hover:text-violet-600 active:cursor-grabbing"
-                title="مقبض الدمج: اسحب فوق سطر آخر لدمجهما (مع تأكيد). على اللمس: اضغط مطوّلا ثم حرّك"
-                onPointerDown={(event) => handlePointerDown(event, 'MERGE', line.id)}
-                onPointerLeave={() => {
-                  if (!touchDrag.current) cancelLongPress();
-                }}
-                draggable
-                onDragStart={(event) => {
-                  event.stopPropagation();
-                  setMergeDragId(line.id);
-                  setDraggingId(null);
-                  setDropIndex(null);
-                  event.dataTransfer.effectAllowed = 'link';
-                  event.dataTransfer.setData('text/plain', `merge:${line.id}`);
-                }}
-                aria-label={`مقبض دمج السطر ${line.label}`}
-              >
-                ⛓
-              </span>
-              <span
-                className="h-2 w-2 shrink-0 rounded-full"
-                style={{ backgroundColor: getCategoryColor(line.category) }}
-                title={CATEGORY_LABELS[line.category]}
-              />
-              <input
-                type="number"
-                min={1}
-                max={classic.lines.length}
-                value={currentOrder}
-                onChange={(event) => {
-                  const target = Number(event.target.value);
-                  if (!Number.isFinite(target)) return;
-                  moveLineInOrder(workingOrder, line.id, target);
-                }}
-                className="h-6 w-11 shrink-0 rounded border border-stone-300 bg-white px-1 text-center text-[11px] tabular-nums"
-                aria-label={`ترتيب السطر ${line.label}`}
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  setLineOrder(shiftLineInOrder(workingOrder, line.id, -1));
-                }}
-                className="rounded border border-stone-200 px-1.5 text-[10px] text-stone-600 hover:bg-stone-50"
-                title="أعلى"
-              >
-                ↑
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setLineOrder(shiftLineInOrder(workingOrder, line.id, 1));
-                }}
-                className="rounded border border-stone-200 px-1.5 text-[10px] text-stone-600 hover:bg-stone-50"
-                title="أسفل"
-              >
-                ↓
-              </button>
-              <span className="min-w-0 flex-1 truncate text-[10.5px] text-stone-700" title={line.ruleLabel}>
-                {line.label} · {line.ruleLabel}
-              </span>
-              {(line.linkIds?.length ?? 0) > 0 && (
-                <span className="shrink-0 rounded bg-violet-100 px-1 text-[9px] text-violet-800">
-                  {toArabicDigits(line.linkIds?.length ?? 0)} رابطا
-                </span>
-              )}
-              </div>
-            </li>
-          );
-        })}
-      </ol>
-
-      <p className="mt-2 text-[10px] leading-relaxed text-stone-500">
-        تغيير رقم سطر يُزحزح الصفوف المتأثرة تلقائيا (إدخال لا استبدال)، فلا يتلف الترتيب ولا
-        العلاقات المرتبطة بالأسطر.
-      </p>
-    </div>
-  );
-}
 
 // ==================== قائمة العلاقات القائمة ====================
 
@@ -893,7 +572,7 @@ function LinksList({
   const deleteLink = useEditorStore((state) => state.deleteLink);
   const updateLink = useEditorStore((state) => state.updateLink);
   const deleteSegment = useEditorStore((state) => state.deleteSegment);
-  const document = useEditorStore((state) => state.document);
+
   const segmentTitles = new Map(segments.map((segment) => [segment.id, segment.title]));
   const variantTitles = new Map((document?.variants ?? []).map((variant) => [variant.id, variant.title]));
 
@@ -910,11 +589,35 @@ function LinksList({
     return `${endpoint.type === 'FACE' ? 'وجه' : 'سطر'} ${shortId(endpoint.id)}`;
   };
 
+  /** النقر على طرف علاقة يجعله هو العنصر النشط عالميًا (FR-ED-02.3). */
+  const selectEndpoint = (endpoint: LinkEndpoint) => {
+    if (endpoint.type === 'FACE') {
+      const [variantId, alternativeId] = endpoint.id.split('::');
+      if (variantId && alternativeId) {
+        selectElement({ kind: 'FACE', id: alternativeId, differenceId: variantId, faceId: alternativeId });
+        return;
+      }
+    }
+    if (endpoint.type === 'LINE') {
+      selectElement({ kind: 'LINE', id: endpoint.id, lineId: endpoint.id });
+      return;
+    }
+    if (endpoint.type === 'SEGMENT') {
+      selectElement({ kind: 'SEGMENT', id: endpoint.id });
+      return;
+    }
+    selectElement({ kind: 'RULE', id: endpoint.id, differenceId: endpoint.id });
+  };
+  const endpointIsSelected = (endpoint: LinkEndpoint): boolean =>
+    selection?.id === endpoint.id ||
+    (selection?.kind === 'FACE' && endpoint.type === 'FACE' && selection.faceId !== undefined && endpoint.id.endsWith(`::${selection.faceId}`));
+
   return (
     <div className="mt-3 rounded-md border border-stone-200 bg-stone-50/60 p-2.5">
       <p className="mb-1.5 text-[10px] font-semibold text-stone-700">
         العلاقات والأجزاء المسجلة ({toArabicDigits(links.length + segments.length)})
       </p>
+      <p role="status" className="text-xs text-amber-900">{operationNotice}</p>
       <ul className="space-y-1.5">
         {links.map((link) => {
           const active =
@@ -927,14 +630,35 @@ function LinksList({
               : 'متنافيان'
             : null;
           return (
-            <li key={link.id} className="rounded border border-stone-200 bg-white px-2 py-1.5">
+            <li
+              key={link.id}
+              className={`rounded border bg-white px-2 py-1.5 ${
+                selection?.kind === 'COMPOSITE_FACE' && selection.id === link.id ? 'selection-row-active' : 'border-stone-200'
+              }`}
+            >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[10.5px] font-medium text-stone-800">
                     {KIND_LABELS[link.kind]} · {locusLabel ?? RELATION_LABELS[link.relation]}
                   </p>
                   <p className="truncate text-[10px] text-stone-600" title={`${describe(link.from)} → ${describe(link.to)}`}>
-                    {describe(link.from)} ← {describe(link.to)}
+                    <button
+                      type="button"
+                      onClick={() => selectEndpoint(link.from)}
+                      className={`rounded px-0.5 hover:underline ${endpointIsSelected(link.from) ? 'bg-emerald-100 text-emerald-800' : ''}`}
+                      title="تحديد هذا الطرف عالميًا: تنتقل إليه اللوحة"
+                    >
+                      {describe(link.from)}
+                    </button>
+                    {' ← '}
+                    <button
+                      type="button"
+                      onClick={() => selectEndpoint(link.to)}
+                      className={`rounded px-0.5 hover:underline ${endpointIsSelected(link.to) ? 'bg-emerald-100 text-emerald-800' : ''}`}
+                      title="تحديد هذا الطرف عالميًا: تنتقل إليه اللوحة"
+                    >
+                      {describe(link.to)}
+                    </button>
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
@@ -962,7 +686,7 @@ function LinksList({
                     <button
                       type="button"
                       onClick={() =>
-                        updateLink(link.id, { relation: 'REFERENCE' })
+                        mergeRecords?.some((record) => record.relationId === link.id && !record.restoredAt) ? void unmerge(link.id) : void confirmLegacy(() => updateLink(link.id, { relation: 'REFERENCE' }))
                       }
                       className="rounded border border-stone-200 px-1.5 py-0.5 text-[9px] text-stone-600 hover:bg-stone-50"
                       title="تحويلها إلى ربط مرجعي دون دمج"
@@ -972,7 +696,7 @@ function LinksList({
                   ) : (
                     <button
                       type="button"
-                      onClick={() => updateLink(link.id, { relation: 'MERGE' })}
+                      onClick={() => void confirmLegacy(() => updateLink(link.id, { relation: 'MERGE' }))}
                       className="rounded border border-stone-200 px-1.5 py-0.5 text-[9px] text-stone-600 hover:bg-stone-50"
                       title="تحويلها إلى دمج في سطر واحد"
                     >
@@ -981,7 +705,7 @@ function LinksList({
                   )}
                   <button
                     type="button"
-                    onClick={() => deleteLink(link.id)}
+                    onClick={() => mergeRecords?.some((record) => record.relationId === link.id && !record.restoredAt) ? void unmerge(link.id) : void confirmLegacy(() => deleteLink(link.id))}
                     className="rounded border border-rose-200 px-1.5 py-0.5 text-[9px] text-rose-700 hover:bg-rose-50"
                   >
                     حذف
@@ -994,12 +718,22 @@ function LinksList({
         })}
 
         {segments.map((segment) => (
-          <li key={segment.id} className="rounded border border-stone-200 bg-white px-2 py-1.5">
+          <li
+            key={segment.id}
+            className={`rounded border bg-white px-2 py-1.5 ${
+              selection?.kind === 'SEGMENT' && selection.id === segment.id ? 'selection-row-active' : 'border-stone-200'
+            }`}
+          >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-[10.5px] font-medium text-stone-800">
+                <button
+                  type="button"
+                  onClick={() => selectElement({ kind: 'SEGMENT', id: segment.id, position: segment.startPosition })}
+                  className="text-start text-[10.5px] font-medium text-stone-800 hover:underline"
+                  title="تحديد هذا الجزء عالميًا: تنتقل إليه اللوحة"
+                >
                   جزء: {segment.title}
-                </p>
+                </button>
                 <p className="text-[10px] text-stone-600">
                   الكلمات {toArabicDigits(segment.startPosition)}–{toArabicDigits(segment.endPosition)}
                   {segment.characterRange
@@ -1009,7 +743,7 @@ function LinksList({
               </div>
               <button
                 type="button"
-                onClick={() => deleteSegment(segment.id)}
+                onClick={() => void confirmLegacy(() => deleteSegment(segment.id))}
                 className="shrink-0 rounded border border-rose-200 px-1.5 py-0.5 text-[9px] text-rose-700 hover:bg-rose-50"
               >
                 حذف

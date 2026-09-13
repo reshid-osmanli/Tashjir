@@ -96,8 +96,9 @@ function toV8Variant(alt: Variant['alternatives'][number], rankIndex: number): V
       url: evidence.url,
     })),
     source: 'editor',
-    createdAt: alt.id,
-    updatedAt: alt.id,
+    copiedFrom: alt.copiedFrom,
+    createdAt: alt.createdAt ?? alt.id,
+    updatedAt: alt.updatedAt ?? alt.id,
   };
 }
 
@@ -133,8 +134,9 @@ export function migrateVariantToDifference(
     globalRuleId: variant.globalRuleId,
     sourceRef: variant.sourceRef,
     description: variant.description,
-    createdAt: variant.id,
-    updatedAt: variant.id,
+    copiedFrom: variant.copiedFrom,
+    createdAt: variant.createdAt ?? variant.id,
+    updatedAt: variant.updatedAt ?? variant.id,
   };
 
   if (variant.engineSnapshot) {
@@ -170,8 +172,8 @@ export function migrateLinkToRelation(link: TashjeerLink): Relation {
   return {
     id: link.id,
     type,
-    fromId: `${link.from.type}:${link.from.id}`,
-    toId: `${link.to.type}:${link.to.id}`,
+    fromId: link.from.type === 'FACE' ? link.from.id.slice(link.from.id.indexOf('::') + 2) : link.from.id,
+    toId: link.to.type === 'FACE' ? link.to.id.slice(link.to.id.indexOf('::') + 2) : link.to.id,
     note: link.notes,
     source: link.origin === 'ENGINE' ? 'engine' : 'editor',
     createdAt: link.createdAt,
@@ -240,32 +242,14 @@ export function migrateDocumentToV8(
   // العلاقات على مستوى المستند من الروابط القديمة.
   const relations: Relation[] = (document.links ?? []).map(migrateLinkToRelation);
 
-  // إلحاق العلاقات المتعلقة بكل اختلاف به (DM-03): علاقة الموضع اليدوية بين
-  // اختلافين تُلحَق بهما معا، فكل اختلاف يحمل علاقاته كاملة (FR-ED-03).
-  const referencesDifference = (endpoint: string, diffId: string): boolean =>
-    endpoint === `DIFFERENCE:${diffId}` ||
-    endpoint === diffId ||
-    endpoint.includes(`:${diffId}::`) || // نهاية FACE: variantId::alternativeId
-    endpoint.includes(`DIFFERENCE:${diffId}::`);
-
-  for (const relation of relations) {
-    for (const target of differences) {
-      if (
-        referencesDifference(relation.fromId, target.id) ||
-        referencesDifference(relation.toId, target.id)
-      ) {
-        if (!target.relations.some((item) => item.id === relation.id)) {
-          target.relations.push(relation);
-        }
-      }
-    }
+ain
   }
 
   const waqfMarks: WaqfMark[] = (document.boundaries ?? []).map((boundary) =>
     migrateBoundaryToWaqfMark(boundary, document.ayahKey)
   );
 
-  const corrections: Correction[] = [];
+  const corrections: Correction[] = [...(document.corrections ?? [])];
   for (const variant of document.variants) {
     if (!variant.engineSnapshot) continue;
     corrections.push({
@@ -312,7 +296,7 @@ export function migrateDocumentToV8(
     });
   }
 
-  const lines: Line[] = (document.manualLines ?? []).map((line) => ({
+  const lines: Line[] = [...(document.lines ?? []), ...(document.manualLines ?? []).filter((line) => !document.lines?.some((saved) => saved.id === line.id)).map((line) => ({
     id: line.id,
     ayahKey: document.ayahKey,
     order: line.lane,
@@ -324,11 +308,11 @@ export function migrateDocumentToV8(
         segment.startPosition >= line.startPosition && segment.endPosition <= line.endPosition
     ).map((segment) => migrateSegment(segment, document.ayahKey)),
     compositeFaceRefs: [],
-    source: 'editor',
+    source: 'editor' as const,
     locked: line.isHidden,
     createdAt: line.id,
     updatedAt: line.id,
-  }));
+  }))];
 
   const auditLog = (document.editLog ?? []).map((entry: DocumentEditEntry) => ({
     id: entry.id,
@@ -360,6 +344,9 @@ export function migrateDocumentToV8(
     ruleOccurrences: [],
     renderRanges,
     corrections,
+    mergeRecords: document.mergeRecords,
+    deletedItems: document.deletedItems,
+    suspendedLinks: document.suspendedLinks,
     auditLog,
     readingWindow: {
       linkNextAyah: document.readingWindow?.linkNextAyah === true,

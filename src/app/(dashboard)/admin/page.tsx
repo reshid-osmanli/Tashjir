@@ -6,6 +6,7 @@
 
 'use client';
 
+import Link from 'next/link';
 import { confirmAction } from '@/lib/ui/confirm-store';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -25,18 +26,6 @@ import {
   saveTransmissionCatalog,
   type TransmissionCatalog,
 } from '@/lib/transmissions/catalog';
-import {
-  DEFAULT_ENGINE_SETTINGS,
-  readEngineSettings,
-  resetEngineSettings,
-  saveEngineSettings,
-  type AlternativeOrderRule,
-  type LineCompositionMode,
-  type LineSpanMode,
-  type SymbolDisplay,
-  type TashjeerEngineSettings,
-  type TieBreakOrder,
-} from '@/lib/tashjeer/engine-settings';
 
 /**
  * يفحص تعارض رقم الترتيب مع قرين آخر (FR-ED-14). عند التعارض يعرض خيارا كميا:
@@ -78,23 +67,16 @@ type EditorTarget =
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>('transmissions');
   const [catalog, setCatalog] = useState<TransmissionCatalog>(() => createDefaultTransmissionCatalog());
-  const [engine, setEngine] = useState<TashjeerEngineSettings>(() => ({ ...DEFAULT_ENGINE_SETTINGS }));
   const [editor, setEditor] = useState<EditorTarget>(null);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
     setCatalog(readTransmissionCatalog());
-    setEngine(readEngineSettings());
   }, []);
 
   const persistCatalog = (next: TransmissionCatalog, successMessage: string) => {
     setCatalog(saveTransmissionCatalog(next));
     setMessage(successMessage);
-  };
-
-  const persistEngine = () => {
-    setEngine(saveEngineSettings(engine));
-    setMessage('تم حفظ إعدادات محرك التشجير. يعاد الرسم فورا في المحرر المفتوح.');
   };
 
   return (
@@ -165,15 +147,15 @@ export default function AdminPage() {
           }}
         />
       ) : (
-        <EngineManager
-          engine={engine}
-          onChange={setEngine}
-          onSave={persistEngine}
-          onReset={() => {
-            setEngine(resetEngineSettings());
-            setMessage('أعيدت إعدادات المحرك الافتراضية: البدء من آخر الآية.');
-          }}
-        />
+        <div className="rounded-xl border border-violet-200 bg-violet-50 p-5 text-violet-950">
+          <h2 className="font-bold">إعدادات المحرك انتقلت إلى الاستوديو</h2>
+          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-violet-900">
+            حافظنا على هذا التبويب للرابط القديم، لكن مصدر الإعداد واحد الآن. افتح مركز المحرك لتحرير الأولويات والقواعد وإعدادات الرسم في مكانها المعتمد.
+          </p>
+          <Link href="/studio?section=settings" className="mt-4 inline-flex rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700">
+            فتح إعدادات المحرك في Engine Studio
+          </Link>
+        </div>
       )}
     </div>
   );
@@ -658,142 +640,6 @@ function PathForm({
   </EntityForm>;
 }
 
-function EngineManager({
-  engine,
-  onChange,
-  onSave,
-  onReset,
-}: {
-  engine: TashjeerEngineSettings;
-  onChange: (settings: TashjeerEngineSettings) => void;
-  onSave: () => void;
-  onReset: () => void;
-}) {
-  return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <section className="rounded-xl border border-stone-200 bg-white p-5">
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm leading-relaxed text-emerald-950">
-          <strong>الترتيب المعتمد:</strong> يبدأ المحرك من آخر موضع اختلاف في الآية إلى أولها.
-          لا تغيّر الفئة أو ترتيب الإدخال هذه القاعدة؛ لا تسمح لوحة الإدارة بحفظ ترتيب يبدأ من أول الآية.
-        </div>
-
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-950">
-            <p className="font-medium">اتجاه المرور في الآية</p>
-            <p className="mt-1">ثابت منهجيا: <strong>من آخر الآية إلى أولها</strong>.</p>
-            <p className="mt-1 text-[11px] text-emerald-800">يُضبط ترتيب المتساويات والأسطر اليدوية من الحقول الآتية.</p>
-          </div>
-
-          <SelectInput
-            label="كسر التعادل عند الموضع نفسه"
-            value={engine.tieBreakOrder}
-            onChange={(tieBreakOrder) => onChange({ ...engine, tieBreakOrder: tieBreakOrder as TieBreakOrder })}
-          >
-            <option value="TAYYIBAH">ترتيب طيبة النشر</option>
-            <option value="SYMBOL">ترتيب الرمز</option>
-            <option value="MANUAL">المسارات اليدوية أولا</option>
-          </SelectInput>
-
-          <SelectInput
-            label="تكوين السطر"
-            value={engine.lineComposition}
-            onChange={(lineComposition) =>
-              onChange({ ...engine, lineComposition: lineComposition as LineCompositionMode })
-            }
-          >
-            <option value="COMBINED">سطر لكل تركيب قراءة (المعتمد)</option>
-            <option value="PER_VARIANT">سطر لكل وجه في كل موضع</option>
-          </SelectInput>
-
-          <SelectInput
-            label="ترتيب أوجه الموضع الواحد"
-            value={engine.alternativeOrder}
-            onChange={(alternativeOrder) =>
-              onChange({ ...engine, alternativeOrder: alternativeOrder as AlternativeOrderRule })
-            }
-          >
-            <option value="STRENGTH">قوة الوجه في الكتاب</option>
-            <option value="TAYYIBAH">ترتيب طيبة النشر</option>
-            <option value="MANUAL">ترتيب المحقق لكل موضع</option>
-          </SelectInput>
-
-          <SelectInput
-            label="ما يظهر في طرف السطر"
-            value={engine.symbolDisplay}
-            onChange={(symbolDisplay) => onChange({ ...engine, symbolDisplay: symbolDisplay as SymbolDisplay })}
-          >
-            <option value="SYMBOLS">رموز القراء</option>
-            <option value="NAMES">الأسماء</option>
-            <option value="BOTH">الرمز مع الاسم</option>
-          </SelectInput>
-
-          <SelectInput
-            label="امتداد السطر الأفقي"
-            value={engine.lineSpan}
-            onChange={(lineSpan) => onChange({ ...engine, lineSpan: lineSpan as LineSpanMode })}
-          >
-            <option value="FULL_AYAH">يمتد مع الآية كلها</option>
-            <option value="VARIANT_SPAN">يقتصر على مدى الاختلاف</option>
-          </SelectInput>
-
-          <div className="grid gap-2 rounded-lg border border-stone-200 p-3">
-            <CheckboxInput
-              label="إظهار اسم الحكم تحت الكلمة"
-              checked={engine.showRuleUnderWord}
-              onChange={(showRuleUnderWord) => onChange({ ...engine, showRuleUnderWord })}
-            />
-            <CheckboxInput
-              label="إظهار حركات المد في الهامش"
-              checked={engine.showMaddColumn}
-              onChange={(showMaddColumn) => onChange({ ...engine, showMaddColumn })}
-            />
-            <CheckboxInput
-              label="نص الآية في سطر واحد مهما طال"
-              checked={engine.singleLineText}
-              onChange={(singleLineText) => onChange({ ...engine, singleLineText })}
-            />
-          </div>
-
-          <RangeInput
-            label="تباعد أسطر الشجرة"
-            value={engine.rowSpacing}
-            min={0.7}
-            max={2}
-            step={0.1}
-            onChange={(rowSpacing) => onChange({ ...engine, rowSpacing })}
-          />
-          <RangeInput
-            label="المسافة بين النص وأول سطر"
-            value={engine.textToTreeGap}
-            min={0.7}
-            max={2}
-            step={0.1}
-            onChange={(textToTreeGap) => onChange({ ...engine, textToTreeGap })}
-          />
-        </div>
-
-        <div className="mt-5 flex justify-end gap-2">
-          <SecondaryButton onClick={onReset}>استعادة الافتراضي</SecondaryButton>
-          <PrimaryButton onClick={onSave}>حفظ إعدادات المحرك</PrimaryButton>
-        </div>
-      </section>
-
-      <aside className="h-fit rounded-xl border border-stone-200 bg-white p-5">
-        <h2 className="text-sm font-bold text-stone-900">كيف يطبَّق الضبط؟</h2>
-        <ol className="mt-3 space-y-2 text-xs leading-relaxed text-stone-600">
-          <li><strong className="text-stone-800">1.</strong> تسجل الأوجه ونطاقات الرواة في محرر الآية.</li>
-          <li><strong className="text-stone-800">2.</strong> يحدد المحقق الوقف والابتداء أو الوصل في مواضعه.</li>
-          <li><strong className="text-stone-800">3.</strong> يقسم المحرك الآية إلى مقاطع، ويعالج آخر مقطع أولا في الوضع المعتمد.</li>
-          <li><strong className="text-stone-800">4.</strong> يمكن نقل أي سطر وإزاحته من لوحة خصائص المحرر دون فقدانه عند الحفظ.</li>
-        </ol>
-        <p className="mt-4 border-t border-stone-100 pt-3 text-[11px] leading-relaxed text-stone-500">
-          إعدادات المحرك عامة لهذا المتصفح؛ أما الوقف وكسور الأسطر والأسطر اليدوية فتحفظ مع كل آية وتدخل في ملف التصدير.
-        </p>
-      </aside>
-    </div>
-  );
-}
-
 function EntityForm({
   title,
   children,
@@ -859,51 +705,6 @@ function SelectInput({
       <select value={value} onChange={(event) => onChange(event.target.value)} required={required} className="input h-9 text-sm">
         {children}
       </select>
-    </label>
-  );
-}
-
-function RangeInput({
-  label,
-  value,
-  min,
-  max,
-  step,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <label className="block rounded-lg border border-stone-200 p-3 text-xs text-stone-700">
-      <span className="flex items-center justify-between font-medium"><span>{label}</span><span>{value.toFixed(1)}×</span></span>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} className="mt-2 w-full accent-emerald-600" />
-    </label>
-  );
-}
-
-function CheckboxInput({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <label className="flex items-center gap-2 text-xs text-stone-700">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="accent-emerald-600"
-      />
-      {label}
     </label>
   );
 }

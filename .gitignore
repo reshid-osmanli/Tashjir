@@ -20,3 +20,7 @@ coverage
 .tmp
 *.tsbuildinfo
 next-env.d.ts
+
+# Browser test artifacts
+playwright-report/
+test-results/
