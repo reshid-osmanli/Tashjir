@@ -59,7 +59,7 @@ export const STATUS_LABELS: Record<RuleStatus, string> = {
   ACTIVE: 'مفعّلة',
   DISABLED: 'معطّلة',
   DEPRECATED: 'متقادمة',
-  CONFLICTED: 'متعرضة',
+  CONFLICTED: 'متعارضة',
   EXPERIMENTAL: 'تجريبية',
 };
 

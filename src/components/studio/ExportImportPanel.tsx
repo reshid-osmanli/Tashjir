@@ -12,9 +12,14 @@ import { useState } from 'react';
 interface ExportImportPanelProps {
   onExport: () => string;
   onImport: (text: string) => { valid: boolean; errors: string[]; warnings: string[] };
+  /**
+   * تصدير حزمة الحوكمة: الإعداد + سلاسل إصدارات القواعد + سجل التدقيق + ملخّص
+   * الاختبارات (FR-ES-07.3/.6، FR-ES-08.3) — بصيغة حتمية صديقة لـ Git.
+   */
+  onExportBundle?: () => void;
 }
 
-export function ExportImportPanel({ onExport, onImport }: ExportImportPanelProps) {
+export function ExportImportPanel({ onExport, onImport, onExportBundle }: ExportImportPanelProps) {
   const [text, setText] = useState('');
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; messages: string[] } | null>(null);
 
@@ -48,6 +53,8 @@ export function ExportImportPanel({ onExport, onImport }: ExportImportPanelProps
         <h3 className="font-bold text-gray-900">تصدير واستيراد إعداد المحرك</h3>
         <p className="mt-1 text-sm text-gray-500">
           التصدير حتمي: نفس الإعداد يعطي نفس النص بايتًا، فيظهر Git فرقًا دقيقًا. الاستيراد يفحص السلامة والإصدار والتعارض.
+          الاستيراد يقبل صيغتين: ملف إعداد مجرد، أو **حزمة حوكمة** (الإعداد + إصدارات القواعد + سجل التدقيق + ملخّص
+          الاختبارات) — يميّزهما تلقائيًا فلا يُكسر ملف قديم.
         </p>
       </div>
 
@@ -61,6 +68,25 @@ export function ExportImportPanel({ onExport, onImport }: ExportImportPanelProps
         <button type="button" onClick={handleImport} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
           استيراد من النص
         </button>
+        {onExportBundle && (
+          <button
+            type="button"
+            onClick={() => {
+              onExportBundle();
+              setFeedback({
+                kind: 'ok',
+                messages: [
+                  'صُدِّرت حزمة الحوكمة: ملف الإعداد + سلاسل إصدارات القواعد + سجل التدقيق + ملخّص اختبارات القواعد.',
+                  'الاستيراد من النص يقبل الحزمة كذلك: يعيد الإعداد والسجلين معها (جولة كاملة).',
+                ],
+              });
+            }}
+            className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100"
+            title="تصدير الحزمة الكاملة مع الإصدارات وسجل التدقيق"
+          >
+            تصدير حزمة الحوكمة
+          </button>
+        )}
       </div>
 
       {feedback && (

@@ -44,8 +44,12 @@ export function extractDifferenceType(rule: EngineRule): string {
 
 const hasAction = (rule: EngineRule, action: string) => rule.actions.some((item) => item.type === action);
 
-/** هل يمكن لقاعدتين أن تطابقا نفس نوع الاختلاف؟ */
-function typesOverlap(a: string, b: string): boolean {
+/**
+ * هل يمكن لقاعدتين أن تطابقا نفس نوع الاختلاف؟
+ * «ANY» تعني أن القاعدة لا تقيّد النوع فتتقاطع مع كل شيء.
+ * مشتركة لأن كشف التعارض (rule-status-flow) يحتاج نفس الحكم — لا منطق مكرر.
+ */
+export function typesOverlap(a: string, b: string): boolean {
   return a === 'ANY' || b === 'ANY' || a === b;
 }
 

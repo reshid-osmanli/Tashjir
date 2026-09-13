@@ -9,13 +9,22 @@
 import { useMemo } from 'react';
 import type { EngineConfig, RuleStatus } from '@/lib/tashjeer/model/v8';
 import { auditProfile } from '@/lib/tashjeer/decision/profile-audit';
+import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { STATUS_LABELS } from './labels';
 
 interface DashboardProps {
   config: EngineConfig;
+  /** التعارضات غير المحسومة المكتشفة تلقائيًا (FR-ES-07.2.2). */
+  conflicts?: Map<string, string[]>;
+  /** عدد قيود سجل التدقيق (FR-ES-07.6). */
+  auditCount?: number;
+  /** تطبيق وسم التعارض التلقائي. */
+  onSyncConflicts?: () => void;
+  /** فتح قسم من أقسام الاستوديو. */
+  onOpenSection?: (section: string) => void;
 }
 
-export function Dashboard({ config }: DashboardProps) {
+export function Dashboard({ config, conflicts, auditCount, onSyncConflicts, onOpenSection }: DashboardProps) {
   const stats = useMemo(() => {
     const byStatus = new Map<RuleStatus, number>();
     let active = 0;
@@ -41,6 +50,61 @@ export function Dashboard({ config }: DashboardProps) {
         <StatCard label="قواعد مفعّلة" value={stats.active} tone="emerald" />
         <StatCard label="صفوف مصفوفة الدمج" value={stats.mergeEntries} tone="blue" />
         <StatCard label="مشكلات في الفحص" value={audit.issueCount} tone={audit.issueCount > 0 ? 'amber' : 'emerald'} />
+      </div>
+
+      {/* الحوكمة: التعارضات المكتشفة وسجل التدقيق (الحزمة ١١) */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div
+          className={`rounded-xl border p-5 shadow-sm ${
+            (conflicts?.size ?? 0) > 0 ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'
+          }`}
+        >
+          <h3 className="font-bold text-gray-900">التعارضات غير المحسومة</h3>
+          {(conflicts?.size ?? 0) === 0 ? (
+            <p className="mt-2 text-sm text-gray-500">
+              لا تعارض غير محسوم في سلم السياسة. الكشف تلقائي ومستمر عند كل تغيير.
+            </p>
+          ) : (
+            <>
+              <p className="mt-2 text-sm text-red-800">
+                {toArabicDigits(conflicts!.size)} قاعدة معنية بتعارض لم يحسمه سلم السياسة (FR-ES-06). تُعرض في المستكشف
+                بلون تحذيري، ويمكن وسمها بحالة «متعارضة».
+              </p>
+              <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto text-xs text-red-700">
+                {Array.from(conflicts!.entries())
+                  .slice(0, 8)
+                  .map(([ruleId, reasons]) => (
+                    <li key={ruleId}>
+                      <span className="font-medium">{config.rules.find((rule) => rule.id === ruleId)?.name ?? ruleId}</span>
+                      : {reasons[0]}
+                    </li>
+                  ))}
+              </ul>
+              {onSyncConflicts && (
+                <button
+                  type="button"
+                  onClick={onSyncConflicts}
+                  className="mt-3 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+                >
+                  تطبيق وسم التعارض
+                </button>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h3 className="font-bold text-gray-900">الحوكمة والتدقيق</h3>
+          <p className="mt-2 text-sm text-gray-500">
+            {toArabicDigits(auditCount ?? 0)} قيدًا في سجل التدقيق: كل تعديل بمنفّذه وسببه وقبل/بعد وزمنه.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <QuickLink label="سجل التدقيق" onClick={() => onOpenSection?.('audit')} />
+            <QuickLink label="رسم الاعتمادات" onClick={() => onOpenSection?.('graph')} />
+            <QuickLink label="اختبارات القواعد" onClick={() => onOpenSection?.('tests')} />
+            <QuickLink label="مستكشف القواعد" onClick={() => onOpenSection?.('rules')} />
+          </div>
+        </div>
       </div>
 
       {audit.issueCount > 0 && (
@@ -101,5 +165,17 @@ function StatCard({ label, value, tone }: { label: string; value: number; tone: 
       <p className="text-3xl font-bold">{value}</p>
       <p className="mt-1 text-sm font-medium opacity-80">{label}</p>
     </div>
+  );
+}
+
+function QuickLink({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+    >
+      {label}
+    </button>
   );
 }

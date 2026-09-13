@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "profile": "example-minimal",
+  "priorityGroups": [
+    { "id": "merge", "label": "قواعد الدمج", "order": 80 },
+    { "id": "fallback", "label": "قواعد احتياطية", "order": 90 }
+  ],
+  "rules": [
+    {
+      "id": "er-example-farsh-madd",
+      "name": "مثال: لا تدمج الفرش مع المد",
+      "description": "ملف مثال مُودَع ليُحرس في CI: يبيّن صيغة ملف المحرك مع حالات اختبار مرجعية.",
+      "type": "MERGE",
+      "category": "MERGE",
+      "scope": "MUSHAF",
+      "conditions": {
+        "all": [
+          { "field": "differenceType", "op": "equals", "value": "FARSH" },
+          { "field": "sameReader", "op": "equals", "value": true }
+        ]
+      },
+      "actions": [{ "type": "PREVENT_MERGE" }],
+      "priority": 100,
+      "groupId": "merge",
+      "specificity": "MUSHAF",
+      "hardness": "HARD",
+      "status": "ACTIVE",
+      "version": 1,
+      "protected": true,
+      "source": "SYSTEM",
+      "testCases": [
+        {
+          "name": "فرش + مد لنفس القارئ ← فصل",
+          "input": { "differenceType": "FARSH", "relatedType": "MADD", "sameReader": true },
+          "expected": "SEPARATE"
+        }
+      ],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "conflictPolicy": ["MOST_SPECIFIC", "HIGHEST_PRIORITY", "EXPLICIT", "LOCAL", "MANUAL"],
+  "executionOrder": ["NORMALIZE", "MERGE", "ORDERING", "FALLBACK"],
+  "mergeMatrix": [
+    { "a": "FARSH", "b": "MADD", "merge": false, "priority": 100, "reason": "مستقلان" }
+  ],
+  "contexts": { "waqf": [], "wasl": [], "ibtida": [], "forbiddenConnection": [] }
+}

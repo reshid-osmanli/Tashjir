@@ -19,6 +19,7 @@ import type {
   MergeMatrixEntry,
   ConflictPolicyStep,
   SpecificityLevel,
+  RuleSource,
 } from '@/lib/tashjeer/model/v8';
 import { SPECIFICITY_RANK } from '@/lib/tashjeer/model/v8';
 import { createEntityId } from '@/lib/tashjeer/model/v8';
@@ -79,6 +80,10 @@ export function toCanonicalRule(rule: EngineRule): CanonicalEngineRule {
     status: rule.status,
     version: rule.version,
   };
+  // حقول Metadata الاختيارية تُكتب فقط حين تكون ذات قيمة، فيبقى ملف القاعدة
+  // القديمة (بلا وصف/مصدر) بايتًا كما كان ولا يظهر فرق Git بلا معنى (DM-13).
+  if (rule.description && rule.description.trim() !== '') canonical.description = rule.description.trim();
+  if (rule.source) canonical.source = rule.source;
   if (rule.protected) canonical.protected = true;
   if (rule.dependsOn && rule.dependsOn.length > 0) canonical.dependsOn = [...rule.dependsOn].sort();
   if (rule.overrides && rule.overrides.length > 0) canonical.overrides = [...rule.overrides].sort();
@@ -238,6 +243,8 @@ function normalizeRule(rule: Partial<EngineRule>, now: string): EngineRule {
   return {
     id: rule.id ?? createEntityId('er'),
     name: rule.name ?? 'قاعدة بلا عنوان',
+    description: typeof rule.description === 'string' && rule.description.trim() ? rule.description.trim() : undefined,
+    source: (rule.source as RuleSource) ?? undefined,
     type: (rule.type as EngineRule['type']) ?? 'MERGE',
     category: (rule.category as EngineRule['category']) ?? 'MERGE',
     scope: (rule.scope as EngineRule['scope']) ?? 'MUSHAF',

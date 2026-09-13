@@ -18,6 +18,7 @@ import type {
   RuleActionType,
   RuleCondition,
   RuleHardness,
+  RuleSource,
   RuleStatus,
   SpecificityLevel,
   TestCase,
@@ -40,6 +41,9 @@ import {
 import { WAQF_WASL_TEMPLATES, type RuleTemplate } from './templates';
 import { previewRuleEdit, summarizePreview } from '@/lib/tashjeer/decision/rule-edit-preview';
 import { confirmAction } from '@/lib/ui/confirm-store';
+import { confirmWithReason } from '@/lib/ui/reason-confirm-store';
+import { buildEditGuard } from '@/lib/tashjeer/rule-status-flow';
+import { SOURCE_LABELS, RULE_SOURCES } from '@/lib/tashjeer/rule-explorer-model';
 
 const RULE_TYPES = Object.keys(RULE_TYPE_LABELS) as EngineRule['type'][];
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as EngineRuleCategory[];
@@ -65,6 +69,10 @@ function emptyCondition(): RuleCondition {
 function ruleToDraft(rule: EngineRule | null): {
   id?: string;
   name: string;
+  /** وصف القاعدة (Metadata — FR-ES-07.4). */
+  description: string;
+  /** مصدر القاعدة (Metadata — FR-ES-07.4). */
+  source?: RuleSource;
   type: EngineRule['type'];
   category: EngineRuleCategory;
   scope: EngineRuleScope;
@@ -85,6 +93,8 @@ function ruleToDraft(rule: EngineRule | null): {
   if (!rule) {
     return {
       name: '',
+      description: '',
+      source: 'EDITOR',
       type: 'MERGE',
       category: 'MERGE',
       scope: 'MUSHAF',
@@ -107,6 +117,8 @@ function ruleToDraft(rule: EngineRule | null): {
   return {
     id: rule.id,
     name: rule.name,
+    description: rule.description ?? '',
+    source: rule.source,
     type: rule.type,
     category: rule.category,
     scope: rule.scope,
@@ -128,7 +140,14 @@ interface RuleBuilderProps {
   rule: EngineRule | null;
   groups: Array<{ id: string; label: string }>;
   profile?: EngineConfig;
-  onSave: (rule: EngineRule | Omit<EngineRule, 'createdAt' | 'updatedAt' | 'version'>) => void;
+  /**
+   * يُستدعى عند الحفظ مع «سياق الحوكمة»: السبب المكتوب (إلزامي للمحمية وعند
+   * تجاوز انحدار) وعلامة التجاوز — تمرّ إلى سجل التدقيق وسلسلة الإصدارات.
+   */
+  onSave: (
+    rule: EngineRule | Omit<EngineRule, 'createdAt' | 'updatedAt' | 'version'>,
+    meta?: { reason?: string; override?: boolean }
+  ) => void;
   onCancel: () => void;
 }
 
@@ -221,6 +240,8 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
     return {
       id: draft.id ?? createEntityId('er'),
       name: draft.name.trim() || 'قاعدة بلا عنوان',
+      description: draft.description.trim() || undefined,
+      source: draft.source ?? (draft.id ? undefined : 'EDITOR'),
       type: draft.type,
       category: draft.category,
       scope: draft.scope,
@@ -239,26 +260,65 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
     };
   };
 
-  // القاعدة المحمية لا تُعدَّل بصمت (P-06): تأكيد كمي يبيّن الأثر قبل الحفظ،
-  // وكذلك أي تعديل يقلب حالة اختبار مرجعية.
+  // حارس التعديل (FR-ES-07.2.3/.5، FR-ES-08.2): القاعدة المحمية لا تُعدَّل بصمت،
+  // والقاعدة النافذة تُحذَّر مع عداد استخدامها، وأي تعديل يقلب حالة اختبار
+  // مرجعية يطلب **تجاوزًا موثّقًا بسبب مكتوب**. الاختبارات تُشغَّل قبل الحفظ
+  // النهائي عبر معاينة الأثر (لا منطق اختبار مكرر في الواجهة).
   const handleSave = async () => {
     const next = assembleRule();
+    const guard = rule && profile ? buildEditGuard(profile, rule) : null;
     const editingProtected = Boolean(rule?.protected);
+    const regressed = Boolean(preview?.introducesRegression);
     const flipped = preview?.flipped.length ?? 0;
-    if (editingProtected || flipped > 0) {
-      const ok = await confirmAction({
-        title: editingProtected ? 'تعديل قاعدة محمية' : 'تعديل يقلب نتائج مرجعية',
-        message: editingProtected
-          ? `القاعدة «${rule?.name ?? ''}» موسومة محمية. حفظ التعديل يسري على كل القرارات التي تعتمد عليها، ويُسجَّل في سجل الإصدارات ويمكن استرجاع النسخة السابقة منه.`
-          : 'هذا التعديل يغيّر نتيجة حالات اختبار كانت ناجحة. يمكن استرجاع النسخة السابقة من سجل الإصدارات بعد النشر.',
+
+    // حالة تستوجب سببًا إلزاميًا: محمية، أو انحدار مرجعي.
+    if (editingProtected || regressed) {
+      const answer = await confirmWithReason({
+        title: regressed ? 'انحدار مكتشف — تجاوز موثّق' : 'تعديل قاعدة محمية',
+        message: regressed
+          ? `تغيّرت نتيجة حالة اختبار مرجعية كانت ناجحة (Expected ← Current). الحفظ يتطلب تأكيدًا صريحًا بالتجاوز الموثّق، ويُحفظ السبب في إصدار القاعدة وسجل التدقيق.`
+          : `القاعدة «${rule?.name ?? ''}» موسومة محمية: حفظ التعديل يسري على كل القرارات التي تعتمد عليها، ويُسجَّل إصدارًا جديدًا يمكن الرجوع إليه.`,
+        warnings: [
+          ...(guard?.warnings ?? []),
+          ...(regressed
+            ? preview!.flipped.map((item) => `«${item.name}»: كان ${item.before} وصار ${item.after}`)
+            : []),
+        ],
+        diff: preview?.flipped.map((item) => ({ label: item.name, before: item.before, after: item.after })),
         impacts: [
           { label: 'حالة اختبار تنقلب', count: flipped },
           { label: 'حالة ثابتة', count: preview?.stable ?? 0 },
-          { label: 'قاعدة تعتمد عليها', count: (profile?.rules ?? []).filter((item) => item.dependsOn?.includes(next.id)).length },
+          { label: 'قاعدة تشير إليها', count: guard?.dependentCount ?? 0 },
+          { label: 'حالة اختبار مرفقة', count: guard?.testCaseCount ?? 0 },
+        ],
+        undoable: false,
+        confirmLabel: regressed ? 'تجاوز الانحدار وحفظ' : 'حفظ التعديل المحمي',
+        reasonLabel: regressed
+          ? 'سبب تجاوز الانحدار (إلزامي — يُحفظ في الإصدار وسجل التدقيق)'
+          : 'سبب تعديل القاعدة المحمية (إلزامي)',
+        reasonPlaceholder: regressed
+          ? 'مثال: تغيّرت السياسة المعتمدة وصار الدمج مقصودًا…'
+          : 'مثال: تصحيح أولوية بحسب رواية حفص…',
+        tone: 'danger',
+      });
+      if (!answer.confirmed) return;
+      onSave(next, { reason: answer.reason, override: true });
+      return;
+    }
+
+    // قاعدة نافذة (غير محمية) بلا انحدار: تحذير كمي بلا سبب إلزامي.
+    if (guard?.isLive || flipped > 0) {
+      const ok = await confirmAction({
+        title: 'تعديل قاعدة نافذة في المحرك',
+        message: 'التعديل يغيّر القرارات الجارية بعد النشر، ويُسجَّل إصدارًا جديدًا يمكن الرجوع إليه.',
+        impacts: [
+          { label: 'حالة اختبار تنقلب', count: flipped },
+          { label: 'حالة ثابتة', count: preview?.stable ?? 0 },
+          { label: 'قاعدة تشير إليها', count: guard?.dependentCount ?? 0 },
         ],
         undoable: false,
         confirmLabel: 'حفظ التعديل',
-        tone: preview?.introducesRegression ? 'danger' : 'default',
+        tone: flipped > 0 ? 'danger' : 'default',
       });
       if (!ok) return;
     }
@@ -288,6 +348,13 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
             onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
             placeholder="مثال: لا تدمج الفرش مع المد"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </Field>
+        <Field label="المصدر (Source)">
+          <Select
+            value={draft.source ?? 'EDITOR'}
+            onChange={(value) => setDraft((current) => ({ ...current, source: value as RuleSource }))}
+            options={RULE_SOURCES.map((source) => ({ value: source, label: SOURCE_LABELS[source] }))}
           />
         </Field>
         <Field label="النوع">
@@ -330,6 +397,21 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
             تتطلب تأكيدًا إضافيًا للتعديل أو الحذف
           </label>
         </Field>
+      </div>
+
+      {/* وصف القاعدة (Metadata — FR-ES-07.4) */}
+      <div>
+        <h4 className="font-semibold text-gray-800">الوصف</h4>
+        <p className="mt-0.5 text-xs text-gray-500">
+          يُحفظ في بيانات القاعدة ويظهر في المستكشف وسجل التدقيق وملف التصدير — اكتب لماذا توجد هذه القاعدة.
+        </p>
+        <textarea
+          value={draft.description}
+          onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
+          rows={2}
+          placeholder="مثال: اختلاف الفرش مستقل عن أحكام المد فلا يُدمجان في سطر واحد."
+          className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
       </div>
 
       {/* منشئ الشروط */}
@@ -511,15 +593,28 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
                 : 'border-emerald-200 bg-emerald-50 text-emerald-700'
           }`}
         >
-          <p className="font-medium">معاينة الأثر: {summarizePreview(preview)}</p>
+          <p className="font-medium">
+            {preview.introducesRegression ? '⚠ Regression detected — انحدار مكتشف قبل الحفظ. ' : 'معاينة الأثر: '}
+            {summarizePreview(preview)}
+          </p>
           {preview.flipped.length > 0 && (
-            <ul className="mt-1.5 space-y-0.5 text-xs">
+            <ul className="mt-1.5 space-y-1 text-xs">
               {preview.flipped.map((flipped) => (
-                <li key={flipped.name}>
-                  «{flipped.name}»: {flipped.before} ← {flipped.after}
+                <li key={flipped.name} className="flex flex-wrap items-center gap-2">
+                  <span>«{flipped.name}»:</span>
+                  <span className="rounded bg-white/70 px-1.5 py-0.5 ring-1 ring-current/20">
+                    Expected: <b>{flipped.before}</b> / Current: <b>{flipped.after}</b>
+                  </span>
                 </li>
               ))}
             </ul>
+          )}
+          {preview.introducesRegression && (
+            <p className="mt-2 text-xs">
+              الاختبارات شُغِّلت تلقائيًا على محرك القرار الحالي قبل الحفظ. الحفظ يتطلب تأكيدًا صريحًا بالتجاوز الموثّق
+              (سبب يُحفظ في إصدار القاعدة وسجل التدقيق)، ونفس الحالات تُشغَّل في <code dir="ltr">npm test</code> فيفشل
+              البناء عند الانحدار.
+            </p>
           )}
         </div>
       )}

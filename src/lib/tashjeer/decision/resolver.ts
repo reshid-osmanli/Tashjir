@@ -16,6 +16,12 @@ import { evaluateGroup } from './conditions';
 import { DEFAULT_SYSTEM_PROFILE } from './policy';
 import type { DecisionContext } from './policy';
 
+/**
+ * سبب «لم يحسم السلم»: يُعاد حين يعجز سلم حل التعارض عن الحسم بخطوة موثّقة
+ * فيُرجَّح الأول. وجوده يعني تعارضًا غير محسوم بالسياسة (FR-ES-07.2).
+ */
+export const UNRESOLVED_POLICY_REASON = 'لم يحسم السلم — المرجّح الأول';
+
 /** خطوة في أثر القرار (لزر Why؟ وصفحة التتبع). */
 export interface DecisionTraceStep {
   stage: string;
@@ -95,12 +101,45 @@ export function resolveConflictPolicy(
   }
 
   // لم يحسم السلم: المرجّح الأول (الأعلى أولوية) يفوز، مع توثيق السبب.
-  return { winner: sorted[0], reason: 'لم يحسم السلم — المرجّح الأول' };
+  // السبب ثابت ومصدَّر: تقرأه طبقة الحوكمة لتعتبر التعارض «غير محسوم» فتسم
+  // القواعد المعنية بحالة CONFLICTED (FR-ES-07.2) بدل ترك الحسم للصدفة.
+  return { winner: sorted[0], reason: UNRESOLVED_POLICY_REASON };
 }
 
 /** يبني مفتاح بحث في مصفوفة الدمج (غير حسّاس لترتيب العنصرين). */
 function matrixKey(a: string, b: string): string {
   return [a, b].sort().join('|');
+}
+
+/**
+ * صف مصفوفة الدمج كقاعدة شكلية (pseudo-rule) حتى يمرّ على **سلم حل التعارض
+ * نفسه** الذي تمرّ عليه قواعد الاستوديو: مرجع واحد للحسم، لا منطق ثانٍ
+ * (P-07). الصلابة مشتقة من الحكم (المنع أصلب من السماح) والأولوية من الصف.
+ */
+export function mergeMatrixPseudoRule(
+  a: string,
+  b: string,
+  merge: boolean,
+  priority: number,
+  reason: string
+): EngineRule {
+  return {
+    id: `matrix:${a}:${b}:${reason}`,
+    name: reason,
+    type: 'MERGE',
+    category: 'MERGE',
+    scope: 'MUSHAF',
+    conditions: { all: [] },
+    actions: [{ type: merge ? 'MERGE' : 'PREVENT_MERGE' }],
+    priority,
+    groupId: 'merge',
+    specificity: 'MUSHAF',
+    hardness: merge ? 'SOFT' : 'HARD',
+    status: 'ACTIVE',
+    version: 1,
+    createdAt: 'matrix',
+    updatedAt: 'matrix',
+  };
 }
 
 /**
@@ -125,24 +164,8 @@ export function resolveMergeDecision(
   }
 
   // تضارب مدخلات: نطبّق سياسة التعارض على القواعد المماثلة.
-  const candidates = entries.map((entry) => ({
-    id: `matrix:${entry.a}:${entry.b}:${entry.reason}`,
-    name: entry.reason,
-    type: 'MERGE' as const,
-    category: 'MERGE' as const,
-    scope: 'MUSHAF' as const,
-    conditions: { all: [] },
-    actions: [],
-    priority: entry.priority,
-    groupId: 'merge',
-    specificity: 'MUSHAF' as const,
-    hardness: (entry.merge ? 'SOFT' : 'HARD') as 'SOFT' | 'HARD',
-    status: 'ACTIVE' as const,
-    version: 1,
-    createdAt: 'matrix',
-    updatedAt: 'matrix',
-  }));
-  const { winner } = resolveConflictPolicy(profile.conflictPolicy, candidates as unknown as EngineRule[]);
+  const candidates = entries.map((entry) => mergeMatrixPseudoRule(entry.a, entry.b, entry.merge, entry.priority, entry.reason));
+  const { winner } = resolveConflictPolicy(profile.conflictPolicy, candidates);
   const chosen = entries.find((entry) => entry.priority === winner?.priority) ?? entries[0];
   return { merge: chosen.merge, reason: chosen.reason, priority: chosen.priority, entry: chosen };
 }
@@ -206,6 +229,29 @@ export function decideMerge(
       message: reason,
       status: decision ? 'won' : 'blocked',
       priority: deciding.priority,
+    });
+  } else if ((preventRules.length > 0 && matrix.merge) || (allowRules.length > 0 && !matrix.merge)) {
+    // قاعدة صريحة تناقض مصفوفة الدمج (FR-ES-05/06): لا تُهمل القاعدة ولا تُهمل
+    // المصفوفة، بل يُعرضان على **سلم حل التعارض نفسه** فيفوز الموثّق بالأولوية
+    // والخصوصية والصلابة. هكذا يبقى لقواعد الاستوديو أثر حقيقي، ويظهر الحسم
+    // في الأثر (CONFLICT) بدل أن يحدث بصمت.
+    const matrixRule = mergeMatrixPseudoRule(a, b, matrix.merge, matrix.priority, matrix.reason);
+    const { winner, reason: why } = resolveConflictPolicy(profile.conflictPolicy, [
+      ...preventRules,
+      ...allowRules,
+      matrixRule,
+    ]);
+    const winnerIsMatrix = winner?.id === matrixRule.id;
+    decision = winner ? !winner.actions.some((action) => action.type === 'PREVENT_MERGE') : matrix.merge;
+    reason = winnerIsMatrix
+      ? `${matrix.reason} (لم تتغلب القاعدة على المصفوفة: ${why})`
+      : `قاعدة «${winner?.name ?? ''}» تناقض مصفوفة الدمج — حسم السلم: ${why}`;
+    trace.push({
+      stage: 'CONFLICT',
+      ruleId: winnerIsMatrix ? undefined : winner?.id,
+      message: reason,
+      status: decision ? 'won' : 'blocked',
+      priority: winner?.priority,
     });
   }
 

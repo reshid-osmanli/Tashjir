@@ -417,12 +417,21 @@ export interface TestCase {
 }
 
 /**
+ * مصدر القاعدة (Metadata — FR-ES-07.4): من أين جاءت؟ سياسة نظام جاهزة، تحرير
+ * مباشر في الاستوديو، مرشّحة من تصحيح محرر، أو مستوردة من ملف خارجي.
+ * يُستنتج للقواعد القديمة بلا حقل (inferRuleSource) فلا يُكسر ملف مُصدَّر سابق.
+ */
+export type RuleSource = 'SYSTEM' | 'EDITOR' | 'CANDIDATE' | 'IMPORTED';
+
+/**
  * قاعدة سياسة في Engine Studio: شرط ← إجراء، بأولوية وخصوصية وحالة وإصدار
  * (FR-ES-02). لا يكتب المستخدم شروطا برمجية أبدا (FR-ES-02).
  */
 export interface EngineRule {
   id: EntityId;
   name: string;
+  /** وصف القاعدة (Metadata كاملة — FR-ES-07.4). */
+  description?: string;
   type: 'DIFFERENCE' | 'ORDERING' | 'MERGE' | 'RELATION' | 'CONTEXT' | 'EXCEPTION';
   category: EngineRuleCategory;
   scope: EngineRuleScope;
@@ -436,8 +445,15 @@ export interface EngineRule {
   specificity: SpecificityLevel;
   hardness: RuleHardness;
   status: RuleStatus;
+  /**
+   * رقم إصدار القاعدة (FR-ES-07.3). المعرّف مقدّس: كل إصدار للقاعدة يحمل نفس
+   * `id` برقم إصدار مختلف، وسلسلة الإصدارات في `rule-versions.ts` تحتفظ
+   * بلقطة كاملة لكل رقم — التعديل لا يمسح التاريخ، والرجوع يُنشئ إصدارًا جديدًا.
+   */
   version: number;
   protected?: boolean;
+  /** مصدر القاعدة (Metadata — FR-ES-07.4). */
+  source?: RuleSource;
   /** معرّفات القواعد المعتمدة عليها/المتعارضة معها (FR-ES-07). */
   dependsOn?: EntityId[];
   overrides?: EntityId[];
@@ -445,6 +461,122 @@ export interface EngineRule {
   testCases?: TestCase[];
   createdAt: string;
   updatedAt: string;
+}
+
+// ==================== حوكمة القواعد: الإصدارات والتدقيق (FR-ES-07.3/.4/.6) ====================
+
+/** سبب التقاط إصدار قاعدة: إنشاء/تعديل/تغيير حالة/رجوع/استيراد. */
+export type RuleVersionSource =
+  | 'CREATE'
+  | 'EDIT'
+  | 'STATUS'
+  | 'PRIORITY'
+  | 'PROTECT'
+  | 'ROLLBACK'
+  | 'IMPORT';
+
+/**
+ * إصدار واحد من سلسلة إصدارات قاعدة (FR-ES-07.3). يحمل لقطة كاملة غير
+ * قابلة للتغيير من القاعدة، فلا يضيع تاريخ أبدًا: لا تعديل ولا رجوع يحذف
+ * إصدارًا وسيطًا.
+ */
+export interface EngineRuleVersion {
+  id: EntityId;
+  /** معرّف القاعدة — ثابت عبر كل إصداراتها (المعرّفات مقدّسة). */
+  ruleId: EntityId;
+  /** رقم الإصدار: ١، ٢، ٣... بلا حد أعلى. */
+  version: number;
+  /** Created: وقت التقاط الإصدار. */
+  at: string;
+  /** By: من التقطه (`local-editor` افتراضيًا حتى تفعيل المصادقة). */
+  by: string;
+  source: RuleVersionSource;
+  /** Reason: سبب التغيير (إلزامي للقواعد المحمية وعند تجاوز انحدار). */
+  reason?: string;
+  /** Modified from: الإصدار الذي استُرجع عند الرجوع (لا حذف للوسيط). */
+  rollbackOf?: number;
+  /** اللقطة الكاملة للقاعدة في هذا الإصدار. */
+  rule: EngineRule;
+}
+
+/** أفعال سجل التدقيق في Engine Studio (FR-ES-07.6). */
+export type StudioAuditAction =
+  | 'RULE_CREATED'
+  | 'RULE_UPDATED'
+  | 'RULE_STATUS_CHANGED'
+  | 'RULE_PRIORITY_CHANGED'
+  | 'RULE_PROTECTED_TOGGLED'
+  | 'RULE_ROLLED_BACK'
+  | 'RULE_DELETED'
+  | 'CONFLICT_TAGGED'
+  | 'CONFLICT_CLEARED'
+  | 'TESTS_RUN'
+  | 'REGRESSION_OVERRIDE'
+  | 'PROFILE_PUBLISHED'
+  | 'PROFILE_ROLLED_BACK'
+  | 'PROFILE_IMPORTED'
+  | 'PROFILE_RESET';
+
+/** تغيير واحد داخل قيد تدقيق: حقل + قبل + بعد. */
+export interface AuditChange {
+  field: string;
+  /** تسمية عربية للحقل (تُحفظ حتى يبقى السجل مقروءًا بلا واجهة). */
+  label: string;
+  before?: unknown;
+  after?: unknown;
+}
+
+/**
+ * قيد في سجل تدقيق Engine Studio (FR-ES-07.6):
+ * `User, Action, Rule, Before, After, Reason, Timestamp`.
+ * يُعرض في لوحة التدقيق بتصفية، ويدخل التصدير ضمن حزمة الحوكمة الحتمية.
+ */
+export interface StudioAuditEntry {
+  id: EntityId;
+  /** Timestamp. */
+  at: string;
+  /** User: `local-editor` افتراضيًا (بنية المصادقة جاهزة). */
+  actor: string;
+  action: StudioAuditAction;
+  /** Rule: معرّف القاعدة واسمها (الاسم يُحفظ ليبقى السجل مقروءًا بعد الحذف). */
+  ruleId?: EntityId;
+  ruleName?: string;
+  /** رقم إصدار القاعدة بعد الفعل (للربط بسلسلة الإصدارات). */
+  version?: number;
+  /** Before/After: تغييرات حقول مفصّلة. */
+  changes?: AuditChange[];
+  /** Reason: سبب صريح (إلزامي للمحمية ولتجاوز الانحدار). */
+  reason?: string;
+  /** ملخّص عربي مقروء في القائمة. */
+  summary: string;
+  /** هل تبيّن أن الفعل تجاوز تحذيرًا (قاعدة محمية/انحدار)؟ */
+  override?: boolean;
+}
+
+/**
+ * حزمة الحوكمة القابلة للتصدير: إعداد المحرك + سلاسل إصدارات القواعد + سجل
+ * التدقيق + نتائج الاختبارات. حتمية (DM-13) فتصلح لـ Git، وتعطي Audit Trail
+ * مكانًا في التصدير دون أن تُنفخ لقطة كل إصدار من إصدارات الملف.
+ */
+export interface EngineGovernanceBundle {
+  format: 'tashjeer-engine-governance';
+  bundleVersion: 1;
+  exportedAt: string;
+  config: EngineConfig;
+  /** معرّف القاعدة ← سلسلة إصداراتها (الأقدم أولًا). */
+  ruleVersions: EngineRuleVersion[];
+  auditTrail: StudioAuditEntry[];
+  /** ملخّص آخر تشغيل لاختبارات القواعد (FR-ES-08). */
+  testReport?: EngineTestReportSummary;
+}
+
+/** ملخّص تشغيل اختبارات القواعد كما يُحفظ في حزمة الحوكمة (FR-ES-08.3). */
+export interface EngineTestReportSummary {
+  total: number;
+  passed: number;
+  failed: number;
+  /** معرّفات القواعد التي فشلت حالة منها (مرتبة — حتمية التصدير). */
+  failingRuleIds: string[];
 }
 
 /** سلّم الخصوصية (FR-ES-06). */

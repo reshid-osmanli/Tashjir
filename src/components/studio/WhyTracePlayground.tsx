@@ -7,20 +7,46 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { EngineConfig } from '@/lib/tashjeer/model/v8';
 import { resolveMerge } from '@/lib/tashjeer/decision/api';
+import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { DIFFERENCE_TYPES, DIFFERENCE_TYPE_LABELS } from './labels';
+import { DecisionGraphView } from './DecisionGraphView';
 
 interface WhyTracePlaygroundProps {
   config: EngineConfig;
+  /** قاعدة يُراد إبراز دورها في الأثر (من رابط عميق أو من المستكشف). */
+  focusRuleId?: string | null;
+  /** فتح قاعدة في المنشئ (من رسم القرار). */
+  onOpenRule?: (ruleId: string) => void;
 }
 
-export function WhyTracePlayground({ config }: WhyTracePlaygroundProps) {
+export function WhyTracePlayground({ config, focusRuleId, onOpenRule }: WhyTracePlaygroundProps) {
   const [a, setA] = useState('MADD');
   const [b, setB] = useState('FARSH');
 
   const result = useMemo(() => resolveMerge(a, b, config), [a, b, config]);
+
+  // قاعدة مُبرزة: إن كانت شروطها تُطابق نوعًا معروفًا نُعبّئ الساحة به حتى يرى
+  // المستخدم أثر القاعدة فعلًا (لا اختيار يدويًا لازمًا).
+  const focusRule = focusRuleId ? config.rules.find((rule) => rule.id === focusRuleId) ?? null : null;
+  useEffect(() => {
+    if (!focusRule) return;
+    const fields = new Map<string, unknown>();
+    const walk = (group: typeof focusRule.conditions) => {
+      for (const item of group.all ?? []) {
+        if ('field' in item) fields.set(item.field, item.value);
+        else walk(item);
+      }
+    };
+    walk(focusRule.conditions);
+    const known = DIFFERENCE_TYPES as string[];
+    const differenceType = fields.get('differenceType');
+    const relatedType = fields.get('relatedType') ?? fields.get('otherType');
+    if (typeof differenceType === 'string' && known.includes(differenceType)) setA(differenceType);
+    if (typeof relatedType === 'string' && known.includes(relatedType)) setB(relatedType);
+  }, [focusRule]);
 
   return (
     <div className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -102,6 +128,37 @@ export function WhyTracePlayground({ config }: WhyTracePlaygroundProps) {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* رسم منطق القرار (FR-ES-07.7.2): يقرأ الأثر نفسه لا منطقًا جديدًا */}
+      <DecisionGraphView
+        result={result}
+        context={{ differenceType: a, relatedType: b, otherType: b }}
+        inputLabel={`${DIFFERENCE_TYPE_LABELS[a] ?? a} + ${DIFFERENCE_TYPE_LABELS[b] ?? b}`}
+        onOpenRule={onOpenRule}
+      />
+
+      {focusRule && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+          <p className="font-semibold">
+            القاعدة المُبرزة: {focusRule.name}{' '}
+            <span className="font-normal opacity-80">(أولوية {toArabicDigits(focusRule.priority)})</span>
+          </p>
+          <p className="mt-1">
+            {result.trace.some((step) => step.ruleId === focusRule.id)
+              ? 'ظهرت هذه القاعدة في أثر القرار أعلاه — انقر عقدها في الرسم لفتحها.'
+              : 'لم تطابق هذه القاعدة المدخلين الحاليين؛ غيّر العنصرين أعلاه لرؤية أثرها، أو افتحها من المستكشف.'}
+          </p>
+          {onOpenRule && (
+            <button
+              type="button"
+              onClick={() => onOpenRule(focusRule.id)}
+              className="mt-2 rounded-lg bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700"
+            >
+              فتح القاعدة في المنشئ
+            </button>
+          )}
         </div>
       )}
 

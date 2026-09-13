@@ -159,6 +159,11 @@ getNarratorName('narrator-hafs')             // "حفص"
 | `tashjeer:reviews:v2` | قرارات المراجعة |
 | `tashjeer:readers:v2` | القراء والإجازات |
 | `tashjeer:settings:v2` | إعدادات المحرر |
+| `tashjeer:engine-config:v1` | ملف إعداد المحرك (EngineConfig) |
+| `tashjeer:engine-config-history:v1` | نسخ الملف الكاملة عند كل نشر (٤٠ نسخة) |
+| `tashjeer:rule-versions:v1` | سلاسل إصدارات القواعد (§8.1) |
+| `tashjeer:rule-audit:v1` | سجل تدقيق استوديو المحرك (§8.2، ٥٠٠ قيد) |
+| `tashjeer:rule-occurrences:v1` | استثناءات مواضع القواعد العامة |
 
 كل ذلك في `localStorage` في هذه المرحلة. صفحة الإعدادات توفّر تصدير نسخة احتياطية كاملة واستيرادها.
 
@@ -210,3 +215,113 @@ npm run db:seed
 `src/lib/tashjeer/migration/migrate-v7-v8.ts` يحوّل `TashjeerDocument` القديم إلى
 النموذج الموحّد دون تعديل الأصل، ويُولّد نسخة احتياطية (`migrateWithBackup`) قبل
 الترحيل (NFR-04). كل معرّف يُحفظ (P-03)، ولا تُفقد بيانات (P-13).
+
+---
+
+## 8. بيانات حوكمة القواعد (PH10a — الحزمة ١١)
+
+ثلاث بُنى بيانات جديدة تحمل وعد «لا يُفقد تاريخ أبدًا» (FR-ES-07.3/.6،
+FR-ES-08.3). تعريفاتها في `src/lib/tashjeer/model/v8.ts`.
+
+### 8.1 إصدار القاعدة (`EngineRuleVersion`)
+
+سلسلة إصدارات **لكل قاعدة** (لا للملف وحده). كل حفظ يُضيف قيدًا بلقطة كاملة
+غير قابلة للتغيير:
+
+```jsonc
+{
+  "id": "erv-…",
+  "ruleId": "er-system-merge-farsh-madd",  // المعرّف مقدّس: ثابت عبر كل الإصدارات
+  "version": 3,                            // ١، ٢، ٣… بلا حد أعلى
+  "at": "2026-05-04T10:12:00.000Z",        // Created
+  "by": "local-editor",                    // Modified by (بلا مصادقة بعد)
+  "source": "EDIT",                        // CREATE|EDIT|STATUS|PRIORITY|PROTECT|ROLLBACK|IMPORT
+  "reason": "خفض الأولوية تحت قاعدة المنع", // Reason — إلزامي للمحمية وللانتقالات المحكومة
+  "rollbackOf": 1,                         // Modified from: عند الرجوع فقط
+  "rule": { /* لقطة كاملة من EngineRule */ }
+}
+```
+
+قواعد لا تُكسر:
+
+| القاعدة | التنفيذ |
+|---|---|
+| المعرّف مقدّس | كل إصدارات القاعدة تحمل نفس `ruleId`؛ الرقم وحده يتغيّر. |
+| لا يُفقد تاريخ | الإضافة فقط. الحفظ المكرر (لا فرق في الحقول) لا يُضيف قيدًا، ولا شيء يُحذف. |
+| الرجوع لا يمحو | الرجوع إلى v١ في سلسلة v١←v٢←v٣ يُنتج **v٤** بمحتوى v١ و`rollbackOf: 1`، وv٢/v٣ باقيان. |
+| رقم الإصدار متّسق | `EngineRule.version` يُسند من السلسلة (`nextVersionNumber`) فلا تتباعد العدّادات. |
+| بلا حد، بتنبيه | تنبيه حجم بعد ٥٠ إصدارًا (`RULE_VERSION_SIZE_NOTICE`) — لا حذف تلقائي. |
+
+**التخزين**: `tashjeer:rule-versions:v1` — خريطة `ruleId ← سلسلة مرتبة بالإصدار`.
+الحذف من الملف لا يحذف السلسلة، لذا يمكن استرجاع قاعدة حُذفت من آخر إصدار
+(بحالة `DISABLED`).
+
+### 8.2 قيد التدقيق (`StudioAuditEntry`)
+
+```jsonc
+{
+  "id": "aud-…",
+  "at": "2026-05-04T10:12:00.000Z",   // Timestamp
+  "actor": "local-editor",            // User — قيمة افتراضية حتى تفعيل المصادقة
+  "action": "RULE_PRIORITY_CHANGED",  // Action (١٥ فعلًا)
+  "ruleId": "er-…", "ruleName": "لا تدمج الفرش مع المد",  // Rule
+  "version": 3,                       // إصدار القاعدة بعد الفعل (يربط بالسلسلة)
+  "changes": [                        // Before / After
+    { "field": "priority", "label": "الأولوية", "before": 100, "after": 90 }
+  ],
+  "reason": "…",                      // Reason
+  "override": true,                   // تجاوز تحذير (محمية/انحدار) — يُصفّى في اللوحة
+  "summary": "تغيير أولوية «لا تدمج الفرش مع المد» (الأولوية) — السبب: …"
+}
+```
+
+الأفعال الخمسة عشر: `RULE_CREATED / RULE_UPDATED / RULE_STATUS_CHANGED /
+RULE_PRIORITY_CHANGED / RULE_PROTECTED_TOGGLED / RULE_ROLLED_BACK / RULE_DELETED /
+CONFLICT_TAGGED / CONFLICT_CLEARED / TESTS_RUN / REGRESSION_OVERRIDE /
+PROFILE_PUBLISHED / PROFILE_ROLLED_BACK / PROFILE_IMPORTED / PROFILE_RESET`.
+
+**التخزين**: `tashjeer:rule-audit:v1` — قائمة الأحدث أولًا، والحد ٥٠٠ قيد
+(`AUDIT_LIMIT`) يُطوى الأقدم عنده. `changes` تُحسب من **فرق الحقول الحتمي**
+(`rule-diff.ts`) نفسه الذي يقارن إصدارين ويُرى في ملف التصدير، فلا منطق فرق
+مكرر.
+
+### 8.3 حالة الاختبار (`TestCase`)
+
+```jsonc
+{ "name": "فرش + مد لنفس القارئ ← فصل",
+  "input": { "differenceType": "FARSH", "relatedType": "MADD", "sameReader": true },
+  "expected": "SEPARATE" }
+```
+
+- `input` سياق قرار مسطّح (نفس حقول `DecisionContext`: `differenceType`,
+  `relatedType`, `otherType`, `readerId`, `narratorId`, `pathId`, `sameReader`,
+  `context`, `position`…).
+- `expected` نص يُطبَّع إلى حكم موحّد (`normalizeExpected`): `MERGE/SEPARATE/
+  CREATE/SKIP/ALLOW/BLOCK` ومرادفاتها العربية والإنجليزية (`لا تدمج`،
+  `do not merge`، `YES`…). قيمة غير معروفة = فشل مُعلَّل لا نجاح صامت.
+- التقييم يمرّ **بواجهة القرار الموحّدة** (`resolveMerge` / `resolveDifference` /
+  `resolveRelationExclusion` / `resolveConnection`) فيُختبر سلوك المحرك الكامل لا
+  القاعدة منفردة.
+- **تدخل ملف التصدير** ضمن `rules[].testCases` بترتيب حتمي (DM-13)، وتُشغَّل في
+  `npm test` عبر `tests/rule-test-suite.test.ts`.
+
+### 8.4 حزمة الحوكمة والتخزين
+
+| المفتاح | المحتوى | الحدّ |
+|---|---|---|
+| `tashjeer:engine-config:v1` | ملف الإعداد (`EngineConfig`، `schemaVersion: 1` بلا تغيير) | — |
+| `tashjeer:engine-config-history:v1` | نسخ الملف الكاملة عند كل نشر | ٤٠ نسخة |
+| `tashjeer:rule-versions:v1` | سلاسل إصدارات القواعد | بلا حد (تنبيه بعد ٥٠/قاعدة) |
+| `tashjeer:rule-audit:v1` | سجل تدقيق الاستوديو | ٥٠٠ قيد |
+
+**حزمة الحوكمة** (`format: "tashjeer-engine-governance"`, `bundleVersion: 1`) تجمع
+الأربعة للتصدير: `config + ruleVersions + auditTrail + testReport`. حتمية
+كالملف: الإصدارات مرتبة بـ`ruleId` ثم `version`، والتدقيق بـ`at` ثم `id`،
+ومفاتيح اللقطات أبجدية — نفس المدخلات ← نفس النص بايتًا، فيظهر فرق Git سطرًا
+لكل قيد جديد. والاستيراد يميّز الحزمة من ملف الإعداد المجرد ويعيد السجلين معها
+(جولة كاملة مختبرة).
+
+> **قرار تصميمي**: لم تُدمج السجلات في `EngineConfig` لأن تضمينها في لقطة كل
+> إصدار من إصدارات الملف يجعل التخزين تربيعي النمو (٤٠ × ن) ويكسر قاعدة «الحفظ
+> المطابق لا يُكرَّر». بقي `schemaVersion: 1` كما هو، فلا يُكسر أي ملف مُصدَّر
+> سابق. (`PROGRESS.md`)
