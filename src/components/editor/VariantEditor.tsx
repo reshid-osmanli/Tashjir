@@ -116,7 +116,7 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="tashjeer-scroll-area flex-1 overflow-y-auto p-5">
           {/* بيانات الاختلاف */}
           <section className="grid gap-3 md:grid-cols-2">
             <Field label="العنوان">

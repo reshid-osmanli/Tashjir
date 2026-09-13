@@ -14,7 +14,11 @@ import { getWordById } from '@/data/quran';
 import { buildSelectionBreadcrumb, describeSelection, selectionKindLabel, type SelectionLookup } from '@/lib/tashjeer/selection-context';
 
 export function SelectionBreadcrumb() {
-  const { document, selection } = useEditorStore();
+  const document = useEditorStore((state) => state.document);
+  const selection = useEditorStore((state) => state.selection);
+  // التحديد المعلّق: آخر تحديد صالح يُعرض رماديا بعد حذف عنصره أو إلغائه
+  // (قرار محسوم: تنظيف آمن بلا فقدان السياق).
+  const lastSelection = useEditorStore((state) => state.lastSelection);
 
   const lookup = useMemo<SelectionLookup>(() => {
     const variants = document?.variants ?? [];
@@ -35,13 +39,27 @@ export function SelectionBreadcrumb() {
     };
   }, [document]);
 
-  const crumbs = buildSelectionBreadcrumb(selection, lookup);
-  const summary = describeSelection(selection, lookup);
+  const dangling = selection === null && lastSelection !== null;
+  const active = selection ?? lastSelection;
+  const crumbs = buildSelectionBreadcrumb(active, lookup);
+  const summary = describeSelection(active, lookup);
 
   if (!selection) {
     return (
       <div className="flex items-center gap-2 border-b border-stone-200 bg-stone-50 px-4 py-1.5 text-[11px] text-stone-400">
-        لا عنصر محدّد — انقر كلمة أو اختلافًا أو سطرًا لعرض سياقه.
+        {dangling ? (
+          <span className="flex flex-wrap items-center gap-1 text-stone-500">
+            <span className="rounded bg-stone-200 px-1.5 py-0.5">آخر تحديد (محذوف أو مُلغى):</span>
+            {crumbs.map((crumb, index) => (
+              <span key={`${crumb.kind}-${index}`} className="flex items-center gap-1">
+                {index > 0 && <span className="text-stone-300">←</span>}
+                <span className="rounded bg-stone-200/70 px-1.5 py-0.5 text-stone-500">{crumb.label}</span>
+              </span>
+            ))}
+          </span>
+        ) : (
+          'لا عنصر محدّد — انقر كلمة أو اختلافًا أو سطرًا لعرض سياقه.'
+        )}
       </div>
     );
   }

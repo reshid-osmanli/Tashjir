@@ -12,6 +12,7 @@ import {
   decideMerge,
   decideMutualExclusion,
   matchRules,
+  resolveConflictPolicy,
   type DecisionResult,
 } from './resolver';
 
@@ -59,17 +60,34 @@ export function resolveDifference(
     });
   }
 
-  const create = differenceRules.length > 0;
-  trace.push({
-    stage: 'DIFFERENCE',
-    message: create ? `يُنشأ اختلاف (${differenceRules.length} قاعدة)` : 'لا قاعدة تستوجب اختلافا',
-    status: create ? 'won' : 'info',
-  });
+  const actionable = differenceRules.filter((rule) =>
+    rule.actions.some((action) => ['CREATE_DIFFERENCE', 'BLOCK_RESULT', 'OVERRIDE_RESULT'].includes(action.type))
+  );
+  const outcome = (rule: (typeof differenceRules)[number]): boolean | undefined => {
+    const override = rule.actions.find((action) => action.type === 'OVERRIDE_RESULT');
+    const value = override?.params?.result;
+    if (value === true || value === 'CREATE' || value === 'ALLOW') return true;
+    if (value === false || value === 'BLOCK' || value === 'SKIP') return false;
+    if (rule.actions.some((action) => action.type === 'BLOCK_RESULT')) return false;
+    if (rule.actions.some((action) => action.type === 'CREATE_DIFFERENCE')) return true;
+    return undefined;
+  };
+  const candidates = actionable.filter((rule) => outcome(rule) !== undefined);
+  const winner = candidates.length > 0 ? resolveConflictPolicy(profile.conflictPolicy, candidates, profile).winner : undefined;
+  const create = winner ? outcome(winner) === true : differenceRules.length > 0;
+  if (winner) {
+    trace.push({ stage: 'DIFFERENCE', ruleId: winner.id, message: `القاعدة الفائزة: ${winner.name}`, status: create ? 'won' : 'blocked', priority: winner.priority });
+    for (const rule of candidates.filter((item) => item.id !== winner.id)) {
+      trace.push({ stage: 'RULE_SKIPPED', ruleId: rule.id, message: `تجاوزتها القاعدة ${winner.name}`, status: 'lost', priority: rule.priority });
+    }
+  } else {
+    trace.push({ stage: 'DIFFERENCE', message: create ? `يُنشأ اختلاف (${differenceRules.length} قاعدة)` : 'لا قاعدة تستوجب اختلافا', status: create ? 'won' : 'info' });
+  }
 
   return {
-    decision: { create, reason: create ? differenceRules.map((rule) => rule.name).join(' + ') : 'لا مطابقة' },
+    decision: { create, reason: winner?.name ?? (create ? differenceRules.map((rule) => rule.name).join(' + ') : 'لا مطابقة') },
     appliedRules: differenceRules,
-    skippedRules: evaluated.filter((item) => !item.matched).map((item) => ({ rule: item.rule, reason: 'غير مطابقة' })),
+    skippedRules: evaluated.filter((item) => !item.matched).map((item) => ({ rule: item.rule, reason: 'غير مطابقة أو غير فاعلة' })),
     trace,
   };
 }

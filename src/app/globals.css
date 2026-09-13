@@ -372,3 +372,77 @@ svg rect.char-hit:hover {
 .tashjeer-pulse {
   animation: tashjeerPulse 1.2s ease-out forwards;
 }
+
+/* ==================== سياق التحديد الموحّد (FR-ED-02) ====================
+   لغة إبراز واحدة عبر كل الواجهات: لون التحديد زمردي، ولون التوجيه
+   (Hover/Focus المرتبط) كهرماني. لا لوحة تخترع لونًا خاصا بها. */
+:root {
+  --tashjeer-select: #059669;        /* التحديد النشط */
+  --tashjeer-select-bg: #ecfdf5;     /* خلفية صف محدد */
+  --tashjeer-focus: #d97706;         /* التوجيه: hover/focus مرتبط */
+  --tashjeer-focus-bg: #fffbeb;      /* خلفية صف موجه */
+}
+
+/* صف محدد في أي قائمة: خلفية زمرديات + إطار داخلي بلون التحديد. */
+.selection-row-active {
+  background: var(--tashjeer-select-bg);
+  box-shadow: inset 0 0 0 1.5px var(--tashjeer-select);
+}
+/* صف موجه بالمؤشر: خلفية كهرمانية خفيفة (لون مختلف عن التحديد). */
+.selection-row-focus:hover {
+  background: var(--tashjeer-focus-bg);
+}
+
+/* ==================== القوائم الطويلة الاحترافية (FR-ED-01) ==================== */
+
+/* شريط تمرير رأسي مرئي ومقروء في حاويات القوائم (WebKit). */
+.tashjeer-scroll-area {
+  scrollbar-width: thin;
+  scrollbar-color: #a8a29e transparent;
+}
+.tashjeer-scroll-area::-webkit-scrollbar {
+  width: 11px;
+}
+.tashjeer-scroll-area::-webkit-scrollbar-track {
+  background: #f5f5f4;
+  border-inline-start: 1px solid #e7e5e4;
+}
+.tashjeer-scroll-area::-webkit-scrollbar-thumb {
+  background: #a8a29e;
+  border-radius: 8px;
+  border: 2px solid #f5f5f4;
+}
+.tashjeer-scroll-area::-webkit-scrollbar-thumb:hover {
+  background: #78716c;
+}
+
+/* زر الصعود/النزول العائم في طرف القائمة (RTL: يمينها). */
+.tashjeer-scroll-btn {
+  border-radius: 9999px;
+  border: 1px solid var(--tashjeer-select);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--tashjeer-select);
+  width: 2rem;
+  height: 2rem;
+  font-size: 0.95rem;
+  line-height: 1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+  user-select: none;
+  touch-action: none;
+}
+.tashjeer-scroll-btn:hover {
+  background: var(--tashjeer-select-bg);
+}
+.tashjeer-scroll-btn:active {
+  background: var(--tashjeer-select);
+  color: #fff;
+}
+
+/* بطاقة معلومات العنصر المُوجَّه إليه فوق اللوحة (FR-ED-02.3). */
+@keyframes tashjeerFocusCard {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.tashjeer-focus-card {
+  animation: tashjeerFocusCard 0.16s ease-out both;
+}

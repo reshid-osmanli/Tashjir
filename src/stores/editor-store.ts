@@ -15,6 +15,18 @@
 //   مع الحفاظ على الخطوط التي عدّلها المستخدم يدويا (isManual).
 
 import { create } from 'zustand';
+import { mergeLines, unmergeLines } from '@/lib/tashjeer/merge-operations';
+import { resolveLineMerge } from '@/lib/tashjeer/decision/line-merge';
+import { snapshotClipboard, pasteClipboard, clipboardCount, type EditorClipboard } from '@/lib/tashjeer/clipboard';
+export type { EditorClipboard } from '@/lib/tashjeer/clipboard';
+import { confirmAction } from '@/lib/ui/confirm-store';
+import { toArabicDigits } from '@/lib/utils/arabic-numbers';
+import type { MultiSelection } from '@/lib/tashjeer/multi-selection';
+import { deleteItems, deletionImpact } from '@/lib/tashjeer/bulk-operations';
+import { applyLineRanks, captureLines } from '@/lib/tashjeer/line-operations';
+import { generateClassicTashjeer, type ClassicLine } from '@/lib/tashjeer/classic-tashjeer';
+import { readStrengthDegrees } from '@/lib/tashjeer/strength-degrees';
+import { variantAppliesToRecitation } from '@/lib/tashjeer/reading-plan';
 import type { VariantCategory } from '@/types';
 import {
   faceEndpointKey,
@@ -67,6 +79,51 @@ export type EditorTool =
   | 'mark'
   /** حذف عنصر بالنقر عليه */
   | 'erase';
+
+// ==================== سياق التحديد الموحّد (FR-ED-02) ====================
+//
+// «العنصر المحدد الآن» حقل `selection` أعلاه: مصدر حقيقة واحد تقرأه وتكتبه
+// كل اللوحات. الكتابة تمر من مساعد واحد (`selectionWrite`) يحدّث الحقل،
+// ويحتفظ بآخر تحديد صالح للعرض الرمادي، ويرفع طلب تركيز برقم متزايد تتفيعل
+// له اللوحة (تمرير + تمييز ≤ 300ms) وكل اللوحات المفتوحة.
+
+/** طلب تركيز واحد: كل كتابة تحديد تزيد `token` بمقدار واحد. */
+export interface SelectionFocus {
+  token: number;
+  /** هل يُطلب وضع العنصر في منتصف منطقة الرؤية حيثما أمكن؟ */
+  center: boolean;
+  /** زمن الطلب، لقياس الالتزام بحد 300ms في التنقيح. */
+  at: number;
+}
+
+/** خيارات كتابة التحديد الموحّدة. */
+export interface SelectionWriteOptions {
+  /** اجعل العنصر في منتصف الرؤية حيثما أمكن (افتراضيا true عند تحديد عنصر). */
+  center?: boolean;
+}
+
+const INITIAL_SELECTION_FOCUS: SelectionFocus = { token: 0, center: false, at: 0 };
+
+/**
+ * الكتابة المركزية للتحديد — «قرار واحد في مكان واحد». كل إجراءات
+ * select* تعود إليها، فلا لوحة تحتفظ بتحديد محلي مناقض ولا منطق مكرر.
+ */
+function selectionWrite(
+  state: Pick<EditorState, 'selection' | 'selectionFocus'>,
+  selection: EditorSelection | null,
+  options?: SelectionWriteOptions
+): Pick<EditorState, 'selection' | 'lastSelection' | 'selectionFocus'> {
+  return {
+    selection,
+    // التحديد الجديد يصير «الأخير الصالح»؛ وعند التنظيف تبقى القديمة للعرض الرمادي.
+    lastSelection: selection ?? state.selection,
+    selectionFocus: {
+      token: state.selectionFocus.token + 1,
+      center: options?.center ?? selection !== null,
+      at: Date.now(),
+    },
+  };
+}
 
 /** الحد الأقصى للقطات التراجع، لتفادي استهلاك الذاكرة. */
 const MAX_HISTORY = 60;
@@ -129,18 +186,6 @@ function writeWorkspacePrefs(state: Pick<EditorState, 'showPropertiesPanel' | 's
 const INITIAL_PREFS = readWorkspacePrefs();
 const bool = (value: unknown, fallback: boolean): boolean => (typeof value === 'boolean' ? value : fallback);
 
-/**
- * حافظة المحرر (FR-ED-06): عنصر واحد، أو عدة أوجه من موضع واحد، أو سطر كامل
- * (كل اختلافات السطر بأوجهها). اللصق يولّد معرّفات جديدة دائما ولا يمس الأصل.
- */
-export type EditorClipboard =
-  | { kind: 'DIFFERENCE'; value: Variant }
-  | { kind: 'FACE'; value: VariantAlternative }
-  | { kind: 'FACES'; value: VariantAlternative[]; sourceVariantId: string }
-  | { kind: 'SEGMENT'; value: LineSegment }
-  | { kind: 'LINE'; value: { lineId: string; label: string; variants: Variant[] } }
-  | null;
-
 /** قرار رابط يدوي كما يُعرض في الواجهة، مع أثره القابل للتفسير. */
 export interface LinkDecisionNotice extends LinkPolicyDecision {
   linkId?: string;
@@ -176,11 +221,25 @@ interface EditorState {
   markingMode: MarkingMode;
   /** المصدر الوحيد للتحديد بين المحرر وكل اللوحات. */
   selection: EditorSelection | null;
+  /**
+   * آخر تحديد صالح: يبقى بعد تنظيف تحديد عنصر حُذف حتى تُعرض سلسلة سياقه
+   * رمادية بدل فراغ مفاجئ (قرار محسوم: تنظيف آمن بلا فقدان السياق).
+   */
+  lastSelection: EditorSelection | null;
+  /**
+   * طلب التركيز الموحّد (FR-ED-02.3): رقمه يزداد مع كل كتابة تحديد، فتتفاعل
+   * اللوحة وكل اللوحات حتى لو لم يتغير العنصر نفسه. حالة واجهة صِرفة: لا
+   * يدخل المستند ولا التصدير ولا التراجع.
+   */
+  selectionFocus: SelectionFocus;
   selectedWordId: number | null;
   selectedVariantId: string | null;
   selectedAlternativeId: string | null;
   selectedBranchId: string | null;
   clipboard: EditorClipboard;
+  multiSelection: MultiSelection | null;
+  setMultiSelection: (selection: MultiSelection | null) => void;
+  requestDeleteItems: (selection: MultiSelection) => Promise<boolean>;
   currentTool: EditorTool;
   /** الفئة المستخدمة عند إنشاء اختلاف جديد */
   draftCategory: VariantCategory;
@@ -246,6 +305,8 @@ interface EditorState {
    */
   lastLinkDecision: LinkDecisionNotice | null;
   clearLinkDecision: () => void;
+  requestMergeLines: (rendered: ClassicLine[], fromId: string, toId: string) => Promise<string>;
+  requestUnmergeLines: (relationId: string) => Promise<string>;
   /**
    * طلب فتح حوار «لماذا؟» من رابط عميق (/editor?ayah=&variant=&why=1) أو من
    * صفحة التتبع؛ لوحة الخصائص تستهلكه وتصفّره. قد يحمل معرّف قاعدة استوديو
@@ -285,7 +346,7 @@ interface EditorState {
   updateSegment: (segmentId: string, patch: Partial<Pick<LineSegment, 'title' | 'startPosition' | 'endPosition' | 'notes'>>) => void;
   deleteSegment: (segmentId: string) => void;
   /** يثبّت ترتيب أسطر العرض يدويا (لقطة كاملة بترتيب المحرر). */
-  setLineOrder: (order: string[]) => void;
+  setLineOrder: (order: string[], rendered?: ClassicLine[]) => void;
   /** ينقل سطرا إلى موضع جديد بإزاحة المتأثرين، انطلاقا من لقطة الترتيب الحالية. */
   moveLineInOrder: (currentLineIds: string[], lineId: string, targetIndex: number) => void;
   /** يعيد الترتيب إلى قاعدة المحرك. */
@@ -313,9 +374,17 @@ interface EditorState {
   selectSegment: (segmentId: string | null) => void;
   selectLine: (lineId: string, differenceId?: string, position?: number) => void;
   selectBranch: (branchId: string | null) => void;
+  /**
+   * الكتابة الموحّدة للتحديد لأنواع لا يملكها إجراء مخصص (حرف، موضع، وجه
+   * مركب، علامة وقف، قاعدة استوديو). كل اللوحات تستعملها عبر واجهة
+   * `lib/editor/selection-store.ts` حتى يبقى القرار في مكان واحد.
+   */
+  setSelection: (selection: EditorSelection | null, options?: SelectionWriteOptions) => void;
   copySelection: () => void;
   cutSelection: () => void;
   pasteSelection: () => void;
+  requestPasteSelection: () => Promise<void>;
+  clipboardNotice: string;
   /** ينسخ عدة أوجه من موضع واحد (تحديد بالنقر + Shift/Ctrl) — FR-ED-06. */
   copyFaces: (variantId: string, faceIds: string[]) => void;
   /**
@@ -367,11 +436,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   markedCharacters: [],
   markingMode: 'WORDS',
   selection: null,
+  lastSelection: null,
+  selectionFocus: INITIAL_SELECTION_FOCUS,
   selectedWordId: null,
   selectedVariantId: null,
   selectedAlternativeId: null,
   selectedBranchId: null,
   clipboard: null,
+  clipboardNotice: '',
+  multiSelection: null,
+  setMultiSelection: (multiSelection) => set({ multiSelection }),
   lastLinkDecision: null,
   pendingWhy: null,
   smartWizardRequest: 0,
@@ -384,19 +458,23 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const document = loadOrCreateDocument(ayahKey);
     const withBranches = withRegeneratedBranches(document);
 
-    set({
+    set((state) => ({
       document: withBranches,
+      multiSelection: null,
       isDirty: false,
       past: [],
       future: [],
       markedPositions: [],
       markedCharacters: [],
-      selection: null,
+      ...selectionWrite(state, null, { center: false }),
+      // سلسلة «آخر تحديد» تخص آيتها؛ بفتح آية أخرى يُصفَّر كليا فلا يُعرض
+      // تحديد قديم تحت مرجع آية جديدة.
+      lastSelection: null,
       selectedWordId: null,
       selectedVariantId: null,
       selectedAlternativeId: null,
       selectedBranchId: null,
-    });
+    }));
   },
 
   resetAyah: () => {
@@ -408,10 +486,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       past: pushHistory(state.past, current),
       future: [],
       document: fresh,
+      multiSelection: null,
       isDirty: true,
       markedPositions: [],
       markedCharacters: [],
-      selection: null,
+      ...selectionWrite(state, null, { center: false }),
+      lastSelection: null,
       selectedVariantId: null,
       selectedAlternativeId: null,
       selectedBranchId: null,
@@ -658,7 +738,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         document
       );
     });
-    set({ selection: null, selectedVariantId: null, selectedAlternativeId: null, selectedBranchId: null });
+    // تنظيف آمن للتحديد الموحّد: يبقى آخر تحديد صالح للعرض الرمادي (قرار محسوم).
+    set((state) => ({
+      ...selectionWrite(state, null, { center: false }),
+      selectedVariantId: null,
+      selectedAlternativeId: null,
+      selectedBranchId: null,
+    }));
   },
 
   addAlternative: (variantId, alternative) => {
@@ -719,93 +805,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 
-  deleteAlternative: (variantId, alternativeId) => {
-    mutate(set, get, (document) => ({
-      ...document,
-      variants: document.variants.map((variant) => {
-        if (variant.id !== variantId) return variant;
-        return {
-          ...variant,
-          alternatives: variant.alternatives.filter(
-            (alternative) => alternative.id !== alternativeId
-          ),
-        };
-      }),
-      branches: document.branches.filter((branch) => branch.alternativeId !== alternativeId),
-    }));
+
   },
 
   deleteAlternativesBulk: (variantId, alternativeIds) => {
-    if (alternativeIds.length === 0) return;
-    const doomed = new Set(alternativeIds);
-    mutate(
-      set,
-      get,
-      (document) => {
-        const owner = document.variants.find((variant) => variant.id === variantId);
-        return withLoggedEdit(
-          {
-            ...document,
-            variants: document.variants.map((variant) =>
-              variant.id === variantId
-                ? { ...variant, alternatives: variant.alternatives.filter((alt) => !doomed.has(alt.id)) }
-                : variant
-            ),
-            branches: document.branches.filter((branch) => !doomed.has(branch.alternativeId)),
-          },
-          {
-            action: 'حذف جماعي للأوجه',
-            targetType: 'ALTERNATIVE',
-            targetId: alternativeIds.join(','),
-            category: owner?.category,
-            summary: `حذف المحرر ${alternativeIds.length} وجهًا دفعة واحدة`,
-          },
-          document
-        );
-      },
-    );
-    set((state) => ({
-      selectedAlternativeId: state.selectedAlternativeId && doomed.has(state.selectedAlternativeId)
-        ? null
-        : state.selectedAlternativeId,
-    }));
+    const selection: MultiSelection = { kind: 'FACE', ownerId: variantId, ids: alternativeIds };
+    mutate(set, get, (document) => deleteItems(document, selection), {
+      action: 'حذف جماعي للأوجه', targetType: 'ALTERNATIVE', targetId: alternativeIds.join(','),
+      summary: `حذف المحرر ${toArabicDigits(alternativeIds.length)} أوجه دفعة واحدة`,
+      changes: [{ field: 'alternatives', before: get().document?.variants.find((item) => item.id === variantId)?.alternatives, after: get().document?.variants.find((item) => item.id === variantId)?.alternatives.filter((item) => !alternativeIds.includes(item.id)) }],
+    });
+    set({ multiSelection: null, selection: null, selectedAlternativeId: null });
   },
 
   deleteVariantsBulk: (variantIds) => {
-    if (variantIds.length === 0) return;
-    const doomed = new Set(variantIds);
-    mutate(
-      set,
-      get,
-      (document) => {
-        const removed = document.variants.filter((variant) => doomed.has(variant.id));
-        const links = variantIds.reduce(
-          (current, id) => pruneLinksForVariant(current, id),
-          document.links ?? []
-        );
-        return withLoggedEdit(
-          {
-            ...document,
-            variants: document.variants.filter((variant) => !doomed.has(variant.id)),
-            branches: document.branches.filter((branch) => !doomed.has(branch.variantId)),
-            links,
-          },
-          {
-            action: 'حذف جماعي للاختلافات',
-            targetType: 'VARIANT',
-            targetId: variantIds.join(','),
-            category: removed[0]?.category,
-            summary: `حذف المحرر ${variantIds.length} اختلافًا دفعة واحدة`,
-          },
-          document
-        );
-      },
-    );
-    set((state) => ({
-      selection: state.selectedVariantId && doomed.has(state.selectedVariantId) ? null : state.selection,
-      selectedVariantId: state.selectedVariantId && doomed.has(state.selectedVariantId) ? null : state.selectedVariantId,
-      selectedAlternativeId: state.selectedVariantId && doomed.has(state.selectedVariantId) ? null : state.selectedAlternativeId,
-    }));
+
   },
 
   setVariantOrderRank: (variantId, rank) => {
@@ -997,6 +1011,40 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   // ==================== الروابط والأجزاء والترتيب اليدوي ====================
 
+  requestMergeLines: async (rendered, fromId, toId) => {
+    const document = get().document;
+    const from = rendered.find((line) => line.id === fromId), to = rendered.find((line) => line.id === toId);
+    if (!document || !from || !to || fromId === toId) return 'اختر سطرين مختلفين.';
+    const profile = loadEngineConfig();
+    const policy = resolveLineMerge(from, to, profile);
+    const reason = policy.reasons.join('؛ ');
+    const accepted = await confirmAction({
+      title: policy.allowed ? 'دمج هذا السطر مع السطر المحدد؟' : 'السياسة تمنع الدمج — هل تريد تجاوزًا يدويًا موثقًا؟',
+      message: toArabicDigits(`«${from.label}» مع «${to.label}». ${policy.allowed ? 'تُحفظ الأصول في سجل الدمج، ويمكن الفك أو التراجع.' : reason + '؛ القواعد: ' + policy.ruleNames.join('، ') + '. التأكيد ينشئ Correction بسبب التجاوز.'}`),
+      impacts: [{ label: 'أسطر', count: 2 }, { label: 'أجزاء', count: from.entries.length + to.entries.length }, { label: 'أوجه فريدة', count: new Set([...from.entries, ...to.entries].map((entry) => `${entry.variantId}::${entry.alternativeId}`)).size }],
+      undoable: true, confirmLabel: policy.allowed ? 'تأكيد' : 'تجاوز بقرار يدوي موثق', tone: 'default',
+    });
+    if (!accepted) return 'أُلغي الدمج؛ لم تتغير البيانات.';
+    if (get().document !== document || JSON.stringify(loadEngineConfig()) !== JSON.stringify(profile)) return 'تغيّر المستند أو السياسة أثناء التأكيد؛ أعد الطلب.';
+    const result = mergeLines(document, rendered, fromId, toId, profile, policy.allowed ? undefined : `تجاوز يدوي صريح من المحرر: ${reason}`);
+    if (result.error) return result.error;
+    mutate(set, get, () => result.document, { action: 'دمج سطرين', targetType: 'LINE_LINK', targetId: fromId,
+      summary: 'دمج بالسحب مع حفظ الأصلين والعلاقات', changes: [{ field: 'lines', before: document.lines ?? captureLines(document, rendered), after: result.document.lines }, { field: 'decision', after: policy }],
+    });
+    set({ lastLinkDecision: { allowed: true, reason: policy.allowed ? 'دمج مسموح' : 'تجاوز يدوي موثق', warning: policy.allowed ? undefined : reason, trace: policy.trace, appliedRuleNames: policy.ruleNames, at: new Date().toISOString() } });
+    return 'تم الدمج. الأصلان محفوظان؛ يمكن التراجع أو الفك من قائمة العلاقات.';
+  },
+  requestUnmergeLines: async (relationId) => {
+    const document = get().document;
+    if (!document) return 'لا مستند.';
+    const result = unmergeLines(document, relationId);
+    if (result.error) return result.error;
+    if (!await confirmAction({ title: 'فك الدمج وإعادة الأصلين؟', impacts: [{ label: 'أسطر', count: 2 }], undoable: true, tone: 'default' })) return 'أُلغي الفك.';
+    if (get().document !== document) return 'تغيّر المستند؛ أعد الطلب.';
+    mutate(set, get, () => result.document, { action: 'فك دمج سطرين', targetType: 'LINE_LINK', targetId: relationId, summary: 'استعادة الأصلين من سجل الدمج', changes: [{ field: 'lines', before: document.lines, after: result.document.lines }] });
+    return 'أُعيد الأصلان؛ يمكن التراجع عن الفك.';
+  },
+
   clearLinkDecision: () => set({ lastLinkDecision: null }),
   requestWhy: (request) => set({ pendingWhy: request }),
   requestSmartWizard: () => set((state) => ({ smartWizardRequest: state.smartWizardRequest + 1 })),
@@ -1076,6 +1124,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   updateLink: (linkId, patch) => {
+    if (get().document?.mergeRecords?.some((record) => record.relationId === linkId && !record.restoredAt)) return;
     mutate(set, get, (document) => {
       const before = (document.links ?? []).find((link) => link.id === linkId);
       return withLoggedEdit(
@@ -1102,6 +1151,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   deleteLink: (linkId) => {
+    if (get().document?.mergeRecords?.some((record) => record.relationId === linkId && !record.restoredAt)) return;
     mutate(set, get, (document) => {
       const before = (document.links ?? []).find((link) => link.id === linkId);
       return withLoggedEdit(
@@ -1206,14 +1256,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         document
       );
     });
+    // تحديد جزء محذوف يُنظَّف بأمان مع إبقاء سلسلة السياق الأخيرة (قرار محسوم).
+    set((state) =>
+      state.selection?.kind === 'SEGMENT' && state.selection.id === segmentId
+        ? selectionWrite(state, null, { center: false })
+        : {}
+    );
   },
 
-  setLineOrder: (order) => {
+  setLineOrder: (order, rendered) => {
     mutate(set, get, (document) => {
       const before = document.lineOrder ?? [];
       if (arraysEqual(before, order)) return document;
+      const previousLines = rendered ? captureLines(document, rendered) : document.lines ?? [];
+      const lines = applyLineRanks(previousLines, order.length ? order : rendered?.map((line) => line.id) ?? []);
       return withLoggedEdit(
-        { ...document, lineOrder: [...order] },
+        { ...document, lineOrder: [...order], lines },
         {
           action: 'ترتيب الأسطر يدويا',
           targetType: 'LINE_ORDER',
@@ -1221,8 +1279,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           summary:
             order.length === 0
               ? 'إعادة الترتيب إلى قاعدة المحرك'
-              : `تثبيت ترتيب ${order.length} سطرا يدويا`,
-          changes: [{ field: 'lineOrder', before, after: [...order] }],
+              : `تثبيت ترتيب ${toArabicDigits(order.length)} سطرا يدويا`,
+          changes: [{ field: 'lineOrder', before, after: [...order] }, { field: 'lines', before: previousLines, after: lines }],
         },
         document
       );
@@ -1234,7 +1292,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   resetLineOrder: () => {
-    get().setLineOrder([]);
+    const document = get().document;
+    if (!document) return;
+    const words = documentWindowWords(document);
+    const layout = layoutAyah(document.ayahKey, words, document.layout);
+    const engineLines = generateClassicTashjeer(
+      getEffectiveVariants(document).filter((variant) => variantAppliesToRecitation(variant, document.boundaries)),
+      layout, DEFAULT_FILTER, document.layout, {
+        catalog: readTransmissionCatalog(), engine: readEngineSettings(), engineConfig: loadEngineConfig(), strengthDegrees: readStrengthDegrees(),
+        boundaries: document.boundaries, branchOverrides: document.branches, manualLines: document.manualLines,
+        links: document.links ?? [], segments: document.segments ?? [], lineOrder: [], focusSegment: document.readingWindow?.focusSegment ?? null,
+      }
+    ).lines;
+    get().setLineOrder([], engineLines);
   },
 
   // ==================== الوقف والابتداء وتخطيط النص ====================
@@ -1260,6 +1330,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ...document,
       boundaries: document.boundaries.filter((boundary) => boundary.id !== boundaryId),
     }));
+    set((state) =>
+      state.selection?.kind === 'WAQF_MARK' && state.selection.id === boundaryId
+        ? selectionWrite(state, null, { center: false })
+        : {}
+    );
   },
 
   setLinkNextAyah: (linked) => {
@@ -1356,184 +1431,148 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setMarkingMode: (mode) => set({ markingMode: mode, markedPositions: [], markedCharacters: [] }),
   selectWord: (wordId) => {
     const word = wordId ? documentWindowWords(get().document).find((item) => item.id === wordId) : undefined;
-    set({
-      selection: wordId ? { kind: 'WORD', id: String(wordId), position: word?.position } : null,
+
       selectedWordId: wordId,
       selectedAlternativeId: null,
-    });
+    }));
   },
   selectVariant: (variantId) => {
     const currentDocument = get().document;
     const variant = variantId && currentDocument
       ? getEffectiveVariants(currentDocument).find((item) => item.id === variantId)
       : undefined;
-    set({
-      selection: variantId
-        ? { kind: variant?.isGlobalDerived ? 'RULE' : 'DIFFERENCE', id: variantId, differenceId: variantId, position: variant?.startPosition }
-        : null,
+
       selectedVariantId: variantId,
       selectedAlternativeId: null,
       selectedBranchId: null,
-    });
+    }));
   },
   selectAlternative: (variantId, alternativeId) => {
     const currentDocument = get().document;
     const variant = currentDocument
       ? getEffectiveVariants(currentDocument).find((item) => item.id === variantId)
       : undefined;
-    set({
-      selection: { kind: 'FACE', id: alternativeId, differenceId: variantId, faceId: alternativeId, position: variant?.startPosition },
+
       selectedVariantId: variantId,
       selectedAlternativeId: alternativeId,
       selectedBranchId: null,
-    });
+    }));
   },
   selectSegment: (segmentId) => {
     const segment = get().document?.segments?.find((item) => item.id === segmentId);
-    set({
-      selection: segmentId ? { kind: 'SEGMENT', id: segmentId, position: segment?.startPosition } : null,
+
       selectedVariantId: null,
       selectedAlternativeId: null,
       selectedBranchId: null,
-    });
+    }));
   },
-  selectLine: (lineId, differenceId, position) => set({
-    selection: { kind: 'LINE', id: lineId, lineId, differenceId, position },
+
     selectedVariantId: differenceId ?? null,
     selectedAlternativeId: null,
     selectedBranchId: lineId,
-  }),
+  })),
   selectBranch: (branchId) => set((state) => ({
     selectedBranchId: branchId,
-    selection: branchId
-      ? { kind: 'LINE', id: branchId, lineId: branchId, differenceId: state.selectedVariantId ?? undefined }
-      : state.selectedVariantId
-        ? { kind: 'DIFFERENCE', id: state.selectedVariantId, differenceId: state.selectedVariantId }
-        : null,
+    ...selectionWrite(
+      state,
+      branchId
+        ? { kind: 'LINE', id: branchId, lineId: branchId, differenceId: state.selectedVariantId ?? undefined }
+        : state.selectedVariantId
+          ? { kind: 'DIFFERENCE', id: state.selectedVariantId, differenceId: state.selectedVariantId }
+          : null
+    ),
   })),
+  setSelection: (selection, options) =>
+    set((state) => ({
+      ...selectionWrite(state, selection, options),
+      // مرايا التوافق مع اللوحات القائمة تُشتق هنا من كتابة واحدة، فلا لوحة
+      // تحتفظ بتحديد محلي مناقض (القرار في مكان واحد).
+      ...(selection?.kind === 'WORD'
+        ? { selectedWordId: Number(selection.id) }
+        : selection?.kind === 'CHARACTER' && selection.wordId
+          ? { selectedWordId: selection.wordId }
+          : {}),
+      ...(selection?.kind === 'DIFFERENCE' || selection?.kind === 'RULE'
+        ? { selectedVariantId: selection.id, selectedAlternativeId: null, selectedBranchId: null }
+        : {}),
+      ...(selection?.kind === 'FACE'
+        ? { selectedVariantId: selection.differenceId ?? null, selectedAlternativeId: selection.faceId ?? selection.id, selectedBranchId: null }
+        : {}),
+      ...(selection?.kind === 'LINE'
+        ? { selectedVariantId: selection.differenceId ?? null, selectedAlternativeId: null, selectedBranchId: selection.lineId ?? selection.id }
+        : {}),
+    })),
   copySelection: () => {
     const state = get();
-    const selection = state.selection;
-    if (!selection || !state.document) return;
+    set({ clipboard: null }); const doc = state.document; const selection = state.selection;
+    if (!doc) return;
+    const multi = state.multiSelection;
+    if (multi?.kind === 'FACE' && multi.ownerId && multi.ids.length) { state.copyFaces(multi.ownerId, multi.ids); return; }
+    if (multi?.kind === 'DIFFERENCE' && multi.ids.length > 0) {
+      const value = doc.variants.filter((item) => multi.ids.includes(item.id));
+      if (value.length) set({ clipboard: snapshotClipboard(doc, value.length === 1 ? { kind: 'DIFFERENCE', value: value[0] } : { kind: 'DIFFERENCES', value }), clipboardNotice: 'نُسخت الاختلافات المحددة.' });
+      return;
+    }
+    if (!selection) return;
     if (selection.kind === 'DIFFERENCE') {
-      const value = state.document.variants.find((item) => item.id === selection.id);
-      if (value) set({ clipboard: { kind: 'DIFFERENCE', value: structuredClone(value) } });
+      const value = doc.variants.find((item) => item.id === selection.id);
+      if (value) set({ clipboard: snapshotClipboard(doc, { kind: 'DIFFERENCE', value }), clipboardNotice: 'نُسخ الاختلاف.' });
     } else if (selection.kind === 'FACE' && selection.differenceId) {
-      const value = state.document.variants
-        .find((item) => item.id === selection.differenceId)
-        ?.alternatives.find((item) => item.id === selection.id);
-      if (value) set({ clipboard: { kind: 'FACE', value: structuredClone(value) } });
+      state.copyFaces(selection.differenceId, [selection.id]);
     } else if (selection.kind === 'SEGMENT') {
-      const value = state.document.segments?.find((item) => item.id === selection.id);
-      if (value) set({ clipboard: { kind: 'SEGMENT', value: structuredClone(value) } });
+      const value = doc.segments?.find((item) => item.id === selection.id);
+      if (value) set({ clipboard: snapshotClipboard(doc, { kind: 'SEGMENT', value }), clipboardNotice: 'نُسخ الجزء.' });
+    } else {
+      set({ clipboard: null, clipboardNotice: 'النسخ بهذا المستوى غير متاح بعد؛ حُفظت البيانات دون تغيير.' });
     }
   },
   copyFaces: (variantId, faceIds) => {
-    const state = get();
-    if (!state.document) return;
-    const owner = state.document.variants.find((item) => item.id === variantId);
-    if (!owner) return;
-    const wanted = new Set(faceIds);
-    const faces = owner.alternatives.filter((item) => wanted.has(item.id));
-    if (faces.length === 0) return;
-    if (faces.length === 1) {
-      set({ clipboard: { kind: 'FACE', value: structuredClone(faces[0]) } });
-      return;
-    }
-    set({ clipboard: { kind: 'FACES', value: structuredClone(faces), sourceVariantId: variantId } });
+    const doc = get().document;
+    if (!doc) return;
+    const faces = doc.variants.find((item) => item.id === variantId)?.alternatives.filter((item) => faceIds.includes(item.id)) ?? [];
+    if (!faces.length) return;
+    set({ clipboard: snapshotClipboard(doc, faces.length === 1 ? { kind: 'FACE', value: faces[0], sourceVariantId: variantId } : { kind: 'FACES', value: faces, sourceVariantId: variantId }), clipboardNotice: `نُسخ ${toArabicDigits(faces.length)} أوجه.` });
   },
   copyLine: (lineId, label, variantIds) => {
-    const state = get();
-    if (!state.document) return;
-    const wanted = new Set(variantIds);
-    const variants = state.document.variants.filter((item) => wanted.has(item.id));
-    if (variants.length === 0) return;
-    set({ clipboard: { kind: 'LINE', value: { lineId, label, variants: structuredClone(variants) } } });
+    const doc = get().document;
+    if (!doc) return;
+    const variants = doc.variants.filter((item) => variantIds.includes(item.id));
+    if (variants.length) set({ clipboard: snapshotClipboard(doc, { kind: 'LINE', value: { lineId, label, variants } }), clipboardNotice: 'نُسخت اختلافات السطر؛ لا تُنشأ ملكية سطر مستقلة في نموذج التوافق.' });
   },
   cutSelection: () => {
-    const state = get();
-    state.copySelection();
-    const selection = get().selection;
-    if (!selection) return;
-    if (selection.kind === 'DIFFERENCE') get().deleteVariant(selection.id);
-    else if (selection.kind === 'FACE' && selection.differenceId) get().deleteAlternative(selection.differenceId, selection.id);
-    else if (selection.kind === 'SEGMENT') get().deleteSegment(selection.id);
+    get().copySelection();
+    const clipboard = get().clipboard;
+    if (clipboard) set({ clipboard: { ...clipboard, mode: 'CUT' }, clipboardNotice: 'جاهز للنقل: المصدر يبقى كما هو حتى تأكيد لصق صالح. نقل الأوجه متاح داخل المستند.' });
+  },
+  requestPasteSelection: async () => {
+    const { document, clipboard, selection, selectedVariantId } = get();
+    if (!document || !clipboard) return;
+    const target = document.variants.find((item) => item.id === selectedVariantId);
+    const preview = pasteClipboard(document, clipboard, selectedVariantId ?? undefined);
+    if (preview.error) { set({ clipboardNotice: preview.error }); return; }
+    if (selection?.kind === 'LINE' && clipboard.kind !== 'FACE' && clipboard.kind !== 'FACES') {
+      set({ clipboardNotice: 'اللصق الجزئي داخل سطر يحتاج ملكية أسطر مستقلة غير متاحة بعد. حدد اختلافًا للصق الأوجه أو وجهة المستند لنسخ الاختلافات.' }); return;
+    }
+    const accepted = await confirmAction({
+      title: clipboard.mode === 'CUT' ? 'تأكيد نقل العناصر المقصوصة؟' : 'تأكيد لصق نسخة مستقلة؟',
+      message: target && (clipboard.kind === 'FACE' || clipboard.kind === 'FACES') ? `في نهاية أوجه «${target.title}».` : 'إضافة الاختلافات/الأجزاء إلى المستند الحالي، دون تغيير بقية عناصره.',
+      impacts: [{ label: 'عناصر', count: clipboardCount(clipboard) }, { label: 'علاقات ستُعلّق للمراجعة', count: (preview.document.suspendedLinks?.length ?? 0) - (document.suspendedLinks?.length ?? 0) }], undoable: true, confirmLabel: 'تأكيد', tone: 'default',
+    });
+    if (!accepted) return;
+    if (get().document !== document || get().clipboard !== clipboard || get().selection !== selection) { set({ clipboardNotice: 'تغيّر المصدر أو الوجهة أثناء التأكيد؛ أعد طلب اللصق.' }); return; }
+    get().pasteSelection();
   },
   pasteSelection: () => {
-    const state = get();
-    const clipboard = state.clipboard;
-    if (!clipboard || !state.document) return;
-    const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    if (clipboard.kind === 'DIFFERENCE') {
-      const source = structuredClone(clipboard.value);
-      const id = `v-copy-${suffix}`;
-      state.addVariant({
-        ...source,
-        id,
-        title: `${source.title} — نسخة`,
-        alternatives: source.alternatives.map((item, index) => ({ ...item, id: `${id}-face-${index + 1}-${suffix}` })),
-        origin: 'EDITOR',
-        engineSnapshot: undefined,
-        editorModifiedAt: undefined,
-      });
-      get().selectVariant(id);
-    } else if (clipboard.kind === 'FACE' && state.selectedVariantId) {
-      const face = structuredClone(clipboard.value);
-      const id = `face-copy-${suffix}`;
-      state.addAlternative(state.selectedVariantId, { ...face, id, isBase: false });
-      get().selectAlternative(state.selectedVariantId, id);
-    } else if (clipboard.kind === 'FACES' && state.selectedVariantId) {
-      const targetId = state.selectedVariantId;
-      const faces = structuredClone(clipboard.value).map((face, index) => ({
-        ...face,
-        id: `face-copy-${index + 1}-${suffix}`,
-        isBase: false,
-      }));
-      mutate(
-        set,
-        get,
-        (document) => ({
-          ...document,
-          variants: document.variants.map((variant) =>
-            variant.id === targetId ? { ...variant, alternatives: [...variant.alternatives, ...faces] } : variant
-          ),
-        }),
-        {
-          action: 'لصق أوجه',
-          targetType: 'ALTERNATIVE',
-          targetId: faces.map((face) => face.id).join(','),
-          summary: `لصق المحرر ${faces.length} أوجه في «${state.document.variants.find((item) => item.id === targetId)?.title ?? targetId}»`,
-        }
-      );
-      get().selectAlternative(targetId, faces[faces.length - 1].id);
-    } else if (clipboard.kind === 'LINE') {
-      const copies = clipboard.value.variants.map((source, index) => {
-        const id = `v-copy-${index + 1}-${suffix}`;
-        return {
-          ...structuredClone(source),
-          id,
-          title: `${source.title} — نسخة`,
-          alternatives: source.alternatives.map((item, faceIndex) => ({ ...item, id: `${id}-face-${faceIndex + 1}-${suffix}` })),
-          origin: 'EDITOR' as const,
-          engineSnapshot: undefined,
-          editorModifiedAt: undefined,
-          isGlobalDerived: undefined,
-          globalRuleId: undefined,
-        };
-      });
-      state.addVariantGroup(copies);
-      if (copies.length > 0) get().selectVariant(copies[0].id);
-    } else if (clipboard.kind === 'SEGMENT') {
-      const segment = clipboard.value;
-      const created = state.addSegment({
-        title: `${segment.title} — نسخة`,
-        startPosition: segment.startPosition,
-        endPosition: segment.endPosition,
-        characterRange: segment.characterRange,
-        notes: segment.notes,
-      });
-      if (created) get().selectSegment(created.id);
-    }
+    const { document, clipboard, selectedVariantId } = get();
+    if (!document || !clipboard) return;
+    const result = pasteClipboard(document, clipboard, selectedVariantId ?? undefined);
+    if (result.error) { set({ clipboardNotice: result.error }); return; }
+    mutate(set, get, () => result.document, {
+      action: clipboard.mode === 'CUT' ? 'نقل من الحافظة' : 'لصق من الحافظة', targetType: 'DOCUMENT', targetId: result.ids.join(','),
+      summary: `${clipboard.mode === 'CUT' ? 'نقل' : 'لصق'} ${toArabicDigits(result.ids.length)} عناصر من الحافظة`,
+      changes: [{ field: 'clipboard', before: { variants: document.variants, links: document.links, segments: document.segments }, after: { variants: result.document.variants, links: result.document.links, segments: result.document.segments } }],
+    });
+    set({ multiSelection: null, clipboard: clipboard.mode === 'CUT' ? null : clipboard, clipboardNotice: 'تم اللصق. العلاقات الخارجية معلّقة للمراجعة عند وجودها؛ يمكن التراجع.' });
   },
   setTool: (tool) =>
     set({
@@ -1601,6 +1640,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     set({
       document: past[past.length - 1],
+      multiSelection: null,
+      selection: null,
+      selectedWordId: null,
+      selectedVariantId: null,
+      selectedAlternativeId: null,
+      selectedBranchId: null,
       past: past.slice(0, -1),
       future: [document, ...get().future].slice(0, MAX_HISTORY),
       isDirty: true,
@@ -1613,6 +1658,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     set({
       document: future[0],
+      multiSelection: null,
+      selection: null,
+      selectedWordId: null,
+      selectedVariantId: null,
+      selectedAlternativeId: null,
+      selectedBranchId: null,
       future: future.slice(1),
       past: pushHistory(get().past, document),
       isDirty: true,
@@ -1652,6 +1703,7 @@ function mutate(
   if (!current) return;
 
   const updated = updater(current);
+  if (updated === current) return;
   const next = withRegeneratedBranches(
     edit ? withLoggedEdit(updated, edit, current) : updated
   );

@@ -16,6 +16,7 @@ export function ConfirmDialogHost() {
   const resolve = useConfirmStore((state) => state.resolve);
   const setHostMounted = useConfirmStore((state) => state.setHostMounted);
   const cancelRef = useRef<HTMLButtonElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setHostMounted(true);
@@ -24,18 +25,21 @@ export function ConfirmDialogHost() {
 
   useEffect(() => {
     if (!pending) return;
+    const previous = document.activeElement as HTMLElement | null;
     cancelRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        event.preventDefault(); event.stopImmediatePropagation(); resolve(false);
+      } else if (event.key === 'Tab') {
+        const buttons = Array.from(dialogRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? []);
+        const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
         event.preventDefault();
-        resolve(false);
-      } else if (event.key === 'Enter') {
-        event.preventDefault();
-        resolve(true);
+        buttons[(index + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length]?.focus();
       }
+      // Enter activates the focused button natively (initially Cancel), never a global confirmation.
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
+    return () => { window.removeEventListener('keydown', onKey, true); previous?.focus(); };
   }, [pending, resolve]);
 
   if (!pending) return null;
@@ -45,6 +49,7 @@ export function ConfirmDialogHost() {
 
   return (
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-[70] flex items-center justify-center bg-stone-900/50 p-4"
       role="alertdialog"
       aria-modal="true"
