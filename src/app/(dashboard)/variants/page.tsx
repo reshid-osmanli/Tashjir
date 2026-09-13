@@ -61,6 +61,8 @@ type IndexedVariant = {
   variantId?: string;
   targetText: string;
   alternativesCount: number;
+  /** عدد مواضع القاعدة المشتقة في المصحف كله (FR-ES-15). */
+  matchCount?: number;
   globalRule?: GlobalRule;
 };
 
@@ -231,6 +233,11 @@ export default function VariantsIndexPage() {
                       التطبيق: {describeGlobalPattern(item.globalRule.pattern)}
                     </p>
                   )}
+                  {typeof item.matchCount === 'number' && item.matchCount > 0 && (
+                    <p className="mt-1 text-[11px] text-violet-800">
+                      المواضع المتأثرة: {item.matchCount} موضعا في المصحف
+                    </p>
+                  )}
                   {item.globalRule?.pattern && <OccurrenceSummary ruleId={item.globalRule.id} />}
                   {item.description && <p className="mt-1 text-xs leading-relaxed text-stone-500">{item.description}</p>}
                   {item.sourceRef && <p className="mt-1 text-[11px] text-stone-400">المرجع: {item.sourceRef}</p>}
@@ -383,6 +390,7 @@ function readIndexedVariants(): IndexedVariant[] {
     targetText: rule.ruleLabel || 'قاعدة عامة للمصحف كله',
     alternativesCount: 0,
     globalRule: rule,
+    matchCount: rule.pattern ? findGlobalRuleMatches(rule, { limit: 100000 }).length : 0,
   }));
 
   return [...local, ...global].sort((first, second) => second.updatedAt.localeCompare(first.updatedAt));

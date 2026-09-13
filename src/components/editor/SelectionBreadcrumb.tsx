@@ -11,6 +11,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 import { getWordById } from '@/data/quran';
+import { listGlobalRules } from '@/lib/storage/global-rules-store';
 import { buildSelectionBreadcrumb, describeSelection, selectionKindLabel, type SelectionLookup } from '@/lib/tashjeer/selection-context';
 
 export function SelectionBreadcrumb() {
@@ -22,6 +23,8 @@ export function SelectionBreadcrumb() {
 
   const lookup = useMemo<SelectionLookup>(() => {
     const variants = document?.variants ?? [];
+    // عنوان القاعدة العامة بكيانها المستقل (FR-ED-15): نفس الـID في كل الواجهات.
+    const ruleTitle = (id: string) => listGlobalRules().find((rule) => rule.id === id)?.title;
     return {
       surahNumber: document?.surahNumber ?? 1,
       ayahNumber: document?.ayahNumber ?? 1,
@@ -36,6 +39,7 @@ export function SelectionBreadcrumb() {
         return owner?.title ?? `سطر`;
       },
       wordText: (id) => getWordById(id)?.text,
+      ruleTitle,
     };
   }, [document]);
 

@@ -1,12 +1,16 @@
 'use client';
-import { useEditorStore } from '@/stores/editor-store';
+import { useEditorStore, type EditorHistoryEntry } from '@/stores/editor-store';
 import { confirmAction } from '@/lib/ui/confirm-store';
 import { toArabicDigits as ar } from '@/lib/utils/arabic-numbers';
+import type { TashjeerDocument } from '@/types/tashjeer';
 
 /** Uses the existing document history, never a second competing command stack. */
 export function HistoryControls() {
   const { past, future, document } = useEditorStore();
   const snapshots = [...past, ...(document ? [document] : []), ...future];
+  // الحالة الحالية مستند صريح، والبقية لقطات موحّدة (مستند + استثناءات + قواعد).
+  const docOf = (snapshot: TashjeerDocument | EditorHistoryEntry): TashjeerDocument =>
+    'occurrences' in snapshot ? snapshot.document : snapshot;
   const jump = async (index: number) => {
     const count = Math.abs(index - past.length);
     if (!count || !document) return;
@@ -22,7 +26,7 @@ export function HistoryControls() {
       {snapshots.map((snapshot, index) => <li key={index}>
         <button type="button" aria-current={index === past.length ? 'step' : undefined} disabled={index === past.length}
           onClick={() => void jump(index)} className="w-full rounded px-2 py-1 text-start hover:bg-stone-100 disabled:bg-emerald-50 disabled:text-emerald-800">
-          {ar(index)} · {index === 0 ? 'أقدم حالة محفوظة' : snapshot.editLog?.at(-1)?.action ?? 'تعديل المستند'}{index === past.length ? ' — الحالية' : ''}
+          {ar(index)} · {index === 0 ? 'أقدم حالة محفوظة' : docOf(snapshot).editLog?.at(-1)?.action ?? 'تعديل المستند'}{index === past.length ? ' — الحالية' : ''}
         </button>
       </li>)}
     </ol>

@@ -8,10 +8,10 @@
 
 'use client';
 
-import { selectRange } from '@/lib/tashjeer/multi-selection';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
-import { ScrollableList } from '@/components/ui/ScrollableList';
+import { useWindowedList } from '@/hooks/useWindowedList';
+import { selectRange } from '@/lib/tashjeer/multi-selection';
 import { documentWindowWords } from '@/lib/tashjeer/reading-window';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
@@ -20,16 +20,6 @@ import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-sys
 import { describeScope, resolveScope } from '@/lib/tashjeer/scope';
 import { VariantEditor } from './VariantEditor';
 import { SmartCreateWizard } from './SmartCreateWizard';
-import { GlobalRuleBuilder, type GlobalRuleSeed } from './GlobalRuleBuilder';
-import { RulesIndexDialog } from './RulesIndexDialog';
-import { characterCount, rangeFromCharacterAnchors, textForCharacterRange } from '@/lib/quran-logic/characters';
-import { listGlobalRules, type GlobalRule } from '@/lib/storage/global-rules-store';
-import { findGlobalRuleMatchesInAyah } from '@/lib/quran-logic/global-rule-engine';
-import { deletedOccurrenceIds, occurrenceIdFor } from '@/lib/storage/rule-occurrences-store';
-import { useRuleOccurrences } from '@/hooks/useRuleOccurrences';
-import { RuleOccurrenceReview } from './RuleOccurrenceReview';
-import type { Variant } from '@/types/tashjeer';
-import { buildLociFromMarks, describeLoci, lociOfVariant } from '@/lib/tashjeer/loci';
 import {
   buildSmartCreateBatch,
   buildSmartCreateMultiTargetBatch,
@@ -40,6 +30,17 @@ import {
   touchWizardTemplate,
   type WizardTemplateConfig,
 } from '@/lib/tashjeer/wizard-templates';
+import { GlobalRuleBuilder, type GlobalRuleSeed } from './GlobalRuleBuilder';
+import { GlobalRuleMetaEditor } from './GlobalRuleMetaEditor';
+import { RulesIndexDialog } from './RulesIndexDialog';
+import { characterCount, rangeFromCharacterAnchors, textForCharacterRange } from '@/lib/quran-logic/characters';
+import { listGlobalRules, saveGlobalRule, type GlobalRule } from '@/lib/storage/global-rules-store';
+import { findGlobalRuleMatchesInAyah } from '@/lib/quran-logic/global-rule-engine';
+import { deletedOccurrenceIds, occurrenceIdFor } from '@/lib/storage/rule-occurrences-store';
+import { useRuleOccurrences } from '@/hooks/useRuleOccurrences';
+import { RuleOccurrenceReview } from './RuleOccurrenceReview';
+import type { Variant } from '@/types/tashjeer';
+import { buildLociFromMarks, describeLoci, lociOfVariant } from '@/lib/tashjeer/loci';
 
 export function VariantsPanel() {
   const {
@@ -49,13 +50,15 @@ export function VariantsPanel() {
     markingMode,
     selectedVariantId,
     selectedAlternativeId,
+    selection,
     selectVariant,
+    selectRule,
     selectAlternative,
+    updateVariant,
+    clearMarks,
     multiSelection,
     setMultiSelection,
     requestDeleteItems,
-    updateVariant,
-    clearMarks,
     applySmartCreateBatch,
     smartWizardRequest,
     refreshDerivedBranches,
@@ -63,6 +66,9 @@ export function VariantsPanel() {
   } = useEditorStore();
 
   const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
+  // القاعدة العامة المحددة كعنصر مستقل (FR-ED-15) + فتح عناصرها المشتقة.
+  const [expandedRuleId, setExpandedRuleId] = useState<string | null>(null);
+  const [editingRule, setEditingRule] = useState<GlobalRule | null>(null);
   const [showGlobalBuilder, setShowGlobalBuilder] = useState(false);
   const [globalNotice, setGlobalNotice] = useState<string | null>(null);
   const [globalBuilderKind, setGlobalBuilderKind] = useState<'CHARACTERS' | 'MORPHOLOGY'>('CHARACTERS');
@@ -77,8 +83,10 @@ export function VariantsPanel() {
   // آخر طلب فتح استُهلك من الاختصار N أو زر «إنشاء» عام.
   const consumedWizardRequest = useRef(0);
   const [listSearch, setListSearch] = useState('');
-  // مرجع الصف المحدد: يُرسم دائمًا حتى خارج نافذة التنافذ ليعمل التمرير إليه.
+  const listRef = useRef<HTMLDivElement>(null);
   const selectedRowRef = useRef<HTMLLIElement>(null);
+  const [canScrollUp, setCanScrollUp] = useState(false);
+  const [canScrollDown, setCanScrollDown] = useState(false);
   // استثناءات المواضع كلها: تغيّرها يعيد حساب عدّادات هذه اللوحة فورا.
   const occurrences = useRuleOccurrences();
   const catalog = useTransmissionCatalog();
@@ -137,6 +145,8 @@ export function VariantsPanel() {
     });
   }, [document, listSearch]);
 
+  // تنافذ القائمة للآيات ذات المواضع الكثيرة (NFR-01): يُرسم المرئي فقط.
+  const windowed = useWindowedList(listRef, visibleVariants.length, { estimateHeight: 110, overscan: 5, threshold: 40 });
 
   const activeGlobalRules = useMemo(() => {
     if (!document) return [];
@@ -154,6 +164,22 @@ export function VariantsPanel() {
       .filter((item) => item.matches.length > 0);
   }, [document, occurrences.key]);
 
+  // القواعد العامة عناصر مستقلة في نفس القائمة (FR-ED-15): قاعدة = عنصر واحد
+  // بلا نسخ لمواضعها المشتقة، والبحث يطبق عليها كما على الاختلافات.
+  const visibleRules = useMemo(() => {
+    void occurrences.key;
+    const query = listSearch.trim().toLowerCase();
+    if (!query) return activeGlobalRules;
+    return activeGlobalRules.filter(({ rule }) => {
+      const title = `${rule.title} ${rule.ruleLabel ?? ''}`.toLowerCase();
+      const category = CATEGORY_LABELS[rule.category] ?? rule.category;
+      return title.includes(query) || category.includes(query) || 'قاعدة عامة'.includes(query);
+    });
+  }, [activeGlobalRules, listSearch, occurrences.key]);
+
+  useEffect(() => {
+    selectedRowRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [selectedVariantId]);
 
   // الاختصار N أو زر «إنشاء» عام يفتح المعالج — باب الإنشاء الواحد (T3).
   useEffect(() => {
@@ -162,6 +188,23 @@ export function VariantsPanel() {
       setShowSmartWizard(true);
     }
   }, [smartWizardRequest]);
+
+  useEffect(() => {
+    const element = listRef.current;
+    if (!element) return;
+    const update = () => {
+      setCanScrollUp(element.scrollTop > 2);
+      setCanScrollDown(element.scrollTop + element.clientHeight < element.scrollHeight - 2);
+    };
+    update();
+    element.addEventListener('scroll', update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => {
+      element.removeEventListener('scroll', update);
+      observer.disconnect();
+    };
+  }, [document?.variants.length]);
 
   if (!document) return null;
 
@@ -235,6 +278,7 @@ export function VariantsPanel() {
     );
   };
 
+
   return (
     <aside className="flex h-full min-h-0 w-[340px] shrink-0 flex-col overflow-hidden border-s border-stone-200 bg-white">
       <header className="border-b border-stone-200 px-4 py-3">
@@ -262,13 +306,14 @@ export function VariantsPanel() {
         بينهما. سجّل المد والفرش والأصول اختلافا اختلافا؛ يجمعها المحرك في سطر الراوي ويضرب أوجهه.
       </p>
 
-      {/* القواعد العامة المطبقة على هذه الآية، مع بقائها محفوظة مرة واحدة فقط. */}
+      {/* القواعد العامة المطبقة على هذه الآية: عناصرها المستقلة في القائمة أدناه. */}
       <section className="border-b border-stone-200 bg-violet-50/50 px-4 py-3">
         <div className="flex items-start justify-between gap-2">
           <div>
             <h3 className="text-xs font-semibold text-violet-950">قواعد عامة في هذا الموضع</h3>
             <p className="mt-0.5 text-[11px] leading-relaxed text-violet-900/75">
-              تظهر هنا النتائج المشتقة من قواعد المصحف، ولا تُنسخ إلى قائمة اختلافات الآية.
+              كل قاعدة عنصر مستقل في قائمة الاختلافات (أسفل): حدّده، وسّع مواضعه المشتقة بحالاتها،
+              أو حرّرها — وهو نفس المعرّف الذي يظهر في التتبع والفهرس والاستوديو.
             </p>
           </div>
           <button
@@ -287,39 +332,6 @@ export function VariantsPanel() {
         </div>
         {globalNotice && (
           <p role="status" className="mt-2 rounded bg-emerald-50 px-2 py-1.5 text-[11px] text-emerald-800">{globalNotice}</p>
-        )}
-        {activeGlobalRules.length === 0 ? (
-          <p className="mt-2 text-[11px] text-violet-900/65">لا توجد قاعدة نمطية نشطة مطابقة لهذه الآية.</p>
-        ) : (
-          <ul className="mt-2 space-y-1.5">
-            {activeGlobalRules.map(({ rule, matches, removedHere }) => (
-              <li key={rule.id} className="rounded border border-violet-100 bg-white px-2 py-1.5 text-[11px]">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="min-w-0 truncate font-medium text-stone-800">{rule.ruleLabel || rule.title}</span>
-                  <span className="shrink-0 text-violet-800">
-                    {matches.length - removedHere} من {matches.length} موضع
-                  </span>
-                </div>
-                <div className="mt-1 flex items-center justify-between gap-2">
-                  {removedHere > 0 ? (
-                    <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] text-rose-800">
-                      حُذف هنا {removedHere} موضعا
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-stone-400">مطبَّقة في هذه الآية</span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setReviewingRule(rule)}
-                    className="shrink-0 rounded border border-violet-300 px-1.5 py-0.5 text-[10px] text-violet-900 hover:bg-violet-50"
-                    title="مراجعة مواضع القاعدة في المصحف كله موضعا موضعا"
-                  >
-                    تتبّع المواضع
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
         )}
       </section>
 
@@ -424,16 +436,51 @@ export function VariantsPanel() {
         )}
       </section>
 
-
+      {/* قائمة الاختلافات: مساحة مستقلة لا تدفع اللوحة خارج الشاشة. */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div className="sticky top-0 z-10 border-b border-stone-200 bg-white px-3 py-2">
+          <label className="block text-[10px] font-medium text-stone-500">بحث وتصفية فورية</label>
+          <input
+            type="search"
+            value={listSearch}
+            onChange={(event) => setListSearch(event.target.value)}
+            placeholder="النص، الفئة، المصدر، الحالة…"
+            className="mt-1 w-full rounded border border-stone-300 px-2 py-1 text-[11px] focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+          {listSearch.trim() && (
+            <button type="button" onClick={() => setListSearch('')} className="mt-1 text-[10px] text-emerald-700 hover:underline">
+              إلغاء البحث
+            </button>
+          )}
+        </div>
+        {canScrollUp && (
+          <button
+            type="button"
+            onClick={() => listRef.current?.scrollBy({ top: -320, behavior: 'smooth' })}
+            className="absolute start-1/2 top-1 z-20 -translate-x-1/2 rounded-full border border-stone-300 bg-white/95 px-4 py-0.5 text-xs shadow-md hover:bg-stone-50"
+            aria-label="الصعود في قائمة الاختلافات"
+          >
+            ↑
+          </button>
+        )}
+        <div
+          ref={listRef}
+          className="min-h-0 flex-1 overscroll-contain overflow-y-scroll scroll-smooth pb-10 pt-1 [scrollbar-gutter:stable] touch-pan-y"
+          tabIndex={0}
+          aria-label="قائمة الاختلافات القابلة للتمرير"
+        >
+        {visibleVariants.length === 0 && visibleRules.length === 0 ? (
           <p className="px-4 py-6 text-center text-xs text-stone-500">
-            {document.variants.length === 0
+            {document.variants.length === 0 && activeGlobalRules.length === 0
               ? 'لا توجد اختلافات مسجّلة في هذه الآية بعد.'
               : 'لا نتائج مطابقة للبحث أو التصفية.'}
           </p>
-
+        ) : (
+          <ul className="divide-y divide-stone-100">
+            {windowed.active && windowed.topPad > 0 && <li aria-hidden style={{ height: windowed.topPad }} />}
             {visibleVariants.map((variant, index) => {
               // خارج النافذة: لا يُرسم إلا الصف المحدد (ليبقى التمرير إليه ممكنا).
-              if (range.active && (index < range.start || index > range.end) && variant.id !== selectedVariantId) {
+              if (windowed.active && (index < windowed.start || index > windowed.end) && variant.id !== selectedVariantId) {
                 return null;
               }
               return (
@@ -444,7 +491,8 @@ export function VariantsPanel() {
                 isSelected={variant.id === selectedVariantId}
                 selectedAlternativeId={variant.id === selectedVariantId ? selectedAlternativeId : null}
                 rowRef={variant.id === selectedVariantId ? selectedRowRef : undefined}
-
+                onMeasure={windowed.active ? (element) => windowed.measure(index, element) : undefined}
+                onSelect={() => selectVariant(variant.id === selectedVariantId ? null : variant.id)}
                 onSelectAlternative={(alternativeId) => selectAlternative(variant.id, alternativeId)}
                 onRecitationModeChange={(recitationMode) => updateVariant(variant.id, { recitationMode })}
                 onEdit={() => setEditingVariantId(variant.id)}
@@ -477,9 +525,44 @@ export function VariantsPanel() {
               />
               );
             })}
+            {windowed.active && windowed.bottomPad > 0 && <li aria-hidden style={{ height: windowed.bottomPad }} />}
+            {visibleRules.map((item) => (
+              <GlobalRuleListItem
+                key={`rule:${item.rule.id}`}
+                rule={item.rule}
+                matches={item.matches}
+                overrides={occurrences.overrides}
+                catalog={catalog}
+                isSelected={selection?.kind === 'RULE' && selection.id === item.rule.id}
+                expanded={expandedRuleId === item.rule.id}
+                onToggle={() => {
+                  const selected = selection?.kind === 'RULE' && selection.id === item.rule.id;
+                  selectRule(selected ? null : item.rule.id);
+                  setExpandedRuleId(selected ? null : item.rule.id);
+                }}
+                onEdit={() => setEditingRule(item.rule)}
+                onReview={() => setReviewingRule(item.rule)}
+                onToggleActive={() => {
+                  saveGlobalRule({ ...item.rule, isActive: !item.rule.isActive });
+                  refreshDerivedBranches();
+                }}
+                onOpenOccurrence={(occurrenceId) => selectVariant(occurrenceId)}
+              />
+            ))}
           </ul>
         )}
-      />
+        </div>
+        {canScrollDown && (
+          <button
+            type="button"
+            onClick={() => listRef.current?.scrollBy({ top: 320, behavior: 'smooth' })}
+            className="absolute bottom-1 start-1/2 z-20 -translate-x-1/2 rounded-full border border-stone-300 bg-white/95 px-4 py-0.5 text-xs shadow-md hover:bg-stone-50"
+            aria-label="النزول في قائمة الاختلافات"
+          >
+            ↓
+          </button>
+        )}
+      </div>
 
       {editingVariant && (
         <VariantEditor
@@ -515,13 +598,26 @@ export function VariantsPanel() {
         <RuleOccurrenceReview
           rule={reviewingRule}
           startAtAyahKey={document.ayahKey}
-          onOpenInEditor={(ayahKey) => {
+          onOpenInEditor={(ayahKey, variantId) => {
             setReviewingRule(null);
             refreshDerivedBranches();
             openAyah(ayahKey);
+            if (variantId) selectVariant(variantId);
           }}
           onClose={() => {
             setReviewingRule(null);
+            refreshDerivedBranches();
+          }}
+        />
+      )}
+
+      {editingRule && (
+        <GlobalRuleMetaEditor
+          rule={editingRule}
+          onClose={() => setEditingRule(null)}
+          onSaved={() => {
+            // تعديل القاعدة يعكس أثرها على كل مواضعها غير المتجاوزة محليا.
+            setEditingRule(null);
             refreshDerivedBranches();
           }}
         />
@@ -602,7 +698,7 @@ const QUICK_CREATE_TEMPLATES: Array<{ id: string; label: string; hint: string; c
     hint: 'مد بأوجه: تحقيق، تحقيق + صلة، صلة + فرش — في عملية واحدة',
     config: {
       types: ['MADUD'],
-      faces: { MADUD: 'تحقيق\nتحقيق + صلة\nصلة + فرش' },
+      faces: { MADUD: 'تحقيق\\nتحقيق + صلة\\nصلة + فرش' },
       relationMode: 'NONE',
       context: 'ALWAYS',
     },
@@ -625,7 +721,6 @@ function VariantRow({
   rowRef,
   onMeasure,
   onSelect,
-  isChecked,
   onSelectAlternative,
   onRecitationModeChange,
   onEdit,
@@ -640,7 +735,6 @@ function VariantRow({
   rowRef?: RefObject<HTMLLIElement | null>;
   /** قياس ارتفاع الصف للتنافذ (اختياري). */
   onMeasure?: (element: HTMLLIElement | null) => void;
-  isChecked?: boolean;
   onSelect: (event: React.MouseEvent) => void;
   onSelectAlternative: (alternativeId: string) => void;
   onRecitationModeChange: (mode: Variant['recitationMode']) => void;
@@ -690,7 +784,7 @@ function VariantRow({
         onMeasure?.(element);
       }}
       data-difference-id={variant.id}
-
+      className={isSelected ? 'bg-emerald-50/60 ring-2 ring-inset ring-emerald-500' : ''}
     >
       <div className="px-4 py-3">
         <button type="button" onClick={onSelect} className="w-full text-start">
@@ -901,4 +995,196 @@ export function StatusBadge({ status }: { status: Variant['status'] }) {
       {style.label}
     </span>
   );
+}
+
+// ==================== عنصر القاعدة العامة المستقل ====================
+
+interface GlobalRuleListItemProps {
+  rule: GlobalRule;
+  matches: ReturnType<typeof findGlobalRuleMatchesInAyah>;
+  overrides: import('@/lib/storage/rule-occurrences-store').RuleOccurrenceOverride[];
+  catalog: import('@/lib/transmissions/catalog').TransmissionCatalog;
+  isSelected: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  onEdit: () => void;
+  onReview: () => void;
+  onToggleActive: () => void;
+  /** تحديد موضع مشتق في التحديد الموحد (يفتحه على اللوحة والقوائم). */
+  onOpenOccurrence: (occurrenceId: string) => void;
+}
+
+/**
+ * القاعدة العامة كعنصر مستقل في قائمة الاختلافات (FR-ED-15):
+ *   - عنصر واحد لا ينسخ مواضعه؛ توسيعه يعرض مواضعه المشتقة في الآية بحالاتها.
+ *   - التحديد عبر التحديد الموحد (kind RULE) فينعكس في شريط السياق وكل اللوحات.
+ *   - نفس المعرّف (rule.id) في التتبع وفهرس القواعد والاستوديو (P-09).
+ */
+function GlobalRuleListItem({
+  rule,
+  matches,
+  overrides,
+  catalog,
+  isSelected,
+  expanded,
+  onToggle,
+  onEdit,
+  onReview,
+  onToggleActive,
+  onOpenOccurrence,
+}: GlobalRuleListItemProps) {
+  const rows = useMemo(
+    () =>
+      matches.map((match) => {
+        const id = occurrenceIdFor(rule.id, match);
+        return { id, match, override: overrides.find((item) => item.id === id) };
+      }),
+    [matches, overrides, rule.id]
+  );
+
+  const deletedHere = rows.filter((row) => row.override?.state === 'DELETED').length;
+
+  return (
+    <li
+      data-rule-id={rule.id}
+      className={isSelected ? 'bg-violet-50/70 ring-2 ring-inset ring-violet-400' : ''}
+    >
+      <div className="px-4 py-3">
+        <button type="button" onClick={onToggle} className="w-full text-start">
+          <div className="flex items-start justify-between gap-2">
+            <span className="flex flex-wrap items-center gap-1">
+              <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-800">
+                قاعدة عامة
+              </span>
+              <span
+                className="rounded px-1.5 py-0.5 text-[10px] font-medium"
+                style={{
+                  backgroundColor: getCategorySoftColor(rule.category),
+                  color: getCategoryColor(rule.category),
+                }}
+              >
+                {CATEGORY_LABELS[rule.category]}
+              </span>
+              {!rule.isActive && (
+                <span className="rounded bg-stone-200 px-1.5 py-0.5 text-[10px] text-stone-600">موقوفة</span>
+              )}
+            </span>
+            <span className="shrink-0 text-[10px] text-violet-800">
+              {toArabicDigits(rows.length - deletedHere)} من {toArabicDigits(rows.length)} موضعا هنا
+            </span>
+          </div>
+
+          <p className="mt-1.5 text-sm font-medium leading-relaxed text-stone-900">{rule.ruleLabel || rule.title}</p>
+          <p className="mt-0.5 text-[11px] text-stone-500">
+            {describeScope(rule.scope, { catalog })}
+            {deletedHere > 0 && (
+              <span className="text-rose-700"> · حُذف هنا {toArabicDigits(deletedHere)} موضعا موضعيا</span>
+            )}
+          </p>
+          <p className="mt-0.5 text-[9.5px] text-stone-400" dir="ltr" title="نفس المعرّف في التتبع والفهرس والاستوديو">
+            {rule.id}
+          </p>
+        </button>
+
+        {isSelected && (
+          <>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={onEdit}
+                className="rounded border border-violet-300 px-2 py-1 text-[11px] text-violet-800 hover:bg-violet-50"
+                title="تعديل القاعدة؛ ينعكس على كل مواضعها غير المتجاوزة محليا"
+              >
+                تحرير القاعدة
+              </button>
+              <button
+                type="button"
+                onClick={onReview}
+                className="rounded border border-violet-300 px-2 py-1 text-[11px] text-violet-800 hover:bg-violet-50"
+                title="مراجعة مواضع القاعدة في المصحف كله موضعا موضعا"
+              >
+                تتبّع المواضع
+              </button>
+              <button
+                type="button"
+                onClick={onToggleActive}
+                className="rounded border border-amber-300 px-2 py-1 text-[11px] text-amber-800 hover:bg-amber-50"
+                title="إيقاف القاعدة يخفيها من كل المصحف دون حذف بياناتها"
+              >
+                {rule.isActive ? 'إيقاف' : 'تفعيل'}
+              </button>
+            </div>
+
+            <p className="mt-2 text-[11px] font-semibold text-violet-950">
+              المواضع المشتقة في هذه الآية ({toArabicDigits(rows.length)})
+            </p>
+            <ul className="mt-1 space-y-1">
+              {rows.map((row) => (
+                <li
+                  key={row.id}
+                  className="flex items-center justify-between gap-2 rounded border border-stone-200 bg-white px-2 py-1 text-[11px]"
+                >
+                  <span className="min-w-0">
+                    <span className="font-medium text-stone-800" style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }}>
+                      {row.match.matchedText}
+                    </span>
+                    <span className="text-stone-500">
+                      {' '}
+                      · كلمة {toArabicDigits(row.match.startPosition)}
+                      {row.match.endPosition !== row.match.startPosition
+                        ? `–${toArabicDigits(row.match.endPosition)}`
+                        : ''}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    <OccurrenceStateBadge override={row.override} />
+                    <button
+                      type="button"
+                      onClick={() => onOpenOccurrence(row.id)}
+                      disabled={row.override?.state === 'DELETED'}
+                      className="rounded border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      title="تحديد هذا الموضع المشتق في اللوحة والقوائم (التحديد الموحد)"
+                    >
+                      تحديد
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {expanded && (
+              <p className="mt-1.5 text-[10px] leading-relaxed text-stone-500">
+                تعديل القاعدة من «تحرير القاعدة» يغيّر كل مواضعها في المصحف بلا نسخ؛ الحذف والتخصيص
+                هنا موضعيان لا يتعدّيان موضعهما (الحزمة 07).
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </li>
+  );
+}
+
+/** حالة موضع مشتق من قاعدة عامة: مطبَّق/معتمد/مخصص/محذوف موضعيا. */
+function OccurrenceStateBadge({
+  override,
+}: {
+  override?: import('@/lib/storage/rule-occurrences-store').RuleOccurrenceOverride;
+}) {
+  if (override?.state === 'DELETED') {
+    return <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] text-rose-800">محذوف هنا</span>;
+  }
+  const customized = Boolean(
+    override?.strengthDegreeId || override?.strengthByNarrator || typeof override?.orderRank === 'number'
+  );
+  if (override?.state === 'CONFIRMED') {
+    return (
+      <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-800">
+        {customized ? 'معتمد · مخصص' : 'معتمد'}
+      </span>
+    );
+  }
+  if (customized) {
+    return <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] text-indigo-800">مخصص</span>;
+  }
+  return <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] text-stone-600">مطبَّق</span>;
 }

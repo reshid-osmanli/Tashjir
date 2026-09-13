@@ -46,7 +46,14 @@ const SECTIONS: Array<{ id: Section; label: string; hint: string }> = [
 interface StudioDeepLink {
   section?: Section;
   ruleId?: string;
-  candidate?: { differenceType?: string; relatedType?: string; engineMerged?: boolean; editorWantsMerge?: boolean };
+  candidate?: {
+    differenceType?: string;
+    relatedType?: string;
+    engineMerged?: boolean;
+    editorWantsMerge?: boolean;
+    /** موضع التصحيح المصدر، ليعود منه المحقق إلى المحرر (نفس Selection Context). */
+    positionRef?: { ayahKey: number; variantId: string };
+  };
 }
 
 function readDeepLink(): StudioDeepLink {
@@ -64,10 +71,21 @@ function readDeepLink(): StudioDeepLink {
   const engineMerged = flag('engineMerged');
   const editorWantsMerge = flag('editorWantsMerge');
   const hasCandidate = differenceType || relatedType || engineMerged !== undefined || editorWantsMerge !== undefined;
+  const ayah = Number(params.get('ayah'));
+  const variant = params.get('variant');
+  const candidate = hasCandidate
+    ? {
+        differenceType,
+        relatedType,
+        engineMerged,
+        editorWantsMerge,
+        positionRef: Number.isFinite(ayah) && ayah > 0 && variant ? { ayahKey: ayah, variantId: variant } : undefined,
+      }
+    : undefined;
   return {
     section: section && SECTIONS.some((item) => item.id === section) ? section : ruleId ? 'rules' : undefined,
     ruleId,
-    candidate: hasCandidate ? { differenceType, relatedType, engineMerged, editorWantsMerge } : undefined,
+    candidate,
   };
 }
 

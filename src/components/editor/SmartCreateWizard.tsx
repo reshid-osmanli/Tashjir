@@ -73,8 +73,10 @@ import {
   textForCharacterRange,
 } from '@/lib/quran-logic/characters';
 import {
+  createGlobalRuleBatchId,
   createGlobalRuleId,
-
+  saveGlobalRulesBatch,
+  type GlobalRule,
 } from '@/lib/storage/global-rules-store';
 import { decideMutualExclusion } from '@/lib/tashjeer/decision/resolver';
 import { resolveScope } from '@/lib/tashjeer/scope';
@@ -194,7 +196,8 @@ export function SmartCreateWizard({
   onComplete,
   onRequestFullBuilder,
 }: SmartCreateWizardProps) {
-
+  const { document, applySmartCreateBatch, refreshDerivedBranches, transactExternal } = useEditorStore();
+  const strengthCatalog = useStrengthDegrees();
 
   const words = useMemo(() => (document ? documentWindowWords(document) : []), [document]);
   const wordLengths = useMemo(
@@ -609,7 +612,47 @@ export function SmartCreateWizard({
       return;
     }
 
-
+    // التعميم (الخطوة 6): قاعدة حتمية واحدة لكل نوع بالنمط المشترك، تنفيذ
+    // ذري (كله أو لا شيء) بدفعة تراجع واحدة (FR-ED-10/DM-08) وتسجيل في التتبع.
+    const batchId = createGlobalRuleBatchId();
+    const rules: Array<Omit<GlobalRule, 'createdAt' | 'updatedAt'>> = selectedTypes.map((type) => ({
+      id: createGlobalRuleId(),
+      createBatchId: batchId,
+      title: typeText[type]?.trim() || `${baseTitle || 'قاعدة'} — ${CATEGORY_LABELS[type]}`,
+      category: type,
+      scope,
+      ruleLabel: variantsByType[type]?.[0]?.label,
+      pattern,
+      strengthDegreeId: typeStrength[type] || undefined,
+      applyRange,
+      evidences: [],
+      status: 'DRAFT',
+      isActive: true,
+    }));
+    try {
+      transactExternal(
+        {
+          action: 'إنشاء قواعد عامة (تعميم)',
+          targetType: 'RULE',
+          targetId: batchId,
+          category: selectedTypes[0],
+          summary: `تعميم ${toArabicDigits(rules.length)} قواعد جديدة على ${applyRange ? 'النطاق المحدد' : 'المصحف كله'}`,
+        },
+        () => {
+          saveGlobalRulesBatch(rules);
+        }
+      );
+      refreshDerivedBranches();
+      const countsNote =
+        dryRun.phase === 'done' && dryRun.counts.length > 0
+          ? ` (المطابقة: ${toArabicDigits(dryRun.counts.reduce((sum, item) => sum + item.count, 0))} موضعًا)`
+          : '';
+      onComplete?.(`أُنشئت ${toArabicDigits(rules.length)} قواعد عامة بالنمط الحتمي في دفعة واحدة${countsNote}.`);
+      onClose();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'تعذّر إنشاء القواعد — لم يُحفظ شيء.');
+    }
+  };
 
   const toggleType = (type: VariantCategory) => {
     setSelectedTypes((current) =>

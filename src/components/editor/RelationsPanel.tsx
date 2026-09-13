@@ -571,8 +571,30 @@ function LinksList({
   const deleteLink = useEditorStore((state) => state.deleteLink);
   const updateLink = useEditorStore((state) => state.updateLink);
   const deleteSegment = useEditorStore((state) => state.deleteSegment);
+  const document = useEditorStore((state) => state.document);
+  const selection = useEditorStore((state) => state.selection);
+  const requestUnmergeLines = useEditorStore((state) => state.requestUnmergeLines);
+  const [operationNotice, setOperationNotice] = useState('');
 
   const segmentTitles = new Map(segments.map((segment) => [segment.id, segment.title]));
+  const mergeRecords = document?.mergeRecords;
+
+  /** فك الدمج عبر سجل الدمج الموحد؛ النتيجة رسالة تُعرض أسفل القائمة. */
+  const unmerge = (relationId: string) => {
+    void requestUnmergeLines(relationId).then(setOperationNotice);
+  };
+
+  /** تأكيد كمي قديم الطراز للتعديلات/الحذف اليدوي (FR-ED-04.2). */
+  const confirmLegacy = (fn: () => void) => {
+    void confirmAction({
+      title: 'تعديل/حذف العلاقة المسجلة؟',
+      message: 'تغيير نوع العلاقة أو حذفها يُسجَّل في سجل التعديل ويمكن التراجع عنه.',
+      undoable: true,
+      tone: 'danger',
+    }).then((ok) => {
+      if (ok) fn();
+    });
+  };
 
   if (links.length === 0 && segments.length === 0) return null;
 
@@ -611,7 +633,7 @@ function LinksList({
       <p className="mb-1.5 text-[10px] font-semibold text-stone-700">
         العلاقات والأجزاء المسجلة ({toArabicDigits(links.length + segments.length)})
       </p>
-      <p role="status" className="text-xs text-amber-900">{operationNotice}</p>
+      {operationNotice && <p role="status" className="text-xs text-amber-900">{operationNotice}</p>}
       <ul className="space-y-1.5">
         {links.map((link) => {
           const active =

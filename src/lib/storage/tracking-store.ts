@@ -20,6 +20,7 @@ import { loadDocument, listDocuments } from './document-store';
 import { listGlobalRules } from './global-rules-store';
 import { listOccurrenceOverrides } from './rule-occurrences-store';
 import { editorCategoryToStudioType } from '@/lib/tashjeer/decision/editor-bridge';
+import type { CorrectionContext } from '@/lib/tashjeer/decision/candidate-rule';
 
 /** مصدر الموضع كما يظهر في التتبع. */
 export type TrackingSource = 'ENGINE' | 'EDITOR';
@@ -49,6 +50,11 @@ export interface TrackingRow {
   /** رتبة الترتيب اليدوية إن ثُبّتت. */
   orderRank?: number;
   /**
+   * رابط «فتح الموضع في المحرر» (T2.2): الآية + العنصر نفسه في التحديد
+   * الموحد إن كان الاختلاف/الموضع المشتق. لسطر الحدث العام الآية وحدها.
+   */
+  openHref?: string;
+  /**
    * ثلاثية التصحيح (AC-02، DM-11): ما اقترحه المحرك (A)، وما غيّره المحرر
    * (B)، والنتيجة المعتمدة (Final). تُبنى من لقطة المحرك المحفوظة على
    * الاختلاف؛ وتغيب إن لم يكن للموضع لقطة (أنشأه المحرر من الصفر).
@@ -72,6 +78,10 @@ export interface CorrectionTriplet {
   /** Final: الحالة المعتمدة الحالية (تساوي A إن لم يعدّل المحرر). */
   final: CorrectionState;
   capturedAt: string;
+  /** سبب التصحيح: ملخص آخر تعديل يدوي مسجّل في سجل المستند (P-06). */
+  reason?: string;
+  /** المصدر: من سجّل آخر تعديل (المحرر المحلي في هذه المرحلة). */
+  actor?: string;
   /** سياق مختصر لإنشاء قاعدة مرشحة من هذا التصحيح (FR-ES-12). */
   candidate: { differenceType: string; engineMerged: boolean; editorWantsMerge: boolean } | null;
 }
@@ -176,6 +186,8 @@ export function readTrackingRows(filters: TrackingFilters = {}): TrackingRow[] {
       globalRuleId: rule.id,
       globalRuleTitle: rule.title,
       orderRank: override.orderRank ?? rule.orderRank,
+      // معرّف الموضع نفسه معرّف اختلافه المشتق: يفتح محددا في المحرر.
+      openHref: `/editor?ayah=${override.ayahKey}&variant=${encodeURIComponent(override.id)}`,
     });
   }
 
@@ -211,6 +223,7 @@ export function readTrackingRows(filters: TrackingFilters = {}): TrackingRow[] {
           globalRuleId: rule.id,
           globalRuleTitle: rule.title,
           orderRank: rule.orderRank,
+          openHref: `/editor?ayah=${ayahKey}&variant=${encodeURIComponent(variantId)}`,
         });
       }
     }
@@ -250,7 +263,8 @@ function rowForEdit(entry: DocumentEditEntry, ayahKey: number): TrackingRow {
     variantId: entry.targetId,
     title: entry.summary,
     category: entry.category ?? 'FARSH',
-    source: 'EDITOR',
+    // مصدر الحدث من السجل نفسه (الحزم 04–08: نقل/دمج/وقف/وصل...).
+    source: entry.origin === 'EDITOR' ? 'EDITOR' : 'ENGINE',
     manuallyModified: true,
     status: 'DRAFT',
     lastEditedAt: entry.at,
@@ -263,6 +277,8 @@ function rowForEdit(entry: DocumentEditEntry, ayahKey: number): TrackingRow {
         actor: entry.actor,
       },
     ],
+    // هدف الحدث قد يكون علاقة/جزءا/علامة: نفتح الآية نفسها في المحرر.
+    openHref: `/editor?ayah=${ayahKey}`,
   };
 }
 
@@ -282,6 +298,10 @@ function rowForVariant(
   );
 
   const source: TrackingSource = variant.origin === 'EDITOR' ? 'EDITOR' : 'ENGINE';
+
+  // سبب التصحيح ومصدره من آخر سطر مسجّل على الموضع (P-06: الأصل محفوظ).
+  const triplet = correctionTripletOf(variant);
+  const latestEdit = edits[edits.length - 1];
 
   return {
     id: `${ayahKey}:${variant.id}`,
@@ -307,7 +327,10 @@ function rowForVariant(
       ? rulesById.get(variant.globalRuleId)?.title
       : undefined,
     orderRank: variant.orderRank,
-    correction: correctionTripletOf(variant),
+    // فتح الموضع في المحرر: الآية + الاختلاف نفسه في التحديد الموحد (T2.2).
+    openHref: `/editor?ayah=${ayahKey}&variant=${encodeURIComponent(variant.id)}`,
+    correction:
+      triplet && latestEdit ? { ...triplet, reason: latestEdit.summary, actor: latestEdit.actor } : triplet,
   };
 }
 
@@ -393,4 +416,41 @@ export function readOccurrenceOverrideSummary(): {
       (item) => item.strengthDegreeId || item.strengthByNarrator || typeof item.orderRank === 'number'
     ).length,
   };
+}
+
+/** تصحيح مُجمَّع من مستند: سياق القاعدة المرشحة + مرجع الموضع للمراجعة. */
+export interface CorrectionContextRef extends CorrectionContext {
+  ayahKey: number;
+  variantId: string;
+  title: string;
+  /** وقت آخر تعديل يدوي على الموضع. */
+  at?: string;
+}
+
+/**
+ * يجمع سياقات التصحيحات من كل المستندات المخزنة (FR-ES-12.3): كل اختلاف
+ * له لقطة محرك (A) وغيّره المحرر (B) هو تصحيح. قراءة صرفة — لا يُنشأ
+ * شيء تلقائيا (P-06)، والتجميع واقتراح القواعد في candidate-rule.ts.
+ */
+export function readCorrectionContexts(): CorrectionContextRef[] {
+  const contexts: CorrectionContextRef[] = [];
+  for (const entry of listDocuments()) {
+    const document = loadDocument(entry.ayahKey);
+    if (!document) continue;
+    for (const variant of getEffectiveVariants(document)) {
+      const triplet = correctionTripletOf(variant);
+      const candidate = triplet?.candidate;
+      if (!triplet || !candidate) continue;
+      contexts.push({
+        differenceType: candidate.differenceType,
+        engineMerged: candidate.engineMerged,
+        editorWantsMerge: candidate.editorWantsMerge,
+        ayahKey: document.ayahKey,
+        variantId: variant.id,
+        title: variant.title,
+        at: triplet.editor?.at,
+      });
+    }
+  }
+  return contexts;
 }

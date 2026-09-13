@@ -47,6 +47,17 @@ export function WhyTraceDialog({ category, onClose, highlightRuleId, line = null
 
   const result = useMemo(() => resolveMerge(a, b, profile), [a, b, profile]);
 
+  // القواعد التي تجاوزها الفائز (FR-ES-15.4): من أثر القرار نفسه،
+  // ببنية «Overrode: Rule #11 (Priority 70)».
+  const overrodeRules = useMemo(
+    () =>
+      result.trace
+        .filter((step) => step.status === 'lost' && step.ruleId)
+        .map((step) => profile.rules.find((rule) => rule.id === step.ruleId))
+        .filter((rule): rule is NonNullable<typeof rule> => Boolean(rule)),
+    [result.trace, profile]
+  );
+
   // أزواج السطر الفعلية: كل اختلافين مختلفَي الفئة اجتمعا على السطر.
   const linePairs = useMemo(() => {
     if (!line || line.entries.length < 2) return [];
@@ -147,6 +158,30 @@ export function WhyTraceDialog({ category, onClose, highlightRuleId, line = null
               </p>
             </div>
           </div>
+
+          {overrodeRules.length > 0 && (
+            <div className="mt-5">
+              <h3 className="mb-2 font-semibold text-gray-800">تجاوزته</h3>
+              <ul className="space-y-1">
+                {overrodeRules.map((rule) => (
+                  <li
+                    key={rule.id}
+                    className="flex items-center justify-between gap-2 rounded bg-gray-100 px-3 py-1.5 text-sm text-gray-600"
+                  >
+                    <span>
+                      {rule.name} <span className="text-xs opacity-70">(أولوية {toArabicDigits(rule.priority)})</span>
+                    </span>
+                    <a
+                      href={`/studio?rule=${encodeURIComponent(rule.id)}`}
+                      className="text-xs text-gray-500 underline-offset-2 hover:underline"
+                    >
+                      افتح في الاستوديو
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="mt-5">
             <h3 className="mb-2 font-semibold text-gray-800">أثر القرار (Decision Trace)</h3>
