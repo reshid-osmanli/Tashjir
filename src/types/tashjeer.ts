@@ -428,6 +428,15 @@ export interface Variant {
    * إن وُجدت رُسمت علامة على كل موضع وحده، بلا خط غليظ يملأ الفجوة.
    */
   loci?: VariantLocus[];
+  /**
+   * فهرس الاختلاف ضمن موضع القارئ نفسه (الأول/الثاني...) عند تعدد الاختلافات
+   * لنفس القارئ+الكلمة (DM-09، FR-ED-03).
+   *
+   * يُسند عند الإنشاء ولا يتغير تلقائيا بعده: حذف «اختلاف ٢» لا يعيد ترقيم
+   * «اختلاف ٣» إلى ٢، حفاظا على استقرار الملفات المصدَّرة (DM-13). غيابه في
+   * المستندات القديمة يعني أن الفهرس يُشتق بالترتيب (الأول = ١).
+   */
+  occurrenceIndex?: number;
   /** الأوجه، ويجب أن يكون فيها وجه واحد على الأقل غير وجه الأساس */
   alternatives: VariantAlternative[];
   /** شرط الأداء؛ غيابه يعني أن الاختلاف صالح في الوقف والوصل. */
@@ -598,6 +607,13 @@ export interface LinkEndpoint {
   id: string;
 }
 
+/** قرار المحقق اليدوي على زوج اختلافين في الموضع نفسه (FR-ED-03). */
+export type LocusLinkVerdict =
+  /** متنافيان: لا يجتمعان في وجه واحد ولا يُضربان معا (مد ٢ ومد ٤) */
+  | 'EXCLUSIVE'
+  /** مرتبطان: يُطبَّقان معا في سطر الراوي */
+  | 'RELATED';
+
 /** أنواع العلاقات التي ينشئها المحرر. */
 export type TashjeerLinkKind =
   /** وجه مركب: هذا الوجه مرتبط/متفق مع وجه آخر */
@@ -607,7 +623,13 @@ export type TashjeerLinkKind =
   /** ربط جزء من سطر بسطر آخر */
   | 'SEGMENT_TO_LINE'
   /** ربط جزء من سطر بقاعدة (اختبار أو قاعدة عامة) */
-  | 'SEGMENT_TO_RULE';
+  | 'SEGMENT_TO_RULE'
+  /**
+   * علاقة موضع: قرار يدوي على زوج اختلافين (طرفاه RULE بمعرّفي الاختلافين)
+   * بأنهما «متنافيان» أو «مرتبطان». يسبق سياسة المحرك في التركيب، ويُرحَّل
+   * إلى MUTUALLY_EXCLUSIVE/RELATED في v8 (FR-ED-03).
+   */
+  | 'DIFFERENCE_TO_DIFFERENCE';
 
 /** أثر العلاقة في العرض. */
 export type TashjeerLinkRelation =
@@ -624,6 +646,11 @@ export interface TashjeerLink {
   relation: TashjeerLinkRelation;
   from: LinkEndpoint;
   to: LinkEndpoint;
+  /**
+   * قرار الموضع اليدوي، لنوع DIFFERENCE_TO_DIFFERENCE وحده: طرفاه RULE
+   * بمعرّفي الاختلافين، والقيمة «متنافيان» أو «مرتبطان».
+   */
+  locusVerdict?: LocusLinkVerdict;
   notes?: string;
   origin: EditOrigin;
   createdAt: string;
@@ -666,6 +693,7 @@ export type DocumentEditTargetType =
   | 'LINE_LINK'
   | 'SEGMENT'
   | 'LINE_ORDER'
+  | 'LOCUS_RELATION'
   | 'DOCUMENT';
 
 /** سطر في سجل تعديلات المستند: تتبع كل عمل يدوي قام به المحرر. */

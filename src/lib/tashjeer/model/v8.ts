@@ -596,6 +596,10 @@ export function linkKindToRelationType(kind: TashjeerLinkKind): RelationType {
     case 'SEGMENT_TO_LINE':
     case 'SEGMENT_TO_RULE':
       return 'PART_OF';
+    case 'DIFFERENCE_TO_DIFFERENCE':
+      // القيمة الافتراضية؛ الترحيل يصقلها بقرار الموضع اليدوي إلى
+      // MUTUALLY_EXCLUSIVE أو RELATED (FR-ED-03).
+      return 'RELATED';
     default:
       return 'MANUAL_LINK';
   }

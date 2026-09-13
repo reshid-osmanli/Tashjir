@@ -88,6 +88,7 @@ import { positionsOfVariant } from './loci';
 import type { EngineConfig } from './model/v8';
 import { marksForWordRange as marksForRange, marksForVariant } from './line-marks';
 import { applyManualLinks, sortLinesByManualOrder } from './manual-links';
+import { manualLocusVerdictsFromLinks } from './decision/editor-bridge';
 
 // ==================== الإعدادات ====================
 
@@ -460,6 +461,10 @@ export function generateClassicTashjeer(
     ])
   );
 
+  // قرارات الموضع اليدوية («متنافيان/مرتبطان») تُستخرج من روابط المستند
+  // وتُمرَّر للتركيب قبل بنائه، فتنعكس على الأسطر لا على الروابط اللاحقة.
+  const manualLocusRelations = manualLocusVerdictsFromLinks(runtime.links ?? []);
+
   const lines: ClassicLine[] =
     engine.lineComposition === 'PER_VARIANT'
       ? buildPerVariantLines(
@@ -481,7 +486,8 @@ export function generateClassicTashjeer(
           catalog,
           strengthDegrees,
           overrideByKey,
-          runtime.engineConfig
+          runtime.engineConfig,
+          manualLocusRelations
         );
 
   // الأسطر اليدوية لا تتجاوز التصفية؛ وهي تتبع نطاقها إن حُدد.
@@ -513,6 +519,18 @@ export function generateClassicTashjeer(
     lines.length = 0;
     lines.push(...applied.lines);
     appliedLinkIds = { merge: applied.appliedMergeIds, reference: applied.appliedReferenceIds };
+  }
+
+  // روابط قرارات الموضع تُطبَّق في التركيب قبل الأسطر، لا في الروابط اللاحقة؛
+  // فتُحسَب مفعّلة متى ظهر طرفاها في العرض الحالي ليصدق مؤشر اللوحة.
+  if ((runtime.links ?? []).length > 0) {
+    const eligibleIds = new Set(eligibleVariants.map((variant) => variant.id));
+    for (const link of runtime.links ?? []) {
+      if (link.kind !== 'DIFFERENCE_TO_DIFFERENCE') continue;
+      if (link.from.type !== 'RULE' || link.to.type !== 'RULE') continue;
+      if (!eligibleIds.has(link.from.id) || !eligibleIds.has(link.to.id)) continue;
+      if (!appliedLinkIds.reference.includes(link.id)) appliedLinkIds.reference.push(link.id);
+    }
   }
 
   const ordered = sortLinesByManualOrder(lines, runtime.lineOrder);
@@ -776,13 +794,15 @@ function buildCombinedLines(
   catalog: TransmissionCatalog | undefined,
   strengthDegrees: StrengthDegreeCatalog,
   overrideByKey: Map<string, TashjeerBranch>,
-  engineConfig?: EngineConfig
+  engineConfig?: EngineConfig,
+  manualLocusRelations?: import('./multi-difference').ManualLocusRelation[]
 ): ClassicLine[] {
   const combinations = buildReadingCombinations(variants, plan, {
     catalog,
     engine,
     strengthDegrees,
     engineConfig,
+    manualLocusRelations,
   }).filter((combination) => {
     if (filter.narratorIds.length === 0) return true;
     return filter.narratorIds.some((narratorId) => combination.narratorIds.includes(narratorId));

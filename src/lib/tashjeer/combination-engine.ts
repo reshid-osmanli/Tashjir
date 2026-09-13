@@ -40,6 +40,7 @@ import { pathsOfNarrator, type ReadingUnit } from './reader-symbols';
 import { narratorTayyibahOrder } from './symbols';
 import type { EngineConfig } from './model/v8';
 import { resolveExclusiveGroups } from './decision/editor-bridge';
+import type { ManualLocusRelation } from './multi-difference';
 
 /** اختيار وجه في موضع من مواضع الآية. */
 export interface CombinationPick {
@@ -77,6 +78,12 @@ export interface CombinationOptions {
    * النظام الافتراضية.
    */
   engineConfig?: EngineConfig;
+  /**
+   * قرارات الموضع اليدوية («متنافيان/مرتبطان») من روابط المستند. تسبق
+   * السياسة في أزواجها وحدها (FR-ED-03): لا تُنشأ هنا ولا تُخمَّن، بل تصل
+   * جاهزة ممن يملك المستند (classic-tashjeer يستخرجها من الروابط).
+   */
+  manualLocusRelations?: ManualLocusRelation[];
 }
 
 const DEFAULT_MAX_PER_UNIT = 48;
@@ -98,8 +105,11 @@ export function buildReadingCombinations(
 
   const orderedVariants = orderVariantsForReading(variants, plan);
   const units = buildReadingUnits(orderedVariants, catalog);
-  // مجموعات التنافي تُحسم مرة واحدة لكل الوحدات من Decision Resolver.
-  const exclusiveGroups = resolveExclusiveGroups(orderedVariants, options.engineConfig).groups;
+  // مجموعات التنافي تُحسم مرة واحدة لكل الوحدات من Decision Resolver، مع
+  // تجاوزات المحقق اليدوية على أزواج الموضع (FR-ED-03).
+  const exclusiveGroups = resolveExclusiveGroups(orderedVariants, options.engineConfig, {
+    locusVerdicts: options.manualLocusRelations,
+  }).groups;
 
   interface Draft {
     picks: CombinationPick[];
@@ -110,8 +120,9 @@ export function buildReadingCombinations(
   const drafts = new Map<string, Draft>();
 
   for (const unit of units) {
-    // المواضع المستقلة تُضرب. أما اختلافان في الموضع نفسه والفئة نفسها
-    // (مد ٢ ومد ٤ مسجّلان اختلافا مستقلا) فأوجه متنافية لموضع واحد.
+    // المواضع المستقلة تُضرب (ومنه تعدد الاختلافات المستقلة لنفس القارئ
+    // والموضع: مد وصلة وفرش تجتمع في سطر الراوي). أما ما حكم الـ Resolver
+    // بتنافيه — أو صحّحه المحقق يدويا «متنافيين» — فيبقى أوجه وجه واحد.
     const buckets = new Map<string, CombinationPick[]>();
     const bucketOrder: string[] = [];
     const groupKeys = exclusiveGroups;

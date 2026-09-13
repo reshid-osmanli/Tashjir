@@ -23,6 +23,7 @@ import {
   type CharacterAnchor,
   type EditorSelection,
   type LinkEndpoint,
+  type LocusLinkVerdict,
   type TashjeerBranch,
   type TashjeerDocument,
   type TashjeerLink,
@@ -37,7 +38,14 @@ import {
 import { parseAyahKey } from '@/data/quran';
 import type { SmartCreateResult } from '@/lib/tashjeer/smart-create';
 import { relationTypeToLinkRelation } from '@/lib/tashjeer/model/v8';
-import { resolveLinkPolicy, type LinkPolicyDecision } from '@/lib/tashjeer/decision/editor-bridge';
+import {
+  resolveLinkPolicy,
+  resolveLocusExclusion,
+  type LinkPolicyDecision,
+} from '@/lib/tashjeer/decision/editor-bridge';
+import { differencesAtPosition, nextOccurrenceIndex } from '@/lib/tashjeer/multi-difference';
+import { describeLoci, lociOfVariant } from '@/lib/tashjeer/loci';
+import { LOCUS_RELATION_CORRECTION_ACTION } from '@/lib/tashjeer/migration/migrate-v7-v8';
 import { loadEngineConfig } from '@/lib/tashjeer/engine-config-store';
 import type { DecisionTraceStep } from '@/lib/tashjeer/decision/resolver';
 import { documentWindowWords } from '@/lib/tashjeer/reading-window';
@@ -149,6 +157,23 @@ export interface LinkDecisionNotice extends LinkPolicyDecision {
   at: string;
 }
 
+/**
+ * رسالة حالة تعدد الاختلافات لموضع واحد (FR-ED-03): تظهر عند إنشاء اختلاف
+ * جديد في موضع يحمل اختلافا آخر («اختلافان لموضع واحد»)، للتأكيد أن الأول
+ * لم يتغير ولم يُدمَج. تُصفَّر صراحة من الواجهة.
+ */
+export interface MultiDifferenceNotice {
+  at: string;
+  /** عدد اختلافات الموضع بعد الإنشاء (٢ فأكثر). */
+  count: number;
+  /** وصف الموضع مختصرا («ك٣»)، تُعرَّب أرقامه في الواجهة. */
+  locusLabel: string;
+  /** معرّفات اختلافات الموضع بعد الإنشاء. */
+  variantIds: string[];
+  /** فئاتها، لبيان التنوع (مد، فرش...). */
+  categories: VariantCategory[];
+}
+
 interface EditorState {
   // ---------- المستند ----------
   /** المستند المفتوح حاليا، أو null قبل التحميل */
@@ -193,6 +218,12 @@ interface EditorState {
   replaceDocument: (document: TashjeerDocument) => void;
 
   // ---------- إجراءات الاختلافات ----------
+  /**
+   * آخر رسالة «تعدد لموضع واحد» بعد إنشاء اختلاف في موضع مشغول.
+   * الوجود وحده يعني أن الإنشاء الأخير صادف موضعا متعدد الاختلافات.
+   */
+  lastMultiDifferenceNotice: MultiDifferenceNotice | null;
+  clearMultiDifferenceNotice: () => void;
   addVariant: (variant: Omit<Variant, 'ayahKey'>) => void;
   /** إنشاء عدة اختلافات مستقلة في معاملة واحدة ولقطة تراجع واحدة. */
   addVariantGroup: (variants: Array<Omit<Variant, 'ayahKey'>>) => void;
@@ -264,9 +295,31 @@ interface EditorState {
     from: LinkEndpoint;
     to: LinkEndpoint;
     notes?: string;
+    /**
+     * قرار الموضع («متنافيان/مرتبطان») لروابط DIFFERENCE_TO_DIFFERENCE وحدها.
+     * يُمرَّر للسياسة لمقارنته باقتراحها، ويُحفَظ على الرابط.
+     */
+    locusVerdict?: LocusLinkVerdict;
+    /**
+     * سطور سجل إضافية تُلحَق في خطوة التراجع نفسها (كتصحيح علاقة الموضع)،
+     * تُبنى بمعرّف الرابط بعد توليده. داخلي: يستعمله setLocusRelation.
+     */
+    extraEdits?: (linkId: string) => EditDescriptor[];
   }) => LinkDecisionNotice;
-  updateLink: (linkId: string, patch: Partial<Pick<TashjeerLink, 'relation' | 'notes' | 'from' | 'to'>>) => void;
+  updateLink: (linkId: string, patch: Partial<Pick<TashjeerLink, 'relation' | 'notes' | 'from' | 'to' | 'locusVerdict'>>) => void;
   deleteLink: (linkId: string) => void;
+  /**
+   * قرار موضع يدوي على زوج اختلافين: «متنافيان» أو «مرتبطان» (FR-ED-03).
+   * ينشئ رابط DIFFERENCE_TO_DIFFERENCE (أو يحدّث القائم للزوج نفسه) مع سطر
+   * تصحيح «المحرك يقترح ← المحرر يقرر» يُرحَّل إلى Correction في v8.
+   * يعيد معرّف الرابط، أو undefined إن تعذّر (لا مستند/لا اختلافان).
+   */
+  setLocusRelation: (
+    firstVariantId: string,
+    secondVariantId: string,
+    verdict: LocusLinkVerdict,
+    notes?: string
+  ) => string | undefined;
   /** ينشئ جزءا من سطر: مدى كلمات/حروف له روابطه وقواعده الخاصة. */
   addSegment: (segment: {
     title: string;
@@ -296,6 +349,8 @@ interface EditorState {
   setLineOffset: (lineIndex: number, offset: number) => void;
 
   // ---------- إجراءات التحديد ----------
+  /** يعلّم مواضع كلمات برمجيا (لزر «اختلاف ثانٍ لهذا الموضع»)، بديلا للإبهام. */
+  markPositions: (positions: number[]) => void;
   toggleMarkedPosition: (position: number) => void;
   toggleMarkedCharacter: (anchor: CharacterAnchor) => void;
   clearMarks: () => void;
@@ -366,6 +421,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   selectedBranchId: null,
   clipboard: null,
   lastLinkDecision: null,
+  lastMultiDifferenceNotice: null,
   pendingWhy: null,
   currentTool: 'select',
   draftCategory: 'FARSH',
@@ -439,16 +495,23 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   // ==================== الاختلافات ====================
 
+  clearMultiDifferenceNotice: () => set({ lastMultiDifferenceNotice: null }),
+
   addVariant: (variant) => {
+    // إضافة اختلاف جديد لنفس (القارئ × الموضع) تُنشئ دائما كيانا جديدا
+    // بمعرف جديد وفهرس تالٍ — لا استبدال ولا دمج ولا تحديث ضمني (FR-ED-03).
+    const current = get().document;
+    const staged: Variant[] = current
+      ? assignOccurrenceIndices(current.variants, [
+          { ...variant, ayahKey: current.ayahKey, origin: 'EDITOR' } as Variant,
+        ])
+      : [];
     mutate(
       set,
       get,
       (document) => ({
         ...document,
-        variants: [
-          ...document.variants,
-          { ...variant, ayahKey: document.ayahKey, origin: 'EDITOR' as const },
-        ].sort(compareVariants),
+        variants: [...document.variants, ...staged].sort(compareVariants),
       }),
       {
         action: 'إضافة اختلاف',
@@ -458,24 +521,29 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         summary: `أضاف المحرر اختلاف «${variant.title}» (${variant.startPosition}–${variant.endPosition})`,
       }
     );
-    set({ markedPositions: [], markedCharacters: [] });
+    const after = get().document;
+    set({
+      markedPositions: [],
+      markedCharacters: [],
+      lastMultiDifferenceNotice: after ? multiDifferenceNoticeFor(after, [variant.id]) : null,
+    });
   },
 
   addVariantGroup: (variants) => {
     if (variants.length === 0) return;
+    const current = get().document;
+    const staged: Variant[] = current
+      ? assignOccurrenceIndices(
+          current.variants,
+          variants.map((variant) => ({ ...variant, ayahKey: current.ayahKey, origin: 'EDITOR' }) as Variant)
+        )
+      : [];
     mutate(
       set,
       get,
       (document) => ({
         ...document,
-        variants: [
-          ...document.variants,
-          ...variants.map((variant) => ({
-            ...variant,
-            ayahKey: document.ayahKey,
-            origin: 'EDITOR' as const,
-          })),
-        ].sort(compareVariants),
+        variants: [...document.variants, ...staged].sort(compareVariants),
       }),
       {
         action: 'إنشاء مجموعة اختلافات',
@@ -484,14 +552,24 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         summary: `أنشأ المحرر ${variants.length} اختلافات مستقلة في عملية واحدة`,
       }
     );
-    set({ markedPositions: [], markedCharacters: [] });
+    const after = get().document;
+    set({
+      markedPositions: [],
+      markedCharacters: [],
+      lastMultiDifferenceNotice: after
+        ? multiDifferenceNoticeFor(
+            after,
+            variants.map((item) => item.id)
+          )
+        : null,
+    });
   },
 
   applySmartCreateBatch: (result) => {
     if (result.differences.length === 0 || !get().document) return;
 
     mutate(set, get, (document) => {
-      const variants: Variant[] = result.differences.map((difference) => {
+      const built: Variant[] = result.differences.map((difference) => {
         const hasCharacters = Boolean(
           difference.locus.characterRange || difference.locus.loci?.some((locus) => locus.characterRange)
         );
@@ -566,6 +644,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         });
       }
 
+      // فهرس الدفعة نسبي؛ النهائي يُسنَد نسبيا للمستند (التالي ضمن المجموعة).
+      const variants = assignOccurrenceIndices(document.variants, built);
+
       return withLoggedEdit(
         {
           ...document,
@@ -582,7 +663,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         document
       );
     });
-    set({ markedPositions: [], markedCharacters: [] });
+    const after = get().document;
+    set({
+      markedPositions: [],
+      markedCharacters: [],
+      lastMultiDifferenceNotice: after
+        ? multiDifferenceNoticeFor(
+            after,
+            result.differences.map((item) => item.id)
+          )
+        : null,
+    });
   },
 
   updateVariant: (variantId, patch) => {
@@ -992,7 +1083,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   clearLinkDecision: () => set({ lastLinkDecision: null }),
   requestWhy: (request) => set({ pendingWhy: request }),
 
-  addLink: ({ kind, relation, from, to, notes }) => {
+  addLink: ({ kind, relation, from, to, notes, locusVerdict, extraEdits }) => {
     const current = get().document;
     const rejected = (reason: string): LinkDecisionNotice => ({
       allowed: false,
@@ -1004,11 +1095,26 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (!current) return rejected('لا مستند مفتوح.');
 
     // القرار أولا (P-07): فئتا الطرفين إن كانا وجهين، لتقييم مصفوفة الدمج.
+    // طرفا RULE يحملان معرّف اختلاف مباشرة (علاقة موضع أو ربط جزء بقاعدة).
     const categoryOfEndpoint = (endpoint: LinkEndpoint): VariantCategory | undefined => {
-      if (endpoint.type !== 'FACE') return undefined;
-      const variantId = endpoint.id.split('::')[0];
-      return current.variants.find((variant) => variant.id === variantId)?.category;
+      if (endpoint.type === 'FACE') {
+        const variantId = endpoint.id.split('::')[0];
+        return current.variants.find((variant) => variant.id === variantId)?.category;
+      }
+      if (endpoint.type === 'RULE') {
+        return current.variants.find((variant) => variant.id === endpoint.id)?.category;
+      }
+      return undefined;
     };
+    // علاقة الموضع: زوج الاختلافين الفعليين للسياسة لتقارن القرار باقتراحها.
+    const locusFirst =
+      kind === 'DIFFERENCE_TO_DIFFERENCE' && from.type === 'RULE'
+        ? current.variants.find((variant) => variant.id === from.id)
+        : undefined;
+    const locusSecond =
+      kind === 'DIFFERENCE_TO_DIFFERENCE' && to.type === 'RULE'
+        ? current.variants.find((variant) => variant.id === to.id)
+        : undefined;
     const policy = resolveLinkPolicy(
       {
         kind,
@@ -1017,6 +1123,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         to,
         fromCategory: categoryOfEndpoint(from),
         toCategory: categoryOfEndpoint(to),
+        locusVerdict,
+        locusPair: locusFirst && locusSecond ? { first: locusFirst, second: locusSecond } : undefined,
       },
       loadEngineConfig()
     );
@@ -1043,20 +1151,40 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         relation,
         from,
         to,
+        ...(locusVerdict ? { locusVerdict } : {}),
         notes: notes?.trim() || undefined,
         origin: 'EDITOR',
         createdAt: now,
         updatedAt: now,
       };
+      const withLink: TashjeerDocument = { ...document, links: [...(document.links ?? []), link] };
+      const withExtras = (extraEdits?.(id) ?? []).reduce(
+        (current, edit) =>
+          appendEditLog(
+            current,
+            makeEditEntry({
+              actor: current.meta.author,
+              action: edit.action,
+              targetType: edit.targetType,
+              targetId: edit.targetId,
+              category: edit.category,
+              summary: edit.summary,
+              changes: edit.changes,
+            })
+          ),
+        withLink
+      );
       return withLoggedEdit(
-        { ...document, links: [...(document.links ?? []), link] },
+        withExtras,
         {
           action: 'إنشاء علاقة',
           targetType: linkTargetTypeOf(kind),
           targetId: id,
           summary:
-            `${relation === 'MERGE' ? 'دمج' : 'ربط'} ${describeEndpoint(from)} مع ${describeEndpoint(to)}` +
-            (policy.decision.warning ? ` (بخلاف سياسة المحرك)` : ''),
+            kind === 'DIFFERENCE_TO_DIFFERENCE'
+              ? locusRelationSummary(from.id, to.id, locusVerdict, policy.decision.warning)
+              : `${relation === 'MERGE' ? 'دمج' : 'ربط'} ${describeEndpoint(from)} مع ${describeEndpoint(to)}` +
+                (policy.decision.warning ? ` (بخلاف سياسة المحرك)` : ''),
         },
         document
       );
@@ -1069,13 +1197,26 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   updateLink: (linkId, patch) => {
     mutate(set, get, (document) => {
       const before = (document.links ?? []).find((link) => link.id === linkId);
+      const next: TashjeerDocument = {
+        ...document,
+        links: (document.links ?? []).map((link) =>
+          link.id === linkId ? { ...link, ...patch, updatedAt: new Date().toISOString() } : link
+        ),
+      };
+      // قلب قرار الموضع تصحيح جديد (لا تعديل شكلي): يُلحَق بسطر تصحيح
+      // «المحرك يقترح ← المحرر يقرر» في الخطوة نفسها.
+      const flippedVerdict =
+        before?.kind === 'DIFFERENCE_TO_DIFFERENCE' &&
+        patch.locusVerdict &&
+        patch.locusVerdict !== before.locusVerdict
+          ? patch.locusVerdict
+          : undefined;
+      const withCorrection =
+        flippedVerdict && before
+          ? appendEditLog(next, locusCorrectionEntry(next, before, flippedVerdict))
+          : next;
       return withLoggedEdit(
-        {
-          ...document,
-          links: (document.links ?? []).map((link) =>
-            link.id === linkId ? { ...link, ...patch, updatedAt: new Date().toISOString() } : link
-          ),
-        },
+        withCorrection,
         {
           action: 'تعديل علاقة',
           targetType: linkTargetTypeOf(before?.kind ?? 'LINE_TO_LINE'),
@@ -1090,6 +1231,58 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         document
       );
     });
+  },
+
+  setLocusRelation: (firstVariantId, secondVariantId, verdict, notes) => {
+    const current = get().document;
+    if (!current) return undefined;
+    if (!firstVariantId || !secondVariantId || firstVariantId === secondVariantId) return undefined;
+    const first = current.variants.find((variant) => variant.id === firstVariantId);
+    const second = current.variants.find((variant) => variant.id === secondVariantId);
+    if (!first || !second) return undefined;
+
+    // الزوج الواحد رابط واحد: إعادة القرار نفسه عملية خاملة، وتغييره تحديث.
+    const existing = (current.links ?? []).find(
+      (link) =>
+        link.kind === 'DIFFERENCE_TO_DIFFERENCE' &&
+        link.from.type === 'RULE' &&
+        link.to.type === 'RULE' &&
+        ((link.from.id === firstVariantId && link.to.id === secondVariantId) ||
+          (link.from.id === secondVariantId && link.to.id === firstVariantId))
+    );
+    if (existing) {
+      if (existing.locusVerdict === verdict) return existing.id;
+      get().updateLink(existing.id, {
+        locusVerdict: verdict,
+        relation: verdict === 'RELATED' ? 'MERGE' : 'REFERENCE',
+        ...(notes !== undefined ? { notes } : {}),
+      });
+      return existing.id;
+    }
+
+    // اقتراح المحرك للزوج قبل التسجيل — «المحرك يقترح والمحرر يقرر».
+    const suggestion = resolveLocusExclusion(first, second, loadEngineConfig()).decision;
+    const notice = get().addLink({
+      kind: 'DIFFERENCE_TO_DIFFERENCE',
+      relation: verdict === 'RELATED' ? 'MERGE' : 'REFERENCE',
+      from: { type: 'RULE', id: firstVariantId },
+      to: { type: 'RULE', id: secondVariantId },
+      notes,
+      locusVerdict: verdict,
+      // سطر التصحيح في الخطوة نفسها: يُرحَّل إلى Correction في v8.
+      extraEdits: (linkId) => [
+        locusCorrectionDescriptor({
+          linkId,
+          firstTitle: first.title,
+          secondTitle: second.title,
+          suggestion,
+          verdict,
+          notes,
+        }),
+      ],
+    });
+    if (!notice.allowed || !notice.linkId) return undefined;
+    return notice.linkId;
   },
 
   deleteLink: (linkId) => {
@@ -1312,6 +1505,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   // ==================== التحديد ====================
 
+  markPositions: (positions) => {
+    const valid = [...new Set(positions)].filter(
+      (position) => Number.isInteger(position) && position > 0
+    );
+    set({ markedPositions: valid.sort((a, b) => a - b), markedCharacters: [] });
+  },
+
   toggleMarkedPosition: (position) => {
     set((state) => {
       const exists = state.markedPositions.includes(position);
@@ -1461,6 +1661,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       state.addVariant({
         ...source,
         id,
+        // النسخة كيان جديد مستقل: فهرس جديد ضمن المجموعة، لا فهرس الأصل.
+        occurrenceIndex: undefined,
         title: `${source.title} — نسخة`,
         alternatives: source.alternatives.map((item, index) => ({ ...item, id: `${id}-face-${index + 1}-${suffix}` })),
         origin: 'EDITOR',
@@ -1503,6 +1705,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         return {
           ...structuredClone(source),
           id,
+          // كل نسخة كيان مستقل بفهرس جديد ضمن مجموعته.
+          occurrenceIndex: undefined,
           title: `${source.title} — نسخة`,
           alternatives: source.alternatives.map((item, faceIndex) => ({ ...item, id: `${id}-face-${faceIndex + 1}-${suffix}` })),
           origin: 'EDITOR' as const,
@@ -1617,7 +1821,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 // ==================== دوال داخلية ====================
 
 /** وصف تعديل يُسجَّل في سجل المستند لأغراض التتبع. */
-interface EditDescriptor {
+export interface EditDescriptor {
   action: string;
   targetType: import('@/types/tashjeer').DocumentEditTargetType;
   targetId: string;
@@ -1737,7 +1941,122 @@ function linkTargetTypeOf(
 ): import('@/types/tashjeer').DocumentEditTargetType {
   if (kind === 'FACE_TO_FACE') return 'FACE_LINK';
   if (kind === 'LINE_TO_LINE') return 'LINE_LINK';
+  if (kind === 'DIFFERENCE_TO_DIFFERENCE') return 'LOCUS_RELATION';
   return 'SEGMENT';
+}
+
+/**
+ * يُسنِد فهرس التعدد (occurrenceIndex) للاختلافات الجديدة تباعا ضمن
+ * مجموعاتها (قارئ × موضع)، دون مساس بالموجودين. من جاء بفهرس صالح صريح
+ * (استعادة/ترحيل) احتُفظ به.
+ */
+function assignOccurrenceIndices(existing: Variant[], fresh: Variant[]): Variant[] {
+  const running = [...existing];
+  return fresh.map((variant) => {
+    if (typeof variant.occurrenceIndex === 'number' && variant.occurrenceIndex > 0) {
+      running.push(variant);
+      return variant;
+    }
+    const assigned = { ...variant, occurrenceIndex: nextOccurrenceIndex(running, variant) };
+    running.push(assigned);
+    return assigned;
+  });
+}
+
+/**
+ * رسالة «تعدد لموضع واحد» بعد إنشاء اختلافات: تُبنى من أول موضع بلغ
+ * اختلافين فأكثر بسبب هذا الإنشاء، وإلا فلا رسالة (لا ضجيج).
+ */
+function multiDifferenceNoticeFor(
+  document: TashjeerDocument,
+  addedVariantIds: string[]
+): MultiDifferenceNotice | null {
+  for (const addedId of addedVariantIds) {
+    const added = document.variants.find((variant) => variant.id === addedId);
+    if (!added) continue;
+    const group = differencesAtPosition(document.variants, added.startPosition);
+    if (group.length < 2) continue;
+    return {
+      at: new Date().toISOString(),
+      count: group.length,
+      locusLabel: describeLoci(lociOfVariant(added)),
+      variantIds: group.map((variant) => variant.id),
+      categories: group.map((variant) => variant.category),
+    };
+  }
+  return null;
+}
+
+/** ملخص إنشاء علاقة الموضع لسجل التعديل. */
+function locusRelationSummary(
+  fromId: string,
+  toId: string,
+  verdict: LocusLinkVerdict | undefined,
+  warning: string | undefined
+): string {
+  const label = verdict === 'RELATED' ? 'مرتبطان' : 'متنافيان';
+  return (
+    `قرار موضع يدوي: «${shortenId(fromId)}» و«${shortenId(toId)}» ${label}` +
+    (warning ? ' (بخلاف اقتراح المحرك)' : '')
+  );
+}
+
+/** وصف سطر تصحيح علاقة التنافي: اقتراح المحرك (قبل) ← قرار المحرر (بعد). */
+function locusCorrectionDescriptor(args: {
+  linkId: string;
+  firstTitle: string;
+  secondTitle: string;
+  suggestion: { exclusive: boolean; reason: string };
+  verdict: LocusLinkVerdict;
+  notes?: string;
+}): EditDescriptor {
+  const verdictLabel = args.verdict === 'RELATED' ? 'مرتبطان' : 'متنافيان';
+  const suggestionLabel = args.suggestion.exclusive ? 'متنافيان' : 'مستقلان';
+  return {
+    action: LOCUS_RELATION_CORRECTION_ACTION,
+    targetType: 'LOCUS_RELATION',
+    targetId: args.linkId,
+    summary:
+      `صحّح المحرر علاقة «${args.firstTitle}» و«${args.secondTitle}»: ` +
+      `اقترح المحرك «${suggestionLabel}» (${args.suggestion.reason})، وقرر المحرر «${verdictLabel}»` +
+      (args.notes?.trim() ? ` — ${args.notes.trim()}` : ''),
+    changes: [
+      {
+        field: 'locusRelation',
+        before: {
+          verdict: args.suggestion.exclusive ? 'EXCLUSIVE' : 'INDEPENDENT',
+          reason: args.suggestion.reason,
+        },
+        after: { verdict: args.verdict, reason: args.notes?.trim() || 'قرار المحقق' },
+      },
+    ],
+  };
+}
+
+/** سطر تصحيح علاقة التنافي جاهزا للإلحاق (يُعاد حساب الاقتراح من المستند). */
+function locusCorrectionEntry(
+  document: TashjeerDocument,
+  link: TashjeerLink,
+  verdict: LocusLinkVerdict,
+  notes?: string
+): import('@/types/tashjeer').DocumentEditEntry {
+  const first = document.variants.find((variant) => variant.id === link.from.id);
+  const second = document.variants.find((variant) => variant.id === link.to.id);
+  const suggestion =
+    first && second
+      ? resolveLocusExclusion(first, second, loadEngineConfig()).decision
+      : { exclusive: verdict === 'EXCLUSIVE', reason: 'تعذّر حساب الاقتراح (طرف مفقود)' };
+  return makeEditEntry({
+    actor: document.meta.author,
+    ...locusCorrectionDescriptor({
+      linkId: link.id,
+      firstTitle: first?.title ?? link.from.id,
+      secondTitle: second?.title ?? link.to.id,
+      suggestion,
+      verdict,
+      notes: notes ?? link.notes,
+    }),
+  });
 }
 
 /** وصف طرف العلاقة في صياغة عربية مفهومة للسجل والتتبع. */

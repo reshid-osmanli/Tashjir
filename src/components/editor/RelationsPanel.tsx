@@ -873,6 +873,7 @@ const KIND_LABELS: Record<TashjeerLinkKind, string> = {
   LINE_TO_LINE: 'سطر ↔ سطر',
   SEGMENT_TO_LINE: 'جزء → سطر',
   SEGMENT_TO_RULE: 'جزء → قاعدة',
+  DIFFERENCE_TO_DIFFERENCE: 'اختلاف ↔ اختلاف (قرار موضع)',
 };
 
 const RELATION_LABELS: Record<TashjeerLinkRelation, string> = {
@@ -892,7 +893,9 @@ function LinksList({
   const deleteLink = useEditorStore((state) => state.deleteLink);
   const updateLink = useEditorStore((state) => state.updateLink);
   const deleteSegment = useEditorStore((state) => state.deleteSegment);
+  const document = useEditorStore((state) => state.document);
   const segmentTitles = new Map(segments.map((segment) => [segment.id, segment.title]));
+  const variantTitles = new Map((document?.variants ?? []).map((variant) => [variant.id, variant.title]));
 
   if (links.length === 0 && segments.length === 0) return null;
 
@@ -900,7 +903,11 @@ function LinksList({
     if (endpoint.type === 'SEGMENT') {
       return `جزء «${segmentTitles.get(endpoint.id) ?? 'محذوف'}»`;
     }
-    return `${endpoint.type === 'FACE' ? 'وجه' : endpoint.type === 'LINE' ? 'سطر' : 'قاعدة'} ${shortId(endpoint.id)}`;
+    if (endpoint.type === 'RULE') {
+      const title = variantTitles.get(endpoint.id);
+      return title ? `اختلاف «${title}»` : `قاعدة ${shortId(endpoint.id)}`;
+    }
+    return `${endpoint.type === 'FACE' ? 'وجه' : 'سطر'} ${shortId(endpoint.id)}`;
   };
 
   return (
@@ -913,12 +920,18 @@ function LinksList({
           const active =
             classic.appliedLinkIds.merge.includes(link.id) ||
             classic.appliedLinkIds.reference.includes(link.id);
+          const isLocus = link.kind === 'DIFFERENCE_TO_DIFFERENCE';
+          const locusLabel = isLocus
+            ? link.locusVerdict === 'RELATED'
+              ? 'مرتبطان'
+              : 'متنافيان'
+            : null;
           return (
             <li key={link.id} className="rounded border border-stone-200 bg-white px-2 py-1.5">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[10.5px] font-medium text-stone-800">
-                    {KIND_LABELS[link.kind]} · {RELATION_LABELS[link.relation]}
+                    {KIND_LABELS[link.kind]} · {locusLabel ?? RELATION_LABELS[link.relation]}
                   </p>
                   <p className="truncate text-[10px] text-stone-600" title={`${describe(link.from)} → ${describe(link.to)}`}>
                     {describe(link.from)} ← {describe(link.to)}
@@ -931,7 +944,21 @@ function LinksList({
                   >
                     {active ? 'مفعّلة' : 'معلّقة'}
                   </span>
-                  {link.relation === 'MERGE' ? (
+                  {isLocus ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateLink(link.id, {
+                          locusVerdict: link.locusVerdict === 'RELATED' ? 'EXCLUSIVE' : 'RELATED',
+                          relation: link.locusVerdict === 'RELATED' ? 'REFERENCE' : 'MERGE',
+                        })
+                      }
+                      className="rounded border border-stone-200 px-1.5 py-0.5 text-[9px] text-stone-600 hover:bg-stone-50"
+                      title="قلب القرار اليدوي على الزوج (يُسجَّل تصحيحا جديدا)"
+                    >
+                      {link.locusVerdict === 'RELATED' ? 'اجعلهما متنافيين' : 'اجعلهما مرتبطين'}
+                    </button>
+                  ) : link.relation === 'MERGE' ? (
                     <button
                       type="button"
                       onClick={() =>

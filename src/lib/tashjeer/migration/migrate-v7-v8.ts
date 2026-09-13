@@ -31,25 +31,16 @@ import type {
   TashjeerDocumentV8,
   RecitationContext,
   Locus,
-  EntityId,
 } from '@/lib/tashjeer/model/v8';
 import { createEntityId, linkKindToRelationType } from '@/lib/tashjeer/model/v8';
+import { resolveOccurrenceIndices } from '@/lib/tashjeer/multi-difference';
 
 /**
- * مفتاح نطاق للتجميع عند تعدد الاختلافات في الموضع نفسه (DM-09).
- * النطاق في النموذج القديم على الأوجه (VariantAlternative) لا على الاختلاف
- * (Variant)، فنجمع معرّفات كل الأوجه. عند غيابها نسقط إلى النطاق العام.
+ * اسم إجراء التصحيح اليدوي لعلاقة التنافي كما يسجَّله المحرر في سجل التعديل.
+ * الترحيل يحوّل كل سطر بهذا الإجراء إلى Correction في v8: اقتراح المحرك
+ * (قبل) ← قرار المحرر (بعد). القيمة ثابتة تعاقدية بين المخزن والترحيل.
  */
-function variantScopeKey(variant: Variant): string {
-  const ids = new Set<string>();
-  for (const alt of variant.alternatives) {
-    for (const id of alt.scope?.narratorIds ?? []) ids.add(id);
-    for (const id of alt.scope?.imamIds ?? []) ids.add(id);
-    for (const id of alt.scope?.pathIds ?? []) ids.add(id);
-  }
-  const sorted = [...ids].sort();
-  return sorted.length > 0 ? `SCOPED:${sorted.join(',')}` : 'ALL';
-}
+export const LOCUS_RELATION_CORRECTION_ACTION = 'تصحيح علاقة التنافي';
 
 /** يحوّل سياق الأداء القديم إلى الجديد (DM-06). */
 function toContext(variant: Variant): RecitationContext {
@@ -161,6 +152,20 @@ export function migrateVariantToDifference(
 
 /** يحوّل رابطا قديما إلى علاقة موحّدة (DM-03). */
 export function migrateLinkToRelation(link: TashjeerLink): Relation {
+  // علاقة الموضع اليدوية (FR-ED-03): طرفاها اختلافان، وقرارها يحدد النوع.
+  if (link.kind === 'DIFFERENCE_TO_DIFFERENCE') {
+    const type: RelationType =
+      link.locusVerdict === 'EXCLUSIVE' ? 'MUTUALLY_EXCLUSIVE' : 'RELATED';
+    return {
+      id: link.id,
+      type,
+      fromId: `DIFFERENCE:${link.from.id}`,
+      toId: `DIFFERENCE:${link.to.id}`,
+      note: link.notes,
+      source: link.origin === 'ENGINE' ? 'engine' : 'editor',
+      createdAt: link.createdAt,
+    };
+  }
   const type: RelationType = linkKindToRelationType(link.kind);
   return {
     id: link.id,
@@ -219,15 +224,9 @@ export function migrateDocumentToV8(
   document: TashjeerDocument,
   options?: { appVersion?: string; profile?: string }
 ): TashjeerDocumentV8 {
-  // حساب occurrenceIndex لكل اختلاف ضمن الموضع+النطاق نفسه (DM-09).
-  const occurrenceCounters = new Map<string, number>();
-  const occurrenceIndex = new Map<EntityId, number>();
-  document.variants.forEach((variant) => {
-    const key = `${variant.startPosition}-${variant.endPosition}-${variantScopeKey(variant)}`;
-    const next = (occurrenceCounters.get(key) ?? 0) + 1;
-    occurrenceCounters.set(key, next);
-    occurrenceIndex.set(variant.id, next);
-  });
+  // فهرس التعدد (DM-09): المخزّن على الاختلاف يُحترم، والمفقود يُشتق
+  // بالترتيب ضمن مجموعة (قارئ × موضع) — الدالة نفسها التي يستعملها المحرر.
+  const occurrenceIndex = resolveOccurrenceIndices(document.variants);
 
   const differences: Difference[] = document.variants.map((variant, index) =>
     migrateVariantToDifference(
@@ -241,7 +240,8 @@ export function migrateDocumentToV8(
   // العلاقات على مستوى المستند من الروابط القديمة.
   const relations: Relation[] = (document.links ?? []).map(migrateLinkToRelation);
 
-  // إلحاق العلاقات المتعلقة بكل اختلاف به (DM-03).
+  // إلحاق العلاقات المتعلقة بكل اختلاف به (DM-03): علاقة الموضع اليدوية بين
+  // اختلافين تُلحَق بهما معا، فكل اختلاف يحمل علاقاته كاملة (FR-ED-03).
   const referencesDifference = (endpoint: string, diffId: string): boolean =>
     endpoint === `DIFFERENCE:${diffId}` ||
     endpoint === diffId ||
@@ -249,13 +249,15 @@ export function migrateDocumentToV8(
     endpoint.includes(`DIFFERENCE:${diffId}::`);
 
   for (const relation of relations) {
-    const target = differences.find(
-      (difference) =>
-        referencesDifference(relation.fromId, difference.id) ||
-        referencesDifference(relation.toId, difference.id)
-    );
-    if (target && !target.relations.some((item) => item.id === relation.id)) {
-      target.relations.push(relation);
+    for (const target of differences) {
+      if (
+        referencesDifference(relation.fromId, target.id) ||
+        referencesDifference(relation.toId, target.id)
+      ) {
+        if (!target.relations.some((item) => item.id === relation.id)) {
+          target.relations.push(relation);
+        }
+      }
     }
   }
 
@@ -277,6 +279,24 @@ export function migrateDocumentToV8(
         alternatives: variant.alternatives,
       },
       at: variant.engineSnapshot.capturedAt,
+      source: 'editor',
+    });
+  }
+
+  // تصحيحات علاقات التنافي اليدوية (FR-ED-03): المحرك يقترح (قبل) والمحرر
+  // يقرر (بعد = النهائي). تُسجَّل في سجل التعديل بإجراء ثابت، وهنا تُرفَع
+  // إلى Correction موحّدة بهدفها (رابط الموضع) وسببها.
+  for (const entry of document.editLog ?? []) {
+    if (entry.action !== LOCUS_RELATION_CORRECTION_ACTION) continue;
+    const change = entry.changes?.find((item) => item.field === 'locusRelation');
+    corrections.push({
+      id: createEntityId('corr'),
+      targetId: entry.targetId,
+      engineResult: change?.before ?? null,
+      editorResult: change?.after ?? null,
+      finalResult: change?.after ?? null,
+      reason: entry.summary,
+      at: entry.at,
       source: 'editor',
     });
   }

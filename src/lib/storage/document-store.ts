@@ -701,6 +701,14 @@ function migrateVariant(variant: Variant, ayahKey: number): Variant {
     variant.recitationMode === 'WAQF_ONLY' || variant.recitationMode === 'WASL_ONLY'
       ? variant.recitationMode
       : undefined;
+  // فهرس التعدد (DM-09): يُحفَظ كما جاء إن كان صالحا، ويُسقَط إن فسد فيُشتق
+  // بالترتيب — لا يُعاد ترقيم الموجودين أبدا (FR-ED-03).
+  const occurrenceIndex =
+    typeof variant.occurrenceIndex === 'number' &&
+    Number.isInteger(variant.occurrenceIndex) &&
+    variant.occurrenceIndex > 0
+      ? variant.occurrenceIndex
+      : undefined;
   const loci = Array.isArray(variant.loci)
     ? variant.loci.map(normalizeLocus).filter((locus) => locus.endPosition >= locus.startPosition)
     : undefined;
@@ -730,6 +738,7 @@ function migrateVariant(variant: Variant, ayahKey: number): Variant {
           ...variant,
           ayahKey,
           recitationMode,
+          ...(occurrenceIndex === undefined ? {} : { occurrenceIndex }),
           startPosition: start.position,
           endPosition: end.position,
           targetKind: 'CHARACTERS',
@@ -747,9 +756,10 @@ function migrateVariant(variant: Variant, ayahKey: number): Variant {
   // تاريخيا، ويحافظ على ثبات ملف التصدير عند دورة استيراد/تصدير قديمة.
   const { characterRange: _ignoredCharacterRange, targetKind, ...legacy } = variant;
   const withLoci = loci && loci.length > 1 ? { loci } : {};
+  const withIndex = occurrenceIndex === undefined ? {} : { occurrenceIndex };
   return targetKind === 'WORDS'
-    ? { ...legacy, ayahKey, recitationMode, startPosition, endPosition, targetKind: 'WORDS', ...withLoci }
-    : { ...legacy, ayahKey, recitationMode, startPosition, endPosition, ...withLoci };
+    ? { ...legacy, ayahKey, recitationMode, startPosition, endPosition, targetKind: 'WORDS', ...withLoci, ...withIndex }
+    : { ...legacy, ayahKey, recitationMode, startPosition, endPosition, ...withLoci, ...withIndex };
 }
 
 function cloneVariants(variants: Variant[]): Variant[] {

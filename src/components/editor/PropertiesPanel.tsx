@@ -23,6 +23,7 @@ import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getImamColor } from '@/lib/tashjeer/color-system';
 import { describeScope, getFullNarratorName, resolveScope } from '@/lib/tashjeer/scope';
 import { StatusBadge } from './VariantsPanel';
+import { LocusDifferences } from './LocusDifferences';
 import { WhyTraceDialog } from './WhyTraceDialog';
 import {
   ManualLinesControls,
@@ -168,6 +169,14 @@ export function PropertiesPanel() {
           <Row label="بلا تشكيل" value={stripHarakat(selectedWord.text)} />
           <Row label="المعرّف" value={selectedWord.id} />
         </Section>
+      )}
+
+      {/* اختلافات الموضع الواحد: كلمة محددة أو موضع القاعدة المحددة */}
+      {(selectedWord ?? selectedVariant) && (
+        <LocusDifferences
+          key={selectedWord?.position ?? selectedVariant?.startPosition ?? 0}
+          position={selectedWord?.position ?? selectedVariant?.startPosition ?? 0}
+        />
       )}
 
       {/* خصائص القاعدة: رقم ترتيب السطر قابل للتحرير دائما، بما فيه المشتق من قاعدة عامة */}

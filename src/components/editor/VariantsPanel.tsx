@@ -287,6 +287,9 @@ export function VariantsPanel() {
         </div>
       </header>
 
+      {/* رسالة تعدد الموضع الواحد: تظهر عند إنشاء اختلاف ثانٍ فأكثر للموضع نفسه، وتُصرَف. */}
+      <MultiDifferenceBanner />
+
       {/* إرشاد منهجي مختصر: كل موضع اختلاف مستقل، والمحرك هو الذي يجمع. */}
       <p className="border-b border-stone-100 bg-emerald-50/60 px-4 py-2 text-[11px] leading-relaxed text-emerald-950">
         علّم الكلمات أو الحروف المتباعدة: كل موضع علامة مستقلة على السطر نفسه، بلا خط يملأ ما
@@ -1009,6 +1012,49 @@ function VariantRow({
         </div>
       </div>
     </li>
+  );
+}
+
+/**
+ * شريط «تعدد الموضع الواحد»: يظهر بعد إنشاء اختلاف لمنطقة بلغت اختلافين
+ * فأكثر، ليؤكد أن الجديد كيان مستقل بفهرس تالٍ لا بديل عن الموجود.
+ */
+function MultiDifferenceBanner() {
+  const notice = useEditorStore((state) => state.lastMultiDifferenceNotice);
+  const clear = useEditorStore((state) => state.clearMultiDifferenceNotice);
+  if (!notice) return null;
+
+  const countLabel =
+    notice.count === 2
+      ? 'اختلافان لموضع واحد'
+      : notice.count <= 10
+        ? `${toArabicDigits(notice.count)} اختلافات لموضع واحد`
+        : `${toArabicDigits(notice.count)} اختلافا لموضع واحد`;
+
+  return (
+    <div
+      role="status"
+      className="flex items-start justify-between gap-2 border-b border-cyan-200 bg-cyan-50/70 px-4 py-2"
+    >
+      <div className="text-[11px] leading-relaxed text-cyan-950">
+        <p className="font-semibold">{countLabel}</p>
+        <p className="mt-0.5 text-cyan-900/80">
+          الموضع: {toArabicDigits(notice.locusLabel)} —{' '}
+          {notice.categories.map((category) => CATEGORY_LABELS[category]).join(' + ')}
+        </p>
+        <p className="mt-0.5 text-cyan-900/70">
+          الجديد مستقل بمعرفه وفهرسه؛ حدّد أي اختلاف في اللوحة المجاورة لتفحّصه.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={clear}
+        className="shrink-0 rounded border border-cyan-300 px-2 py-0.5 text-[10px] text-cyan-900 hover:bg-cyan-100"
+        aria-label="صرف الرسالة"
+      >
+        فهمت
+      </button>
+    </div>
   );
 }
 

@@ -217,22 +217,31 @@ export function decideMerge(
   };
 }
 
-/** يحدّد ما إذا كان اختلافان متنافيين (لا يُضربان وجها) — FR-ED-03/DM-09. */
+/**
+ * يحدّد ما إذا كان اختلافان متنافيين (لا يُضربان وجها) — FR-ED-03/DM-09.
+ *
+ * التنافي **سياسة صريحة قابلة للتعديل من الاستوديو**، لا حكم مثبّت بالكود:
+ * الحكم هنا هو عكس قرار الدمج في `decideMerge` (المصفوفة + القواعد). فالمدّان
+ * متنافيان افتراضيا لأن مدخل `MADD+MADD` في المصفوفة يقول «لا دمج»، ولو غيّر
+ * الاستوديو المدخل إلى دمج (أو حسمت قاعدة بذلك) زال التنافي دون لمس الكود.
+ */
 export function decideMutualExclusion(
   a: string,
   b: string,
   profile: EngineConfig = DEFAULT_SYSTEM_PROFILE
 ): DecisionResult<{ exclusive: boolean; reason: string }> {
   const trace: DecisionTraceStep[] = [];
-  const { merge } = decideMerge(a, b, profile).decision;
-  const exclusive = a === b || !merge;
+  const { merge, reason } = decideMerge(a, b, profile).decision;
+  const exclusive = !merge;
   trace.push({
     stage: 'EXCLUSION',
-    message: exclusive ? `${a} و${b} متنافيان (لا يُضربان)` : `${a} و${b} غير متنافيين`,
+    message: exclusive
+      ? `${a} و${b} متنافيان (لا يُضربان) — ${reason}`
+      : `${a} و${b} غير متنافيين — ${reason}`,
     status: exclusive ? 'blocked' : 'applied',
   });
   return {
-    decision: { exclusive, reason: exclusive ? 'متنافيان أو من نفس النوع' : 'مرتبطان' },
+    decision: { exclusive, reason },
     appliedRules: [],
     skippedRules: [],
     trace,
