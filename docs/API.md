@@ -4,6 +4,37 @@
 
 API المشروع مبني باستخدام Next.js API Routes.
 
+> التخزين المحلي هو مصدر التنفيذ الحالي في المتصفح؛ الواجهات النقية التالية هي عقدة القرار التي تستعملها الصفحات والاختبارات قبل نقل التخزين إلى API دائم.
+
+---
+
+## Engine Studio وDecision API
+
+لا تتخذ الواجهة قرارًا مستقلًا. كل قرار دمج/تنافٍ/اختلاف/ترتيب يمر عبر:
+
+```ts
+import {
+  resolveDifference,
+  resolveMerge,
+  resolveRelation,
+  resolveConnection,
+  resolveOrder,
+  resolveVariant,
+} from '@/lib/tashjeer/decision/api';
+```
+
+كل دالة تعيد `decision` و`appliedRules` و`skippedRules` و`trace`. ملف السياسة `EngineConfig` في `engine-config-store.ts` يحتوي على مجموعات الأولوية، القواعد ذات المعرّفات الثابتة، سلم التعارض، ترتيب التنفيذ، مصفوفة الدمج، العلاقات والسياقات.
+
+### تصدير/استيراد إعداد المحرك
+
+- `serializeEngineConfig(config)` يصدر حزمة حتمية منظمة (`policies`، `rules`، `priorities`، `relations`، `contexts`، `merge-policies`، `schema-version`) مرتّبة بالمعرّفات، بلا طوابع زمنية؛ تغيير `priority` يغيّر سطر القيمة فقط.
+- `toCanonicalConfig(config)` متاح للتكاملات التي تحتاج الشكل المسطح الداخلي.
+- `validateEngineConfig(value)` يفحص الإصدار، الحقول، المعرّفات المكررة ومجموعات الأولوية.
+- `importEngineConfigText(text)` يحلل ويفحص ويطبّع دون الكتابة إلى التخزين؛ صفحة `/studio` تعرض المعاينة ثم تطبق الاستيراد كمسودة غير محفوظة.
+- `saveEngineConfig(config)` هو مسار الحفظ الوحيد لملف السياسة.
+
+إعدادات الرسم والترتيب القديمة (`engine-settings.ts`) لها واجهة تحرير واحدة في `/studio?section=settings`؛ تبويب `/admin` القديم يعيد توجيه المستخدم إليها ولا يملك نسخة ثانية.
+
 ---
 
 ## نقاط النهاية (Endpoints)

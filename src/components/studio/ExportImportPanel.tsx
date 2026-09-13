@@ -11,12 +11,14 @@ import { useState } from 'react';
 
 interface ExportImportPanelProps {
   onExport: () => string;
+  onPreviewImport: (text: string) => { valid: boolean; errors: string[]; warnings: string[] };
   onImport: (text: string) => { valid: boolean; errors: string[]; warnings: string[] };
 }
 
-export function ExportImportPanel({ onExport, onImport }: ExportImportPanelProps) {
+export function ExportImportPanel({ onExport, onPreviewImport, onImport }: ExportImportPanelProps) {
   const [text, setText] = useState('');
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; messages: string[] } | null>(null);
+  const [validated, setValidated] = useState(false);
 
   const handleExport = () => {
     setText(onExport());
@@ -33,10 +35,21 @@ export function ExportImportPanel({ onExport, onImport }: ExportImportPanelProps
     }
   };
 
+  const handlePreview = () => {
+    const result = onPreviewImport(text);
+    setValidated(result.valid);
+    if (result.valid) {
+      setFeedback({ kind: 'ok', messages: [...(result.warnings ?? []), 'الفحص سليم. راجع النص ثم اضغط «تطبيق الاستيراد»؛ لم يُغيّر الملف بعد.'] });
+    } else {
+      setFeedback({ kind: 'err', messages: result.errors.length > 0 ? result.errors : ['فشل فحص الاستيراد.'] });
+    }
+  };
+
   const handleImport = () => {
     const result = onImport(text);
+    setValidated(false);
     if (result.valid) {
-      setFeedback({ kind: 'ok', messages: ['استورد الإعداد بنجاح. احفظ لتثبيته.'] });
+      setFeedback({ kind: 'ok', messages: ['استورد الإعداد بنجاح كمسودة غير محفوظة. راجع بوابة النشر قبل التثبيت.'] });
     } else {
       setFeedback({ kind: 'err', messages: result.errors.length > 0 ? result.errors : ['فشل الاستيراد.'] });
     }
@@ -58,9 +71,10 @@ export function ExportImportPanel({ onExport, onImport }: ExportImportPanelProps
         <button type="button" onClick={handleCopy} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
           نسخ النص
         </button>
-        <button type="button" onClick={handleImport} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-          استيراد من النص
+        <button type="button" onClick={handlePreview} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          فحص ومعاينة الاستيراد
         </button>
+        {validated && <button type="button" onClick={handleImport} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700">تطبيق الاستيراد</button>}
       </div>
 
       {feedback && (

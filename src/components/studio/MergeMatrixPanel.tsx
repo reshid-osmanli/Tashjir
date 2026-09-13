@@ -8,7 +8,8 @@
 'use client';
 
 import { useState } from 'react';
-import type { MergeMatrixEntry } from '@/lib/tashjeer/model/v8';
+import type { MergeMatrixEntry, RelationPolicyEntry, RelationPolicyKind } from '@/lib/tashjeer/model/v8';
+import { createEntityId } from '@/lib/tashjeer/model/v8';
 import { DIFFERENCE_TYPES, DIFFERENCE_TYPE_LABELS } from './labels';
 
 interface MergeMatrixPanelProps {
@@ -16,13 +17,42 @@ interface MergeMatrixPanelProps {
   onAdd: (entry: MergeMatrixEntry) => void;
   onUpdate: (index: number, patch: Partial<MergeMatrixEntry>) => void;
   onRemove: (index: number) => void;
+  relations?: RelationPolicyEntry[];
+  onAddRelation?: (entry: RelationPolicyEntry) => void;
+  onUpdateRelation?: (index: number, patch: Partial<RelationPolicyEntry>) => void;
+  onRemoveRelation?: (index: number) => void;
 }
 
-export function MergeMatrixPanel({ matrix, onAdd, onUpdate, onRemove }: MergeMatrixPanelProps) {
+const RELATION_LABELS: Record<RelationPolicyKind, string> = {
+  RELATED: 'مترابطان',
+  INDEPENDENT: 'مستقلان',
+  PARENT_CHILD: 'أب ← ابن',
+  MERGEABLE: 'قابلان للدمج',
+  MUTUALLY_EXCLUSIVE: 'متنافيان',
+};
+
+export function MergeMatrixPanel({
+  matrix,
+  onAdd,
+  onUpdate,
+  onRemove,
+  relations = [],
+  onAddRelation,
+  onUpdateRelation,
+  onRemoveRelation,
+}: MergeMatrixPanelProps) {
   const [draft, setDraft] = useState<MergeMatrixEntry>({
     a: 'MADD',
     b: 'TAHQIQ',
     merge: true,
+    priority: 70,
+    reason: '',
+  });
+  const [relationDraft, setRelationDraft] = useState<RelationPolicyEntry>({
+    id: '',
+    a: 'MADD',
+    b: 'TAHQIQ',
+    relation: 'RELATED',
     priority: 70,
     reason: '',
   });
@@ -184,6 +214,47 @@ export function MergeMatrixPanel({ matrix, onAdd, onUpdate, onRemove }: MergeMat
         >
           إضافة
         </button>
+      </div>
+
+      {/* سياسات العلاقات بين الكيانات: مستقلة عن صفوف الدمج وتُقرأ عبر Resolver. */}
+      <div className="space-y-3 border-t border-gray-100 pt-5">
+        <div>
+          <h4 className="font-bold text-gray-900">العلاقات بين الكيانات</h4>
+          <p className="mt-1 text-sm text-gray-500">Related · Independent · Parent-Child · Mergeable · Mutually Exclusive. لا تُنسخ السياسة إلى مواضع الآيات.</p>
+        </div>
+        {relations.length > 0 && (
+          <div className="overflow-x-auto rounded-lg border border-gray-100">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-right text-gray-500">
+                <tr><th className="px-2 py-1.5">أ</th><th className="px-2 py-1.5">ب</th><th className="px-2 py-1.5">العلاقة</th><th className="px-2 py-1.5">الأولوية</th><th className="px-2 py-1.5">السبب</th><th /></tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {relations.map((entry, index) => (
+                  <tr key={entry.id}>
+                    <td className="px-2 py-1.5">{DIFFERENCE_TYPE_LABELS[entry.a] ?? entry.a}</td>
+                    <td className="px-2 py-1.5">{DIFFERENCE_TYPE_LABELS[entry.b] ?? entry.b}</td>
+                    <td className="px-2 py-1.5">
+                      <select value={entry.relation} onChange={(event) => onUpdateRelation?.(index, { relation: event.target.value as RelationPolicyKind })} className="rounded border border-gray-300 px-1.5 py-1 text-xs">
+                        {(Object.keys(RELATION_LABELS) as RelationPolicyKind[]).map((kind) => <option key={kind} value={kind}>{RELATION_LABELS[kind]}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-2 py-1.5"><input type="number" value={entry.priority} onChange={(event) => onUpdateRelation?.(index, { priority: Number(event.target.value) })} className="w-16 rounded border border-gray-300 px-1.5 py-1 text-xs" /></td>
+                    <td className="px-2 py-1.5"><input type="text" value={entry.reason} onChange={(event) => onUpdateRelation?.(index, { reason: event.target.value })} className="w-full min-w-28 rounded border border-gray-300 px-1.5 py-1 text-xs" /></td>
+                    <td className="px-2 py-1.5"><button type="button" onClick={() => onRemoveRelation?.(index)} className="text-xs text-red-600 hover:underline">حذف</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="flex flex-wrap items-end gap-2 rounded-lg bg-gray-50 p-3">
+          <label className="space-y-1 text-xs text-gray-500">أ<select value={relationDraft.a} onChange={(event) => setRelationDraft((current) => ({ ...current, a: event.target.value }))} className="block rounded border border-gray-300 px-2 py-1.5 text-sm">{DIFFERENCE_TYPES.map((type) => <option key={type} value={type}>{DIFFERENCE_TYPE_LABELS[type]}</option>)}</select></label>
+          <label className="space-y-1 text-xs text-gray-500">ب<select value={relationDraft.b} onChange={(event) => setRelationDraft((current) => ({ ...current, b: event.target.value }))} className="block rounded border border-gray-300 px-2 py-1.5 text-sm">{DIFFERENCE_TYPES.map((type) => <option key={type} value={type}>{DIFFERENCE_TYPE_LABELS[type]}</option>)}</select></label>
+          <label className="space-y-1 text-xs text-gray-500">العلاقة<select value={relationDraft.relation} onChange={(event) => setRelationDraft((current) => ({ ...current, relation: event.target.value as RelationPolicyKind }))} className="block rounded border border-gray-300 px-2 py-1.5 text-sm">{(Object.keys(RELATION_LABELS) as RelationPolicyKind[]).map((kind) => <option key={kind} value={kind}>{RELATION_LABELS[kind]}</option>)}</select></label>
+          <label className="space-y-1 text-xs text-gray-500">الأولوية<input type="number" value={relationDraft.priority} onChange={(event) => setRelationDraft((current) => ({ ...current, priority: Number(event.target.value) }))} className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-sm" /></label>
+          <label className="min-w-40 flex-1 space-y-1 text-xs text-gray-500">السبب<input type="text" value={relationDraft.reason} onChange={(event) => setRelationDraft((current) => ({ ...current, reason: event.target.value }))} placeholder="حسب السياق" className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm" /></label>
+          <button type="button" disabled={!onAddRelation} onClick={() => { onAddRelation?.({ ...relationDraft, id: createEntityId('rel'), reason: relationDraft.reason.trim() || 'سياسة علاقة' }); setRelationDraft((current) => ({ ...current, reason: '' })); }} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50">إضافة علاقة</button>
+        </div>
       </div>
     </div>
   );
