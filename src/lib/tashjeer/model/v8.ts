@@ -493,6 +493,26 @@ export interface MergeMatrixEntry {
   reason: string;
 }
 
+/**
+ * سياسة علاقة بين كيانين في طبقة القرار (FR-ES-05/06).
+ * تُخزَّن بالمعرّفات/الأنواع فقط، ولا تُنسخ إلى مستندات الآيات.
+ */
+export type RelationPolicyKind =
+  | 'RELATED'
+  | 'INDEPENDENT'
+  | 'PARENT_CHILD'
+  | 'MERGEABLE'
+  | 'MUTUALLY_EXCLUSIVE';
+
+export interface RelationPolicyEntry {
+  id: EntityId;
+  a: string;
+  b: string;
+  relation: RelationPolicyKind;
+  priority: number;
+  reason: string;
+}
+
 /** سياقات الوقف/الوصل/ممنوع الوصل (FR-ES-16). */
 export interface EngineContexts {
   waqf: EntityId[];
@@ -515,6 +535,8 @@ export interface EngineConfig {
   /** ترتيب التنفيذ (FR-ES-04). */
   executionOrder: string[];
   mergeMatrix: MergeMatrixEntry[];
+  /** سياسات العلاقات الرسومية؛ اختيارية للتوافق مع ملفات الإصدار ١ السابقة. */
+  relations?: RelationPolicyEntry[];
   contexts: EngineContexts;
 }
 
