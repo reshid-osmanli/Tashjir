@@ -11,6 +11,7 @@ import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { Narrator, ReadingImam, TransmissionPath } from '@/types';
 import {
+  auditStoredCatalog,
   catalogImamsInOrder,
   catalogNarratorsInOrder,
   catalogPathsForNarrator,
@@ -23,8 +24,10 @@ import {
   readTransmissionCatalog,
   resetTransmissionCatalog,
   saveTransmissionCatalog,
+  type CatalogAudit,
   type TransmissionCatalog,
 } from '@/lib/transmissions/catalog';
+import { describeDisplayOrderConflicts } from '@/lib/tashjeer/display-order';
 import {
   DEFAULT_ENGINE_SETTINGS,
   readEngineSettings,
@@ -65,6 +68,7 @@ async function resolveOrderConflict<T extends { id: string; order: number }>(
 
 const TABS = [
   { id: 'transmissions', label: 'القراء والرواة والطرق' },
+  { id: 'display-order', label: 'ترتيب الظهور' },
   { id: 'engine', label: 'محرك التشجير' },
 ] as const;
 
@@ -81,14 +85,18 @@ export default function AdminPage() {
   const [engine, setEngine] = useState<TashjeerEngineSettings>(() => ({ ...DEFAULT_ENGINE_SETTINGS }));
   const [editor, setEditor] = useState<EditorTarget>(null);
   const [message, setMessage] = useState('');
+  // ما صحّحه التطبيع تلقائيًا في الكتالوج المحفوظ (DM-04): يُعرض ولا يُخفى.
+  const [audit, setAudit] = useState<CatalogAudit | null>(null);
 
   useEffect(() => {
+    setAudit(auditStoredCatalog());
     setCatalog(readTransmissionCatalog());
     setEngine(readEngineSettings());
   }, []);
 
   const persistCatalog = (next: TransmissionCatalog, successMessage: string) => {
     setCatalog(saveTransmissionCatalog(next));
+    setAudit(auditStoredCatalog());
     setMessage(successMessage);
   };
 
@@ -139,7 +147,30 @@ export default function AdminPage() {
         ))}
       </nav>
 
-      {tab === 'transmissions' ? (
+      {audit && (audit.conflicts.length > 0 || audit.legacySchema) && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900">
+          <p className="font-semibold">
+            صُحّحت أرقام الترتيب الصريحة تلقائيًا عند قراءة الكتالوج المحفوظ
+            {audit.legacySchema ? ` (إصدار البيانات: ${toArabicDigits(audit.storedVersion ?? 0)})` : ''}.
+          </p>
+          {audit.legacySchema && (
+            <p className="mt-1">
+              بيانات أقدم من توحيد الرقم الصريح: عُبّئ رقم ظهور{' '}
+              {toArabicDigits(audit.migratedNarrators)} راويًا من ترتيب الطيبة القائم، فالظهور
+              المعتاد لم يتغير. راجع الأرقام في تبويب «ترتيب الظهور» ثم احفظ لتثبيتها.
+            </p>
+          )}
+          {audit.conflicts.length > 0 && (
+            <p className="mt-1">
+              تعارضات فُضّت بالأصغر معرفًا: {describeDisplayOrderConflicts(audit.conflicts)}.
+            </p>
+          )}
+        </div>
+      )}
+
+      {tab === 'display-order' ? (
+        <DisplayOrderManager catalog={catalog} onPersist={persistCatalog} />
+      ) : tab === 'transmissions' ? (
         <TransmissionManager
           catalog={catalog}
           editor={editor}
@@ -198,28 +229,35 @@ function TransmissionManager({
   const narrators = useMemo(() => catalogNarratorsInOrder(catalog), [catalog]);
 
   // سحب وإفلات لإعادة الترتيب (FR-ED-14): كل إفلات يعيد الترقيم 1..n صراحة.
+  // أقران الراوي هم **كل الرواة** لا رواة إمامه، فسحبه داخل الكتالوج المتشعب
+  // يأخذ موضع الهدف في الترتيب العام، والسحب بين قارئين مختلفين جائز.
   const [drag, setDrag] = useState<{ kind: 'IMAM' | 'NARRATOR' | 'PATH'; id: string; group?: string } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
 
+  /** هل يصلح هذا الإفلات؟ الطرق وحدها مقيّدة براويها لأن أقرانها داخله. */
+  const canDropOn = (kind: 'IMAM' | 'NARRATOR' | 'PATH', group?: string) =>
+    Boolean(drag) && drag!.kind === kind && (kind === 'NARRATOR' || drag!.group === group);
+
   const dropOn = (kind: 'IMAM' | 'NARRATOR' | 'PATH', targetId: string, group?: string) => {
-    if (!drag || drag.kind !== kind || drag.group !== group || drag.id === targetId) {
+    if (!canDropOn(kind, group) || drag!.id === targetId) {
       setDrag(null);
       setDropTarget(null);
       return;
     }
     if (kind === 'IMAM') {
       const toIndex = imams.findIndex((imam) => imam.id === targetId);
-      onPersist({ ...catalog, imams: movePeer(catalog.imams, drag.id, toIndex) }, 'أُعيد ترتيب القراء.');
+      onPersist({ ...catalog, imams: movePeer(catalog.imams, drag!.id, toIndex) }, 'أُعيد ترتيب القراء.');
     } else if (kind === 'NARRATOR') {
-      const peers = catalog.narrators.filter((narrator) => narrator.imamId === group);
-      const sorted = [...peers].sort((a, b) => a.order - b.order);
-      const toIndex = sorted.findIndex((narrator) => narrator.id === targetId);
-      onPersist({ ...catalog, narrators: replacePeers(catalog.narrators, movePeer(peers, drag.id, toIndex)) }, 'أُعيد ترتيب الرواة.');
+      const toIndex = narrators.findIndex((narrator) => narrator.id === targetId);
+      onPersist(
+        { ...catalog, narrators: movePeer(catalog.narrators, drag!.id, toIndex) },
+        `أُعيد ترتيب الرواة: صار رقم ${narrators[toIndex]?.name ?? ''} للساحب.`
+      );
     } else {
       const peers = catalog.paths.filter((path) => path.narratorId === group);
       const sorted = [...peers].sort((a, b) => a.order - b.order);
       const toIndex = sorted.findIndex((path) => path.id === targetId);
-      onPersist({ ...catalog, paths: replacePeers(catalog.paths, movePeer(peers, drag.id, toIndex)) }, 'أُعيد ترتيب الطرق.');
+      onPersist({ ...catalog, paths: replacePeers(catalog.paths, movePeer(peers, drag!.id, toIndex)) }, 'أُعيد ترتيب الطرق.');
     }
     setDrag(null);
     setDropTarget(null);
@@ -233,7 +271,7 @@ function TransmissionManager({
       setDrag({ kind, id, group });
     },
     onDragOver: (event: React.DragEvent) => {
-      if (!drag || drag.kind !== kind || drag.group !== group) return;
+      if (!canDropOn(kind, group)) return;
       event.preventDefault();
       event.stopPropagation();
       setDropTarget(id);
@@ -386,13 +424,18 @@ function TransmissionManager({
                           <li key={narrator.id} className={`px-4 py-3 ${dropClass(narrator.id)}`} {...dragProps('NARRATOR', narrator.id, imam.id)}>
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="flex items-center gap-2">
-                                <span className="cursor-grab select-none text-stone-300 hover:text-stone-500 active:cursor-grabbing" title="اسحب لإعادة ترتيب رواة هذا القارئ" aria-hidden>⠿</span>
+                                <span className="cursor-grab select-none text-stone-300 hover:text-stone-500 active:cursor-grabbing" title="اسحب لتغيير ترتيب ظهور الراوي بين كل الرواة" aria-hidden>⠿</span>
                                 <span className="flex h-7 min-w-7 items-center justify-center rounded bg-emerald-700 px-1 text-sm font-bold text-white" style={{ fontFamily: "'Amiri Quran', serif" }}>
                                   {narrator.symbol || '—'}
                                 </span>
                                 <div>
-                                  <p className="text-sm font-semibold text-stone-900">{narrator.name}</p>
-                                  <p className="text-[11px] text-stone-500">ترتيب الراوي: {toArabicDigits(narrator.order)} · الطيبة: {narrator.legacyOrderInTayyibah != null ? toArabicDigits(narrator.legacyOrderInTayyibah) : '—'}</p>
+                                  <p className="text-sm font-semibold text-stone-900">
+                                    <span className="text-emerald-800">{toArabicDigits(narrator.order)}.</span> {narrator.name}
+                                  </p>
+                                  <p className="text-[11px] text-stone-500">
+                                    ترتيب الظهور بين كل الرواة: {toArabicDigits(narrator.order)} · الطيبة (مرجع):{' '}
+                                    {narrator.legacyOrderInTayyibah != null ? toArabicDigits(narrator.legacyOrderInTayyibah) : '—'}
+                                  </p>
                                 </div>
                               </div>
                               <div className="flex gap-1.5">
@@ -412,7 +455,7 @@ function TransmissionManager({
                                         {path.symbol ? `${path.symbol} · ` : ''}
                                         {path.shortName}
                                       </span>
-                                      <span className="block truncate text-[10px] text-stone-500">{toArabicDigits(path.order)} · {path.code}</span>
+                                      <span className="block truncate text-[10px] text-stone-500">ترتيب الظهور {toArabicDigits(path.order)} · {path.code}</span>
                                     </span>
                                     <span className="flex shrink-0 gap-1">
                                       <button type="button" onClick={() => onOpenEditor({ kind: 'PATH', id: path.id })} className="text-[10px] text-emerald-800 hover:underline">تعديل</button>
@@ -523,7 +566,7 @@ function ImamForm({
     <TextInput label="اسم القارئ" value={name} onChange={setName} required />
     <div className="grid grid-cols-3 gap-2">
       <TextInput label="الرمز" value={symbol} onChange={setSymbol} placeholder="أ" />
-      <TextInput label="الترتيب" value={String(order)} onChange={(next) => setOrder(Number(next))} type="number" required />
+      <TextInput label="رقم ترتيب الظهور" value={String(order)} onChange={(next) => setOrder(Number(next))} type="number" required />
       <TextInput label="البلد" value={region} onChange={setRegion} />
     </div>
     <p className="text-[11px] leading-relaxed text-stone-500">
@@ -550,8 +593,8 @@ function NarratorForm({
   const [name, setName] = useState(value?.name ?? '');
   const [imamId, setImamId] = useState(value?.imamId ?? initialImamId ?? catalog.imams[0]?.id ?? '');
   const [symbol, setSymbol] = useState(value?.symbol ?? '');
-  const [order, setOrder] = useState(value?.order ?? 1);
-  const [tayyibahOrder, setTayyibahOrder] = useState(value?.legacyOrderInTayyibah ?? catalog.narrators.length + 1);
+  // رقم الترتيب الصريح للظهور: عام بين **كل الرواة**، لا داخل الإمام.
+  const [order, setOrder] = useState(value?.order ?? catalog.narrators.length + 1);
   const [slug, setSlug] = useState(value?.slug ?? '');
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -562,12 +605,13 @@ function NarratorForm({
       imamId,
       symbol: symbol.trim(),
       order: Math.max(1, Number(order) || 1),
-      legacyOrderInTayyibah: Math.max(1, Number(tayyibahOrder) || 1),
+      // ترتيب الطيبة مرجع تاريخي لا يُعاد توليده من رقم الظهور: يبقى كما حُفظ،
+      // والجديد الذي لا أصل له في الطيبة يبقى بلا مرجع («—» في القائمة).
+      legacyOrderInTayyibah: value?.legacyOrderInTayyibah,
       slug: slug.trim() || undefinedSlug(name),
     };
-    // الأقران: رواة الإمام نفسه (الترتيب داخل الإمام).
-    const peers = catalog.narrators.filter((item) => item.imamId === imamId || item.id === narrator.id);
-    const resolved = await resolveOrderConflict(peers, narrator, (peer) => peer.name);
+    // الأقران: كل الرواة (FR-ED-14). التعارض يُعرض كميا ثم يُحل بإزاحة.
+    const resolved = await resolveOrderConflict(catalog.narrators, narrator, (peer) => peer.name);
     if (!resolved) return;
     const kept = value ? catalog.narrators : [...catalog.narrators, narrator];
     onSave(
@@ -581,11 +625,25 @@ function NarratorForm({
       <option value="">اختر القارئ</option>
       {catalogImamsInOrder(catalog).map((imam) => <option key={imam.id} value={imam.id}>{imam.name}</option>)}
     </SelectInput>
-    <div className="grid grid-cols-3 gap-2">
+    <div className="grid grid-cols-2 gap-2">
       <TextInput label="الرمز" value={symbol} onChange={setSymbol} placeholder="ب" />
-      <TextInput label="ترتيبه" value={String(order)} onChange={(next) => setOrder(Number(next))} type="number" required />
-      <TextInput label="ترتيب الطيبة" value={String(tayyibahOrder)} onChange={(next) => setTayyibahOrder(Number(next))} type="number" required />
+      <TextInput
+        label="رقم ترتيب الظهور"
+        value={String(order)}
+        onChange={(next) => setOrder(Number(next))}
+        type="number"
+        required
+      />
     </div>
+    <p className="rounded bg-stone-50 px-2.5 py-2 text-[11px] leading-relaxed text-stone-600">
+      الرقم الصريح هو الذي يحكم ظهور الراوي في كل الواجهات: بجانب الأسطر، وفي محدد
+      النطاقات، وفي التصفية، وفي ترتيب الأمة، وفي التصدير. الاسم والرمز لا يحكمان
+      شيئا. ترتيب الطيبة المحفوظ لهذا الراوي:{' '}
+      <strong>
+        {value?.legacyOrderInTayyibah != null ? toArabicDigits(value.legacyOrderInTayyibah) : '—'}
+      </strong>{' '}
+      (مرجع تاريخي لا يتغير من هنا).
+    </p>
     <TextInput label="المعرّف المختصر" value={slug} onChange={setSlug} placeholder="qalun" />
   </EntityForm>;
 }
@@ -645,10 +703,11 @@ function PathForm({
     <div className="grid grid-cols-3 gap-2">
       <TextInput label="رمز الطريق" value={symbol} onChange={setSymbol} placeholder="أز" />
       <TextInput label="الرمز/الكود" value={code} onChange={setCode} placeholder="warsh-azraq" />
-      <TextInput label="الترتيب" value={String(order)} onChange={(next) => setOrder(Number(next))} type="number" required />
+      <TextInput label="رقم ترتيب الظهور" value={String(order)} onChange={(next) => setOrder(Number(next))} type="number" required />
     </div>
     <p className="text-[11px] leading-relaxed text-stone-500">
-      إن انفرد الطريق بالوجه يُطبع <strong>اسمه</strong> على السطر («الأزرق»). الرمز اختياري يظهر في الدليل
+      رقم الطريق صريح بين طرق راويه، وموضعه العام مشتق من رقم راويه فلا يقفز طريق
+      على راوٍ آخر. إن انفرد الطريق بالوجه يُطبع <strong>اسمه</strong> على السطر («الأزرق»). الرمز اختياري يظهر في الدليل
       والبطاقات. وإذا اجتمع طريقاه طُبع رمز الراوي.
     </p>
     <label className="flex items-center gap-2 text-xs text-stone-700">
@@ -656,6 +715,425 @@ function PathForm({
       طريق معتمد في الكتالوج
     </label>
   </EntityForm>;
+}
+
+// ==================== ترتيب الظهور الصريح (FR-ED-14، DM-04) ====================
+//
+// هذه اللوحة هي المكان الوحيد الذي يُضبط فيه **رقم الظهور** لكل قارئ وراوٍ
+// وطريق. القاعدة التي تنفذها:
+//
+//   • الرقم صريح وقابل للتحرير، ولا رقمان متساويان أبدًا: إدخال رقم مشغول
+//     يعرض تسوية كمية («إدراج مع إزاحة») بتأكيد قبل أن يقع أي تغيير.
+//   • السحب اختصار لكتابة الأرقام: كل إفلات يعيد ترقيم الأقران ١..ن صراحة،
+//     فلا يُخزَّن «ترتيب قائمة» ضمني يمكن أن يختلف عن الأرقام.
+//   • المعرّفات مقدسة: لا يتغير معرّف بتغيير الترتيب، ولا يتغير الترتيب
+//     بتغيير الاسم أو الرمز.
+
+/** صف واحد في قائمة ترتيب الظهور. */
+interface OrderRow {
+  id: string;
+  /** الرقم الصريح الحالي. */
+  order: number;
+  label: string;
+  note?: string;
+  symbol?: string;
+}
+
+function DisplayOrderManager({
+  catalog,
+  onPersist,
+}: {
+  catalog: TransmissionCatalog;
+  onPersist: (catalog: TransmissionCatalog, message: string) => void;
+}) {
+  const imams = useMemo(() => catalogImamsInOrder(catalog), [catalog]);
+  const narrators = useMemo(() => catalogNarratorsInOrder(catalog), [catalog]);
+
+  /** يكتب رقمًا صريحًا لأحد الأئمة مع فضّ التعارض بتأكيد كمي. */
+  const setImamOrder = async (imam: ReadingImam, order: number) => {
+    if (!Number.isFinite(order) || order < 1 || order === imam.order) return;
+    const next = await resolveOrderConflict(
+      catalog.imams,
+      { ...imam, order: Math.round(order) },
+      (peer) => peer.name
+    );
+    if (!next) return;
+    onPersist({ ...catalog, imams: next }, `صار رقم ظهور القارئ ${imam.name}: ${toArabicDigits(Math.round(order))}.`);
+  };
+
+  const moveImam = (id: string, toIndex: number) => {
+    onPersist({ ...catalog, imams: movePeer(catalog.imams, id, toIndex) }, 'أُعيدت أرقام ظهور القراء.');
+  };
+
+  /** يكتب رقمًا صريحًا لراوٍ بين **كل الرواة**. */
+  const setNarratorOrder = async (narrator: Narrator, order: number) => {
+    if (!Number.isFinite(order) || order < 1 || order === narrator.order) return;
+    const next = await resolveOrderConflict(
+      catalog.narrators,
+      { ...narrator, order: Math.round(order) },
+      (peer) => peer.name
+    );
+    if (!next) return;
+    onPersist(
+      { ...catalog, narrators: replacePeers(catalog.narrators, next) },
+      `صار رقم ظهور الراوي ${narrator.name}: ${toArabicDigits(Math.round(order))}.`
+    );
+  };
+
+  const moveNarrator = (id: string, toIndex: number) => {
+    onPersist({ ...catalog, narrators: movePeer(catalog.narrators, id, toIndex) }, 'أُعيدت أرقام ظهور الرواة.');
+  };
+
+  /** يكتب رقمًا صريحًا لطريق بين طرق راويه. */
+  const setPathOrder = async (path: TransmissionPath, order: number) => {
+    if (!Number.isFinite(order) || order < 1 || order === path.order) return;
+    const peers = catalog.paths.filter((item) => item.narratorId === path.narratorId);
+    const next = await resolveOrderConflict(
+      peers,
+      { ...path, order: Math.round(order) },
+      (peer) => peer.shortName
+    );
+    if (!next) return;
+    onPersist(
+      { ...catalog, paths: replacePeers(catalog.paths, next) },
+      `صار رقم ظهور الطريق ${path.shortName}: ${toArabicDigits(Math.round(order))}.`
+    );
+  };
+
+  const movePath = (path: TransmissionPath, toIndex: number) => {
+    const peers = catalog.paths.filter((item) => item.narratorId === path.narratorId);
+    onPersist(
+      { ...catalog, paths: replacePeers(catalog.paths, movePeer(peers, path.id, toIndex)) },
+      'أُعيدت أرقام ظهور الطرق.'
+    );
+  };
+
+  /**
+   * يعيد أرقام ظهور الرواة إلى ترتيب الطيبة المحفوظ.
+   *
+   * مرجع للطوارئ بعد تجارب إعادة الترتيب: لا يمسّ المعرّفات ولا الرموز ولا
+   * الأسماء، ويطلب تأكيدًا كميا لأنه يعيد كتابة أرقام كل الرواة.
+   */
+  const restoreTayyibah = async () => {
+    const withLegacy = catalog.narrators.filter((narrator) => narrator.legacyOrderInTayyibah != null);
+    if (withLegacy.length === 0) return;
+    const changed = withLegacy.filter((narrator) => narrator.order !== narrator.legacyOrderInTayyibah);
+    const ok = await confirmAction({
+      title: 'إعادة أرقام ظهور الرواة إلى ترتيب الطيبة',
+      message:
+        'يُكتب رقم كل راوٍ من ترتيب الطيبة المحفوظ له، وتُفضّ التعارضات بالأصغر معرفًا. المعرّفات والرموز والأسماء لا تتغير.',
+      impacts: [
+        { label: 'راوٍ سيتغير رقمه', count: changed.length },
+        { label: 'راوٍ بلا ترتيب طيبة محفوظ (يبقى رقمه)', count: catalog.narrators.length - withLegacy.length },
+      ],
+      undoable: false,
+      confirmLabel: 'استعادة ترتيب الطيبة',
+    });
+    if (!ok) return;
+
+    const byId = new Map(withLegacy.map((narrator) => [narrator.id, narrator.legacyOrderInTayyibah!]));
+    onPersist(
+      {
+        ...catalog,
+        narrators: catalog.narrators.map((narrator) =>
+          byId.has(narrator.id) ? { ...narrator, order: byId.get(narrator.id)! } : narrator
+        ),
+      },
+      'أُعيدت أرقام ظهور الرواة إلى ترتيب الطيبة.'
+    );
+  };
+
+  const imamRows: OrderRow[] = imams.map((imam) => ({
+    id: imam.id,
+    order: imam.order,
+    label: imam.name,
+    note: imam.region || imam.slug,
+    symbol: imam.symbol,
+  }));
+
+  const narratorRows: OrderRow[] = narrators.map((narrator) => ({
+    id: narrator.id,
+    order: narrator.order,
+    label: narrator.name,
+    note: imams.find((imam) => imam.id === narrator.imamId)?.name ?? narrator.imamId,
+    symbol: narrator.symbol,
+  }));
+
+  return (
+    <div className="space-y-5">
+      <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs leading-relaxed text-emerald-950">
+        <p className="font-semibold">الترتيب رقم صريح، لا اسم ولا تاريخ إضافة.</p>
+        <p className="mt-1">
+          الرقم المكتوب هنا هو الذي يحكم الظهور في كل الواجهات: بطاقات الرموز بجانب
+          الأسطر، محدد النطاقات، التصفية بقارئ، ترتيب الأمة في التركيب، المصحف
+          (/quran)، التتبع (/tracking)، وملف التصدير. تعديل الاسم أو الرمز أو إعداد
+          العرض لا يحرّك أحدًا من موضعه؛ ولا يغيّر الترتيب إلا تغيير الرقم نفسه.
+        </p>
+        <p className="mt-1 text-emerald-800">
+          أقران القارئ: كل القراء. أقران الراوي: **كل الرواة** (لا رواة إمامه). أقران
+          الطريق: طرق راويه — وموضع الطريق العام مشتق من رقم راويه.
+        </p>
+      </section>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <OrderList
+          title="ترتيب ظهور القراء (الأئمة)"
+          hint="اسحب أو اكتب الرقم. إدخال رقم مشغول يعرض تسوية بإزاحة من بعده."
+          rows={imamRows}
+          onSetOrder={(id, order) => {
+            const imam = catalog.imams.find((item) => item.id === id);
+            if (imam) void setImamOrder(imam, order);
+          }}
+          onMove={(id, toIndex) => moveImam(id, toIndex)}
+        />
+
+        <div className="space-y-4">
+          <OrderList
+            title="ترتيب ظهور الرواة (بين كل الرواة)"
+            hint="هذا هو ترتيب الأمة الذي تُفرَز به الأسطر والبطاقات."
+            rows={narratorRows}
+            onSetOrder={(id, order) => {
+              const narrator = catalog.narrators.find((item) => item.id === id);
+              if (narrator) void setNarratorOrder(narrator, order);
+            }}
+            onMove={(id, toIndex) => moveNarrator(id, toIndex)}
+            extraAction={
+              <SecondaryButton onClick={() => void restoreTayyibah()}>
+                استعادة ترتيب الطيبة
+              </SecondaryButton>
+            }
+          />
+        </div>
+      </div>
+
+      <section className="rounded-xl border border-stone-200 bg-white p-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-sm font-bold text-stone-900">ترتيب ظهور الطرق</h2>
+          <p className="text-[11px] text-stone-500">
+            الرقم داخل طرق الراوي الواحد؛ الموضع العام = رقم الراوي ثم رقم الطريق.
+          </p>
+        </div>
+
+        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {narrators.map((narrator) => {
+            const rows: OrderRow[] = catalogPathsForNarrator(catalog, narrator.id).map((path) => ({
+              id: path.id,
+              order: path.order,
+              label: path.shortName.split('/').pop()?.trim() || path.shortName,
+              note: path.code,
+              symbol: path.symbol,
+            }));
+            if (rows.length === 0) return null;
+            return (
+              <OrderList
+                key={narrator.id}
+                compact
+                title={`${narrator.name} — ${toArabicDigits(rows.length)} طريقًا`}
+                rows={rows}
+                onSetOrder={(id, order) => {
+                  const path = catalog.paths.find((item) => item.id === id);
+                  if (path) void setPathOrder(path, order);
+                }}
+                onMove={(id, toIndex) => {
+                  const path = catalog.paths.find((item) => item.id === id);
+                  if (path) movePath(path, toIndex);
+                }}
+              />
+            );
+          })}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/**
+ * قائمة ترتيب واحدة: مقبض سحب، ورقم صريح قابل للتحرير، وسهمان للمس.
+ *
+ * الرقم يُحرَّر محليا ثم يُثبَّت عند Enter أو فقد التركيز، فلا يقفز الحقل
+ * أثناء الكتابة ولا يُحفظ رقم ناقص.
+ */
+function OrderList({
+  title,
+  hint,
+  rows,
+  onSetOrder,
+  onMove,
+  extraAction,
+  compact = false,
+}: {
+  title: string;
+  hint?: string;
+  rows: OrderRow[];
+  onSetOrder: (id: string, order: number) => void;
+  onMove: (id: string, toIndex: number) => void;
+  extraAction?: React.ReactNode;
+  compact?: boolean;
+}) {
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropId, setDropId] = useState<string | null>(null);
+
+  const indexById = new Map(rows.map((row, index) => [row.id, index]));
+
+  const drop = (targetId: string) => {
+    if (!dragId || dragId === targetId) {
+      setDragId(null);
+      setDropId(null);
+      return;
+    }
+    const toIndex = indexById.get(targetId);
+    if (toIndex != null) onMove(dragId, toIndex);
+    setDragId(null);
+    setDropId(null);
+  };
+
+  return (
+    <section
+      className={`rounded-xl border border-stone-200 bg-white ${compact ? 'p-3' : 'p-4'}`}
+      aria-label={title}
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className={`${compact ? 'text-xs' : 'text-sm'} font-bold text-stone-900`}>{title}</h2>
+        {extraAction}
+      </div>
+      {hint && <p className="mt-1 text-[11px] leading-relaxed text-stone-500">{hint}</p>}
+
+      <ul className="mt-2 space-y-1">
+        {rows.map((row) => {
+          const index = indexById.get(row.id) ?? 0;
+          const isDragging = dragId === row.id;
+          const isTarget = dropId === row.id && dragId !== row.id;
+          return (
+            <li
+              key={row.id}
+              draggable
+              onDragStart={(event) => {
+                event.dataTransfer.effectAllowed = 'move';
+                setDragId(row.id);
+              }}
+              onDragOver={(event) => {
+                if (!dragId) return;
+                event.preventDefault();
+                setDropId(row.id);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                drop(row.id);
+              }}
+              onDragEnd={() => {
+                setDragId(null);
+                setDropId(null);
+              }}
+              className={`flex items-center gap-2 rounded-md border px-2 py-1.5 transition-colors ${
+                isTarget
+                  ? 'border-emerald-400 bg-emerald-50 ring-2 ring-emerald-300'
+                  : 'border-stone-200 bg-white hover:bg-stone-50'
+              } ${isDragging ? 'opacity-50' : ''}`}
+            >
+              <span
+                className="cursor-grab select-none text-stone-300 hover:text-stone-600 active:cursor-grabbing"
+                title="اسحب لكتابة أرقام ترتيب جديدة"
+                aria-hidden
+              >
+                ⠿
+              </span>
+
+              <OrderNumberInput value={row.order} onCommit={(order) => onSetOrder(row.id, order)} />
+
+              {row.symbol && (
+                <span
+                  className="flex h-6 min-w-6 items-center justify-center rounded bg-stone-800 px-1 text-xs font-bold text-white"
+                  style={{ fontFamily: "'Amiri Quran', serif" }}
+                  title="الرمز لا يحكم الترتيب"
+                >
+                  {row.symbol}
+                </span>
+              )}
+
+              <span className="min-w-0 flex-1">
+                <span className={`block truncate font-medium text-stone-900 ${compact ? 'text-[11px]' : 'text-xs'}`}>
+                  {row.label}
+                </span>
+                {row.note && (
+                  <span className="block truncate text-[10px] text-stone-500">{row.note}</span>
+                )}
+              </span>
+
+              <span className="flex shrink-0 flex-col">
+                <button
+                  type="button"
+                  aria-label={`تقديم ${row.label}`}
+                  disabled={index === 0}
+                  onClick={() => onMove(row.id, index - 1)}
+                  className="rounded px-1 text-[10px] leading-none text-stone-500 hover:bg-stone-100 hover:text-stone-900 disabled:opacity-25"
+                >
+                  ▲
+                </button>
+                <button
+                  type="button"
+                  aria-label={`تأخير ${row.label}`}
+                  disabled={index === rows.length - 1}
+                  onClick={() => onMove(row.id, index + 1)}
+                  className="rounded px-1 text-[10px] leading-none text-stone-500 hover:bg-stone-100 hover:text-stone-900 disabled:opacity-25"
+                >
+                  ▼
+                </button>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+
+      {rows.length === 0 && <p className="mt-2 text-[11px] text-stone-500">لا عناصر.</p>}
+    </section>
+  );
+}
+
+/**
+ * حقل الرقم الصريح.
+ *
+ * يحتفظ بمسودة محلية أثناء الكتابة ويثبّتها عند Enter/فقد التركيز، ويعيد
+ * المسودة إلى القيمة المحفوظة إن أُهملت، فلا يبقى في الواجهة رقم لا يطابق
+ * البيانات (وهو جوهر «الترتيب رقم صريح»).
+ */
+function OrderNumberInput({ value, onCommit }: { value: number; onCommit: (order: number) => void }) {
+  const [draft, setDraft] = useState(String(value));
+
+  useEffect(() => {
+    setDraft(String(value));
+  }, [value]);
+
+  const commit = () => {
+    // الأرقام العربية مقبولة في الحقل كما في كل واجهة المشروع.
+    const normalized = draft.replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)));
+    const parsed = Number.parseInt(normalized, 10);
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      setDraft(String(value));
+      return;
+    }
+    if (parsed !== value) onCommit(parsed);
+    else setDraft(String(value));
+  };
+
+  return (
+    <input
+      type="number"
+      min={1}
+      inputMode="numeric"
+      value={draft}
+      aria-label="رقم ترتيب الظهور"
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          commit();
+        }
+        if (event.key === 'Escape') setDraft(String(value));
+      }}
+      className="h-7 w-14 shrink-0 rounded border border-stone-300 bg-white px-1 text-center text-xs tabular-nums text-stone-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+    />
+  );
 }
 
 function EngineManager({

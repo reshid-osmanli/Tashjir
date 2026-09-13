@@ -12,6 +12,12 @@
 import { useMemo, useState } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
+import {
+  catalogImamsInOrder,
+  catalogNarratorsInOrder,
+  catalogPathsForNarrator,
+} from '@/lib/transmissions/catalog';
+import { allPathsInDisplayOrder } from '@/lib/tashjeer/reader-symbols';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getImamColor } from '@/lib/tashjeer/color-system';
 import { describeScope, normalizeScope, resolveScope } from '@/lib/tashjeer/scope';
@@ -728,7 +734,9 @@ export function ScopePicker({
   };
 
   const toggleImam = (imamId: string) => {
-    const imamNarrators = catalog.narrators.filter((narrator) => narrator.imamId === imamId);
+    const imamNarrators = catalogNarratorsInOrder(catalog).filter(
+      (narrator) => narrator.imamId === imamId
+    );
     const allSelected = imamNarrators.every((narrator) => selected.has(narrator.id));
 
     const next = new Set(selected);
@@ -789,9 +797,9 @@ export function ScopePicker({
               setPickerMode('paths');
               if (scope.kind !== 'PATHS') {
                 const narratorIds = resolveScope(scope, catalog);
-                const pathIds = catalog.paths.filter((p) =>
-                  narratorIds.includes(p.narratorId)
-                ).map((p) => p.id);
+                const pathIds = allPathsInDisplayOrder(catalog)
+                  .filter((p) => narratorIds.includes(p.narratorId))
+                  .map((p) => p.id);
                 onChange({ kind: 'PATHS', pathIds });
               }
             }}
@@ -815,7 +823,7 @@ export function ScopePicker({
             type="button"
             onClick={() => {
               if (pickerMode === 'paths') {
-                onChange({ kind: 'PATHS', pathIds: catalog.paths.map((p) => p.id) });
+                onChange({ kind: 'PATHS', pathIds: allPathsInDisplayOrder(catalog).map((p) => p.id) });
               } else {
                 onChange({ kind: 'ALL' });
               }
@@ -842,8 +850,10 @@ export function ScopePicker({
 
       {pickerMode === 'narrators' ? (
         <div className="grid grid-cols-2 gap-1.5 rounded-md border border-stone-200 p-2 md:grid-cols-5">
-          {catalog.imams.map((imam) => {
-            const imamNarrators = catalog.narrators.filter((narrator) => narrator.imamId === imam.id);
+          {catalogImamsInOrder(catalog).map((imam) => {
+            const imamNarrators = catalogNarratorsInOrder(catalog).filter(
+              (narrator) => narrator.imamId === imam.id
+            );
             const allSelected = imamNarrators.every((narrator) => selected.has(narrator.id));
             const color = getImamColor(imam.id);
             const imamSymbol = imam.symbol?.trim() || '';
@@ -895,8 +905,10 @@ export function ScopePicker({
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-1.5 rounded-md border border-stone-200 p-2 md:grid-cols-5">
-          {catalog.imams.map((imam) => {
-            const imamNarrators = catalog.narrators.filter((narrator) => narrator.imamId === imam.id);
+          {catalogImamsInOrder(catalog).map((imam) => {
+            const imamNarrators = catalogNarratorsInOrder(catalog).filter(
+              (narrator) => narrator.imamId === imam.id
+            );
             const color = getImamColor(imam.id);
 
             return (
@@ -909,7 +921,7 @@ export function ScopePicker({
                 </div>
 
                 {imamNarrators.map((narrator) => {
-                  const paths = catalog.paths.filter((p) => p.narratorId === narrator.id);
+                  const paths = catalogPathsForNarrator(catalog, narrator.id);
                   return (
                     <div key={narrator.id} className="space-y-1">
                       <div className="text-[10px] font-bold text-stone-700 px-1 border-b border-stone-200 pb-0.5">

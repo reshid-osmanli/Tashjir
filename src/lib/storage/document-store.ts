@@ -54,6 +54,11 @@ import {
   saveTransmissionCatalog,
   type TransmissionCatalog,
 } from '@/lib/transmissions/catalog';
+import {
+  describeDisplayOrderConflicts,
+  detectDisplayOrderConflicts,
+  type DisplayOrderConflict,
+} from '@/lib/tashjeer/display-order';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 
 /**
@@ -313,7 +318,14 @@ function safeReadCatalog(): TransmissionCatalog | null {
   }
 }
 
-/** يشتق قائمة رتب العرض الصريحة من الكتالوج بترتيب حتمي (DM-04، DM-13). */
+/**
+ * يشتق قائمة رتب العرض الصريحة من الكتالوج بترتيب حتمي (DM-04، DM-13).
+ *
+ * الرقم المصدَّر هو **نفس الرقم الصريح الذي يحكم الظهور** في كل الواجهات
+ * (`lib/tashjeer/display-order.ts`): للأئمة والرواة رقم عام بين أقرانهم،
+ * وللطرق رقم داخل راويها. فملف مصدَّر من جهاز واستُورد في آخر يعيد ترتيب
+ * الظهور نفسه بايتًا ببايت.
+ */
 export function displayOrderOfCatalog(catalog: TransmissionCatalog | null): DisplayOrderEntry[] {
   if (!catalog) return [];
   const entries: DisplayOrderEntry[] = [
@@ -332,7 +344,7 @@ export function displayOrderOfCatalog(catalog: TransmissionCatalog | null): Disp
 export function applyDisplayOrder(
   catalog: TransmissionCatalog,
   entries: DisplayOrderEntry[]
-): { catalog: TransmissionCatalog; applied: number; unknown: number } {
+): { catalog: TransmissionCatalog; applied: number; unknown: number; conflicts: DisplayOrderConflict[] } {
   const byId = new Map(entries.filter((entry) => typeof entry?.displayOrder === 'number').map((entry) => [entry.id, entry]));
   let applied = 0;
   const pick = <T extends { id: string; order: number }>(item: T, kind: DisplayOrderEntry['kind']): T => {
@@ -349,7 +361,11 @@ export function applyDisplayOrder(
   };
   const known = new Set([...catalog.imams, ...catalog.narrators, ...catalog.paths].map((item) => item.id));
   const unknown = entries.filter((entry) => !known.has(entry.id)).length;
-  return { catalog: next, applied, unknown };
+  // القرار المحسوم: رقمان متساويان في ملف مستورد لا يُتركان؛ يُكشفان هنا
+  // ليُعرضا تحذيرًا، ويفضّهما `normalizeTransmissionCatalog` حتميا بالأصغر
+  // معرفًا عند الحفظ. المعرّفات لا تتغير في كلتا الحالتين.
+  const conflicts = detectDisplayOrderConflicts(next);
+  return { catalog: next, applied, unknown, conflicts };
 }
 
 function exportDocumentBundle(documents: TashjeerDocument[], options: ExportOptions = {}): string {
@@ -563,9 +579,17 @@ export function importDocuments(json: string, overwrite = false): ImportResult {
 
   // رتب العرض (DM-04): تُطبَّق على الكيانات المعروفة فقط؛ المجهولة تُذكر.
   if (Array.isArray(bundle.displayOrder) && bundle.displayOrder.length > 0 && isBrowser()) {
-    const { catalog, applied, unknown } = applyDisplayOrder(readTransmissionCatalog(), bundle.displayOrder);
-    if (applied > 0) saveTransmissionCatalog(catalog);
+    const { catalog, applied, unknown, conflicts } = applyDisplayOrder(
+      readTransmissionCatalog(),
+      bundle.displayOrder
+    );
+    if (applied > 0 || conflicts.length > 0) saveTransmissionCatalog(catalog);
     if (unknown > 0) result.warnings.push(`رتب عرض لكيانات غير معروفة محليا تم تجاهلها: ${toArabicDigits(unknown)}.`);
+    if (conflicts.length > 0) {
+      result.warnings.push(
+        `تعارض في أرقام الترتيب المستوردة صُحّح تلقائيًا بالأصغر معرفًا: ${describeDisplayOrderConflicts(conflicts)}. راجعه في لوحة التحكم ← ترتيب الظهور.`
+      );
+    }
   }
 
   for (const document of bundle.documents) {

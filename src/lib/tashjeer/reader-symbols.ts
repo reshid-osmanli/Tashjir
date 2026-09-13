@@ -21,6 +21,15 @@ import type { TransmissionCatalog } from '@/lib/transmissions/catalog';
 import { NARRATORS, READING_IMAMS, TRANSMISSION_PATH_SEEDS } from '@/data/qiraat-data/qiraat';
 import { DEFAULT_IMAM_SYMBOLS, DEFAULT_NARRATOR_SYMBOLS } from '@/data/qiraat-data/symbols';
 import { resolveScope } from './scope';
+import {
+  displayOrderOfImam,
+  displayOrderOfNarrator,
+  imamChipDisplayOrder,
+  pathDisplayKey,
+  pathsOfNarratorSorted,
+  sortImamsByDisplayOrder,
+  sortPathsByDisplayOrder,
+} from './display-order';
 
 /** مستوى البطاقة: إمام، أو راوٍ، أو طريق. */
 export type ReaderChipKind = 'IMAM' | 'NARRATOR' | 'PATH';
@@ -53,7 +62,13 @@ export interface ReaderChip {
   symbol: string;
   /** النص الذي يُطبع فعلا: الرمز إن وُجد، وإلا الاسم. */
   text: string;
-  /** ترتيب البطاقة في طيبة النشر، لضبط تسلسل الرموز على السطر. */
+  /**
+   * مفتاح ترتيب البطاقة على السطر، من الرقم الصريح للظهور (FR-ED-14).
+   *
+   * للراوي: رقمه الصريح بين كل الرواة. للإمام: أصغر أرقام رواته (البطاقة تحل
+   * محلهما فتأخذ موضعهما). للطريق: رقم راويه + كسر من رقمه بين طرق راويه،
+   * فيبقى الأزرق قبل الأصبهاني ولا يقفز طريق على راوٍ آخر.
+   */
   order: number;
   /** الرواة الذين تمثلهم هذه البطاقة، للتلميح والتصفية. */
   narratorIds: string[];
@@ -84,19 +99,20 @@ export function getImamName(imamId: string, catalog?: TransmissionCatalog): stri
   return context(catalog).imams.find((item) => item.id === imamId)?.name ?? imamId;
 }
 
-/** الأئمة مرتبين مع رموزهم، للوحة الرموز ولوحة التحكم. */
+/** الأئمة مرتبين بالرقم الصريح مع رموزهم، للوحة الرموز ولوحة التحكم. */
 export function getImamsWithSymbols(catalog?: TransmissionCatalog): Array<{
   id: string;
   name: string;
   symbol: string;
+  /** الرقم الصريح للظهور، ليُطبع بجانب الاسم في اللوحات الإدارية. */
+  order: number;
 }> {
-  return [...context(catalog).imams]
-    .sort((first, second) => first.order - second.order)
-    .map((imam) => ({
-      id: imam.id,
-      name: imam.name,
-      symbol: getImamSymbol(imam.id, catalog),
-    }));
+  return sortImamsByDisplayOrder(context(catalog).imams, catalog).map((imam) => ({
+    id: imam.id,
+    name: imam.name,
+    symbol: getImamSymbol(imam.id, catalog),
+    order: displayOrderOfImam(imam.id, catalog),
+  }));
 }
 
 /** اسم الطريق وحده كما يُطبع على السطر: «الأزرق»، «أبو نشيط». */
@@ -114,11 +130,14 @@ export function getPathSymbol(pathId: string, catalog?: TransmissionCatalog): st
   return context(catalog).paths.find((item) => item.id === pathId)?.symbol?.trim() ?? '';
 }
 
-/** كل طرق راوٍ في الكتالوج، مرتبة. */
+/** كل طرق راوٍ في الكتالوج، مرتبة بالرقم الصريح ثم المعرّف. */
 export function pathsOfNarrator(narratorId: string, catalog?: TransmissionCatalog) {
-  return context(catalog)
-    .paths.filter((path) => path.narratorId === narratorId)
-    .sort((first, second) => first.order - second.order);
+  return pathsOfNarratorSorted(narratorId, catalog);
+}
+
+/** كل طرق الكتالوج مرتبة بالرقم الصريح (ثم المعرّف عند التساوي). */
+export function allPathsInDisplayOrder(catalog?: TransmissionCatalog) {
+  return sortPathsByDisplayOrder(context(catalog).paths, catalog);
 }
 
 /** يحوّل نطاق وجه إلى وحدات قراءة: طرقا إن ذُكرت الطرق، وإلا رواة. */
@@ -170,7 +189,10 @@ export function chipsForUnits(units: ReadingUnit[], catalog?: TransmissionCatalo
       continue;
     }
 
-    for (const pathId of [...entry.pathIds].sort()) {
+    for (const pathId of [...entry.pathIds].sort((first, second) =>
+      pathDisplayKey(first, catalog) - pathDisplayKey(second, catalog) ||
+      first.localeCompare(second)
+    )) {
       const path = ctx.paths.find((item) => item.id === pathId);
       const name = getPathShortName(pathId, catalog);
       pathChips.push({
@@ -180,7 +202,7 @@ export function chipsForUnits(units: ReadingUnit[], catalog?: TransmissionCatalo
         symbol: path?.symbol?.trim() ?? '',
         // الطريق المنفرد يُذكر باسمه على السطر، ولو وُضع له رمز في اللوحة.
         text: name,
-        order: narratorOrder(narratorId, ctx),
+        order: pathDisplayKey(pathId, catalog),
         narratorIds: [narratorId],
       });
     }
@@ -200,7 +222,11 @@ export function chipsForUnits(units: ReadingUnit[], catalog?: TransmissionCatalo
       name: imam.name,
       symbol,
       text: symbol || imam.name,
-      order: Math.min(...imamNarrators.map((narrator) => narrator.legacyOrderInTayyibah ?? 999)),
+      order: imamChipDisplayOrder(
+        imam.id,
+        imamNarrators.map((narrator) => narrator.id),
+        catalog
+      ),
       narratorIds: imamNarrators.map((narrator) => narrator.id),
     });
 
@@ -216,7 +242,7 @@ export function chipsForUnits(units: ReadingUnit[], catalog?: TransmissionCatalo
       name: narrator?.name ?? narratorId,
       symbol,
       text: symbol || narrator?.name || narratorId,
-      order: narrator?.legacyOrderInTayyibah ?? 999,
+      order: displayOrderOfNarrator(narratorId, catalog),
       narratorIds: [narratorId],
     });
   }
@@ -245,6 +271,12 @@ export function describeReaderChips(chips: ReaderChip[]): string {
     .join('، ');
 }
 
-function narratorOrder(narratorId: string, ctx: SymbolContext): number {
-  return ctx.narrators.find((narrator) => narrator.id === narratorId)?.legacyOrderInTayyibah ?? 999;
+/**
+ * رقم الراوي الصريح.
+ *
+ * يبقى هذا الغلاف الرقيق حتى لا يستورد مستعملو البطاقات وحدة الترتيب بأنفسهم؛
+ * الحاكم الفعلي هو `display-order` وحده.
+ */
+export function narratorOrder(narratorId: string, catalog?: TransmissionCatalog): number {
+  return displayOrderOfNarrator(narratorId, catalog);
 }

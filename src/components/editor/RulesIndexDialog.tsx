@@ -14,6 +14,10 @@ import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-system';
 import { describeScope, resolveScope } from '@/lib/tashjeer/scope';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
+import {
+  catalogImamsInOrder,
+  catalogNarratorsInOrder,
+} from '@/lib/transmissions/catalog';
 import { useRuleOccurrences } from '@/hooks/useRuleOccurrences';
 import { getSurahOrFirst } from '@/data/quran';
 import { describeGlobalPattern, findGlobalRuleMatches } from '@/lib/quran-logic/global-rule-engine';
@@ -198,9 +202,9 @@ export function RulesIndexDialog({
             </select>
             <select value={readerId} onChange={(event) => setReaderId(event.target.value)} className="input">
               <option value="">كل القراء والرواة</option>
-              {catalog.imams.map((imam) => (
+              {catalogImamsInOrder(catalog).map((imam) => (
                 <optgroup key={imam.id} label={imam.name}>
-                  {catalog.narrators
+                  {catalogNarratorsInOrder(catalog)
                     .filter((narrator) => narrator.imamId === imam.id)
                     .map((narrator) => (
                       <option key={narrator.id} value={narrator.id}>{narrator.name}</option>

@@ -26,28 +26,34 @@ export const READING_IMAMS: ReadingImam[] = [
 ];
 
 // ==================== الرواة العشرون ====================
+//
+// `order` هنا هو **رقم الترتيب الصريح للظهور** (displayOrder) بين كل الرواة
+// (١..٢٠)، وهو المصدر الوحيد لترتيب الظهور في كل الواجهات وفي التصدير
+// (FR-ED-14، DM-04). قيمته في البذرة مطابقة لترتيب طيبة النشر المحفوظ في
+// `legacyOrderInTayyibah`؛ والحقلان يفترقان فور تعديل المشرف الرقم الصريح،
+// فيبقى `legacyOrderInTayyibah` مرجعًا تاريخيًا لا حاكمًا على الظهور.
 
 export const NARRATORS: Narrator[] = [
   { id: 'narrator-qalun', imamId: 'imam-nafi', name: 'قالون', slug: 'qalun', order: 1, legacyOrderInTayyibah: 1 },
   { id: 'narrator-warsh', imamId: 'imam-nafi', name: 'ورش', slug: 'warsh', order: 2, legacyOrderInTayyibah: 2 },
-  { id: 'narrator-al-bazzi', imamId: 'imam-ibn-kathir', name: 'البزي', slug: 'al-bazzi', order: 1, legacyOrderInTayyibah: 3 },
-  { id: 'narrator-qunbul', imamId: 'imam-ibn-kathir', name: 'قنبل', slug: 'qunbul', order: 2, legacyOrderInTayyibah: 4 },
-  { id: 'narrator-al-duri-abu-amr', imamId: 'imam-abu-amr', name: 'الدوري', slug: 'al-duri-abu-amr', order: 1, legacyOrderInTayyibah: 5 },
-  { id: 'narrator-al-susi', imamId: 'imam-abu-amr', name: 'السوسي', slug: 'al-susi', order: 2, legacyOrderInTayyibah: 6 },
-  { id: 'narrator-hisham', imamId: 'imam-ibn-amir', name: 'هشام', slug: 'hisham', order: 1, legacyOrderInTayyibah: 7 },
-  { id: 'narrator-ibn-dhakwan', imamId: 'imam-ibn-amir', name: 'ابن ذكوان', slug: 'ibn-dhakwan', order: 2, legacyOrderInTayyibah: 8 },
-  { id: 'narrator-hafs', imamId: 'imam-asim', name: 'حفص', slug: 'hafs', order: 1, legacyOrderInTayyibah: 9 },
-  { id: 'narrator-shubah', imamId: 'imam-asim', name: 'شعبة', slug: 'shubah', order: 2, legacyOrderInTayyibah: 10 },
-  { id: 'narrator-khalaf-hamzah', imamId: 'imam-hamzah', name: 'خلف', slug: 'khalaf-hamzah', order: 1, legacyOrderInTayyibah: 11 },
-  { id: 'narrator-khallad', imamId: 'imam-hamzah', name: 'خلاد', slug: 'khallad', order: 2, legacyOrderInTayyibah: 12 },
-  { id: 'narrator-al-layth', imamId: 'imam-al-kisai', name: 'الليث', slug: 'al-layth', order: 1, legacyOrderInTayyibah: 13 },
-  { id: 'narrator-al-duri-kisai', imamId: 'imam-al-kisai', name: 'الدوري', slug: 'al-duri-kisai', order: 2, legacyOrderInTayyibah: 14 },
-  { id: 'narrator-ibn-wardan', imamId: 'imam-abu-jafar', name: 'ابن وردان', slug: 'ibn-wardan', order: 1, legacyOrderInTayyibah: 15 },
-  { id: 'narrator-ibn-jammaz', imamId: 'imam-abu-jafar', name: 'ابن جماز', slug: 'ibn-jammaz', order: 2, legacyOrderInTayyibah: 16 },
-  { id: 'narrator-ruways', imamId: 'imam-yaqub', name: 'رويس', slug: 'ruways', order: 1, legacyOrderInTayyibah: 17 },
-  { id: 'narrator-rawh', imamId: 'imam-yaqub', name: 'روح', slug: 'rawh', order: 2, legacyOrderInTayyibah: 18 },
-  { id: 'narrator-idris', imamId: 'imam-khalaf', name: 'إدريس', slug: 'idris', order: 1, legacyOrderInTayyibah: 19 },
-  { id: 'narrator-ishaq', imamId: 'imam-khalaf', name: 'إسحاق', slug: 'ishaq', order: 2, legacyOrderInTayyibah: 20 },
+  { id: 'narrator-al-bazzi', imamId: 'imam-ibn-kathir', name: 'البزي', slug: 'al-bazzi', order: 3, legacyOrderInTayyibah: 3 },
+  { id: 'narrator-qunbul', imamId: 'imam-ibn-kathir', name: 'قنبل', slug: 'qunbul', order: 4, legacyOrderInTayyibah: 4 },
+  { id: 'narrator-al-duri-abu-amr', imamId: 'imam-abu-amr', name: 'الدوري', slug: 'al-duri-abu-amr', order: 5, legacyOrderInTayyibah: 5 },
+  { id: 'narrator-al-susi', imamId: 'imam-abu-amr', name: 'السوسي', slug: 'al-susi', order: 6, legacyOrderInTayyibah: 6 },
+  { id: 'narrator-hisham', imamId: 'imam-ibn-amir', name: 'هشام', slug: 'hisham', order: 7, legacyOrderInTayyibah: 7 },
+  { id: 'narrator-ibn-dhakwan', imamId: 'imam-ibn-amir', name: 'ابن ذكوان', slug: 'ibn-dhakwan', order: 8, legacyOrderInTayyibah: 8 },
+  { id: 'narrator-hafs', imamId: 'imam-asim', name: 'حفص', slug: 'hafs', order: 9, legacyOrderInTayyibah: 9 },
+  { id: 'narrator-shubah', imamId: 'imam-asim', name: 'شعبة', slug: 'shubah', order: 10, legacyOrderInTayyibah: 10 },
+  { id: 'narrator-khalaf-hamzah', imamId: 'imam-hamzah', name: 'خلف', slug: 'khalaf-hamzah', order: 11, legacyOrderInTayyibah: 11 },
+  { id: 'narrator-khallad', imamId: 'imam-hamzah', name: 'خلاد', slug: 'khallad', order: 12, legacyOrderInTayyibah: 12 },
+  { id: 'narrator-al-layth', imamId: 'imam-al-kisai', name: 'الليث', slug: 'al-layth', order: 13, legacyOrderInTayyibah: 13 },
+  { id: 'narrator-al-duri-kisai', imamId: 'imam-al-kisai', name: 'الدوري', slug: 'al-duri-kisai', order: 14, legacyOrderInTayyibah: 14 },
+  { id: 'narrator-ibn-wardan', imamId: 'imam-abu-jafar', name: 'ابن وردان', slug: 'ibn-wardan', order: 15, legacyOrderInTayyibah: 15 },
+  { id: 'narrator-ibn-jammaz', imamId: 'imam-abu-jafar', name: 'ابن جماز', slug: 'ibn-jammaz', order: 16, legacyOrderInTayyibah: 16 },
+  { id: 'narrator-ruways', imamId: 'imam-yaqub', name: 'رويس', slug: 'ruways', order: 17, legacyOrderInTayyibah: 17 },
+  { id: 'narrator-rawh', imamId: 'imam-yaqub', name: 'روح', slug: 'rawh', order: 18, legacyOrderInTayyibah: 18 },
+  { id: 'narrator-idris', imamId: 'imam-khalaf', name: 'إدريس', slug: 'idris', order: 19, legacyOrderInTayyibah: 19 },
+  { id: 'narrator-ishaq', imamId: 'imam-khalaf', name: 'إسحاق', slug: 'ishaq', order: 20, legacyOrderInTayyibah: 20 },
 ];
 
 export interface TransmissionPathSeed extends TransmissionPath {

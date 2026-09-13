@@ -21,7 +21,7 @@ import {
   type ReadingPlan,
 } from './reading-plan';
 import { resolveScope } from './scope';
-import { narratorTayyibahOrder } from './symbols';
+import { narratorDisplayOrder } from './symbols';
 
 /**
  * ترتيب موضعين من مواضع الآية.
@@ -160,5 +160,5 @@ export function leadNarratorOrder(
 ): number {
   const narratorIds = resolveScope(alt.scope, catalog);
   if (narratorIds.length === 0) return 999;
-  return Math.min(...narratorIds.map((id) => narratorTayyibahOrder(id, catalog)));
+  return Math.min(...narratorIds.map((id) => narratorDisplayOrder(id, catalog)));
 }

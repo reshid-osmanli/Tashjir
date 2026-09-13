@@ -37,7 +37,7 @@ import {
 } from './ordering';
 import { allNarratorIds, resolveScope } from './scope';
 import { pathsOfNarrator, type ReadingUnit } from './reader-symbols';
-import { narratorTayyibahOrder } from './symbols';
+import { readingUnitDisplayOrder } from './display-order';
 import type { EngineConfig } from './model/v8';
 import { resolveExclusiveGroups } from './decision/editor-bridge';
 
@@ -323,14 +323,13 @@ function unitKey(unit: ReadingUnit): string {
 }
 
 /**
- * ترتيب الوحدة في الأمة: ترتيب راويها في الطيبة، وترتيب الطريق داخل الراوي
- * كسرا صغيرا بعده، حتى يبقى الأزرق قبل الأصبهاني في سطور ورش.
+ * ترتيب الوحدة في الأمة من **الرقم الصريح للظهور** (FR-ED-14).
+ *
+ * المصدر واحد مع بطاقات الرموز على السطر (`display-order.ts`)، فلا يختلف ترتيب
+ * السطور عن ترتيب البطاقات المطبوعة في أطرافها. الرقم الصريح للراوي بين كل
+ * الرواة، وترتيب الطريق داخل راويه كسر صغير بعده حتى يبقى الأزرق قبل
+ * الأصبهاني في سطور ورش، ولا يتجاوز طريقٌ راويًا يليه.
  */
 function unitOrder(unit: ReadingUnit, catalog?: TransmissionCatalog): number {
-  const base = narratorTayyibahOrder(unit.narratorId, catalog);
-  if (!unit.pathId) return base;
-
-  const paths = pathsOfNarrator(unit.narratorId, catalog);
-  const index = paths.findIndex((path) => path.id === unit.pathId);
-  return base + (index === -1 ? 0.5 : (index + 1) / (paths.length + 1)) * 0.9;
+  return readingUnitDisplayOrder(unit, catalog);
 }

@@ -9,22 +9,24 @@ import { NARRATORS, READING_IMAMS, TRANSMISSION_PATH_SEEDS } from '@/data/qiraat
 import type { Narrator, ReadingImam, TransmissionPath } from '@/types';
 import type { TransmissionCatalog } from '@/lib/transmissions/catalog';
 import type { ReadingScope } from '@/types/tashjeer';
+import { displayOrderOfNarrator, sortNarratorIds } from './display-order';
 
-/** كل معرّفات الرواة في البذرة مرتبة حسب ترتيب طيبة النشر. */
-export const ALL_NARRATOR_IDS: string[] = [...NARRATORS]
-  .sort((a, b) => (a.legacyOrderInTayyibah ?? 0) - (b.legacyOrderInTayyibah ?? 0))
-  .map((narrator) => narrator.id);
+/**
+ * كل معرّفات الرواة في البذرة مرتبة بالرقم الصريح للظهور (FR-ED-14).
+ *
+ * ثابت توافق للواجهات التي لا تمرر كتالوجا؛ قيمته في البذرة مطابقة لترتيب
+ * طيبة النشر لأن الرقم الصريح الافتراضي مُعبَّأ منه.
+ */
+export const ALL_NARRATOR_IDS: string[] = sortNarratorIds(
+  NARRATORS.map((narrator) => narrator.id)
+);
 
-/** كل معرّفات الرواة في الكتالوج الذي يعمل عليه المحرك. */
+/** كل معرّفات الرواة في الكتالوج الذي يعمل عليه المحرك، بالرقم الصريح. */
 export function allNarratorIds(catalog?: TransmissionCatalog): string[] {
-  return [...(catalog?.narrators ?? NARRATORS)]
-    .sort(
-      (a, b) =>
-        (a.legacyOrderInTayyibah ?? 999) - (b.legacyOrderInTayyibah ?? 999) ||
-        a.order - b.order ||
-        a.name.localeCompare(b.name, 'ar')
-    )
-    .map((narrator) => narrator.id);
+  return sortNarratorIds(
+    (catalog?.narrators ?? NARRATORS).map((narrator) => narrator.id),
+    catalog
+  );
 }
 
 /** يحوّل تعبير النطاق إلى قائمة رواة صريحة مرتبة وبلا تكرار. */
@@ -158,9 +160,14 @@ export function getFullNarratorName(narratorId: string, catalog?: TransmissionCa
   return imam ? `${narrator.name} عن ${imam.name}` : narrator.name;
 }
 
-/** ترتيب الراوي في طيبة النشر (1..20)، أو 999 إن كان غير معروف. */
+/**
+ * رقم الترتيب الصريح للراوي (١..ن)، أو ٩٩٩ إن كان غير معروف.
+ *
+ * يحل محل «ترتيب الراوي في طيبة النشر» الذي كان يُقرأ من الحقل التاريخي؛
+ * الرقم الصريح هو الحاكم الآن في كل الواجهات (FR-ED-14).
+ */
 export function getNarratorOrder(narratorId: string, catalog?: TransmissionCatalog): number {
-  return makeContext(catalog).narratorById.get(narratorId)?.legacyOrderInTayyibah ?? 999;
+  return displayOrderOfNarrator(narratorId, catalog);
 }
 
 /** يبني نطاقا مكملا: كل من لم يشمله النطاق المعطى. */
@@ -202,6 +209,8 @@ export function normalizeScope(narratorIds: string[], catalog?: TransmissionCata
 // ==================== دوال داخلية ====================
 
 interface ScopeContext {
+  /** الكتالوج الذي بُني منه السياق، لتمريره إلى دوال الرقم الصريح. */
+  catalog?: TransmissionCatalog;
   narrators: Narrator[];
   imams: ReadingImam[];
   paths: TransmissionPath[];
@@ -215,16 +224,13 @@ function makeContext(catalog?: TransmissionCatalog): ScopeContext {
   const narrators = catalog?.narrators ?? NARRATORS;
   const imams = catalog?.imams ?? READING_IMAMS;
   const paths = catalog?.paths ?? TRANSMISSION_PATH_SEEDS;
-  const narratorIds = [...narrators]
-    .sort(
-      (a, b) =>
-        (a.legacyOrderInTayyibah ?? 999) - (b.legacyOrderInTayyibah ?? 999) ||
-        a.order - b.order ||
-        a.name.localeCompare(b.name, 'ar')
-    )
-    .map((narrator) => narrator.id);
+  const narratorIds = sortNarratorIds(
+    narrators.map((narrator) => narrator.id),
+    catalog
+  );
 
   return {
+    catalog,
     narrators,
     imams,
     paths,
@@ -254,12 +260,15 @@ function findFullyCoveredImams(
   return { imamIds, coveredNarrators };
 }
 
+/**
+ * فرز بالرقم الصريح للظهور.
+ *
+ * الاسم التاريخي `sortByTayyibah` بقي لأن ترتيب الطيبة هو الافتراضي الذي
+ * يُعبَّأ منه الرقم الصريح؛ أما الحاكم فهو الرقم نفسه، فلو عدّله المشرف تغيّر
+ * ترتيب النطاق هنا وفي كل مكان آخر معه.
+ */
 function sortByTayyibah(ids: string[], context: ScopeContext): string[] {
-  return [...ids].sort(
-    (first, second) =>
-      (context.narratorById.get(first)?.legacyOrderInTayyibah ?? 999) -
-      (context.narratorById.get(second)?.legacyOrderInTayyibah ?? 999)
-  );
+  return sortNarratorIds(ids, context.catalog);
 }
 
 function unique(values: string[]): string[] {

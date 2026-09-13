@@ -31,7 +31,7 @@ import type {
 import type { AyahLayout } from '@/types/tashjeer';
 import { getCategoryColor } from './color-system';
 import { marksForWordRange } from './line-marks';
-import { narratorTayyibahOrder } from './symbols';
+import { narratorDisplayOrder } from './symbols';
 import type { ClassicLine, ClassicLineEntry, ClassicReaderChip } from './classic-tashjeer';
 
 // ==================== مطابقة الأطراف بالأسطر ====================
@@ -189,7 +189,7 @@ export function mergeTwoLines(from: ClassicLine, to: ClassicLine): ClassicLine {
 
   const readers = combineChips(from.readers, to.readers);
   const narratorIds = [...new Set([...from.narratorIds, ...to.narratorIds])].sort(
-    (first, second) => narratorTayyibahOrder(first) - narratorTayyibahOrder(second)
+    (first, second) => narratorDisplayOrder(first) - narratorDisplayOrder(second)
   );
   const marks = [...from.marks, ...to.marks].sort(
     (first, second) => first.position - second.position

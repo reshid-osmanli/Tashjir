@@ -16,6 +16,10 @@ import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
 import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
 import { getWordById, stripHarakat } from '@/data/quran';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
+import {
+  catalogImamsInOrder,
+  catalogNarratorsInOrder,
+} from '@/lib/transmissions/catalog';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
 import { useEngineConfig } from '@/hooks/useEngineConfig';
 import { useStrengthDegrees } from '@/hooks/useStrengthDegrees';
@@ -346,13 +350,15 @@ export function PropertiesPanel() {
         </div>
 
         <div className="space-y-2">
-          {catalog.imams.map((imam) => (
+          {catalogImamsInOrder(catalog).map((imam) => (
             <div key={imam.id}>
               <p className="mb-1 text-[11px] font-medium" style={{ color: getImamColor(imam.id) }}>
                 {imam.name}
               </p>
               <div className="flex flex-wrap gap-1">
-                {catalog.narrators.filter((narrator) => narrator.imamId === imam.id).map((narrator) => {
+                {catalogNarratorsInOrder(catalog)
+                  .filter((narrator) => narrator.imamId === imam.id)
+                  .map((narrator) => {
                   const active = filter.narratorIds.includes(narrator.id);
                   return (
                     <button

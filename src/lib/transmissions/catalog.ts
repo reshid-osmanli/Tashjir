@@ -14,8 +14,23 @@ import {
   TRANSMISSION_PATH_SEEDS,
 } from '@/data/qiraat-data/qiraat';
 import { DEFAULT_IMAM_SYMBOLS, DEFAULT_NARRATOR_SYMBOLS } from '@/data/qiraat-data/symbols';
+import {
+  compareExplicitOrder,
+  detectDisplayOrderConflicts,
+  resolveDisplayOrderConflicts,
+  type DisplayOrderConflict,
+} from '@/lib/tashjeer/display-order';
 
-export const TRANSMISSION_CATALOG_VERSION = 1;
+/**
+ * إصدار مخطط الكتالوج.
+ *
+ * **٢ (الحزمة ١٠، FR-ED-14):** حقل `order` في الراوي صار **رقم الترتيب الصريح
+ * للظهور بين كل الرواة** بعد أن كان «ترتيبه داخل إمامه» (١ أو ٢). كل كتالوج
+ * محفوظ بإصدار أقدم يُرحَّل عند القراءة: يُعبَّأ الرقم الصريح من ترتيب الطيبة
+ * القائم، فلا يتغير الظهور المعتاد ولا يفقد أحد ترتيبه (انظر
+ * `migrateLegacyDisplayOrders`).
+ */
+export const TRANSMISSION_CATALOG_VERSION = 2;
 export const TRANSMISSION_CATALOG_STORAGE_KEY = 'tashjeer:transmissions:v1';
 export const TRANSMISSION_CATALOG_EVENT = 'tashjeer:transmissions-change';
 
@@ -49,6 +64,14 @@ export function createDefaultTransmissionCatalog(): TransmissionCatalog {
  * يجعل الكتالوج صالحا للرسم حتى لو كان قديمًا أو عُدّل يدويا في التخزين.
  * لا يحذف الطريق اليتيم عمدا: تظهره لوحة التحكم ليتم إصلاح نسبته، لكن محلل
  * النطاق لن ينسبه إلى راو غير موجود.
+ *
+ * **ضمانات الترتيب الصريح (FR-ED-14، DM-04):**
+ *
+ *   1. كل كيان يخرج برقم ترتيب صريح موجب (يُعبَّأ من الافتراضي الموثق عند الغياب).
+ *   2. **لا رقمان متساويان أبدًا** داخل مجموعة أقران واحدة؛ التعارض يُفضّ حتميا
+ *      بالأصغر معرفًا (الترتيب الأبجدي للـID) ثم بإعادة ترقيم ١..ن.
+ *   3. الفرز بالرقم الصريح ثم **المعرّف** — لا بالاسم ولا بالرمز ولا بتاريخ
+ *      الإضافة، فتغيير الاسم لا يحرّك صاحبه من موضعه.
  */
 export function normalizeTransmissionCatalog(
   value: Partial<TransmissionCatalog> | null | undefined
@@ -58,34 +81,42 @@ export function normalizeTransmissionCatalog(
   const rawNarrators = Array.isArray(value?.narrators) ? value!.narrators : fallback.narrators;
   const rawPaths = Array.isArray(value?.paths) ? value!.paths : fallback.paths;
 
-  const imams = uniqueById(rawImams)
-    .filter(isImam)
-    .map((imam, index) => ({
-      ...imam,
-      order: positiveInteger(imam.order, index + 1),
-      slug: imam.slug || slugFromId(imam.id),
-      // رمز الإمام: ما حفظه المشرف، وإلا بذرة المشروع، وإلا فراغ يظهر بالاسم.
-      symbol: imam.symbol ?? DEFAULT_IMAM_SYMBOLS[imam.id] ?? '',
-    }))
-    .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, 'ar'));
+  // الترحيل اللطيف: بيانات الإصدار ١ كانت تحمل للراوي رقمًا محليًا داخل إمامه،
+  // فيُعبَّأ رقمه الصريح العام من ترتيب الطيبة القائم قبل أي فرز أو فضّ تعارض.
+  const migratedNarrators = migrateLegacyDisplayOrders(
+    rawNarrators,
+    typeof value?.schemaVersion === 'number' ? value.schemaVersion : TRANSMISSION_CATALOG_VERSION
+  );
 
-  const narrators = uniqueById(rawNarrators)
-    .filter(isNarrator)
-    .map((narrator, index) => ({
-      ...narrator,
-      order: positiveInteger(narrator.order, index + 1),
-      legacyOrderInTayyibah: positiveInteger(narrator.legacyOrderInTayyibah, index + 1),
-      slug: narrator.slug || slugFromId(narrator.id),
-      symbol: narrator.symbol ?? DEFAULT_NARRATOR_SYMBOLS[narrator.id] ?? '',
-    }))
-    .sort(
-      (a, b) =>
-        (a.legacyOrderInTayyibah ?? 999) - (b.legacyOrderInTayyibah ?? 999) ||
-        a.order - b.order ||
-        a.name.localeCompare(b.name, 'ar')
-    );
+  const imams = resolveDisplayOrderConflicts(
+    uniqueById(rawImams)
+      .filter(isImam)
+      .map((imam, index) => ({
+        ...imam,
+        order: positiveInteger(imam.order, index + 1),
+        slug: imam.slug || slugFromId(imam.id),
+        // رمز الإمام: ما حفظه المشرف، وإلا بذرة المشروع، وإلا فراغ يظهر بالاسم.
+        symbol: imam.symbol ?? DEFAULT_IMAM_SYMBOLS[imam.id] ?? '',
+      }))
+  ).sort(compareExplicitOrder);
 
-  const paths = uniqueById(rawPaths)
+  const narrators = resolveDisplayOrderConflicts(
+    uniqueById(migratedNarrators)
+      .filter(isNarrator)
+      .map((narrator, index) => ({
+        ...narrator,
+        // الرقم الصريح بين كل الرواة؛ افتراضيه ترتيب الطيبة ثم موضع الإدخال.
+        order: positiveInteger(
+          narrator.order,
+          positiveInteger(narrator.legacyOrderInTayyibah, index + 1)
+        ),
+        slug: narrator.slug || slugFromId(narrator.id),
+        symbol: narrator.symbol ?? DEFAULT_NARRATOR_SYMBOLS[narrator.id] ?? '',
+      }))
+  ).sort(compareExplicitOrder);
+
+  // أقران الطريق هم طرق راويه، ففضّ التعارض يقع داخل كل راوٍ على حدة.
+  const normalizedPaths = uniqueById(rawPaths)
     .filter(isPath)
     .map((path, index) => ({
       ...path,
@@ -96,8 +127,11 @@ export function normalizeTransmissionCatalog(
       fullName: path.fullName || path.shortName || path.id,
       isCanonical: path.isCanonical ?? false,
       symbol: typeof path.symbol === 'string' ? path.symbol.trim() : '',
-    }))
-    .sort((a, b) => a.order - b.order || a.shortName.localeCompare(b.shortName, 'ar'));
+    }));
+
+  const paths = resolvePathOrdersPerNarrator(normalizedPaths).sort(
+    (a, b) => a.narratorId.localeCompare(b.narratorId) || compareExplicitOrder(a, b)
+  );
 
   return {
     schemaVersion: TRANSMISSION_CATALOG_VERSION,
@@ -105,6 +139,81 @@ export function normalizeTransmissionCatalog(
     imams,
     narrators,
     paths,
+  };
+}
+
+/**
+ * ترحيل الأرقام الصريحة من كتالوج بإصدار أقدم (DM-17: ترحيل لطيف موثق).
+ *
+ * في الإصدار ١ كان `Narrator.order` ترتيبًا داخل الإمام (١ أو ٢) بينما كان
+ * ترتيب الظهور الفعلي هو `legacyOrderInTayyibah`. فلو قرأنا تلك البيانات
+ * بالميزة الجديدة لتساوى عشرون راويًا في رقمين ولانعكس ترتيب الأمة. لذلك
+ * يُعبَّأ الرقم الصريح من ترتيب الطيبة القائم، ومن لا ترتيب له يُرقَّم بعد
+ * آخر معروف بترتيب ظهوره في الملف (حتمي بلا عشوائية).
+ *
+ * البيانات بإصدار ٢ أو أحدث تُترك كما هي: رقم المشرف الصريح مقدَّس.
+ */
+export function migrateLegacyDisplayOrders(
+  narrators: readonly Narrator[],
+  schemaVersion: number
+): Narrator[] {
+  if (schemaVersion >= TRANSMISSION_CATALOG_VERSION) return [...narrators];
+
+  let nextFree = narrators.reduce(
+    (max, narrator) => Math.max(max, positiveInteger(narrator.legacyOrderInTayyibah, 0)),
+    0
+  );
+
+  return narrators.map((narrator) => {
+    const tayyibah = positiveInteger(narrator.legacyOrderInTayyibah, 0);
+    const order = tayyibah > 0 ? tayyibah : (nextFree += 1);
+    return order === narrator.order ? narrator : { ...narrator, order };
+  });
+}
+
+/** تعارضات الأرقام الصريحة في الكتالوج المحفوظ **قبل** تصحيحها تلقائيا. */
+export function auditCatalogDisplayOrders(
+  value: Partial<TransmissionCatalog> | null | undefined
+): DisplayOrderConflict[] {
+  return detectDisplayOrderConflicts(value);
+}
+
+/** نتيجة فحص الكتالوج المحفوظ: ما الذي صُحّح تلقائيًا عند قراءته. */
+export interface CatalogAudit {
+  /** تعارضات أرقام الترتيب كما هي في التخزين قبل فضّها حتميا. */
+  conflicts: DisplayOrderConflict[];
+  /** إصدار المخطط المحفوظ، أو null إن لم يوجد كتالوج محفوظ. */
+  storedVersion: number | null;
+  /** هل البيانات أقدم من الإصدار الحالي فاحتاجت ترحيل الأرقام الصريحة. */
+  legacySchema: boolean;
+  /** عدد الرواة الذين عُّبئ رقمهم الصريح من ترتيب الطيبة أثناء الترحيل. */
+  migratedNarrators: number;
+}
+
+/**
+ * يفحص الكتالوج **المحفوظ** ويخبر بما صحّحه التطبيع تلقائيًا.
+ *
+ * التطبيع يضمن «لا رقمان متساويان أبدًا» ويرحّل بيانات الإصدار الأقدم، لكن
+ * المشرف يجب أن يرى أن ذلك وقع ليراجعه (DM-04: تحذير يعرض التعارض للتصحيح).
+ */
+export function auditStoredCatalog(): CatalogAudit | null {
+  const raw = readRawTransmissionCatalog();
+  if (!raw) return null;
+
+  const storedVersion = typeof raw.schemaVersion === 'number' ? raw.schemaVersion : null;
+  const legacySchema = storedVersion === null || storedVersion < TRANSMISSION_CATALOG_VERSION;
+  const rawNarrators = Array.isArray(raw.narrators) ? raw.narrators : [];
+  const migrated = legacySchema
+    ? migrateLegacyDisplayOrders(rawNarrators, storedVersion ?? 0).filter(
+        (narrator, index) => narrator.order !== rawNarrators[index]?.order
+      ).length
+    : 0;
+
+  return {
+    conflicts: detectDisplayOrderConflicts(raw),
+    storedVersion,
+    legacySchema,
+    migratedNarrators: migrated,
   };
 }
 
@@ -118,6 +227,24 @@ export function readTransmissionCatalog(): TransmissionCatalog {
     return normalizeTransmissionCatalog(JSON.parse(raw) as Partial<TransmissionCatalog>);
   } catch {
     return createDefaultTransmissionCatalog();
+  }
+}
+
+/**
+ * يقرأ الكتالوج المحفوظ **كما هو في التخزين** بلا تطبيع ولا ترحيل.
+ *
+ * للتشخيص فقط: لوحة التحكم تقارنه بالمطبَّع لتخبر المشرف أن تعارض أرقام أو
+ * بيانات إصدار قديم صُحّحت تلقائيًا عند القراءة. لا يُستعمل للرسم أبدًا.
+ */
+export function readRawTransmissionCatalog(): Partial<TransmissionCatalog> | null {
+  if (!isBrowser()) return null;
+  try {
+    const raw = window.localStorage.getItem(TRANSMISSION_CATALOG_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<TransmissionCatalog>;
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
   }
 }
 
@@ -145,18 +272,18 @@ export function resetTransmissionCatalog(): TransmissionCatalog {
   return saveTransmissionCatalog(fresh);
 }
 
-/** أدوات استعلام صغيرة حتى لا تكرر الواجهات الترتيب والفلترة. */
+/**
+ * أدوات استعلام صغيرة حتى لا تكرر الواجهات الترتيب والفلترة.
+ *
+ * كلها تفرز بالرقم الصريح ثم المعرّف (لا بالاسم): نفس الكتالوج يعطي نفس
+ * الترتيب في كل الواجهات وفي التصدير (FR-ED-14).
+ */
 export function catalogNarratorsInOrder(catalog: TransmissionCatalog): Narrator[] {
-  return [...catalog.narrators].sort(
-    (a, b) =>
-      (a.legacyOrderInTayyibah ?? 999) - (b.legacyOrderInTayyibah ?? 999) ||
-      a.order - b.order ||
-      a.name.localeCompare(b.name, 'ar')
-  );
+  return [...catalog.narrators].sort(compareExplicitOrder);
 }
 
 export function catalogImamsInOrder(catalog: TransmissionCatalog): ReadingImam[] {
-  return [...catalog.imams].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, 'ar'));
+  return [...catalog.imams].sort(compareExplicitOrder);
 }
 
 export function catalogPathsForNarrator(
@@ -165,7 +292,7 @@ export function catalogPathsForNarrator(
 ): TransmissionPath[] {
   return catalog.paths
     .filter((path) => path.narratorId === narratorId)
-    .sort((a, b) => a.order - b.order || a.shortName.localeCompare(b.shortName, 'ar'));
+    .sort(compareExplicitOrder);
 }
 
 /** معرّف محلي آمن للكيانات التي يضيفها المشرف. */
@@ -224,6 +351,25 @@ function isPath(value: unknown): value is TransmissionPath {
       typeof (value as TransmissionPath).id === 'string' &&
       typeof (value as TransmissionPath).narratorId === 'string'
   );
+}
+
+/**
+ * يفضّ تعارضات أرقام الطرق **داخل كل راوٍ** على حدة.
+ *
+ * أقران الطريق هم طرق راويه لا كل طرق الكتالوج، فلو فُضّت التعارضات عالميًا
+ * لتحول «الأزرق ١» و«ابن الحصين ١» إلى رقمين مختلفين بلا معنى.
+ */
+function resolvePathOrdersPerNarrator(paths: TransmissionPath[]): TransmissionPath[] {
+  const groups = new Map<string, TransmissionPath[]>();
+  for (const path of paths) {
+    const list = groups.get(path.narratorId) ?? [];
+    list.push(path);
+    groups.set(path.narratorId, list);
+  }
+
+  const result: TransmissionPath[] = [];
+  for (const group of groups.values()) result.push(...resolveDisplayOrderConflicts(group));
+  return result;
 }
 
 function positiveInteger(value: number | undefined, fallback: number): number {

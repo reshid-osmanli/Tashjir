@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 import { documentWindowWords } from '@/lib/tashjeer/reading-window';
 import { layoutAyah } from '@/lib/tashjeer/layout-engine';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
+import { catalogNarratorsInOrder } from '@/lib/transmissions/catalog';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
 import { useEditorStore } from '@/stores/editor-store';
 import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
@@ -128,7 +129,7 @@ export function RecitationControls() {
           </label>
           {isSpecific && (
             <div className="flex flex-wrap gap-1 border-t border-violet-100 pt-1.5">
-              {catalog.narrators.map((narrator) => {
+              {catalogNarratorsInOrder(catalog).map((narrator) => {
                 const active = narratorIds.includes(narrator.id);
                 return (
                   <button

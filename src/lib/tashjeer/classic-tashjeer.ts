@@ -68,7 +68,7 @@ import {
   type ReadingPlan,
 } from './reading-plan';
 import { formatPathName, getNarratorName, resolveScope } from './scope';
-import { getNarratorSymbol, narratorTayyibahOrder } from './symbols';
+import { getNarratorSymbol, narratorDisplayOrder } from './symbols';
 import {
   chipsForUnits,
   scopeToUnits,
@@ -866,7 +866,7 @@ function combinationToLine(
   const primaryPick = combination.picks[0];
   const chips = unitChips(combination.units, catalog);
   const narratorIds = [...combination.narratorIds].sort(
-    (first, second) => narratorTayyibahOrder(first, catalog) - narratorTayyibahOrder(second, catalog)
+    (first, second) => narratorDisplayOrder(first, catalog) - narratorDisplayOrder(second, catalog)
   );
 
   const strength = resolveStrength(
@@ -1023,7 +1023,7 @@ function alternativeToLine(
   override?: TashjeerBranch
 ): ClassicLine | null {
   const narratorIds = resolveScope(alt.scope, catalog).sort(
-    (first, second) => narratorTayyibahOrder(first, catalog) - narratorTayyibahOrder(second, catalog)
+    (first, second) => narratorDisplayOrder(first, catalog) - narratorDisplayOrder(second, catalog)
   );
   const marks = marksForVariant(variant, layout);
   if (marks.length === 0) return null;

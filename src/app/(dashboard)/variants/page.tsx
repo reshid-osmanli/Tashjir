@@ -12,7 +12,11 @@ import { ScopePicker } from '@/components/editor/VariantEditor';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-system';
 import { describeScope, resolveScope } from '@/lib/tashjeer/scope';
-import { readTransmissionCatalog } from '@/lib/transmissions/catalog';
+import {
+  catalogImamsInOrder,
+  catalogNarratorsInOrder,
+  readTransmissionCatalog,
+} from '@/lib/transmissions/catalog';
 import {
   createGlobalRuleId,
   deleteGlobalRule,
@@ -154,9 +158,9 @@ export default function VariantsIndexPage() {
           </FilterSelect>
           <FilterSelect label="القارئ / الراوي" value={readerId} onChange={setReaderId}>
             <option value="">كل القراء</option>
-            {catalog.imams.map((imam) => (
+            {catalogImamsInOrder(catalog).map((imam) => (
               <optgroup key={imam.id} label={imam.name}>
-                {catalog.narrators
+                {catalogNarratorsInOrder(catalog)
                   .filter((narrator) => narrator.imamId === imam.id)
                   .map((narrator) => (
                     <option key={narrator.id} value={narrator.id}>{narrator.name}</option>
