@@ -17,8 +17,10 @@ import { characterBoundsForWord, splitQuranCharacters } from '@/lib/quran-logic/
 import {
   confirmOccurrence,
   deleteOccurrence,
+  hasLocalOverride,
   listOccurrenceLog,
   occurrenceIdFor,
+  PATCH_FIELD_LABELS,
   restoreOccurrence,
   setOccurrenceOrderRank,
   setOccurrenceStrength,
@@ -26,6 +28,7 @@ import {
   type RuleOccurrenceOverride,
 } from '@/lib/storage/rule-occurrences-store';
 import { useRuleOccurrences } from '@/hooks/useRuleOccurrences';
+import { useEditorStore } from '@/stores/editor-store';
 import { useStrengthDegrees } from '@/hooks/useStrengthDegrees';
 import { describeScope } from '@/lib/tashjeer/scope';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
@@ -52,14 +55,14 @@ const FILTER_LABELS: Record<OccurrenceFilter, string> = {
   PENDING: 'ما لم يُراجَع',
   CONFIRMED: 'ما اعتُمد',
   DELETED: 'ما حُذف',
-  EDITED: 'ما خُصِّصت درجته',
+  EDITED: 'ما عُدِّل محليًا',
 };
 
 const ACTION_LABELS: Record<OccurrenceLogEntry['action'], string> = {
   DELETE: 'حذف موضعي',
   RESTORE: 'إرجاع',
   CONFIRM: 'اعتماد',
-  EDIT: 'تعديل درجة',
+  EDIT: 'تعديل موضعي',
 };
 
 export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEditor }: RuleOccurrenceReviewProps) {
@@ -112,7 +115,7 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
       total: rows.length,
       deleted: rows.filter((row) => row.override?.state === 'DELETED').length,
       confirmed: rows.filter((row) => row.override?.state === 'CONFIRMED').length,
-      edited: rows.filter((row) => row.override?.strengthDegreeId || row.override?.strengthByNarrator).length,
+      edited: rows.filter((row) => hasLocalOverride(row.override)).length,
     }),
     [rows]
   );
@@ -152,22 +155,53 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
     setIndex((value) => Math.min(Math.max(value + delta, 0), Math.max(visible.length - 1, 0)));
   };
 
+  // كل إجراء هنا معاملة خارجية: لقطة تراجع موحدة وسطر تتبع في سجل
+  // المستند، فيعمل Ctrl+Z على الحذف والتحرير الموضعيين (FR-ED-10).
+  const transactExternal = useEditorStore((state) => state.transactExternal);
+
   const handleDelete = () => {
     if (!current) return;
-    deleteOccurrence(rule.id, current.match, reason);
+    transactExternal(
+      {
+        action: 'حذف موضعي من قاعدة',
+        targetType: 'RULE',
+        targetId: current.id,
+        category: rule.category,
+        summary: `حذف الموضع ${matchRef(current.match)} من قاعدة «${rule.title}» (القاعدة باقية)`,
+      },
+      () => deleteOccurrence(rule.id, current.match, reason)
+    );
     setReason('');
     occurrences.refresh();
   };
 
   const handleRestore = () => {
     if (!current) return;
-    restoreOccurrence(current.id);
+    transactExternal(
+      {
+        action: 'إرجاع موضع محذوف',
+        targetType: 'RULE',
+        targetId: current.id,
+        category: rule.category,
+        summary: `إرجاع الموضع ${matchRef(current.match)} إلى قاعدة «${rule.title}»`,
+      },
+      () => restoreOccurrence(current.id)
+    );
     occurrences.refresh();
   };
 
   const handleConfirm = () => {
     if (!current) return;
-    confirmOccurrence(rule.id, current.match);
+    transactExternal(
+      {
+        action: 'اعتماد موضع قاعدة',
+        targetType: 'RULE',
+        targetId: current.id,
+        category: rule.category,
+        summary: `اعتماد الموضع ${matchRef(current.match)} من قاعدة «${rule.title}» بعد المراجعة`,
+      },
+      () => confirmOccurrence(rule.id, current.match)
+    );
     occurrences.refresh();
     // الاعتماد خطوة مراجعة، فينتقل تلقائيا إلى ما يليه توفيرا لنقرة.
     step(1);
@@ -175,16 +209,38 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
 
   const handleStrength = (next: { degreeId?: string; byNarrator?: ReaderStrengthMap }) => {
     if (!current) return;
-    setOccurrenceStrength(rule.id, current.match, {
-      strengthDegreeId: next.degreeId,
-      strengthByNarrator: next.byNarrator,
-    });
+    transactExternal(
+      {
+        action: 'تخصيص درجة موضع',
+        targetType: 'RULE',
+        targetId: current.id,
+        category: rule.category,
+        summary: `تخصيص درجة القوة للموضع ${matchRef(current.match)} وحده`,
+      },
+      () =>
+        setOccurrenceStrength(rule.id, current.match, {
+          strengthDegreeId: next.degreeId,
+          strengthByNarrator: next.byNarrator,
+        })
+    );
     occurrences.refresh();
   };
 
   const handleOrderRank = (rank: number | null) => {
     if (!current) return;
-    setOccurrenceOrderRank(rule.id, current.match, rank);
+    transactExternal(
+      {
+        action: 'تعديل ترتيب موضع قاعدة',
+        targetType: 'RULE',
+        targetId: current.id,
+        category: rule.category,
+        summary:
+          rank === null
+            ? `إلغاء ترتيب السطر اليدوي للموضع ${matchRef(current.match)}`
+            : `تعديل رقم ترتيب السطر للموضع ${matchRef(current.match)} إلى ${rank}`,
+      },
+      () => setOccurrenceOrderRank(rule.id, current.match, rank)
+    );
     occurrences.refresh();
   };
 
@@ -232,7 +288,7 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
               <Stat label="مطابق" value={counts.total} tone="stone" />
               <Stat label="معتمد" value={counts.confirmed} tone="emerald" />
               <Stat label="محذوف موضعيا" value={counts.deleted} tone="rose" />
-              <Stat label="درجة مخصَّصة" value={counts.edited} tone="indigo" />
+              <Stat label="تجاوز محلي" value={counts.edited} tone="indigo" />
             </div>
           </div>
         </header>
@@ -429,6 +485,15 @@ function OccurrenceCard({
           <span style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }}>{match.matchedText}</span>
           {degreeLabel ? ` · الدرجة: ${degreeLabel}` : ''}
         </p>
+        {override?.patch && Object.keys(override.patch).length > 0 && (
+          <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] leading-relaxed text-amber-900">
+            حقول معدَّلة محليًا:{' '}
+            {(Object.keys(override.patch) as Array<keyof typeof override.patch>)
+              .map((field) => PATCH_FIELD_LABELS[field])
+              .join('، ')}
+            {override.patch.note ? ` — السبب: ${override.patch.note}` : ''}
+          </p>
+        )}
       </div>
 
       {/* الإجراءات */}
@@ -652,7 +717,18 @@ function LogTable({ log }: { log: OccurrenceLogEntry[] }) {
                 <td className="px-3 py-2 text-stone-800" style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }}>
                   {entry.matchedText ?? '—'}
                 </td>
-                <td className="px-3 py-2 text-stone-600">{entry.reason ?? '—'}</td>
+                <td className="px-3 py-2 text-stone-600">
+                  {entry.reason ?? '—'}
+                  {entry.changes && entry.changes.length > 0 && (
+                    <ul className="mt-1 space-y-0.5 text-[10px] text-stone-500">
+                      {entry.changes.map((change, changeIndex) => (
+                        <li key={`${change.field}-${changeIndex}`}>
+                          {change.field}: {change.before ?? '—'} ← {change.after ?? '—'}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </td>
                 <td className="px-3 py-2 text-stone-500">{formatDate(entry.at)}</td>
               </tr>
             );
@@ -665,6 +741,13 @@ function LogTable({ log }: { log: OccurrenceLogEntry[] }) {
 
 // ==================== عناصر صغيرة ====================
 
+/** مرجع مقروء للموضع في ملخصات التتبع: النص والسورة والآية. */
+function matchRef(match: GlobalRuleMatch): string {
+  const ayah = match.ayahKey ? getAyahByKey(match.ayahKey) : undefined;
+  const where = ayah ? `${getSurahOrFirst(ayah.surahNumber).name} ${ayah.ayahNumber}` : '—';
+  return `«${match.matchedText}» (${where})`;
+}
+
 function passesFilter(override: RuleOccurrenceOverride | undefined, filter: OccurrenceFilter): boolean {
   switch (filter) {
     case 'PENDING':
@@ -674,20 +757,30 @@ function passesFilter(override: RuleOccurrenceOverride | undefined, filter: Occu
     case 'DELETED':
       return override?.state === 'DELETED';
     case 'EDITED':
-      return Boolean(override?.strengthDegreeId || override?.strengthByNarrator);
+      return hasLocalOverride(override);
     default:
       return true;
   }
 }
 
 function StateBadge({ override }: { override?: RuleOccurrenceOverride }) {
-  if (override?.state === 'DELETED') {
-    return <span className="rounded bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-800">محذوف هنا</span>;
-  }
-  if (override?.state === 'CONFIRMED') {
-    return <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-800">معتمد</span>;
-  }
-  return <span className="rounded bg-stone-200 px-2 py-0.5 text-[10px] font-medium text-stone-700">لم يُراجَع</span>;
+  const state =
+    override?.state === 'DELETED' ? (
+      <span className="rounded bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-800">محذوف هنا</span>
+    ) : override?.state === 'CONFIRMED' ? (
+      <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-800">معتمد</span>
+    ) : (
+      <span className="rounded bg-stone-200 px-2 py-0.5 text-[10px] font-medium text-stone-700">لم يُراجَع</span>
+    );
+  if (!hasLocalOverride(override)) return state;
+  return (
+    <span className="flex items-center gap-1">
+      {state}
+      <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-900">
+        متجاوز محليًا
+      </span>
+    </span>
+  );
 }
 
 function NavButton({

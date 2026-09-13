@@ -29,8 +29,8 @@ import { documentWindowWords } from '@/lib/tashjeer/reading-window';
 import { buildCharacterPattern, findGlobalRuleMatches } from '@/lib/quran-logic/global-rule-engine';
 import {
   createGlobalRuleId,
-  saveGlobalRule,
-  setGlobalRuleOrderRank,
+  saveGlobalRuleBatch,
+  type GlobalRule,
 } from '@/lib/storage/global-rules-store';
 import { resolveScope } from '@/lib/tashjeer/scope';
 import { ScopePicker } from './VariantEditor';
@@ -109,7 +109,7 @@ export function SmartCreateWizard({
   onClose,
   onComplete,
 }: SmartCreateWizardProps) {
-  const { document, applySmartCreateBatch } = useEditorStore();
+  const { document, applySmartCreateBatch, transactExternal } = useEditorStore();
 
   const words = useMemo(() => (document ? documentWindowWords(document) : []), [document]);
 
@@ -307,27 +307,34 @@ export function SmartCreateWizard({
       return;
     }
 
-    let created = 0;
-    for (let index = 0; index < selectedTypes.length; index += 1) {
-      const type = selectedTypes[index]!;
-      const saved = saveGlobalRule({
-        id: createGlobalRuleId(),
-        title: `${baseTitle} — ${CATEGORY_LABELS[type]}`,
-        category: type,
-        scope,
-        ruleLabel: CATEGORY_LABELS[type],
-        pattern: buildCharacterPattern(document.ayahKey, characterRange),
-        applyRange,
-        status: 'DRAFT',
-        isActive: true,
-        orderRank: index + 1,
-      });
-      if (saved.orderRank) setGlobalRuleOrderRank(saved.id, saved.orderRank);
-      created += 1;
-    }
+    // الدفعة وحدة ذرية (FR-ED-10/DM-08): وسم دفعي مشترك ورتب صريحة
+    // متجاورة، وكلها خطوة تراجع واحدة — مع بقاء كل قاعدة مستقلة بعدها.
+    const batch = selectedTypes.map((type) => ({
+      id: createGlobalRuleId(),
+      title: `${baseTitle} — ${CATEGORY_LABELS[type]}`,
+      category: type,
+      scope,
+      ruleLabel: CATEGORY_LABELS[type],
+      pattern: buildCharacterPattern(document.ayahKey, characterRange),
+      applyRange,
+      status: 'DRAFT' as const,
+      isActive: true,
+    }));
+    let created: GlobalRule[] = [];
+    transactExternal(
+      {
+        action: 'إنشاء دفعة قواعد عامة',
+        targetType: 'RULE',
+        targetId: batch.map((rule) => rule.id).join(','),
+        summary: `إنشاء ${batch.length} قواعد عامة مستقلة من المعالج الذكي (${baseTitle})`,
+      },
+      () => {
+        created = saveGlobalRuleBatch(batch).rules;
+      }
+    );
     const rangeLabel =
       applicationScope === 'SURAH' ? 'هذه السورة' : applicationScope === 'AYAH_RANGE' ? 'مدى الآيات المحدد' : 'المصحف كله';
-    onComplete?.(`أُنشئت ${toArabicDigits(created)} قواعد عامة مستقلة على ${rangeLabel} — تظهر في كل موضع مطابق بلا نسخ.`);
+    onComplete?.(`أُنشئت ${toArabicDigits(created.length)} قواعد عامة مستقلة على ${rangeLabel} — تظهر في كل موضع مطابق بلا نسخ.`);
     onClose();
   };
 
