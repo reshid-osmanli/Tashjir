@@ -57,8 +57,10 @@ export function TashjeerFigure({
   characterMarkingActive = false,
   selectedWordId = null,
   selectedVariantId = null,
+  selectedBoundaryId = null,
   pulseLineId = null,
   hoveredLineId = null,
+  onBoundaryClick,
   onWordClick,
   onCharacterClick,
   onLineClick,
@@ -91,6 +93,10 @@ export function TashjeerFigure({
   characterMarkingActive?: boolean;
   selectedWordId?: number | null;
   selectedVariantId?: string | null;
+  /** العلامة المحددة في التحديد الموحد (تبرز بإطار أثخن). */
+  selectedBoundaryId?: string | null;
+  /** النقر على علامة وقف/ابتداء/منع: يحددها في التحديد الموحد. */
+  onBoundaryClick?: (boundary: RecitationBoundary) => void;
   /** سطر يُنبض لحظيا بعد إحضاره إلى مجال الرؤية (FR-ED-02.4). */
   pulseLineId?: string | null;
   hoveredLineId?: string | null;
@@ -114,7 +120,12 @@ export function TashjeerFigure({
 
       <AyahMarkers layout={layout} markers={ayahMarkers} fontSize={fontSize} />
 
-      <BoundaryMarkers boundaries={boundaries} layout={layout} />
+      <BoundaryMarkers
+        boundaries={boundaries}
+        layout={layout}
+        selectedBoundaryId={selectedBoundaryId}
+        onBoundaryClick={onBoundaryClick}
+      />
 
       <g>
         {classic.lines.map((line) => (
@@ -892,9 +903,13 @@ function BaselineBand({
 function BoundaryMarkers({
   boundaries,
   layout,
+  selectedBoundaryId,
+  onBoundaryClick,
 }: {
   boundaries: RecitationBoundary[];
   layout: { boxByPosition: Map<number, WordBox> };
+  selectedBoundaryId?: string | null;
+  onBoundaryClick?: (boundary: RecitationBoundary) => void;
 }) {
   const labels: Record<RecitationBoundary['kind'], string> = {
     WAQF: 'وقف',
@@ -918,12 +933,20 @@ function BoundaryMarkers({
         const x = boundary.kind === 'IBTIDA' ? box.x + box.width + 4 : box.x - 4;
         const y = boundary.kind === 'IBTIDA' ? box.topY - 13 : box.bottomY + 16;
         const color = colors[boundary.kind];
+        const selected = boundary.id === selectedBoundaryId;
+        const clickable = typeof onBoundaryClick === 'function';
         const text = `${boundary.label || labels[boundary.kind]}${
           boundary.connectsToNextAyah ? ' ↔ التالية' : ''
         }`;
 
         return (
-          <g key={boundary.id} opacity={0.94}>
+          <g
+            key={boundary.id}
+            opacity={0.94}
+            pointerEvents={clickable ? 'auto' : 'none'}
+            cursor={clickable ? 'pointer' : undefined}
+            onClick={clickable ? () => onBoundaryClick(boundary) : undefined}
+          >
             <line
               x1={x}
               y1={boundary.kind === 'IBTIDA' ? box.topY - 2 : box.bottomY + 2}
@@ -939,9 +962,9 @@ function BoundaryMarkers({
               width={Math.max(34, text.length * 6.5 + 10)}
               height={17}
               rx={5}
-              fill="#ffffff"
+              fill={selected ? '#fef9c3' : '#ffffff'}
               stroke={color}
-              strokeWidth={0.8}
+              strokeWidth={selected ? 2 : 0.8}
             />
             <text
               x={x}

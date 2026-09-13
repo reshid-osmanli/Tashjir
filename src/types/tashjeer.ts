@@ -666,6 +666,7 @@ export type DocumentEditTargetType =
   | 'LINE_LINK'
   | 'SEGMENT'
   | 'LINE_ORDER'
+  | 'BOUNDARY'
   | 'DOCUMENT';
 
 /** سطر في سجل تعديلات المستند: تتبع كل عمل يدوي قام به المحرر. */
@@ -709,6 +710,16 @@ export interface RecitationBoundary {
   notes?: string;
   /** لا يصح إلا عند آخر كلمة: يربط نهاية الآية بأول الآية التالية. */
   connectsToNextAyah?: boolean;
+  /**
+   * مصدر العلامة: EDITOR أثبتها المحقق، وENGINE اقترحها المحرك (تعمل عمل
+   * «الوقف المعلّم» في حزمة الوقف على نهايات الآيات).
+   */
+  source?: 'EDITOR' | 'ENGINE';
+  /**
+   * الضبط الحرفي اختياريًا: فهرس الحرف داخل الكلمة (0-based). غيابه يعني
+   * الضبط على مستوى الكلمة.
+   */
+  characterIndex?: number;
 }
 
 /**
@@ -724,6 +735,12 @@ export interface ReadingWindowSettings {
   linkNextAyah?: boolean;
   /** تشجير مقطع محدد وحده (مواضع النافذة، شاملة الطرفين). */
   focusSegment?: { startPosition: number; endPosition: number } | null;
+  /**
+   * الحدود الداخلية الموصولة في النافذة: كل عنصر موضع كلمة يُوصل ما بعدها
+   * بدل الوقف عليه (FR-ED-11.2). الفارغ أو الغائب يعني الوقف على كل حدّ،
+   * والوصل عند حدّ عليه «ممنوع الوصل» مرفوض (قيد صلب).
+   */
+  segmentWasl?: number[];
 }
 
 /** سطر يدوي دلالي، للحالات التي يحتاج فيها المحقق إلى إضافة سطر مستقل. */
@@ -861,7 +878,7 @@ export interface TashjeerDocument {
 // ==================== سياق التحديد الموحد ====================
 
 /** كل اللوحات والمحرر تتشارك هذا المرجع؛ لا تحتفظ أي لوحة بتحديد مستقل. */
-export type EditorSelectionKind = 'WORD' | 'LINE' | 'SEGMENT' | 'DIFFERENCE' | 'FACE' | 'RULE';
+export type EditorSelectionKind = 'WORD' | 'LINE' | 'SEGMENT' | 'DIFFERENCE' | 'FACE' | 'RULE' | 'BOUNDARY';
 
 export interface EditorSelection {
   kind: EditorSelectionKind;

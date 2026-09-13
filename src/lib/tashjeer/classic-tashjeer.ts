@@ -64,8 +64,10 @@ import { DEFAULT_ENGINE_SETTINGS, type TashjeerEngineSettings } from './engine-s
 import {
   buildReadingPlan,
   readingSegmentIndex,
+  variantAppliesToRecitation,
   variantTraversalAnchor,
   type ReadingPlan,
+  type RecitationContextOptions,
 } from './reading-plan';
 import { formatPathName, getNarratorName, resolveScope } from './scope';
 import { getNarratorSymbol, narratorTayyibahOrder } from './symbols';
@@ -121,6 +123,12 @@ export interface ClassicTashjeerOptions {
    * إلا ما وقع داخل هذا المدى من الكلمات، وتُحصر أطراف الأسطر فيه.
    */
   focusSegment?: { startPosition: number; endPosition: number } | null;
+  /**
+   * سياق الوقف/الوصل (FR-ED-11.1): عند تمريره تُسقط من الأسطر الاختلافات
+   * المشروطة الخارجة عن سياقها قبل بناء التراكيب — في وضعَي التركيب
+   * (COMBINED) والوجه المنفرد (PER_VARIANT) معًا.
+   */
+  recitation?: RecitationContextOptions & { boundaries?: RecitationBoundary[] };
   /**
    * روابط المحرر اليدوية: دمج الأوجه والأسطر وربط الأجزاء. تصحيح نتيجة
    * المحرك هنا لا بإعادة تشغيله.
@@ -434,11 +442,21 @@ export function generateClassicTashjeer(
     ? Math.max(...spanBoxes.map((box) => box.x + box.width))
     : opts.canvasWidth - opts.paddingRight;
 
-  // 1. تصفية المواضع: الفئة الظاهرة، ومقطع العمل، ووجود وجه غير أساسي يقرأ
-  //    به أحد من المعروضين.
+  // 1. تصفية المواضع: الفئة الظاهرة، ومقطع العمل، وسياق الوقف/الوصل،
+  //    ووجود وجه غير أساسي يقرأ به أحد من المعروضين.
   const eligibleVariants = variants.filter((variant) => {
     if (!filter.categories.includes(variant.category)) return false;
     if (focus && !intersectsSegmentForVariant(variant, focus)) return false;
+    if (
+      runtime.recitation &&
+      !variantAppliesToRecitation(
+        variant,
+        runtime.recitation.boundaries ?? runtime.boundaries ?? [],
+        runtime.recitation
+      )
+    ) {
+      return false;
+    }
     return variant.alternatives.some((alt) => {
       if (alt.isBase) return false;
       const narratorIds = resolveScope(alt.scope, catalog);

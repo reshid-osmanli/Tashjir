@@ -34,6 +34,7 @@ import type {
   EntityId,
 } from '@/lib/tashjeer/model/v8';
 import { createEntityId, linkKindToRelationType } from '@/lib/tashjeer/model/v8';
+import { getAyahWordsByKey } from '@/data/quran';
 
 /**
  * مفتاح نطاق للتجميع عند تعدد الاختلافات في الموضع نفسه (DM-09).
@@ -173,25 +174,34 @@ export function migrateLinkToRelation(link: TashjeerLink): Relation {
   };
 }
 
-/** يحوّل علامة وقف/ابتداء قديمة إلى WaqfMark (DM-07). */
-export function migrateBoundaryToWaqfMark(boundary: RecitationBoundary, ayahKey: number): WaqfMark {
+/**
+ * يحوّل علامة وقف/ابتداء قديمة إلى WaqfMark (DM-07).
+ * العلامة عند آخر كلمة (أو المربوطة بالتالية) نطاقُها نهاية الآية، وما عداها
+ * داخلي. المصدر والضبط الحرفي يُحملان من العلامة عند وجودهما.
+ */
+export function migrateBoundaryToWaqfMark(
+  boundary: RecitationBoundary,
+  ayahKey: number,
+  wordsCount?: number
+): WaqfMark {
   const kindMap: Record<RecitationBoundary['kind'], WaqfMarkKind> = {
     WAQF: 'WAQF',
     IBTIDA: 'IBTIDA',
     NO_WASL: 'FORBIDDEN_WASL',
     WASL: 'WASL',
   };
+  const atEnd = typeof wordsCount === 'number' && boundary.position === wordsCount;
   return {
     id: boundary.id,
     ayahKey,
     position: boundary.position,
-    characterIndex: undefined,
+    characterIndex: boundary.characterIndex,
     kind: kindMap[boundary.kind],
-    scope: boundary.connectsToNextAyah ? 'END_OF_AYAH' : 'INTERNAL',
+    scope: boundary.connectsToNextAyah || atEnd ? 'END_OF_AYAH' : 'INTERNAL',
     connectsToNextAyah: boundary.connectsToNextAyah,
     label: boundary.label,
     notes: boundary.notes,
-    source: 'editor',
+    source: boundary.source === 'ENGINE' ? 'engine' : 'editor',
     createdAt: boundary.id,
   };
 }
@@ -259,8 +269,9 @@ export function migrateDocumentToV8(
     }
   }
 
+  const ayahWordsCount = getAyahWordsByKey(document.ayahKey).length;
   const waqfMarks: WaqfMark[] = (document.boundaries ?? []).map((boundary) =>
-    migrateBoundaryToWaqfMark(boundary, document.ayahKey)
+    migrateBoundaryToWaqfMark(boundary, document.ayahKey, ayahWordsCount)
   );
 
   const corrections: Correction[] = [];
@@ -344,6 +355,7 @@ export function migrateDocumentToV8(
     readingWindow: {
       linkNextAyah: document.readingWindow?.linkNextAyah === true,
       focusSegment: document.readingWindow?.focusSegment ?? null,
+      segmentWasl: [...(document.readingWindow?.segmentWasl ?? [])],
     },
     lineOrder: document.lineOrder ?? [],
     createdAt: document.meta?.createdAt ?? new Date().toISOString(),

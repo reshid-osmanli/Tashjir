@@ -36,7 +36,12 @@ import { coalesceLineOrder, orderSnapshotOf, shiftLineInOrder } from '@/lib/tash
 import { listGlobalRules } from '@/lib/storage/global-rules-store';
 import { faceEndpointKey } from '@/types/tashjeer';
 import type { VariantCategory } from '@/types';
-import type { TashjeerLinkRelation, VerificationStatus } from '@/types/tashjeer';
+import type {
+  RecitationBoundaryKind,
+  TashjeerLinkRelation,
+  VerificationStatus,
+} from '@/types/tashjeer';
+import { jointAt, jointStateIcon, jointStateLabel } from '@/lib/tashjeer/waqf-context';
 import type { ClassicLine, ClassicTashjeer } from '@/lib/tashjeer/classic-tashjeer';
 
 const STATUS_OPTIONS: Array<{ value: VerificationStatus; label: string }> = [
@@ -54,9 +59,15 @@ export function PropertiesPanel() {
   const {
     document,
     filter,
+    selection,
     selectedWordId,
     selectedVariantId,
     selectedBranchId,
+    selectBoundary,
+    updateBoundary,
+    deleteBoundary,
+    toggleJoint,
+    setLinkNextAyah,
     toggleNarrator,
     setFilter,
     setDocumentStatus,
@@ -76,7 +87,7 @@ export function PropertiesPanel() {
   const engine = useEngineSettings();
   const engineConfig = useEngineConfig();
   const strengthDegrees = useStrengthDegrees();
-  const { stats, classic } = useAyahTashjeer(document, filter, {}, { catalog, engine, strengthDegrees, engineConfig });
+  const { stats, classic, words, window: readingWindow } = useAyahTashjeer(document, filter, {}, { catalog, engine, strengthDegrees, engineConfig });
 
   const selectedWord = useMemo(
     () => (selectedWordId ? getWordById(selectedWordId) : undefined),
@@ -88,6 +99,24 @@ export function PropertiesPanel() {
     [document]
   );
   const selectedVariant = effectiveVariants.find((variant) => variant.id === selectedVariantId);
+  const selectedBoundary =
+    selection?.kind === 'BOUNDARY'
+      ? document?.boundaries.find((boundary) => boundary.id === selection.id)
+      : undefined;
+  const selectedJoint = useMemo(
+    () =>
+      selectedBoundary && document
+        ? jointAt(selectedBoundary.position, {
+            wordsCount: words.length,
+            boundaries: document.boundaries,
+            linkNextAyah: readingWindow.isLinked,
+            segmentWasl: document.readingWindow?.segmentWasl,
+            firstAyahEndPosition: readingWindow.firstAyahEndPosition,
+          })
+        : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedBoundary, document]
+  );
   const selectedBranch = document?.branches.find((branch) => branch.id === selectedBranchId);
   const selectedLine =
     classic.lines.find((line) => line.id === selectedBranchId) ??
@@ -167,6 +196,82 @@ export function PropertiesPanel() {
           <Row label="الترتيب" value={toArabicDigits(selectedWord.position)} />
           <Row label="بلا تشكيل" value={stripHarakat(selectedWord.text)} />
           <Row label="المعرّف" value={selectedWord.id} />
+        </Section>
+      )}
+
+      {/* العلامة المحددة: نوعها وحالتها (وقف/وصل/ممنوع) والوصل عندها. */}
+      {selectedBoundary && (
+        <Section title="العلامة المحددة">
+          <div className="flex items-center justify-between gap-2">
+            <select
+              value={selectedBoundary.kind}
+              onChange={(event) =>
+                updateBoundary(selectedBoundary.id, {
+                  kind: event.target.value as RecitationBoundaryKind,
+                })
+              }
+              className="h-7 rounded border border-stone-300 bg-white px-1 text-[11px]"
+              aria-label="نوع العلامة"
+            >
+              <option value="WAQF">وقف</option>
+              <option value="IBTIDA">ابتداء</option>
+              <option value="WASL">وصل</option>
+              <option value="NO_WASL">ممنوع الوصل</option>
+            </select>
+            {selectedJoint && (
+              <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] text-stone-700">
+                {jointStateIcon(selectedJoint.state)} {jointStateLabel(selectedJoint.state)}
+              </span>
+            )}
+          </div>
+          <Row label="الموضع" value={`بعد الكلمة ${toArabicDigits(selectedBoundary.position)}`} />
+          <label className="mt-1.5 block">
+            <span className="mb-0.5 block text-[11px] font-medium text-stone-600">وصف العلامة</span>
+            <input
+              value={selectedBoundary.label ?? ''}
+              onChange={(event) => updateBoundary(selectedBoundary.id, { label: event.target.value })}
+              placeholder="وقف كافٍ، وصل أولى..."
+              className="input h-7 text-[11px]"
+            />
+          </label>
+          {selectedJoint?.kind === 'INTERNAL' && (
+            <button
+              type="button"
+              onClick={() => toggleJoint(selectedBoundary.position)}
+              className={`mt-2 w-full rounded border px-2 py-1.5 text-[11px] ${
+                selectedJoint.connected
+                  ? 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
+                  : 'border-sky-300 bg-sky-600 text-white hover:bg-sky-700'
+              }`}
+            >
+              {selectedJoint.connected ? 'فصل المقطعين بوقف ⏸' : 'وصل المقطعين 🔗'}
+            </button>
+          )}
+          {selectedJoint?.kind === 'AYAH_END' && !readingWindow.isLinked && (
+            <button
+              type="button"
+              onClick={() => setLinkNextAyah(true)}
+              className="mt-2 w-full rounded border border-sky-300 bg-sky-50 px-2 py-1.5 text-[11px] text-sky-900 hover:bg-sky-100"
+            >
+              وصل الآية بالتالية 🔗
+            </button>
+          )}
+          <div className="mt-2 flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => selectBoundary(null)}
+              className="flex-1 rounded border border-stone-300 bg-white px-2 py-1 text-[11px] text-stone-700 hover:bg-stone-50"
+            >
+              إلغاء التحديد
+            </button>
+            <button
+              type="button"
+              onClick={() => deleteBoundary(selectedBoundary.id)}
+              className="flex-1 rounded border border-red-300 bg-white px-2 py-1 text-[11px] text-red-700 hover:bg-red-50"
+            >
+              حذف العلامة
+            </button>
+          </div>
         </Section>
       )}
 

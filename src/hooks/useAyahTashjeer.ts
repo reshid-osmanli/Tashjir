@@ -135,7 +135,12 @@ export function useAyahTashjeer(
     () =>
       document
         ? getEffectiveVariants(document).filter((variant) =>
-            variantAppliesToRecitation(variant, document.boundaries ?? [])
+            variantAppliesToRecitation(variant, document.boundaries ?? [], {
+              wordsCount: window.words.length,
+              linkNextAyah,
+              segmentWasl: document.readingWindow?.segmentWasl,
+              firstAyahEndPosition: window.firstAyahEndPosition,
+            })
           )
         : [],
     // eslint-disable-next-line react-hooks/exhaustive-deps

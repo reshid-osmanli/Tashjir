@@ -15,6 +15,11 @@ import { buildReadingPlan } from '@/lib/tashjeer/reading-plan';
 import { normalizeScope, resolveScope } from '@/lib/tashjeer/scope';
 import { getNarratorSymbol } from '@/lib/tashjeer/symbols';
 import { documentReadingWindow, nextAyahKeyInSurah } from '@/lib/tashjeer/reading-window';
+import {
+  jointStateIcon,
+  jointStateLabel,
+  listJoints,
+} from '@/lib/tashjeer/waqf-context';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { parseAyahKey } from '@/data/quran';
 import type { VariantCategory } from '@/types';
@@ -36,11 +41,17 @@ export function RecitationControls() {
   const {
     document,
     selectedWordId,
+    selection,
     addBoundary,
     updateBoundary,
     deleteBoundary,
+    selectBoundary,
     setLinkNextAyah,
     setFocusSegment,
+    toggleJoint,
+    lastConnectionRejection,
+    clearConnectionRejection,
+    undo,
   } = useEditorStore();
   const [kind, setKind] = useState<RecitationBoundaryKind>('WAQF');
   const [label, setLabel] = useState('');
@@ -59,6 +70,20 @@ export function RecitationControls() {
     () => buildReadingPlan(words.length, document?.boundaries ?? []),
     [document?.boundaries, words.length]
   );
+  // حدود الوصل/الوقف في النافذة: آخر الآية والحدود الداخلية بعد العلامات.
+  const joints = useMemo(
+    () =>
+      listJoints({
+        wordsCount: words.length,
+        boundaries: document?.boundaries ?? [],
+        linkNextAyah: readingWindow.isLinked,
+        segmentWasl: document?.readingWindow?.segmentWasl,
+        firstAyahEndPosition: readingWindow.firstAyahEndPosition,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [document?.boundaries, document?.readingWindow?.segmentWasl, readingWindow, words.length]
+  );
+  const internalJoints = joints.filter((joint) => joint.kind === 'INTERNAL');
 
   if (!document) return null;
 
@@ -164,7 +189,14 @@ export function RecitationControls() {
       {document.boundaries.length > 0 && (
         <ul className="mt-3 space-y-1.5">
           {document.boundaries.map((boundary) => (
-            <li key={boundary.id} className="rounded border border-stone-200 bg-white p-2">
+            <li
+              key={boundary.id}
+              className={`rounded border p-2 ${
+                selection?.kind === 'BOUNDARY' && selection.id === boundary.id
+                  ? 'border-violet-500 bg-violet-50/50'
+                  : 'border-stone-200 bg-white'
+              }`}
+            >
               <div className="flex items-center gap-1.5">
                 <select
                   value={boundary.kind}
@@ -178,7 +210,20 @@ export function RecitationControls() {
                   <option value="WASL">وصل</option>
                   <option value="NO_WASL">ممنوع الوصل</option>
                 </select>
-                <span className="text-[10px] text-stone-600">عند الكلمة {boundary.position}</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    selectBoundary(
+                      selection?.kind === 'BOUNDARY' && selection.id === boundary.id
+                        ? null
+                        : boundary.id
+                    )
+                  }
+                  className="text-[10px] text-stone-600 hover:text-violet-800 hover:underline"
+                  title="تحديد العلامة في اللوحة"
+                >
+                  عند الكلمة {boundary.position}
+                </button>
                 <button
                   type="button"
                   onClick={() => deleteBoundary(boundary.id)}
@@ -209,6 +254,40 @@ export function RecitationControls() {
             </li>
           ))}
         </ul>
+      )}
+
+      {/* رفض الوصل (ممنوع الوصل قيد صلب): رسالة ومرجع العلامة وتراجع. */}
+      {lastConnectionRejection && (
+        <div className="mt-3 rounded border border-red-300 bg-red-50 p-2" role="alert">
+          <p className="text-[11px] font-semibold text-red-900">⛔ تعذّر الوصل — لم يتغير شيء</p>
+          <p className="mt-0.5 text-[11px] leading-relaxed text-red-800">
+            {lastConnectionRejection.reason}
+          </p>
+          {lastConnectionRejection.markNote && (
+            <p className="mt-0.5 text-[10px] text-red-700">
+              العلامة: {lastConnectionRejection.markNote}
+            </p>
+          )}
+          <div className="mt-1.5 flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                clearConnectionRejection();
+                undo();
+              }}
+              className="rounded border border-red-300 bg-white px-2 py-1 text-[10px] text-red-800 hover:bg-red-100"
+            >
+              تراجع
+            </button>
+            <button
+              type="button"
+              onClick={clearConnectionRejection}
+              className="rounded border border-stone-300 bg-white px-2 py-1 text-[10px] text-stone-600 hover:bg-stone-50"
+            >
+              إخفاء
+            </button>
+          </div>
+        </div>
       )}
 
       <div className="mt-3 rounded bg-stone-50 p-2">
@@ -282,31 +361,99 @@ export function RecitationControls() {
         )}
       </div>
 
+      {/* الحدود الداخلية: كل حدّ وقفٌ إلا ما وصله المحقق صراحة. */}
+      {internalJoints.length > 0 && (
+        <div className="mt-3 space-y-1.5">
+          <p className="text-[10px] font-semibold text-stone-700">وصل المقاطع الداخلية</p>
+          <p className="text-[10px] leading-relaxed text-stone-500">
+            الحدّ الموصول تظهر عنده أحكام «وصلًا فقط» وتسقط أحكام «وقفًا فقط». الوصل عند
+            «ممنوع الوصل» مرفوض.
+          </p>
+          <ul className="space-y-1">
+            {internalJoints.map((joint) => (
+              <li
+                key={joint.position}
+                className={`flex items-center gap-1.5 rounded border p-1.5 ${
+                  joint.state === 'FORBIDDEN'
+                    ? 'border-red-200 bg-red-50/50'
+                    : joint.connected
+                      ? 'border-sky-200 bg-sky-50/50'
+                      : 'border-stone-200 bg-white'
+                }`}
+              >
+                <span className="text-[11px]" aria-hidden>
+                  {jointStateIcon(joint.state)}
+                </span>
+                <span className="flex-1 text-[11px] text-stone-700">
+                  بعد الكلمة {toArabicDigits(joint.position)} · {jointStateLabel(joint.state)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => toggleJoint(joint.position)}
+                  className={`rounded border px-2 py-0.5 text-[10px] ${
+                    joint.state === 'FORBIDDEN'
+                      ? 'border-red-300 bg-white text-red-700 hover:bg-red-100'
+                      : joint.connected
+                        ? 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
+                        : 'border-sky-300 bg-sky-600 text-white hover:bg-sky-700'
+                  }`}
+                  title={
+                    joint.state === 'FORBIDDEN'
+                      ? 'الوصل ممنوع بعلامة المحقق — المحاولة مرفوضة'
+                      : joint.connected
+                        ? 'فصل المقطعين بوقف'
+                        : 'وصل المقطعين'
+                  }
+                >
+                  {joint.connected ? 'افصل ⏸' : 'صِل 🔗'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* وصل الآيتين: الحكم قد يقع بين آخر آية وأول التي بعدها. */}
       <div className="mt-3 rounded border border-sky-200 bg-sky-50/60 p-2">
-        <p className="text-[10px] font-semibold text-sky-900">وصل الآيتين</p>
+        <div className="flex items-center justify-between gap-1.5">
+          <p className="text-[10px] font-semibold text-sky-900">وصل الآيتين</p>
+          {/* مبدّل الوضع المرئي: وقف أم وصل عند نهاية الآية. */}
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+              readingWindow.isLinked
+                ? 'bg-sky-600 text-white'
+                : 'bg-stone-200 text-stone-700'
+            }`}
+          >
+            {readingWindow.isLinked ? '🔗 وصل' : '⏸ وقف'}
+          </span>
+        </div>
         {nextKey ? (
           <>
             <label className="mt-1 flex items-center gap-1.5 text-[11px] text-sky-900">
               <input
                 type="checkbox"
                 checked={readingWindow.isLinked}
-                disabled={plan.forbiddenWaslAfter.includes(readingWindow.firstAyahEndPosition)}
                 onChange={(event) => setLinkNextAyah(event.target.checked)}
-                className="accent-sky-700 disabled:cursor-not-allowed"
+                className="accent-sky-700"
               />
               ضمّ الآية {toArabicDigits(parseAyahKey(nextKey).ayahNumber)} إلى نافذة العمل
             </label>
-            {plan.forbiddenWaslAfter.includes(readingWindow.firstAyahEndPosition) ? (
+            <p className="mt-1 text-[10px] leading-relaxed text-sky-800">
+              {readingWindow.isLinked
+                ? 'الحدّ وصلٌ: تظهر أحكام «وصلًا فقط» وتسقط أحكام «وقفًا فقط» عند نهاية الآية.'
+                : 'الحدّ وقفٌ: تظهر أحكام «وقفًا فقط» وتسقط أحكام «وصلًا فقط» عند نهاية الآية.'}
+            </p>
+            {plan.forbiddenWaslAfter.includes(readingWindow.firstAyahEndPosition) && (
               <p className="mt-1 rounded bg-red-50 px-1.5 py-1 text-[10px] text-red-800">
-                الوصل ممنوع بعلامة المحقق عند نهاية الآية. احذف العلامة أو غيّرها قبل ضم الآية التالية.
-              </p>
-            ) : (
-              <p className="mt-1 text-[10px] leading-relaxed text-sky-800">
-                عند الوصل تتسلسل مواضع الكلمات عبر الآيتين، فيمكن تحديد حكم يبدأ في آخر الأولى
-                وينتهي في أول الثانية، ويشجّره المحرك سطرا واحدا.
+                تنبيه: علامة «ممنوع الوصل» عند نهاية الآية — أي محاولة وصل مرفوضة. احذف
+                العلامة أو غيّرها قبل ضم الآية التالية.
               </p>
             )}
+            <p className="mt-1 text-[10px] leading-relaxed text-sky-800">
+              عند الوصل تتسلسل مواضع الكلمات عبر الآيتين، فيمكن تحديد حكم يبدأ في آخر الأولى
+              وينتهي في أول الثانية، ويشجّره المحرك سطرا واحدا.
+            </p>
           </>
         ) : (
           <p className="mt-1 text-[10px] text-sky-800">هذه آخر آية في السورة، فلا وصل بعدها.</p>

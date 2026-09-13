@@ -32,6 +32,19 @@ export function SelectionBreadcrumb() {
         return owner?.title ?? `سطر`;
       },
       wordText: (id) => getWordById(id)?.text,
+      boundaryLabel: (id) => {
+        const boundary = document?.boundaries.find((item) => item.id === id);
+        if (!boundary) return undefined;
+        const kind =
+          boundary.kind === 'WAQF'
+            ? 'وقف'
+            : boundary.kind === 'IBTIDA'
+              ? 'ابتداء'
+              : boundary.kind === 'WASL'
+                ? 'وصل'
+                : 'ممنوع الوصل';
+        return `${kind} — ك${boundary.position}${boundary.label ? ` (${boundary.label})` : ''}`;
+      },
     };
   }, [document]);
 

@@ -169,26 +169,196 @@ export function resolveRelation(
 
 // ==================== الوصل/ممنوع الوصل ====================
 
-/** يتحقق من السماح بالوصل بين حدّين (FR-ED-11، DM-07، FR-ES-16). */
+/** طلب وصل بين حدّين (FR-ED-11.3، DM-07، FR-ES-16). */
+export interface ConnectionRequest {
+  /** علامة المنع عند الحدّ، أو null. مرجعها (معرّفها وملاحظتها) يظهر في الرفض. */
+  forbiddenMark?: { id: string; note?: string } | null;
+  /** بديل مباشر: هل الوصل ممنوع؟ (يُستعمل عند غياب مرجع العلامة). */
+  forbidden?: boolean;
+  /** وصف الموضع للرسائل، مثل: «نهاية الآية (بعد الكلمة ٤)». */
+  label?: string;
+  /** حقول سياق إضافية لتقييم قواعد الاستوديو. */
+  context?: DecisionContext;
+}
+
+/**
+ * يتحقق من السماح بالوصل بين حدّين (FR-ED-11، DM-07، FR-ES-16).
+ *
+ * المنع قيدٌ صلب (Hard): علامة «ممنوع الوصل» ترفض العملية دائمًا ولا تُتجاوز
+ * إلا بحذف العلامة نفسها. ثم تُقيَّم قواعد الاستوديو المفعّلة (ACTIVE):
+ * قاعدة مطابقة بإجراء حجب (BLOCK_RESULT) ترفض الوصل باسمها — وهذا هو قالب
+ * «IF Connection=FORBIDDEN THEN Block» من الحزمة 02. ما عداه مسموح.
+ *
+ * الصيغة القديمة `resolveConnection(forbidden, profile)` تبقى عاملة حرفيًا.
+ */
 export function resolveConnection(
   forbidden: boolean,
-  _profile: EngineConfig = DEFAULT_SYSTEM_PROFILE
+  profile?: EngineConfig
+): DecisionResult<{ allowed: boolean; reason: string }>;
+export function resolveConnection(
+  request: ConnectionRequest,
+  profile?: EngineConfig
+): DecisionResult<{ allowed: boolean; reason: string }>;
+export function resolveConnection(
+  forbiddenOrRequest: boolean | ConnectionRequest,
+  profile: EngineConfig = DEFAULT_SYSTEM_PROFILE
 ): DecisionResult<{ allowed: boolean; reason: string }> {
   const trace: DecisionResult<{ allowed: boolean; reason: string }>['trace'] = [];
+  const request: ConnectionRequest =
+    typeof forbiddenOrRequest === 'boolean' ? { forbidden: forbiddenOrRequest } : forbiddenOrRequest;
+  const mark = request.forbiddenMark ?? null;
+  const forbidden = mark !== null || request.forbidden === true;
+  const where = request.label ? ` — ${request.label}` : '';
+
   if (forbidden) {
-    trace.push({ stage: 'CONNECTION', message: 'علامة ممنوع الوصل present — الوصل مرفوض', status: 'blocked' });
+    const ref = mark ? ` (العلامة ${mark.id}${mark.note ? ` — ${mark.note}` : ''})` : '';
+    trace.push({
+      stage: 'CONNECTION',
+      message: `علامة ممنوع الوصل حاضرة — الوصل مرفوض${where}${ref}`,
+      status: 'blocked',
+    });
     return {
-      decision: { allowed: false, reason: 'الوصل ممنوع في هذا الموضع' },
+      decision: { allowed: false, reason: `الوصل ممنوع في هذا الموضع${where}${ref}` },
       appliedRules: [],
       skippedRules: [],
       trace,
     };
   }
-  trace.push({ stage: 'CONNECTION', message: 'لا مانع — الوصل مسموح', status: 'won' });
+
+  // قواعد الاستوديو المفعّلة قد تحجب الوصل (قالب ممنوع الوصل).
+  const ctx: DecisionContext = { forbiddenWasl: false, connection: 'ALLOWED', ...request.context };
+  const { matched, evaluated } = matchRules(profile, ctx);
+  const blocking = matched.filter(
+    (rule) => rule.status === 'ACTIVE' && rule.actions.some((action) => action.type === 'BLOCK_RESULT')
+  );
+  for (const item of evaluated) {
+    if (item.matched) {
+      trace.push({
+        stage: 'MATCH',
+        ruleId: item.rule.id,
+        message: `طابقت: ${item.rule.name}`,
+        status: 'applied',
+        priority: item.rule.priority,
+      });
+    }
+  }
+  if (blocking.length > 0) {
+    const names = blocking.map((rule) => rule.name).join(' + ');
+    trace.push({ stage: 'CONNECTION', message: `حجبته قاعدة مفعّلة: ${names}`, status: 'blocked' });
+    return {
+      decision: { allowed: false, reason: `حجب الوصل بقاعدة: ${names}` },
+      appliedRules: blocking,
+      skippedRules: evaluated
+        .filter((item) => !item.matched)
+        .map((item) => ({ rule: item.rule, reason: 'غير مطابقة' })),
+      trace,
+    };
+  }
+
+  trace.push({ stage: 'CONNECTION', message: `لا مانع — الوصل مسموح${where}`, status: 'won' });
   return {
-    decision: { allowed: true, reason: 'لا علامة ممنوع وصل' },
-    appliedRules: [],
-    skippedRules: [],
+    decision: { allowed: true, reason: 'لا علامة ممنوع وصل ولا قاعدة حاجبة' },
+    appliedRules: matched.filter((rule) => rule.status === 'ACTIVE'),
+    skippedRules: evaluated
+      .filter((item) => !item.matched)
+      .map((item) => ({ rule: item.rule, reason: 'غير مطابقة' })),
+    trace,
+  };
+}
+
+// ==================== سياق الاختلاف (وقفًا فقط/وصلًا فقط) ====================
+
+/** طلب تقييم ظهور اختلاف مشروط في وضع أداء (FR-ED-11.1/11.2). */
+export interface DifferenceContextRequest {
+  /** سياق الاختلاف المثبت: دائمًا، وقفًا فقط، وصلًا فقط. */
+  context: 'ALWAYS' | 'WAQF_ONLY' | 'WASL_ONLY';
+  /** وضع الأداء الفعلي عند موضع الاختلاف. */
+  mode: 'WAQF' | 'WASL';
+  /** هل عند الموضع منع وصل صلب؟ */
+  forbidden?: boolean;
+  /** الموضع (بعد الكلمة N) للأثر والرسائل. */
+  position?: number;
+  /** حقول سياق إضافية لتقييم قواعد الاستوديو. */
+  extra?: DecisionContext;
+}
+
+/**
+ * يحسم ظهور اختلاف مشروط في سياق أداء: يطابق السياقُ الوضعَ أولًا
+ * (وقفًا فقط ← وقف، وصلًا فقط ← وصل)، ثم تُقيَّم قواعد الاستوديو المفعّلة:
+ * قاعدة حجب مطابقة (كقالب «ممنوع الوصل: احجب») تُسقط الاختلاف من العرض
+ * مع ذكر اسمها في الأثر — والكيان نفسه لا يُحذف أبدًا.
+ */
+export function resolveDifferenceContext(
+  request: DifferenceContextRequest,
+  profile: EngineConfig = DEFAULT_SYSTEM_PROFILE
+): DecisionResult<{ active: boolean; reason: string }> {
+  const trace: DecisionResult<{ active: boolean; reason: string }>['trace'] = [];
+  const { context, mode } = request;
+  const where = typeof request.position === 'number' ? ` عند الموضع ${request.position}` : '';
+
+  if (context !== 'ALWAYS') {
+    const matches = mode === 'WAQF' ? context === 'WAQF_ONLY' : context === 'WASL_ONLY';
+    trace.push({
+      stage: 'CONTEXT',
+      message:
+        context === 'WAQF_ONLY'
+          ? `السياق «وقفًا فقط» والوضع «${mode === 'WAQF' ? 'وقف' : 'وصل'}»${where}`
+          : `السياق «وصلًا فقط» والوضع «${mode === 'WAQF' ? 'وقف' : 'وصل'}»${where}`,
+      status: matches ? 'applied' : 'skipped',
+    });
+    if (!matches) {
+      return {
+        decision: {
+          active: false,
+          reason: mode === 'WAQF' ? 'يسقط بالوقف (وصلًا فقط)' : 'يسقط بالوصل (وقفًا فقط)',
+        },
+        appliedRules: [],
+        skippedRules: [],
+        trace,
+      };
+    }
+  } else {
+    trace.push({ stage: 'CONTEXT', message: `السياق «دائمًا» — ظاهر في الوقف والوصل${where}`, status: 'applied' });
+  }
+
+  const ctx: DecisionContext = {
+    context,
+    connection: mode,
+    forbiddenWasl: request.forbidden === true,
+    position: request.position !== undefined ? String(request.position) : undefined,
+    ...request.extra,
+  };
+  const { matched, evaluated } = matchRules(profile, ctx);
+  const blocking = matched.filter(
+    (rule) => rule.status === 'ACTIVE' && rule.actions.some((action) => action.type === 'BLOCK_RESULT')
+  );
+  for (const rule of matched) {
+    trace.push({
+      stage: 'MATCH',
+      ruleId: rule.id,
+      message: `طابقت: ${rule.name}`,
+      status: 'applied',
+      priority: rule.priority,
+    });
+  }
+  if (blocking.length > 0) {
+    const names = blocking.map((rule) => rule.name).join(' + ');
+    trace.push({ stage: 'CONTEXT', message: `أسقطته قاعدة مفعّلة: ${names}`, status: 'blocked' });
+    return {
+      decision: { active: false, reason: `أسقطه حجب بقاعدة: ${names}` },
+      appliedRules: blocking,
+      skippedRules: [],
+      trace,
+    };
+  }
+
+  trace.push({ stage: 'CONTEXT', message: 'الاختلاف ظاهر في هذا السياق', status: 'won' });
+  return {
+    decision: { active: true, reason: 'السياق يطابق الوضع ولا حجب' },
+    appliedRules: matched.filter((rule) => rule.status === 'ACTIVE'),
+    skippedRules: evaluated
+      .filter((item) => !item.matched)
+      .map((item) => ({ rule: item.rule, reason: 'غير مطابقة' })),
     trace,
   };
 }

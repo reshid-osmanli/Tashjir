@@ -38,9 +38,11 @@ import { parseAyahKey } from '@/data/quran';
 import type { SmartCreateResult } from '@/lib/tashjeer/smart-create';
 import { relationTypeToLinkRelation } from '@/lib/tashjeer/model/v8';
 import { resolveLinkPolicy, type LinkPolicyDecision } from '@/lib/tashjeer/decision/editor-bridge';
+import { resolveConnection } from '@/lib/tashjeer/decision/api';
 import { loadEngineConfig } from '@/lib/tashjeer/engine-config-store';
 import type { DecisionTraceStep } from '@/lib/tashjeer/decision/resolver';
 import { documentWindowWords } from '@/lib/tashjeer/reading-window';
+import { describeJoint, sanitizeSegmentWasl } from '@/lib/tashjeer/waqf-context';
 import { layoutAyah } from '@/lib/tashjeer/layout-engine';
 import { generateBranches } from '@/lib/tashjeer/branch-engine';
 import { getEffectiveVariants, matchFromDerivedVariant } from '@/lib/quran-logic/global-rule-engine';
@@ -146,6 +148,15 @@ export interface LinkDecisionNotice extends LinkPolicyDecision {
   linkId?: string;
   trace: DecisionTraceStep[];
   appliedRuleNames: string[];
+  at: string;
+}
+
+/** رفض وصل كما يُعرض في الواجهة: السبب ومرجع علامة المنع (FR-ED-11.3). */
+export interface ConnectionRejection {
+  reason: string;
+  markId?: string;
+  markNote?: string;
+  position?: number;
   at: string;
 }
 
@@ -289,8 +300,23 @@ interface EditorState {
   updateBoundary: (boundaryId: string, patch: Partial<RecitationBoundary>) => void;
   deleteBoundary: (boundaryId: string) => void;
   toggleForcedLineBreak: (position: number) => void;
-  /** وصل الآية بالتي بعدها في نافذة عمل واحدة، أو فك الوصل. */
-  setLinkNextAyah: (linked: boolean) => void;
+  /**
+   * وصل الآية بالتي بعدها في نافذة عمل واحدة، أو فك الوصل. يعيد هل قُبِل
+   * الطلب؛ الرفض (ممنوع الوصل) يُسجَّل في `lastConnectionRejection` بمرجع
+   * العلامة، ولا يغيّر المستند ولا سجل التراجع.
+   */
+  setLinkNextAyah: (linked: boolean) => boolean;
+  /**
+   * وصل مقطعين داخليين عند حدّ («بعد الكلمة position») أو فصلهما بوقف.
+   * الوصل عند حدّ عليه «ممنوع الوصل» مرفوض (قيد صلب) ويُسجَّل في
+   * `lastConnectionRejection`؛ الفصل مباح دائمًا.
+   */
+  connectJoint: (position: number) => boolean;
+  disconnectJoint: (position: number) => void;
+  toggleJoint: (position: number) => boolean;
+  /** آخر رفض وصل (ممنوع الوصل أو قاعدة حاجبة)، تعرضه الواجهة وتُصَفِّره. */
+  lastConnectionRejection: ConnectionRejection | null;
+  clearConnectionRejection: () => void;
   /** حصر التشجير في مقطع محدد، أو إلغاء الحصر بتمرير null. */
   setFocusSegment: (segment: { startPosition: number; endPosition: number } | null) => void;
   setLineOffset: (lineIndex: number, offset: number) => void;
@@ -301,6 +327,8 @@ interface EditorState {
   clearMarks: () => void;
   setMarkingMode: (mode: MarkingMode) => void;
   selectWord: (wordId: number | null) => void;
+  /** تحديد علامة وقف/ابتداء/منع في التحديد الموحد (FR-ED-11/T4). */
+  selectBoundary: (boundaryId: string | null) => void;
   selectVariant: (variantId: string | null) => void;
   selectAlternative: (variantId: string, alternativeId: string) => void;
   selectSegment: (segmentId: string | null) => void;
@@ -366,6 +394,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   selectedBranchId: null,
   clipboard: null,
   lastLinkDecision: null,
+  lastConnectionRejection: null,
   pendingWhy: null,
   currentTool: 'select',
   draftCategory: 'FARSH',
@@ -1231,50 +1260,224 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   // ==================== الوقف والابتداء وتخطيط النص ====================
 
   addBoundary: (boundary) => {
-    mutate(set, get, (document) => ({
-      ...document,
-      boundaries: [...document.boundaries, boundary].sort((first, second) => first.position - second.position),
-    }));
+    mutate(set, get, (document) => {
+      const stamped: RecitationBoundary = { source: 'EDITOR', ...boundary };
+      return withLoggedEdit(
+        {
+          ...document,
+          boundaries: [...document.boundaries, stamped].sort(
+            (first, second) => first.position - second.position
+          ),
+        },
+        {
+          action: 'إضافة علامة وقف',
+          targetType: 'BOUNDARY',
+          targetId: stamped.id,
+          summary: `سجّل المحقق ${boundaryKindLabel(stamped.kind)} عند الكلمة ${stamped.position}${stamped.label ? ` (${stamped.label})` : ''}`,
+        },
+        document
+      );
+    });
   },
 
   updateBoundary: (boundaryId, patch) => {
-    mutate(set, get, (document) => ({
-      ...document,
-      boundaries: document.boundaries
-        .map((boundary) => (boundary.id === boundaryId ? { ...boundary, ...patch } : boundary))
-        .sort((first, second) => first.position - second.position),
-    }));
+    mutate(set, get, (document) => {
+      const before = document.boundaries.find((boundary) => boundary.id === boundaryId);
+      return withLoggedEdit(
+        {
+          ...document,
+          boundaries: document.boundaries
+            .map((boundary) => (boundary.id === boundaryId ? { ...boundary, ...patch } : boundary))
+            .sort((first, second) => first.position - second.position),
+        },
+        {
+          action: 'تعديل علامة وقف',
+          targetType: 'BOUNDARY',
+          targetId: boundaryId,
+          summary: `تعديل العلامة ${before ? `${boundaryKindLabel(before.kind)} عند الكلمة ${before.position}` : boundaryId}: ${Object.keys(patch).join('، ') || '—'}`,
+          changes: Object.entries(patch).map(([field, after]) => ({
+            field,
+            before: before ? (before as unknown as Record<string, unknown>)[field] : undefined,
+            after,
+          })),
+        },
+        document
+      );
+    });
   },
 
   deleteBoundary: (boundaryId) => {
-    mutate(set, get, (document) => ({
-      ...document,
-      boundaries: document.boundaries.filter((boundary) => boundary.id !== boundaryId),
+    mutate(set, get, (document) => {
+      const before = document.boundaries.find((boundary) => boundary.id === boundaryId);
+      return withLoggedEdit(
+        {
+          ...document,
+          boundaries: document.boundaries.filter((boundary) => boundary.id !== boundaryId),
+        },
+        {
+          action: 'حذف علامة وقف',
+          targetType: 'BOUNDARY',
+          targetId: boundaryId,
+          summary: before
+            ? `حذف المحقق ${boundaryKindLabel(before.kind)} عند الكلمة ${before.position}${before.kind === 'NO_WASL' ? ' — أصبح الوصل جائزًا عند هذا الحدّ' : ''}`
+            : `حذف العلامة ${boundaryId}`,
+        },
+        document
+      );
+    });
+    // حذف العلامة المحددة يُخلي التحديد الموحد.
+    set((state) => ({
+      selection: state.selection?.kind === 'BOUNDARY' && state.selection.id === boundaryId ? null : state.selection,
     }));
   },
 
   setLinkNextAyah: (linked) => {
-    mutate(set, get, (document) => {
+    const current = get().document;
+    if (!current) return false;
+
+    if (linked) {
       const baseWordsCount = documentWindowWords({
-        ...document,
-        readingWindow: { ...(document.readingWindow ?? {}), linkNextAyah: false },
+        ...current,
+        readingWindow: { ...(current.readingWindow ?? {}), linkNextAyah: false },
       }).length;
-      const isForbidden = document.boundaries.some(
+      const forbid = current.boundaries.find(
         (boundary) => boundary.kind === 'NO_WASL' && boundary.position === baseWordsCount
       );
-      const accepted = linked && !isForbidden;
-      return {
+      // القرار عبر resolveConnection (P-07): المنع الصلب أو قاعدة حاجبة يرفض.
+      const verdict = resolveConnection(
+        {
+          forbiddenMark: forbid ? { id: forbid.id, note: forbid.label ?? forbid.notes } : null,
+          label: `نهاية الآية (بعد الكلمة ${baseWordsCount})`,
+        },
+        loadEngineConfig()
+      );
+      if (!verdict.decision.allowed) {
+        set({
+          lastConnectionRejection: {
+            reason: verdict.decision.reason,
+            markId: forbid?.id,
+            markNote: forbid?.label ?? forbid?.notes,
+            position: baseWordsCount,
+            at: new Date().toISOString(),
+          },
+        });
+        return false;
+      }
+    }
+
+    mutate(
+      set,
+      get,
+      (document) => ({
         ...document,
         readingWindow: {
           ...(document.readingWindow ?? {}),
-          linkNextAyah: accepted,
+          linkNextAyah: linked,
           // فك الوصل يبطل مقطعا قد يكون امتد إلى الآية الثانية.
-          focusSegment: accepted ? (document.readingWindow?.focusSegment ?? null) : null,
+          focusSegment: linked ? (document.readingWindow?.focusSegment ?? null) : null,
         },
-      };
-    });
-    set({ selectedWordId: null, markedPositions: [], markedCharacters: [] });
+      }),
+      {
+        action: linked ? 'وصل الآية بالتالية' : 'فك وصل الآية',
+        targetType: 'DOCUMENT',
+        targetId: String(current.ayahKey),
+        summary: linked
+          ? 'وصل المحقق الآية بالتالية في نافذة واحدة — أحكام «وقفًا فقط» عند الحدّ تسقط وتظهر أحكام «وصلًا فقط»'
+          : 'فكّ المحقق وصل الآية — عادت أحكام «وقفًا فقط» وسقطت أحكام «وصلًا فقط»',
+      }
+    );
+    set({ selectedWordId: null, markedPositions: [], markedCharacters: [], lastConnectionRejection: null });
+    return true;
   },
+
+  connectJoint: (position) => {
+    const current = get().document;
+    if (!current || !Number.isInteger(position) || position < 1) return false;
+    const forbid = current.boundaries.find(
+      (boundary) => boundary.kind === 'NO_WASL' && boundary.position === position
+    );
+    const verdict = resolveConnection(
+      {
+        forbiddenMark: forbid ? { id: forbid.id, note: forbid.label ?? forbid.notes } : null,
+        label: describeJoint({ position, kind: 'INTERNAL', state: 'WAQF', marks: [], connected: false }),
+      },
+      loadEngineConfig()
+    );
+    if (!verdict.decision.allowed) {
+      set({
+        lastConnectionRejection: {
+          reason: verdict.decision.reason,
+          markId: forbid?.id,
+          markNote: forbid?.label ?? forbid?.notes,
+          position,
+          at: new Date().toISOString(),
+        },
+      });
+      return false;
+    }
+    mutate(
+      set,
+      get,
+      (document) => {
+        const wordsCount = documentWindowWords(document).length;
+        const next = sanitizeSegmentWasl(
+          [...(document.readingWindow?.segmentWasl ?? []), position],
+          Math.max(wordsCount, position + 1)
+        );
+        return withLoggedEdit(
+          {
+            ...document,
+            readingWindow: { ...(document.readingWindow ?? {}), segmentWasl: next },
+          },
+          {
+            action: 'وصل مقطعين',
+            targetType: 'BOUNDARY',
+            targetId: `joint-${position}`,
+            summary: `وصل المحقق المقطعين عند الحدّ بعد الكلمة ${position} — تظهر أحكام «وصلًا فقط» وتسقط أحكام «وقفًا فقط»`,
+          },
+          document
+        );
+      },
+    );
+    set({ lastConnectionRejection: null });
+    return true;
+  },
+
+  disconnectJoint: (position) => {
+    const current = get().document;
+    if (!current) return;
+    mutate(set, get, (document) => {
+      const before = document.readingWindow?.segmentWasl ?? [];
+      const next = before.filter((item) => item !== position);
+      if (next.length === before.length) return document;
+      return withLoggedEdit(
+        {
+          ...document,
+          readingWindow: { ...(document.readingWindow ?? {}), segmentWasl: next },
+        },
+        {
+          action: 'فصل مقطعين بوقف',
+          targetType: 'BOUNDARY',
+          targetId: `joint-${position}`,
+          summary: `فصل المحقق المقطعين بوقف بعد الكلمة ${position} — عادت أحكام «وقفًا فقط» وسقطت أحكام «وصلًا فقط»`,
+        },
+        document
+      );
+    });
+    set({ lastConnectionRejection: null });
+  },
+
+  toggleJoint: (position) => {
+    const current = get().document;
+    if (!current) return false;
+    if ((current.readingWindow?.segmentWasl ?? []).includes(position)) {
+      get().disconnectJoint(position);
+      return true;
+    }
+    return get().connectJoint(position);
+  },
+
+  clearConnectionRejection: () => set({ lastConnectionRejection: null }),
 
   setFocusSegment: (segment) => {
     mutate(set, get, (document) => ({
@@ -1351,6 +1554,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       selection: wordId ? { kind: 'WORD', id: String(wordId), position: word?.position } : null,
       selectedWordId: wordId,
       selectedAlternativeId: null,
+    });
+  },
+  selectBoundary: (boundaryId) => {
+    const boundary = boundaryId
+      ? get().document?.boundaries.find((item) => item.id === boundaryId)
+      : undefined;
+    set({
+      selection: boundaryId
+        ? { kind: 'BOUNDARY', id: boundaryId, position: boundary?.position }
+        : null,
+      selectedVariantId: null,
+      selectedAlternativeId: null,
+      selectedBranchId: null,
     });
   },
   selectVariant: (variantId) => {
@@ -1729,6 +1945,20 @@ function compareVariants(a: Variant, b: Variant): number {
 
 function pushHistory(past: TashjeerDocument[], document: TashjeerDocument): TashjeerDocument[] {
   return [...past, document].slice(-MAX_HISTORY);
+}
+
+/** تسمية نوع علامة الوقف/الابتداء/الوصل بالعربية (للسجل والرسائل). */
+function boundaryKindLabel(kind: RecitationBoundary['kind']): string {
+  switch (kind) {
+    case 'WAQF':
+      return 'علامة وقف';
+    case 'IBTIDA':
+      return 'علامة ابتداء';
+    case 'WASL':
+      return 'علامة وصل';
+    case 'NO_WASL':
+      return 'علامة ممنوع الوصل';
+  }
 }
 
 /** نوع هدف الرابط في سجل التعديل بحسب نوع العلاقة. */

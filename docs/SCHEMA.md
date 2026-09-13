@@ -48,7 +48,7 @@
   "renderRanges": [ /* DM-11 */ ],
   "corrections": [ /* Engine/Editor/Final */ ],
   "auditLog": [ /* قبل/بعد/سبب/مصدر */ ],
-  "readingWindow": { "linkNextAyah": false, "focusSegment": null },
+  "readingWindow": { "linkNextAyah": false, "focusSegment": null, "segmentWasl": [] },
   "lineOrder": [ "…" ]
 }
 ```
@@ -81,7 +81,7 @@
 | `Variant` | `Difference` (مع `locus`, `occurrenceIndex`, `relations`, `rank`) |
 | `Variant.alternatives[]` | `Difference.variants[]` (الوجه الأساسي يُستبعد) |
 | `TashjeerLink` | `Relation` (نوع موحّد) |
-| `RecitationBoundary` | `WaqfMark` (`NO_WASL`→`FORBIDDEN_WASL`) |
+| `RecitationBoundary` | `WaqfMark` (`NO_WASL`→`FORBIDDEN_WASL`، والنطاق `END_OF_AYAH` عند آخر كلمة، والمصدر والضبط الحرفي يُحملان) |
 | `Variant.engineSnapshot` | `Correction` + `Difference.engineSnapshot` |
 | `Variant.origin` | `Difference.source` (`ENGINE`→`engine`, غيره→`editor`) |
 

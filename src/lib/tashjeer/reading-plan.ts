@@ -7,6 +7,7 @@
 
 import type { RecitationBoundary, RecitationMode, Variant } from '@/types/tashjeer';
 import type { TraversalOrder } from './engine-settings';
+import { differenceAppliesAt } from './waqf-context';
 
 export interface ReadingSegment {
   /** موضع أول كلمة في المقطع. */
@@ -123,16 +124,42 @@ export function isWaqfAt(position: number, boundaries: RecitationBoundary[]): bo
   );
 }
 
+/** سياق نافذة العمل عند تقييم الاختلافات المشروطة (FR-ED-11). */
+export interface RecitationContextOptions {
+  /** عدد كلمات النافذة. غيابه يعني التقييم القديم (العلامات الصريحة فقط). */
+  wordsCount?: number;
+  /** هل الآية موصولة بالتالية؟ */
+  linkNextAyah?: boolean;
+  /** الحدود الداخلية الموصولة («بعد الكلمة N»). */
+  segmentWasl?: number[];
+  /** موضع آخر كلمة في الآية الأولى (يساوي wordsCount عند عدم الوصل). */
+  firstAyahEndPosition?: number;
+}
+
 /**
  * يطبّق شرط الوقف/الوصل على الاختلاف دون مسح بياناته. الاختلاف المشروط
  * يبقى في الفهرس والتتبع، لكنه لا يدخل النتيجة النهائية إلا في سياقه.
+ *
+ * بلا `opts` يبقى السلوك القديم حرفيًا (وقف صريح عند الموضع أم لا) حفاظًا
+ * على الاختبارات القائمة؛ ومع `wordsCount` يُحسم السياق من نافذة العمل
+ * (نهاية الآية وقفٌ طبيعي، والحدّ الموصول وصلٌ) عبر `waqf-context`.
  */
 export function variantAppliesToRecitation(
   variant: Pick<Variant, 'recitationMode' | 'endPosition'>,
-  boundaries: RecitationBoundary[]
+  boundaries: RecitationBoundary[],
+  opts?: RecitationContextOptions
 ): boolean {
   const mode: RecitationMode = variant.recitationMode ?? 'ALWAYS';
   if (mode === 'ALWAYS') return true;
+  if (opts?.wordsCount && opts.wordsCount > 0) {
+    return differenceAppliesAt(mode, variant.endPosition, {
+      wordsCount: opts.wordsCount,
+      boundaries,
+      linkNextAyah: opts.linkNextAyah,
+      segmentWasl: opts.segmentWasl,
+      firstAyahEndPosition: opts.firstAyahEndPosition,
+    });
+  }
   const stopped = isWaqfAt(variant.endPosition, boundaries);
   return mode === 'WAQF_ONLY' ? stopped : !stopped;
 }

@@ -559,8 +559,12 @@ export interface TashjeerDocumentV8 {
     changes?: Array<{ field: string; before?: unknown; after?: unknown }>;
     source: 'engine' | 'editor';
   }>;
-  /** وصل الآية بالتالية/المقطع المعزول. */
-  readingWindow?: { linkNextAyah?: boolean; focusSegment?: { startPosition: number; endPosition: number } | null };
+  /** وصل الآية بالتالية/المقطع المعزول/الحدود الداخلية الموصولة. */
+  readingWindow?: {
+    linkNextAyah?: boolean;
+    focusSegment?: { startPosition: number; endPosition: number } | null;
+    segmentWasl?: number[];
+  };
   /** ترتيب أسطر العرض اليدوي. */
   lineOrder?: EntityId[];
   createdAt: string;

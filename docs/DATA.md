@@ -210,3 +210,24 @@ npm run db:seed
 `src/lib/tashjeer/migration/migrate-v7-v8.ts` يحوّل `TashjeerDocument` القديم إلى
 النموذج الموحّد دون تعديل الأصل، ويُولّد نسخة احتياطية (`migrateWithBackup`) قبل
 الترحيل (NFR-04). كل معرّف يُحفظ (P-03)، ولا تُفقد بيانات (P-13).
+
+### سياق الوقف/الوصل (الحزمة 08 — FR-ED-11)
+
+- **`readingWindow.segmentWasl`**: الحدود الداخلية الموصولة («بعد الكلمة N»).
+  تُطهَّر عند الحفظ والتحميل (أعداد صحيحة موجبة فريدة مرتبة دون آخر النافذة)،
+  وتُرحَّل إلى v8 كما هي.
+- **`RecitationBoundary.source`**: مصدر العلامة (`EDITOR` أثبتها المحقق، و`ENGINE`
+  اقترحها المحرك)، و**`characterIndex`** للضبط الحرفي اختياريًا. يُرحَّلان إلى
+  `WaqfMark.source` و`WaqfMark.characterIndex`، ونطاق العلامة عند آخر كلمة
+  `END_OF_AYAH` وما عداها `INTERNAL`.
+- **التحديد الموحد** يقبل نوع `BOUNDARY`، وسجل التعديل يقبل هدف `BOUNDARY`:
+  إضافة العلامة وتعديلها وحذفها ووصل المقاطع وفصلها كلها مسجلة وقابلة للتراجع.
+- **مرجع السياق البحت** `src/lib/tashjeer/waqf-context.ts`: تعداد الحدود
+  (`listJoints`)، وحسم الوضع (`resolvePositionMode`: نهاية النافذة وقفٌ طبيعي،
+  والدرز الموصول وصلٌ، والمنع وقفٌ إجباري، وما سوى ذلك استمرار)، وتقييم
+  المشروط (`differenceAppliesAt`)، وتطهير الوصل (`sanitizeSegmentWasl`).
+- **القرارات** (`decision/api.ts`): `resolveConnection` بصيغة موسّعة (مرجع
+  علامة المنع + قواعد الاستوديو المفعّلة الحاجبة) مع بقاء الصيغة القديمة،
+  و`resolveDifferenceContext` لحسم ظهور المشروط في وضع أداء مع أثر قابل
+  للتفسير. `variantAppliesToRecitation` تقبل سياق نافذة اختياريًا، وبلاه يبقى
+  السلوك القديم حرفيًا.

@@ -24,10 +24,11 @@
 // حماية من الانفجار العددي: عشرة مواضع لكل منها ثلاثة أوجه تعني ٥٩ ألف
 // تركيب. لذلك يوجد سقف صريح لعدد تراكيب الوحدة الواحدة (`maxPerUnit`).
 
-import type { Variant, VariantAlternative } from '@/types/tashjeer';
+import type { RecitationBoundary, Variant, VariantAlternative } from '@/types/tashjeer';
 import type { TransmissionCatalog } from '@/lib/transmissions/catalog';
 import type { TashjeerEngineSettings } from './engine-settings';
 import type { StrengthDegreeCatalog } from './strength-degrees';
+import { variantAppliesToRecitation, type RecitationContextOptions } from './reading-plan';
 import type { ReadingPlan } from './reading-plan';
 import { createDefaultStrengthDegrees } from './strength-degrees';
 import {
@@ -77,6 +78,13 @@ export interface CombinationOptions {
    * النظام الافتراضية.
    */
   engineConfig?: EngineConfig;
+  /**
+   * سياق الوقف/الوصل (FR-ED-11.1): عند تمريره تُسقط من التركيب الاختلافات
+   * المشروطة الخارجة عن سياقها (وقفًا فقط يسقط بالوصل، ووصلًا فقط يسقط
+   * بالوقف) — من التركيب فقط، والكيانات تبقى في البيانات. غيابه يعني السلوك
+   * القديم: كل الاختلافات الممررة تدخل التركيب.
+   */
+  recitation?: RecitationContextOptions & { boundaries?: RecitationBoundary[] };
 }
 
 const DEFAULT_MAX_PER_UNIT = 48;
@@ -96,7 +104,14 @@ export function buildReadingCombinations(
   const strengthDegrees = options.strengthDegrees ?? createDefaultStrengthDegrees();
   const maxPerUnit = options.maxPerUnit ?? DEFAULT_MAX_PER_UNIT;
 
-  const orderedVariants = orderVariantsForReading(variants, plan);
+  // بوابة السياق (FR-ED-11.1): المشروط الخارج عن سياقه يسقط من التركيب
+  // لا من البيانات. غياب `recitation` يعني السلوك القديم: الكل يدخل.
+  const contextualVariants = options.recitation
+    ? variants.filter((variant) =>
+        variantAppliesToRecitation(variant, options.recitation!.boundaries ?? [], options.recitation)
+      )
+    : variants;
+  const orderedVariants = orderVariantsForReading(contextualVariants, plan);
   const units = buildReadingUnits(orderedVariants, catalog);
   // مجموعات التنافي تُحسم مرة واحدة لكل الوحدات من Decision Resolver.
   const exclusiveGroups = resolveExclusiveGroups(orderedVariants, options.engineConfig).groups;

@@ -61,9 +61,11 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     markedCharacters,
     selectedWordId,
     selectedVariantId,
+    selection,
     setZoom,
     setPan,
     selectWord,
+    selectBoundary,
     selectVariant,
     selectAlternative,
     selectLine,
@@ -405,8 +407,10 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
             characterMarkingActive={!readOnly && currentTool === 'mark' && markingMode === 'CHARACTERS'}
             selectedWordId={selectedWordId}
             selectedVariantId={selectedVariantId}
+            selectedBoundaryId={selection?.kind === 'BOUNDARY' ? selection.id : null}
             pulseLineId={pulseLineId}
             hoveredLineId={hoveredLineId}
+            onBoundaryClick={readOnly ? undefined : (boundary) => selectBoundary(boundary.id)}
             onWordClick={handleWordClick}
             onCharacterClick={handleCharacterClick}
             onLineClick={handleLineClick}

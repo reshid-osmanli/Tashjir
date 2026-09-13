@@ -678,9 +678,20 @@ function migrateDocument(document: TashjeerDocument): TashjeerDocument {
     readingWindow: {
       linkNextAyah: document.readingWindow?.linkNextAyah === true,
       focusSegment: normalizeFocusSegmentValue(document.readingWindow?.focusSegment),
+      segmentWasl: sanitizeSegmentWaslValue(document.readingWindow?.segmentWasl),
     },
     meta,
   };
+}
+
+/** يقبل الحدود الموصولة المحفوظة إن كانت مواضع صحيحة، ويسقط ما عداها. */
+function sanitizeSegmentWaslValue(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<number>();
+  for (const item of value) {
+    if (Number.isInteger(item) && item >= 1) seen.add(item);
+  }
+  return [...seen].sort((a, b) => a - b);
 }
 
 /** يقبل المقطع المحفوظ إن كان مدى صحيحا، وإلا أسقطه بلا ضجيج. */

@@ -82,7 +82,7 @@ describe('الاستيراد مع الترحيل التلقائي', () => {
 
     const restored = store.loadDocument(AYAH_KEY);
     expect(restored?.schemaVersion).toBe(8);
-    expect(restored?.readingWindow).toEqual({ linkNextAyah: false, focusSegment: null });
+    expect(restored?.readingWindow).toEqual({ linkNextAyah: false, focusSegment: null, segmentWasl: [] });
     // المعرّفات لا تتغير بالترحيل (P-03).
     expect(restored?.variants[0].id).toBe('variant-legacy');
     expect(restored?.variants[0].alternatives.map((alt) => alt.id)).toEqual(['alt-base', 'alt-madd']);

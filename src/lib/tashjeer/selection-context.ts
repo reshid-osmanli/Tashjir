@@ -28,6 +28,8 @@ export interface SelectionLookup {
   wordText?: (id: number) => string | undefined;
   /** عنوان قاعدة عامة بمعرّفها. */
   ruleTitle?: (id: string) => string | undefined;
+  /** عنوان علامة وقف/ابتداء/منع بمعرّفها. */
+  boundaryLabel?: (id: string) => string | undefined;
 }
 
 /** درجة في سلسلة السياق. */
@@ -54,6 +56,7 @@ const KIND_LABEL: Record<EditorSelection['kind'], string> = {
   DIFFERENCE: 'اختلاف',
   FACE: 'وجه',
   RULE: 'قاعدة',
+  BOUNDARY: 'علامة',
 };
 
 /** يبني عنوان الآية بصيغة «سورة:آية». */
@@ -98,6 +101,10 @@ export function buildSelectionBreadcrumb(
   if (selection.kind === 'RULE') {
     const title = lookup.ruleTitle?.(selection.id) ?? 'قاعدة';
     crumbs.push({ kind: 'RULE', label: title });
+  }
+  if (selection.kind === 'BOUNDARY') {
+    const title = lookup.boundaryLabel?.(selection.id) ?? 'علامة وقف';
+    crumbs.push({ kind: 'BOUNDARY', label: title });
   }
   return crumbs;
 }
@@ -145,6 +152,13 @@ export function describeSelection(
       };
     case 'RULE':
       return { kind: 'RULE', ...base, label: lookup.ruleTitle?.(selection.id) ?? 'قاعدة', leaf: false };
+    case 'BOUNDARY':
+      return {
+        kind: 'BOUNDARY',
+        ...base,
+        label: lookup.boundaryLabel?.(selection.id) ?? 'علامة وقف',
+        leaf: true,
+      };
     default:
       return null;
   }

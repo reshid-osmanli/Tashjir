@@ -12,7 +12,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { resolveAyahDocument } from '@/lib/tashjeer/ayah-tashjeer-source';
 import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
@@ -20,6 +20,7 @@ import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { useEngineSettings } from '@/hooks/useEngineSettings';
 import { useEngineConfig } from '@/hooks/useEngineConfig';
 import { useStrengthDegrees } from '@/hooks/useStrengthDegrees';
+import { parseAyahKey } from '@/data/quran';
 import { TashjeerFigure } from '@/components/editor/TashjeerFigure';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
@@ -58,12 +59,23 @@ export function AyahTashjeerView({
   const engine = useEngineSettings();
   const engineConfig = useEngineConfig();
   const strengthDegrees = useStrengthDegrees();
-  const { layout, classic, viewBox } = useAyahTashjeer(
+  const { layout, classic, viewBox, window: readingWindow } = useAyahTashjeer(
     document,
     FULL_FILTER,
     {},
     { catalog, engine, strengthDegrees, engineConfig }
   );
+
+  // نهاية الآية الأولى حين تُوصل بالتالية: يُطبع عندها رقم الآية — كما في المحرر.
+  const ayahMarkers = useMemo(() => {
+    if (!readingWindow.isLinked) return [];
+    return [
+      {
+        position: readingWindow.firstAyahEndPosition,
+        ayahNumber: parseAyahKey(readingWindow.ayahKeys[0]).ayahNumber,
+      },
+    ];
+  }, [readingWindow]);
 
   if (!document) return null;
 
@@ -132,6 +144,8 @@ export function AyahTashjeerView({
               fontSize={34}
               showLabels
               boundaries={document.boundaries}
+              ayahMarkers={ayahMarkers}
+              focusSegment={document.readingWindow?.focusSegment ?? null}
               baseNarratorName={
                 catalog.narrators.find((narrator) => narrator.id === 'narrator-hafs')?.name ?? 'حفص'
               }
