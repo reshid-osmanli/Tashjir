@@ -25,12 +25,7 @@ export const SHORTCUT_HINTS: ShortcutHint[] = [
   { keys: 'M', description: 'أداة تعليم الكلمات' },
   { keys: 'E', description: 'أداة المسح' },
   { keys: 'Ctrl + S', description: 'حفظ المستند' },
-  { keys: 'Ctrl + C / X / V', description: 'نسخ الاختلافات/الأوجه/الأجزاء؛ X لنقل الأوجه بعد لصق مؤكد' },
-  { keys: 'Shift + نقر', description: 'تحديد مدى في قائمة الأوجه أو الاختلافات' },
-  { keys: 'Ctrl + نقر', description: 'إضافة عنصر للتحديد المتعدد أو إزالته في قائمة الأوجه/الاختلافات' },
-  { keys: 'Ctrl + A', description: 'تحديد كل عناصر القائمة الحالية (الأوجه أو الاختلافات المصفّاة)' },
-  { keys: 'Alt + ↑ / ↓', description: 'نقل السطر المركّز في لوحة الترتيب مع تأكيد' },
-  { keys: 'ضغط مطوّل ٣٥٠ مللي ثانية', description: 'سحب السطر أو مقبض الدمج؛ Esc للإلغاء' },
+
   { keys: 'Ctrl + Z', description: 'تراجع' },
   { keys: 'Ctrl + Shift + Z', description: 'إعادة' },
   { keys: 'Ctrl + =', description: 'تكبير' },
@@ -127,6 +122,9 @@ export function useKeyboardShortcuts(enabled = true): void {
           break;
         case 'b':
           store.toggleVariantsPanel();
+          break;
+        case 'n':
+          store.requestSmartWizard();
           break;
         case 'escape':
           store.clearMarks();

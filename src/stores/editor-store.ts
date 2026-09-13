@@ -315,6 +315,13 @@ interface EditorState {
   pendingWhy: { ruleId?: string } | null;
   requestWhy: (request: { ruleId?: string } | null) => void;
   /**
+   * عدّاد طلبات فتح المعالج الذكي (FR-ED-08/T3): الاختصار N أو أي زر «إنشاء»
+   * عام يرفعه، ولوحة الاختلافات تستهلكه فتفتح المعالج على التحديد الحالي —
+   * باب إنشاء واحد لا أبواب متفرقة.
+   */
+  smartWizardRequest: number;
+  requestSmartWizard: () => void;
+  /**
    * ينشئ علاقة يدوية بين عنصرين: وجهين، سطرين، أو جزء وسطر/قاعدة.
    * يمرّ أولا على Decision Resolver: الرابط المحظور بقاعدة لا يُسجَّل، والمخالف
    * لمصفوفة الدمج يُسجَّل بتحذير (المحرر يقرر). يعيد القرار للمستدعي.
@@ -441,6 +448,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setMultiSelection: (multiSelection) => set({ multiSelection }),
   lastLinkDecision: null,
   pendingWhy: null,
+  smartWizardRequest: 0,
   currentTool: 'select',
   draftCategory: 'FARSH',
 
@@ -1039,6 +1047,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   clearLinkDecision: () => set({ lastLinkDecision: null }),
   requestWhy: (request) => set({ pendingWhy: request }),
+  requestSmartWizard: () => set((state) => ({ smartWizardRequest: state.smartWizardRequest + 1 })),
 
   addLink: ({ kind, relation, from, to, notes }) => {
     const current = get().document;

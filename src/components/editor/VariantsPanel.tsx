@@ -28,9 +28,18 @@ import { findGlobalRuleMatchesInAyah } from '@/lib/quran-logic/global-rule-engin
 import { deletedOccurrenceIds, occurrenceIdFor } from '@/lib/storage/rule-occurrences-store';
 import { useRuleOccurrences } from '@/hooks/useRuleOccurrences';
 import { RuleOccurrenceReview } from './RuleOccurrenceReview';
-import type { VariantCategory } from '@/types';
-import type { Variant, VariantLocus } from '@/types/tashjeer';
-import { boundsOfLoci, buildLociFromMarks, describeLoci, lociOfVariant } from '@/lib/tashjeer/loci';
+import type { Variant } from '@/types/tashjeer';
+import { buildLociFromMarks, describeLoci, lociOfVariant } from '@/lib/tashjeer/loci';
+import {
+  buildSmartCreateBatch,
+  buildSmartCreateMultiTargetBatch,
+  type SmartVariantSpec,
+} from '@/lib/tashjeer/smart-create';
+import {
+  listWizardTemplates,
+  touchWizardTemplate,
+  type WizardTemplateConfig,
+} from '@/lib/tashjeer/wizard-templates';
 
 export function VariantsPanel() {
   const {
@@ -40,8 +49,6 @@ export function VariantsPanel() {
     markingMode,
     selectedVariantId,
     selectedAlternativeId,
-    draftCategory,
-    setDraftCategory,
     selectVariant,
     selectAlternative,
     multiSelection,
@@ -49,8 +56,8 @@ export function VariantsPanel() {
     requestDeleteItems,
     updateVariant,
     clearMarks,
-    addVariant,
-    addVariantGroup,
+    applySmartCreateBatch,
+    smartWizardRequest,
     refreshDerivedBranches,
     openAyah,
   } = useEditorStore();
@@ -64,9 +71,11 @@ export function VariantsPanel() {
   const [globalBuilderRange, setGlobalBuilderRange] = useState<import('@/types/tashjeer').CharacterRange | null>(null);
   const [reviewingRule, setReviewingRule] = useState<GlobalRule | null>(null);
   const [showRulesIndex, setShowRulesIndex] = useState(false);
-  const [showBatchBuilder, setShowBatchBuilder] = useState(false);
-  const [batchCategories, setBatchCategories] = useState<VariantCategory[]>(['USUL', 'FARSH', 'MADUD']);
   const [showSmartWizard, setShowSmartWizard] = useState(false);
+  // قوالب المستخدم للإنشاء السريع بنقرة (تُحفظ من المعالج نفسه).
+  const [quickTemplates, setQuickTemplates] = useState(() => listWizardTemplates());
+  // آخر طلب فتح استُهلك من الاختصار N أو زر «إنشاء» عام.
+  const consumedWizardRequest = useRef(0);
   const [listSearch, setListSearch] = useState('');
   // مرجع الصف المحدد: يُرسم دائمًا حتى خارج نافذة التنافذ ليعمل التمرير إليه.
   const selectedRowRef = useRef<HTMLLIElement>(null);
@@ -146,101 +155,84 @@ export function VariantsPanel() {
   }, [document, occurrences.key]);
 
 
+  // الاختصار N أو زر «إنشاء» عام يفتح المعالج — باب الإنشاء الواحد (T3).
+  useEffect(() => {
+    if (smartWizardRequest > consumedWizardRequest.current) {
+      consumedWizardRequest.current = smartWizardRequest;
+      setShowSmartWizard(true);
+    }
+  }, [smartWizardRequest]);
+
   if (!document) return null;
 
   const editingVariant = document.variants.find((variant) => variant.id === editingVariantId);
 
-  const createVariantFromLoci = (loci: VariantLocus[], openEditor: boolean) => {
-    if (loci.length === 0 || !document) return;
+  /** نص موضع واحد من التحديد لعناوين الإسناد الدفعي (FR-ED-09). */
+  const titleOfLocus = (locus: (typeof draftLoci)[number]): string =>
+    locus.characterRange
+      ? textForCharacterRange(words, locus.characterRange)
+      : words
+          .filter((word) => word.position >= locus.startPosition && word.position <= locus.endPosition)
+          .map((word) => word.text)
+          .join(' ');
 
-    const bounds = boundsOfLoci(loci);
-    const title = loci
-      .map((locus) =>
-        locus.characterRange
-          ? textForCharacterRange(words, locus.characterRange)
-          : words
-              .filter((word) => word.position >= locus.startPosition && word.position <= locus.endPosition)
-              .map((word) => word.text)
-              .join(' ')
-      )
-      .filter(Boolean)
-      .join('  ·  ');
-
-    const id = `v-${document.ayahKey}-${bounds.startPosition}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const isCharacters = loci.some((locus) => Boolean(locus.characterRange));
-
-    addVariant({
-      id,
-      category: draftCategory,
-      title: title || 'اختلاف',
-      startPosition: bounds.startPosition,
-      endPosition: bounds.endPosition,
-      targetKind: isCharacters ? 'CHARACTERS' : 'WORDS',
-      characterRange: loci.length === 1 ? loci[0].characterRange : undefined,
-      loci: loci.length > 1 ? loci : undefined,
-      status: 'DRAFT',
-      alternatives: [
-        {
-          id: `${id}-base`,
-          text: title || 'وجه المصحف',
-          label: 'وجه المصحف',
-          isBase: true,
-          scope: { kind: 'ALL' },
-        },
-      ],
-    });
-
-    if (openEditor) {
-      selectVariant(id);
-      setEditingVariantId(id);
+  /**
+   * الإنشاء السريع (T3): قالب جاهز أو محفوظ يُطبَّق على التحديد الحالي بنقرة
+   * واحدة عبر نواة المعالج نفسها — القدرة نفسها والباب واحد. المواضع المتفرقة
+   * تُسند دفعة واحدة (FR-ED-09) في معاملة واحدة قابلة للتراجع الجماعي.
+   */
+  const handleQuickCreate = (config: WizardTemplateConfig, templateId?: string) => {
+    if (draftLoci.length === 0 || config.types.length === 0) return;
+    const variants: Partial<Record<(typeof config.types)[number], SmartVariantSpec[]>> = {};
+    for (const type of config.types) {
+      const faces = (config.faces[type] ?? '')
+        .split(/[\n,،]+/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .map((label) => ({ label }));
+      if (faces.length > 0) variants[type] = faces;
     }
-  };
-
-  /** اختلاف واحد: المواضع المتباعدة تبقى منفصلة على السطر نفسه. */
-  const handleCreateVariant = () => {
-    createVariantFromLoci(draftLoci, true);
-  };
-
-  /** اختلاف مستقل لكل موضع، يجمعها المحرك في سطر الراوي إن اتفق النطاق. */
-  const handleCreatePerLocus = () => {
-    draftLoci.forEach((locus, index) => {
-      createVariantFromLoci([locus], index === 0);
-    });
-  };
-
-  /** إنشاء جماعي، لكن كل نوع يبقى كيانا مستقلا بمعرّفه ورتبته. */
-  const handleCreateBatch = () => {
-    if (draftLoci.length === 0 || batchCategories.length === 0) return;
-    const bounds = boundsOfLoci(draftLoci);
-    const baseText = markedText || 'وجه المصحف';
-    const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    addVariantGroup(
-      batchCategories.map((category, index) => {
-        const id = `v-${document.ayahKey}-${bounds.startPosition}-${stamp}-${index + 1}`;
-        return {
-          id,
-          category,
-          title: `${baseText} — ${CATEGORY_LABELS[category]}`,
-          startPosition: bounds.startPosition,
-          endPosition: bounds.endPosition,
-          targetKind: draftLoci.some((locus) => locus.characterRange) ? ('CHARACTERS' as const) : ('WORDS' as const),
-          characterRange: draftLoci.length === 1 ? draftLoci[0].characterRange : undefined,
-          loci: draftLoci.length > 1 ? draftLoci : undefined,
-          orderRank: index + 1,
-          status: 'DRAFT' as const,
-          alternatives: [
-            {
-              id: `${id}-base`,
-              text: baseText,
-              label: 'وجه المصحف',
-              isBase: true,
-              scope: { kind: 'ALL' as const },
-            },
-          ],
-        };
-      })
+    const first = config.types[0]!;
+    const relations =
+      config.relationMode === 'NONE' || config.types.length < 2
+        ? []
+        : config.types.slice(1).map((type) => ({
+            fromType: first,
+            toType: type,
+            type: (config.relationMode === 'MUTUALLY_EXCLUSIVE' ? 'MUTUALLY_EXCLUSIVE' : 'RELATED') as
+              | 'RELATED'
+              | 'MUTUALLY_EXCLUSIVE',
+          }));
+    const baseTitle = markedText.trim() || 'اختلاف';
+    const input = {
+      ayahKey: document.ayahKey,
+      selection: draftLoci,
+      baseTitle,
+      types: config.types,
+      scope: { kind: 'ALL' as const },
+      context: config.context,
+      relations,
+      variants,
+    };
+    // هدف واحد أو بنية مركبة؛ والأهداف المتفرقة تُكرر عليها البنية كلها.
+    const result =
+      draftLoci.length > 1
+        ? buildSmartCreateMultiTargetBatch({
+            ...input,
+            targets: draftLoci.map((locus) => [locus]),
+            titles: draftLoci.map((locus) => titleOfLocus(locus) || baseTitle),
+          })
+        : buildSmartCreateBatch(input);
+    applySmartCreateBatch(result);
+    if (templateId) {
+      touchWizardTemplate(templateId);
+      setQuickTemplates(listWizardTemplates());
+    }
+    clearMarks();
+    refreshDerivedBranches();
+    setGlobalNotice(
+      `إنشاء سريع: ${toArabicDigits(result.differences.length)} اختلافات مستقلة و${toArabicDigits(result.relations.length)} علاقات في خطوة واحدة.`
     );
-    setShowBatchBuilder(false);
   };
 
   return (
@@ -331,16 +323,26 @@ export function VariantsPanel() {
         )}
       </section>
 
-      {/* إنشاء اختلاف من الكلمات المعلّمة */}
+      {/* الإنشاء عبر باب واحد: المعالج الذكي + الإنشاء السريع بالقوالب (T3). */}
       <section className="border-b border-stone-200 bg-stone-50 px-4 py-3">
         <h3 className="text-xs font-semibold text-stone-700">اختلاف جديد</h3>
 
         {!hasMarks ? (
-          <p className="mt-1.5 text-xs leading-relaxed text-stone-500">
-            {markingMode === 'CHARACTERS'
-              ? 'فعّل أداة التعليم (M) ثم انقر كل حرف في خليته. المتصل يصير موضعا واحدا، والمتباعد مواضع منفصلة.'
-              : 'فعّل أداة التعليم (M) ثم انقر الكلمات. المتباعدة تُحفظ مواضع منفصلة، لا مدى يملأ ما بينها.'}
-          </p>
+          <div className="mt-1.5 space-y-2">
+            <p className="text-xs leading-relaxed text-stone-500">
+              {markingMode === 'CHARACTERS'
+                ? 'فعّل أداة التعليم (M) ثم انقر كل حرف في خليته، أو افتح المعالج وحدد الموضع بداخله.'
+                : 'فعّل أداة التعليم (M) ثم انقر الكلمات (Ctrl+نقر يعلّم دون تبديل الأداة)، أو افتح المعالج وحدد الموضع بداخله.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowSmartWizard(true)}
+              className="w-full rounded-md border border-emerald-600 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-950 hover:bg-emerald-100"
+              title="الاختصار N — التحديد البصري متاح داخل المعالج نفسه"
+            >
+              🧭 إنشاء ذكي (N)
+            </button>
+          </div>
         ) : (
           <div className="mt-2 space-y-2">
             <div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2">
@@ -355,91 +357,46 @@ export function VariantsPanel() {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-1">
-              {(Object.keys(CATEGORY_LABELS) as VariantCategory[]).map((category) => (
-                <button
-                  key={category}
-                  type="button"
-                  onClick={() => setDraftCategory(category)}
-                  className={`rounded border px-2 py-1 text-[11px] transition-colors ${
-                    draftCategory === category
-                      ? 'border-stone-800 bg-stone-800 text-white'
-                      : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-100'
-                  }`}
-                >
-                  {CATEGORY_LABELS[category]}
-                </button>
-              ))}
-            </div>
-
             <button
               type="button"
               onClick={() => setShowSmartWizard(true)}
               className="w-full rounded-md border border-emerald-600 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-950 hover:bg-emerald-100"
-              title="المعالج الموحّد: أنواع وأوجه ونطاق قرّاء وعلاقات وسياق ونطاق جغرافي في خطوات واضحة"
+              title="المعالج الموحّد (N): أنواع وأوجه ونطاق قرّاء وعلاقات وسياق وتعميم في خطوات واضحة"
             >
               🧭 المعالج الذكي الموحّد (٧ خطوات)
             </button>
-            <button
-              type="button"
-              onClick={() => setShowBatchBuilder((value) => !value)}
-              className="w-full rounded-md border border-cyan-500 bg-cyan-50 px-3 py-1.5 text-xs font-bold text-cyan-950 hover:bg-cyan-100"
-            >
-              + إنشاء عدة اختلافات مستقلة دفعة واحدة
-            </button>
-            {showBatchBuilder && (
-              <div className="rounded-md border border-cyan-200 bg-white p-2">
-                <p className="text-[10px] leading-relaxed text-cyan-950">
-                  اختر الأنواع. ستنشأ بمعرّفات مستقلة ورتب متتابعة، ويمكن تحرير كل واحد وحذفه وربطه دون التأثير في غيره.
-                </p>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {(Object.keys(CATEGORY_LABELS) as VariantCategory[]).map((category) => (
-                    <label key={category} className="flex items-center gap-1 rounded border border-stone-200 px-1.5 py-1 text-[10px]">
-                      <input
-                        type="checkbox"
-                        checked={batchCategories.includes(category)}
-                        onChange={() =>
-                          setBatchCategories((current) =>
-                            current.includes(category)
-                              ? current.filter((item) => item !== category)
-                              : [...current, category]
-                          )
-                        }
-                        className="accent-cyan-700"
-                      />
-                      {CATEGORY_LABELS[category]}
-                    </label>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  disabled={batchCategories.length === 0}
-                  onClick={handleCreateBatch}
-                  className="mt-2 w-full rounded bg-cyan-700 px-2 py-1.5 text-[11px] font-medium text-white hover:bg-cyan-800 disabled:opacity-50"
-                >
-                  إنشاء {toArabicDigits(batchCategories.length)} اختلافات مستقلة
-                </button>
+
+            <div className="rounded-md border border-cyan-200 bg-white p-2">
+              <p className="text-[10px] leading-relaxed text-cyan-950">
+                إنشاء سريع بنقرة: القالب نفسه عبر نواة المعالج — والمواضع المتفرقة تُسند دفعة واحدة.
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {QUICK_CREATE_TEMPLATES.map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => handleQuickCreate(template.config)}
+                    title={template.hint}
+                    className="rounded border border-cyan-300 bg-cyan-50 px-2 py-1 text-[10px] text-cyan-950 hover:bg-cyan-100"
+                  >
+                    ⚡ {template.label}
+                  </button>
+                ))}
+                {quickTemplates.map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => handleQuickCreate(template.config, template.id)}
+                    title={template.hint ?? 'قالب محفوظ من المعالج'}
+                    className="rounded border border-violet-300 bg-violet-50 px-2 py-1 text-[10px] text-violet-950 hover:bg-violet-100"
+                  >
+                    ⚡ {template.name}
+                  </button>
+                ))}
               </div>
-            )}
+            </div>
 
             <div className="grid gap-2 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={handleCreateVariant}
-                className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
-              >
-                اختلاف واحد بمواضع منفصلة
-              </button>
-              {draftLoci.length > 1 && (
-                <button
-                  type="button"
-                  onClick={handleCreatePerLocus}
-                  className="rounded-md border border-emerald-600 bg-white px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-50"
-                  title="كل كلمة أو حرف اختلاف مستقل: مد هنا وفرش هناك. يجمعها المحرك في سطر الراوي."
-                >
-                  اختلاف مستقل لكل موضع
-                </button>
-              )}
               {markingMode === 'CHARACTERS' && markedCharacterRange && (
                 <button
                   type="button"
@@ -606,21 +563,57 @@ export function VariantsPanel() {
         />
       )}
 
-      {showSmartWizard && draftLoci.length > 0 && (
+      {showSmartWizard && (
         <SmartCreateWizard
           selectionText={markedText}
-          initialLoci={draftLoci}
+          initialLoci={draftLoci.length > 0 ? draftLoci : [{ startPosition: 1, endPosition: 1 }]}
           onClose={() => setShowSmartWizard(false)}
           onComplete={(message) => {
             clearMarks();
             refreshDerivedBranches();
+            setQuickTemplates(listWizardTemplates());
             setGlobalNotice(message);
+          }}
+          onRequestFullBuilder={(seed) => {
+            // المنشئ الكامل امتداد للمعالج لا بديل عنه: يُزرع بإعداد المعالج.
+            setShowSmartWizard(false);
+            setGlobalBuilderKind(markedCharacterRange ? 'CHARACTERS' : 'MORPHOLOGY');
+            setGlobalBuilderSeed(seed);
+            setGlobalBuilderRange(null);
+            setShowGlobalBuilder(true);
           }}
         />
       )}
     </aside>
   );
 }
+
+/** قوالب الإنشاء السريع المدمجة: بنقرة عبر نواة المعالج نفسها (T3). */
+const QUICK_CREATE_TEMPLATES: Array<{ id: string; label: string; hint: string; config: WizardTemplateConfig }> = [
+  {
+    id: 'quick-farsh',
+    label: 'فرش واحد',
+    hint: 'اختلاف فرشي واحد على التحديد — كل موضع متفرق يأخذ نسخته',
+    config: { types: ['FARSH'], faces: {}, relationMode: 'NONE', context: 'ALWAYS' },
+  },
+  {
+    id: 'quick-madd-group',
+    label: 'مد + تحقيق + صلة',
+    hint: 'مد بأوجه: تحقيق، تحقيق + صلة، صلة + فرش — في عملية واحدة',
+    config: {
+      types: ['MADUD'],
+      faces: { MADUD: 'تحقيق\nتحقيق + صلة\nصلة + فرش' },
+      relationMode: 'NONE',
+      context: 'ALWAYS',
+    },
+  },
+  {
+    id: 'quick-farsh-usul',
+    label: 'فرش + أصول',
+    hint: 'اختلافان مستقلان مرتبطان — على كل موضع محدد',
+    config: { types: ['FARSH', 'USUL'], faces: {}, relationMode: 'RELATED_TREE', context: 'ALWAYS' },
+  },
+];
 
 // ==================== صف الاختلاف ====================
 
