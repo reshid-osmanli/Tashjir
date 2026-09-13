@@ -128,6 +128,7 @@ export function generateBranches(
       return [{
         ...branch,
         category: variant.category,
+        orderRank: variant.orderRank,
         nodes,
         side: CATEGORY_SIDE[variant.category],
         // لا نفقد تسمية حررها المستخدم يدويا، أما البطاقة المولدة الفارغة
@@ -161,6 +162,7 @@ export function generateBranches(
         variantId: variant.id,
         alternativeId: alternative.id,
         category: variant.category,
+        orderRank: variant.orderRank,
         nodes,
         lane: 0, // يُحسب لاحقا في assignLanes
         side: CATEGORY_SIDE[variant.category],
@@ -275,6 +277,15 @@ function compareBranchesForLanes(
   second: TashjeerBranch,
   options: BranchGenerationOptions
 ): number {
+  // الرتبة الصريحة (FR-ED-10) تسبق كل قاعدة — كالمحرك الكلاسيكي سواء.
+  const firstRank = first.orderRank;
+  const secondRank = second.orderRank;
+  if (typeof firstRank === 'number' && typeof secondRank === 'number' && firstRank !== secondRank) {
+    return firstRank - secondRank;
+  }
+  if (typeof firstRank === 'number' && typeof secondRank !== 'number') return -1;
+  if (typeof firstRank !== 'number' && typeof secondRank === 'number') return 1;
+
   const traversal = options.traversal ?? 'END_TO_START';
   const firstSpan = branchPositionSpan(first);
   const secondSpan = branchPositionSpan(second);

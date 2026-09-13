@@ -45,6 +45,7 @@ import type {
 } from '@/types/tashjeer';
 import { listGlobalRules, ruleAppliesToAyah, type GlobalRule } from '@/lib/storage/global-rules-store';
 import {
+  hasLocalOverride,
   occurrenceIdFor,
   occurrenceOverrideMap,
   type RuleOccurrenceOverride,
@@ -719,7 +720,9 @@ export function getEffectiveVariants(document: TashjeerDocument): Variant[] {
  */
 export function matchFromDerivedVariant(variant: Variant): GlobalRuleMatch | null {
   if (!variant.isGlobalDerived || !variant.globalRuleId || !variant.characterRange) return null;
-  const separator = variant.title.indexOf(' · ');
+  // النص المطابَق مُلحق آخر العنوان؛ الأخير لا الأول، فقد يحمل العنوان
+  // المرقَّع محليًا الفاصل نفسه (FR-ED-10).
+  const separator = variant.title.lastIndexOf(' · ');
   return {
     ruleId: variant.globalRuleId,
     ayahKey: variant.ayahKey,
@@ -730,18 +733,27 @@ export function matchFromDerivedVariant(variant: Variant): GlobalRuleMatch | nul
   };
 }
 
-/** يحول نتيجة المطابقة إلى اختلاف مشتق يفهمه محرك التشجير الحالي. */
+/**
+ * يحول نتيجة المطابقة إلى اختلاف مشتق يفهمه محرك التشجير الحالي.
+ *
+ * التجاوز المحلي (FR-ED-10) طبقة فوق الاشتقاق: كل حقل مرقَّع يُعرض
+ * بدل قيمة القاعدة الأمّ في هذا الموضع وحده، والمعرّف ثابت لا يتغير
+ * بالترقيع فيبقى مفتاح الاستثناء والسجل واحدًا.
+ */
 export function variantFromGlobalMatch(
   rule: GlobalRule,
   match: GlobalRuleMatch,
   override?: RuleOccurrenceOverride
 ): Variant {
   const id = occurrenceIdFor(rule.id, match);
+  const patch = override?.patch;
+  const title = patch?.title?.trim() ? patch.title.trim() : rule.title;
+  const matchedText = patch?.text ? patch.text : match.matchedText;
   return {
     id,
     ayahKey: match.ayahKey ?? 0,
-    category: rule.category,
-    title: `${rule.title} · ${match.matchedText}`,
+    category: patch?.category ?? rule.category,
+    title: `${title} · ${matchedText}`,
     startPosition: match.startPosition,
     endPosition: match.endPosition,
     targetKind: 'CHARACTERS',
@@ -749,21 +761,22 @@ export function variantFromGlobalMatch(
     status: rule.status,
     isGlobalDerived: true,
     globalRuleId: rule.id,
+    hasLocalOverride: hasLocalOverride(override),
     // المحرك مصدر هذا الموضع؛ التصحيح اليدوي يظهر في سجل التعديل والتتبع.
     origin: 'ENGINE',
     // رتبة ترتيب السطر: تخصيص الموضع يسبق رتبة القاعدة العامة.
     orderRank: override?.orderRank ?? rule.orderRank,
-    description: rule.description,
-    sourceRef: rule.sourceRef,
+    description: patch?.description ?? rule.description,
+    sourceRef: patch?.sourceRef ?? rule.sourceRef,
     alternatives: [
       {
         id: `${id}:alternative`,
-        text: match.matchedText,
-        label: rule.ruleLabel || rule.title,
-        scope: rule.scope,
-        ruleLabel: rule.ruleLabel,
-        maddHarakat: rule.maddHarakat,
-        notes: rule.description,
+        text: matchedText,
+        label: patch?.label ?? patch?.ruleLabel ?? rule.ruleLabel ?? title,
+        scope: patch?.scope ?? rule.scope,
+        ruleLabel: patch?.ruleLabel ?? rule.ruleLabel,
+        maddHarakat: patch?.maddHarakat ?? rule.maddHarakat,
+        notes: patch?.notes ?? rule.description,
         evidences: rule.evidences,
         // تخصيص الموضع يسبق درجة القاعدة، فقد يرجّح المحقق الوجه هنا
         // ويؤخّره هناك بحسب السياق.

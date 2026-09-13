@@ -59,7 +59,24 @@ import { getEffectiveVariants, matchFromDerivedVariant } from '@/lib/quran-logic
 import { readTransmissionCatalog } from '@/lib/transmissions/catalog';
 import { readEngineSettings } from '@/lib/tashjeer/engine-settings';
 import { moveLineToIndex } from '@/lib/tashjeer/manual-links';
-import { setOccurrenceOrderRank } from '@/lib/storage/rule-occurrences-store';
+import {
+  deleteOccurrence,
+  exportOccurrenceData,
+  overrideById,
+  restoreOccurrence,
+  restoreOccurrenceData,
+  setLocalOverride,
+  clearLocalOverride,
+  setOccurrenceOrderRank,
+  type LocalOverridePatch,
+  type OccurrenceStoreShape,
+} from '@/lib/storage/rule-occurrences-store';
+import {
+  exportGlobalRulesSnapshot,
+  listGlobalRules,
+  restoreGlobalRulesSnapshot,
+  type GlobalRule,
+} from '@/lib/storage/global-rules-store';
 import {
   appendEditLog,
   createDocument,
@@ -194,6 +211,17 @@ export interface LinkDecisionNotice extends LinkPolicyDecision {
   at: string;
 }
 
+/**
+ * لقطة تراجع موحدة (FR-ED-10): المستند مع الاستثناءات والقواعد العامة
+ * معًا، فالتراجع عن تحرير موضعي يعيد القيم الثلاث دفعة واحدة ولا يترك
+ * أثرًا معلقًا في مخزن دون آخر.
+ */
+export interface EditorHistoryEntry {
+  document: TashjeerDocument;
+  occurrences: OccurrenceStoreShape;
+  globalRules: GlobalRule[];
+}
+
 interface EditorState {
   // ---------- المستند ----------
   /** المستند المفتوح حاليا، أو null قبل التحميل */
@@ -201,9 +229,9 @@ interface EditorState {
   /** هل توجد تعديلات غير محفوظة */
   isDirty: boolean;
   /** لقطات التراجع */
-  past: TashjeerDocument[];
+  past: EditorHistoryEntry[];
   /** لقطات الإعادة */
-  future: TashjeerDocument[];
+  future: EditorHistoryEntry[];
 
   // ---------- العرض ----------
   zoom: number;
@@ -280,6 +308,20 @@ interface EditorState {
    * قاعدة عامة (تخصيص موضعي يسبق رتبة القاعدة). هذا هو مدخل لوحة الخصائص.
    */
   setEffectiveOrderRank: (variantId: string, rank: number | null) => void;
+  /**
+   * معاملة خارجية (FR-ED-10): تغيير في مخزن الاستثناءات أو القواعد العامة
+   * يُنفَّذ داخل لقطة تراجع موحدة مع سطر تتبع في سجل المستند، فالتراجع
+   * يعيد المستند والمخازن معًا.
+   */
+  transactExternal: (edit: EditDescriptor, fn: () => void) => void;
+  /** يثبّت ترقيعًا محليًا على موضع مشتق من قاعدة عامة (FR-ED-10/T2). */
+  setDerivedLocalOverride: (variantId: string, patch: LocalOverridePatch) => void;
+  /** يلغي التجاوز المحلي لموضع مشتق فيعود مشتقًا خالصًا من قاعدته. */
+  clearDerivedLocalOverride: (variantId: string, note?: string) => void;
+  /** يحذف موضعًا واحدًا من قاعدة عامة دون المساس بسائر المواضع. */
+  deleteDerivedOccurrence: (variantId: string, reason?: string) => void;
+  /** يرجع موضعًا محذوفًا من قاعدة عامة. */
+  restoreDerivedOccurrence: (variantId: string) => void;
   /** ينقل وجها داخل موضعه صعودا أو نزولا، فيثبّت ترتيب أوجه الموضع. */
   moveAlternative: (variantId: string, alternativeId: string, delta: number) => void;
   /** يعيد ترتيب أوجه الموضع إلى قاعدة المحرك. */
@@ -482,8 +524,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (!current) return;
 
     const fresh = withRegeneratedBranches(createDocument(current.ayahKey, current.meta.author));
+    const entry = captureHistoryEntry(current);
     set((state) => ({
-      past: pushHistory(state.past, current),
+      past: pushHistory(state.past, entry),
       future: [],
       document: fresh,
       multiSelection: null,
@@ -517,8 +560,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   replaceDocument: (document) => {
+    const current = get().document;
     set((state) => ({
-      past: state.document ? pushHistory(state.past, state.document) : state.past,
+      past: current ? pushHistory(state.past, captureHistoryEntry(current)) : state.past,
       future: [],
       document: withRegeneratedBranches(document),
       isDirty: true,
@@ -865,11 +909,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const match = matchFromDerivedVariant(derived);
     if (!match) return;
 
-    setOccurrenceOrderRank(derived.globalRuleId, match, rank);
-    mutate(
-      set,
-      get,
-      (current) => ({ ...current }),
+    get().transactExternal(
       {
         action: 'تعديل ترتيب موضع قاعدة',
         targetType: 'RULE',
@@ -880,7 +920,104 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             ? `إلغاء ترتيب السطر اليدوي للموضع «${derived.title}»`
             : `تعديل رقم ترتيب السطر للموضع «${derived.title}» إلى ${rank}`,
         changes: [{ field: 'orderRank', before: derived.orderRank, after: rank ?? undefined }],
-      }
+      },
+      () => setOccurrenceOrderRank(derived.globalRuleId!, match, rank)
+    );
+  },
+
+  transactExternal: (edit, fn) => {
+    const state = get();
+    const current = state.document;
+    if (!current) {
+      // بلا مستند مفتوح لا لقطة تراجع؛ يُنفَّذ التغيير وحده (صفحة المكتبة).
+      fn();
+      return;
+    }
+    // اللقطة قبل التنفيذ لا بعده، وإلا حفظ التراجع الحالة الجديدة نفسها.
+    const entry = captureHistoryEntry(current);
+    fn();
+    set({
+      past: pushHistory(state.past, entry),
+      future: [],
+      document: withRegeneratedBranches(withLoggedEdit({ ...current }, edit, current)),
+      isDirty: true,
+    });
+  },
+
+  setDerivedLocalOverride: (variantId, patch) => {
+    const document = get().document;
+    if (!document) return;
+    const derived = getEffectiveVariants(document).find((variant) => variant.id === variantId);
+    if (!derived?.globalRuleId) return;
+    const match = matchFromDerivedVariant(derived);
+    if (!match) return;
+
+    get().transactExternal(
+      {
+        action: 'تجاوز محلي لموضع قاعدة',
+        targetType: 'RULE',
+        targetId: variantId,
+        category: derived.category,
+        summary: `تجاوز محلي للموضع «${derived.title}» في هذه الآية وحدها`,
+        changes: Object.entries(patch).map(([field, after]) => ({ field, after })),
+      },
+      () => setLocalOverride(derived.globalRuleId!, match, patch)
+    );
+  },
+
+  clearDerivedLocalOverride: (variantId, note) => {
+    const document = get().document;
+    if (!document) return;
+    const derived = getEffectiveVariants(document).find((variant) => variant.id === variantId);
+    if (!derived?.globalRuleId) return;
+
+    get().transactExternal(
+      {
+        action: 'إلغاء التجاوز المحلي',
+        targetType: 'RULE',
+        targetId: variantId,
+        category: derived.category,
+        summary: `إلغاء التجاوز المحلي للموضع «${derived.title}»: عودة إلى قيم القاعدة الأمّ`,
+      },
+      () => clearLocalOverride(variantId, note)
+    );
+  },
+
+  deleteDerivedOccurrence: (variantId, reason) => {
+    const document = get().document;
+    if (!document) return;
+    const derived = getEffectiveVariants(document).find((variant) => variant.id === variantId);
+    if (!derived?.globalRuleId) return;
+    const match = matchFromDerivedVariant(derived);
+    if (!match) return;
+
+    get().transactExternal(
+      {
+        action: 'حذف موضعي من قاعدة',
+        targetType: 'RULE',
+        targetId: variantId,
+        category: derived.category,
+        summary: `حذف الموضع «${derived.title}» من هذه الآية وحدها (القاعدة باقية)`,
+      },
+      () => deleteOccurrence(derived.globalRuleId!, match, reason)
+    );
+  },
+
+  restoreDerivedOccurrence: (variantId) => {
+    const document = get().document;
+    if (!document) return;
+    const override = overrideById(variantId);
+    if (!override) return;
+    const ruleTitle = listGlobalRules().find((rule) => rule.id === override.ruleId)?.title ?? override.ruleId;
+
+    get().transactExternal(
+      {
+        action: 'إرجاع موضع محذوف',
+        targetType: 'RULE',
+        targetId: variantId,
+        summary: `إرجاع الموضع «${override.matchedText ?? ''}» من قاعدة «${ruleTitle}»`,
+      },
+      () => restoreOccurrence(variantId)
     );
   },
 
@@ -1638,16 +1775,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { past, document } = get();
     if (past.length === 0 || !document) return;
 
+    // الالتقاط قبل الاستعادة حتمًا: الاستعادة تكتب المخازن، وأي التقاط
+    // بعدها يقرأ الحالة المستعادة نفسها فيفسد الإعادة.
+    const entry = past[past.length - 1];
+    const currentEntry = captureHistoryEntry(document);
+    const restored = restoreHistoryEntry(entry);
     set({
-      document: past[past.length - 1],
-      multiSelection: null,
-      selection: null,
-      selectedWordId: null,
-      selectedVariantId: null,
-      selectedAlternativeId: null,
-      selectedBranchId: null,
+
       past: past.slice(0, -1),
-      future: [document, ...get().future].slice(0, MAX_HISTORY),
+      future: [currentEntry, ...get().future].slice(0, MAX_HISTORY),
       isDirty: true,
     });
   },
@@ -1656,16 +1792,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { future, document } = get();
     if (future.length === 0 || !document) return;
 
+    const entry = future[0];
+    const currentEntry = captureHistoryEntry(document);
+    const restored = restoreHistoryEntry(entry);
     set({
-      document: future[0],
-      multiSelection: null,
-      selection: null,
-      selectedWordId: null,
-      selectedVariantId: null,
-      selectedAlternativeId: null,
-      selectedBranchId: null,
+
       future: future.slice(1),
-      past: pushHistory(get().past, document),
+      past: pushHistory(get().past, currentEntry),
       isDirty: true,
     });
   },
@@ -1677,7 +1810,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 // ==================== دوال داخلية ====================
 
 /** وصف تعديل يُسجَّل في سجل المستند لأغراض التتبع. */
-interface EditDescriptor {
+export interface EditDescriptor {
   action: string;
   targetType: import('@/types/tashjeer').DocumentEditTargetType;
   targetId: string;
@@ -1709,11 +1842,34 @@ function mutate(
   );
 
   set({
-    past: pushHistory(state.past, current),
+    past: pushHistory(state.past, captureHistoryEntry(current)),
     future: [],
     document: next,
     isDirty: true,
   });
+}
+
+/**
+ * يلتقط لقطة موحدة للحالة قبل التعديل: المستند والاستثناءات والقواعد.
+ * تُستدعى دائمًا قبل كتابة أي مخزن، وإلا حفظ التراجع الحالة الجديدة.
+ */
+function captureHistoryEntry(document: TashjeerDocument): EditorHistoryEntry {
+  return {
+    document,
+    occurrences: exportOccurrenceData(),
+    globalRules: exportGlobalRulesSnapshot(),
+  };
+}
+
+/**
+ * يستعيد لقطة موحدة: المخازن أولا ثم المستند بخطوط مولّدة من القيم
+ * المستعادة، فلا يبقى أثر معلق في مخزن دون آخر (FR-ED-10).
+ * الاستعادة نفسها تبث أحداث التغيير فتتحدث كل اللوحات المستمعة.
+ */
+function restoreHistoryEntry(entry: EditorHistoryEntry): TashjeerDocument {
+  restoreOccurrenceData(entry.occurrences);
+  restoreGlobalRulesSnapshot(entry.globalRules);
+  return withRegeneratedBranches(entry.document);
 }
 
 /** يلحق سطر سجل تعديل بالمستند إن كان التعديل حقيقيا (تغيرت بياناته). */
@@ -1781,15 +1937,24 @@ function orderedAlternativeIds(variant: Variant): string[] {
 
 /** ترتيب الاختلافات: من آخر الآية إلى أولها، موافقا لقاعدة التشجير. */
 function compareVariants(a: Variant, b: Variant): number {
+  // الرتبة الصريحة (FR-ED-10) رقم لا اسم: تسبق كل قاعدة، والتعادل الأخير
+  // بالمعرّف لا بالعنوان حتى لا يقلب التحرير اللفظي ترتيب القائمة.
+  const aRank = a.orderRank;
+  const bRank = b.orderRank;
+  if (typeof aRank === 'number' && typeof bRank === 'number' && aRank !== bRank) {
+    return aRank - bRank;
+  }
+  if (typeof aRank === 'number' && typeof bRank !== 'number') return -1;
+  if (typeof aRank !== 'number' && typeof bRank === 'number') return 1;
   // ارتكاز التشجير الصحيح هو آخر كلمة في المدى عند السير من آخر الآية.
   // استخدام startPosition هنا كان يقلب ترتيب اختلاف يمتد على أكثر من كلمة.
   if (a.endPosition !== b.endPosition) return b.endPosition - a.endPosition;
   if (a.startPosition !== b.startPosition) return b.startPosition - a.startPosition;
-  return a.title.localeCompare(b.title, 'ar');
+  return a.id.localeCompare(b.id);
 }
 
-function pushHistory(past: TashjeerDocument[], document: TashjeerDocument): TashjeerDocument[] {
-  return [...past, document].slice(-MAX_HISTORY);
+function pushHistory(past: EditorHistoryEntry[], entry: EditorHistoryEntry): EditorHistoryEntry[] {
+  return [...past, entry].slice(-MAX_HISTORY);
 }
 
 /** نوع هدف الرابط في سجل التعديل بحسب نوع العلاقة. */

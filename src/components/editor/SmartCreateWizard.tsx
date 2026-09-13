@@ -74,8 +74,7 @@ import {
 } from '@/lib/quran-logic/characters';
 import {
   createGlobalRuleId,
-  saveGlobalRulesBatch,
-  setGlobalRuleOrderRank,
+
 } from '@/lib/storage/global-rules-store';
 import { decideMutualExclusion } from '@/lib/tashjeer/decision/resolver';
 import { resolveScope } from '@/lib/tashjeer/scope';
@@ -195,8 +194,7 @@ export function SmartCreateWizard({
   onComplete,
   onRequestFullBuilder,
 }: SmartCreateWizardProps) {
-  const { document, applySmartCreateBatch } = useEditorStore();
-  const strengthCatalog = useStrengthDegrees();
+
 
   const words = useMemo(() => (document ? documentWindowWords(document) : []), [document]);
   const wordLengths = useMemo(
@@ -611,42 +609,7 @@ export function SmartCreateWizard({
       return;
     }
 
-    try {
-      // ذري (كله أو لا شيء): تحقق من الكل ثم كتابة واحدة — لا نصف مجموعة.
-      const saved = saveGlobalRulesBatch(
-        selectedTypes.map((type, index) => ({
-          id: createGlobalRuleId(),
-          title: `${baseTitle} — ${CATEGORY_LABELS[type]}`,
-          category: type,
-          scope,
-          ruleLabel: CATEGORY_LABELS[type],
-          pattern,
-          applyRange,
-          status: 'DRAFT' as const,
-          isActive: true,
-          orderRank: index + 1,
-        }))
-      );
-      // تثبيت الرتب عبر المضبّط الرسمي يعيد ترقيم المتأثرة (تجميلي لا يبطل الذرية).
-      try {
-        for (const rule of saved) {
-          if (rule.orderRank) setGlobalRuleOrderRank(rule.id, rule.orderRank);
-        }
-      } catch {
-        // تجاهل: القواعد محفوظة والرتب ظاهرة قابلة للضبط لاحقًا.
-      }
-      const rangeLabel =
-        applicationScope === 'SURAH' ? 'هذه السورة' : applicationScope === 'AYAH_RANGE' ? 'مدى الآيات المحدد' : 'المصحف كله';
-      const dryNote =
-        dryRun.phase === 'done'
-          ? ` — المعاينة: ${dryRun.counts.map(({ type, count }) => `${CATEGORY_LABELS[type]} ${toArabicDigits(count)}`).join('، ')} موضعًا`
-          : '';
-      onComplete?.(`أُنشئت ${toArabicDigits(saved.length)} قواعد عامة مستقلة على ${rangeLabel} — تظهر في كل موضع مطابق بلا نسخ${dryNote}.`);
-      onClose();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'فشل التعميم ولم يُحفظ شيء.');
-    }
-  };
+
 
   const toggleType = (type: VariantCategory) => {
     setSelectedTypes((current) =>
