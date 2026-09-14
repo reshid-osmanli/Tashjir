@@ -12,18 +12,22 @@
 
 import { useMemo, useState, type DragEvent } from 'react';
 import type { EngineConfig, EngineRule, ConflictPolicyStep, PriorityGroup } from '@/lib/tashjeer/model/v8';
+import type { RulePriorityShift } from '@/lib/tashjeer/engine-config-store';
 import { CONFLICT_POLICY_LABELS, PIPELINE_STAGE_LABELS } from './labels';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 
 interface PriorityPipelineProps {
   config: EngineConfig;
   onConflictPolicyChange: (policy: ConflictPolicyStep[]) => void;
-  /** إعادة ترتيب مراحل التنفيذ (اختياري: إن غاب تُعرض المراحل للقراءة فقط). */
-  onExecutionOrderChange?: (order: string[]) => void;
+  /**
+   * إعادة ترتيب مراحل التنفيذ (اختياري: إن غاب تُعرض المراحل للقراءة فقط).
+   * قد تكون غير متزامنة: بوابة التحذير وقياس الأثر (FR-ES-04) تقرر قبل الحفظ.
+   */
+  onExecutionOrderChange?: (order: string[]) => void | Promise<void>;
   /** تحديث مجموعة أولوية (ترتيبها أو اسمها). */
   onGroupChange?: (group: PriorityGroup) => void;
-  /** تغيير رقم أولوية قاعدة بعينها. */
-  onRulePriorityChange?: (ruleId: string, priority: number) => void;
+  /** تغيير رقم أولوية قاعدة بعينها؛ يعيد تقرير الإزاحة إن زُيحت قواعد للتصادم. */
+  onRulePriorityChange?: (ruleId: string, priority: number) => RulePriorityShift[] | void;
   /** فتح قاعدة في المنشئ. */
   onOpenRule?: (ruleId: string) => void;
 }
@@ -161,6 +165,12 @@ export function PriorityPipeline({
   onOpenRule,
 }: PriorityPipelineProps) {
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
+  /** تقرير إزاحة تصادم الأولويات — إشعار المستخدم (FR-ES-01). */
+  const [shifts, setShifts] = useState<RulePriorityShift[]>([]);
+
+  const notePriorityChange = (ruleId: string, priority: number): void => {
+    setShifts(onRulePriorityChange?.(ruleId, priority) ?? []);
+  };
 
   const togglePolicyStep = (step: ConflictPolicyStep) => {
     if (config.conflictPolicy.includes(step)) {
@@ -194,10 +204,14 @@ export function PriorityPipeline({
 
   const reorderRules = (next: EngineRule[]) => {
     if (!onRulePriorityChange) return;
+    const allShifts: RulePriorityShift[] = [];
     for (const { ruleId, priority } of renumberPriorities(next.map((rule) => rule.id))) {
       const current = next.find((rule) => rule.id === ruleId);
-      if (current && current.priority !== priority) onRulePriorityChange(ruleId, priority);
+      if (current && current.priority !== priority) {
+        allShifts.push(...(onRulePriorityChange(ruleId, priority) ?? []));
+      }
     }
+    setShifts(allShifts);
   };
 
   return (
@@ -208,6 +222,12 @@ export function PriorityPipeline({
         <p className="mt-1 text-sm text-gray-500">
           سلم المجموعات: الأصغر ترتيبا أعم قاعدة. اسحب لإعادة الترتيب، وافتح مجموعة لترتيب قواعدها.
         </p>
+        {shifts.length > 0 && (
+          <p className="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
+            الرقم كان مشغولًا: أُزيح بمقدار ١ —{' '}
+            {shifts.map((item) => `«${item.ruleName}» ${toArabicDigits(item.from)} ← ${toArabicDigits(item.to)}`).join('، ')}
+          </p>
+        )}
         <div className="mt-3">
           <ReorderableList
             items={sortedGroups}
@@ -216,6 +236,7 @@ export function PriorityPipeline({
             render={(group) => {
               const rules = rulesByGroup.get(group.id) ?? [];
               const open = openGroupId === group.id;
+              const maxInGroup = Math.max(1, ...rules.map((item) => item.priority));
               return (
                 <div className="flex-1 rounded-lg bg-gray-50 px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
@@ -255,12 +276,23 @@ export function PriorityPipeline({
                                 {rule.protected && <span className="mr-1 text-[10px] text-amber-700">محمية</span>}
                                 {rule.status !== 'ACTIVE' && <span className="mr-1 text-[10px] text-gray-400">{rule.status}</span>}
                               </button>
+                              {/* شريط ترتيبي: موضع القاعدة ضمن مجموعتها (FR-ES-01) */}
+                              <span
+                                className="relative h-1.5 w-14 shrink-0 overflow-hidden rounded-full bg-gray-100"
+                                title={`موقع الأولوية ${toArabicDigits(rule.priority)} ضمن المجموعة`}
+                                aria-hidden
+                              >
+                                <span
+                                  className="absolute inset-y-0 right-0 rounded-full bg-emerald-500/80"
+                                  style={{ width: `${Math.max(6, Math.round((rule.priority / maxInGroup) * 100))}%` }}
+                                />
+                              </span>
                               <span className="flex items-center gap-1 text-xs text-gray-500">
                                 <span>أولوية</span>
                                 <input
                                   type="number"
                                   value={rule.priority}
-                                  onChange={(event) => onRulePriorityChange?.(rule.id, Number(event.target.value))}
+                                  onChange={(event) => notePriorityChange(rule.id, Number(event.target.value))}
                                   disabled={!onRulePriorityChange}
                                   className="w-16 rounded border border-gray-200 px-1 py-0.5 text-center text-xs"
                                   aria-label={`أولوية القاعدة ${rule.name}`}
@@ -347,7 +379,7 @@ export function PriorityPipeline({
         </div>
         <p className="mt-3 text-xs text-gray-400">
           {onExecutionOrderChange
-            ? 'إعادة ترتيب المراحل تؤثر في كل قرار؛ راجع اختبارات القواعد بعدها. التغيير يُحفظ مع الملف الشخصي.'
+            ? 'إعادة ترتيب المراحل تؤثر في كل قرار؛ عند السحب يُعرض تحذير مع قياس أثر مبدئي (المراحل المتغيرة، القواعد المتأثرة، اختبارات القواعد على الترتيب الجديد) قبل الحفظ.'
             : 'ترتيب التنفيذ معروض للقراءة فقط في هذا السياق.'}
         </p>
       </div>

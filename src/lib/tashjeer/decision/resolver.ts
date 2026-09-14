@@ -91,8 +91,11 @@ function actionOutcome(rule: EngineRule): boolean | undefined {
   return undefined;
 }
 
-function actionStage(rule: EngineRule): string {
-  // منع الدمج جزء من مرحلة MERGE؛ BLOCK_RESULT وحده قاعدة حجب عامة تسبقها.
+/**
+ * مرحلة التنفيذ التابعة لإجراء القاعدة (FR-ES-04). منع الدمج جزء من مرحلة
+ * MERGE؛ BLOCK_RESULT وحده قاعدة حجب عامة تسبقها.
+ */
+export function executionStageOf(rule: EngineRule): string {
   if (rule.actions.some((action) => action.type === 'BLOCK_RESULT')) return 'BLOCKING';
   if (rule.actions.some((action) => action.type === 'OVERRIDE_RESULT')) return 'EXCEPTIONS';
   if (rule.actions.some((action) => action.type === 'MERGE')) return 'MERGE';
@@ -101,8 +104,27 @@ function actionStage(rule: EngineRule): string {
 }
 
 function executionStageIndex(rule: EngineRule, profile: EngineConfig): number {
-  const index = profile.executionOrder.indexOf(actionStage(rule));
+  const index = profile.executionOrder.indexOf(executionStageOf(rule));
   return index < 0 ? Number.MAX_SAFE_INTEGER : index;
+}
+
+/**
+ * أثر مبدئي بسيط لتبديل ترتيب التنفيذ (FR-ES-04): المراحل التي تغيّر موضعها
+ * النسبي، وعدد القواعد التي إجراءاتها في تلك المراحل. يُعرض في تحذير ما
+ * قبل الحفظ مع نتائج اختبارات القواعد على الترتيب الجديد.
+ */
+export function executionOrderImpact(
+  config: EngineConfig,
+  nextOrder: string[]
+): { changedStages: string[]; affectedRules: EngineRule[] } {
+  const oldPos = new Map(config.executionOrder.map((stage, index) => [stage, index]));
+  const newPos = new Map(nextOrder.map((stage, index) => [stage, index]));
+  const changedStages = nextOrder.filter(
+    (stage) => oldPos.has(stage) && oldPos.get(stage) !== newPos.get(stage)
+  );
+  const changed = new Set(changedStages);
+  const affectedRules = config.rules.filter((rule) => changed.has(executionStageOf(rule)));
+  return { changedStages, affectedRules };
 }
 
 function precedenceForConflict(a: EngineRule, b: EngineRule, profile?: EngineConfig): number {
@@ -128,7 +150,12 @@ export function resolveConflictPolicy(
 ): { winner?: EngineRule; reason: string } {
   const usable = candidates.filter(isActive);
   if (usable.length === 0) return { reason: 'لا مرشّحات فاعلة' };
-  if (usable.length === 1) return { winner: usable[0], reason: 'مرشّح واحد' };
+  if (usable.length === 1) {
+    const only = usable[0];
+    // حتى المرشّح الوحيد يُفسَّر: تجاوز صريح موثق ليس «مصادفة» (T7/T6).
+    if (isExplicitOverride(only)) return { winner: only, reason: `Explicit Override موثق (${only.name})` };
+    return { winner: only, reason: 'مرشّح واحد' };
+  }
 
   const sorted = [...usable].sort((a, b) => precedenceForConflict(a, b, profile));
   const hard = sorted.filter((rule) => rule.hardness === 'HARD');
