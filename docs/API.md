@@ -2,38 +2,142 @@
 
 ## نظرة عامة
 
-API المشروع مبني باستخدام Next.js API Routes.
+API المشروع مبني باستخدام Next.js API Routes، لكن **طبقة القرار المركزية** هي الأساس في الحزمة 01 (PH0).
 
-> التخزين المحلي هو مصدر التنفيذ الحالي في المتصفح؛ الواجهات النقية التالية هي عقدة القرار التي تستعملها الصفحات والاختبارات قبل نقل التخزين إلى API دائم.
+> التخزين المحلي هو مصدر التنفيذ الحالي في المتصفح؛ الواجهات النقية التالية هي عقدة القرار التي تستعملها الصفحات والاختبارات قبل نقل التخزين إلى API دائم. لا تملك أي ميزة تنفيذًا خاصًا لقرارات الدمج/الترتيب/التنافي — كل شيء يمر عبر Decision API (P-07).
 
 ---
 
-## Engine Studio وDecision API
+## Decision API الموحدة (FR-EN-03) — الحزمة 01
 
-لا تتخذ الواجهة قرارًا مستقلًا. كل قرار دمج/تنافٍ/اختلاف/ترتيب يمر عبر:
+> الملف: `src/lib/tashjeer/decision/api.ts` + `resolver.ts` + `policy.ts`
+> كل استدعاء يعيد: النتيجة + القواعد المطابقة والفائزة والمتجاهلة وأسبابها + Trace قابل للتفسير.
+
+### التواقيع
 
 ```ts
-import {
-  resolveDifference,
-  resolveMerge,
-  resolveRelation,
-  resolveConnection,
-  resolveOrder,
-  resolveVariant,
-} from '@/lib/tashjeer/decision/api';
+// يحسم إن كان الموضع يستوجب إنشاء اختلاف
+function resolveDifference(
+  ctx: DecisionContext,
+  profile?: EngineConfig
+): DecisionResult<{ create: boolean; reason: string }>
+
+// يحسم دمج عنصرين (فئتين/نوعين)
+function resolveMerge(
+  a: string, // نوع أول: FARSH, MADD, TAHQIQ...
+  b: string, // نوع ثاني
+  profile?: EngineConfig,
+  ctx?: DecisionContext
+): DecisionResult<{ merge: boolean; reason: string; priority: number }>
+
+// يحسم تنافي وجهين (لا يُضربان إن كانا متنافيين)
+function resolveRelationExclusion(
+  a: string,
+  b: string,
+  profile?: EngineConfig
+): DecisionResult<{ exclusive: boolean; reason: string }>
+
+// يحسم أي وجه يفوز في موضع (بالقوة ثم بالسياسات)
+function resolveVariant(
+  candidates: Array<{ id: string; strengthRank?: number }>,
+  ctx: DecisionContext,
+  profile?: EngineConfig
+): DecisionResult<{ winnerId?: string; orderedIds: string[] }>
+
+// يحسم ترتيب عناصر بمراعاة الرتبة الصريحة ثم سياسات ORDERING (DM-04)
+function resolveOrder(
+  items: Array<{ id: string; explicitOrder?: number }>,
+  profile?: EngineConfig,
+  ctx?: DecisionContext
+): DecisionResult<{ orderedIds: string[] }>
+
+// يتحقق من صحة علاقة بين كيانين وفق قواعد RELATION/EXCEPTION
+function resolveRelation(
+  fromId: string,
+  toId: string,
+  type: string, // MERGE | REFERENCE | ...
+  profile?: EngineConfig,
+  ctx?: DecisionContext
+): DecisionResult<{ valid: boolean; reason: string }>
+
+// يتحقق من السماح بالوصل بين حدّين (DM-07، FR-ED-11)
+function resolveConnection(
+  forbidden: boolean, // هل توجد علامة FORBIDDEN_WASL؟
+  profile?: EngineConfig
+): DecisionResult<{ allowed: boolean; reason: string }>
+
+// بنية النتيجة الموحدة
+interface DecisionResult<T> {
+  decision: T;
+  appliedRules: EngineRule[];               // الفائزة/المطبقة
+  skippedRules: Array<{ rule: EngineRule; reason: string }>; // المتجاهلة
+  trace: DecisionTraceStep[];               // أثر قابل للتفسير
+}
+interface DecisionTraceStep {
+  stage: string; // INPUT | MATCH | MERGE | CONFLICT | RULE_WON | FINAL ...
+  ruleId?: string;
+  message: string;
+  status: 'applied' | 'skipped' | 'won' | 'lost' | 'blocked' | 'info';
+  priority?: number;
+}
 ```
 
-كل دالة تعيد `decision` و`appliedRules` و`skippedRules` و`trace`. ملف السياسة `EngineConfig` في `engine-config-store.ts` يحتوي على مجموعات الأولوية، القواعد ذات المعرّفات الثابتة، سلم التعارض، ترتيب التنفيذ، مصفوفة الدمج، العلاقات والسياقات.
+### أمثلة استخدام
 
-### تصدير/استيراد إعداد المحرك
+```ts
+import { resolveMerge, resolveOrder } from '@/lib/tashjeer/decision/api';
+import { DEFAULT_SYSTEM_PROFILE } from '@/lib/tashjeer/decision/policy';
+
+// هل ندمج فرش مع مد؟
+const merge = resolveMerge('FARSH', 'MADD', DEFAULT_SYSTEM_PROFILE);
+console.log(merge.decision.merge); // false — مستقلان
+console.log(merge.trace); // [{ stage: 'MERGE', message: 'مصفوفة الدمج: لا تدمج — مستقلان', ... }]
+
+// ترتيب برتبة صريحة (DM-04)
+const order = resolveOrder([
+  { id: 'diff-b', explicitOrder: 2 },
+  { id: 'diff-a', explicitOrder: 1 },
+]);
+console.log(order.decision.orderedIds); // ['diff-a', 'diff-b']
+```
+
+### فصل المنطق عن السياسة (FR-EN-01)
+
+- **Engine Logic** (قياس، تخطيط، ضرب أوجه، توليد أسطر، ملء مسارات) يبقى كودًا في `lib/tashjeer/` دون تحويلها لإعدادات.
+- **Engine Policy** (الأولويات، متى يُدمج/يُمنع/يُفصل، سياقات الوقف/الوصل، الاستثناءات، حل التعارض، ترتيب التنفيذ) في `EngineConfig` الموحد يُقرأ من Profile المفعّل.
+- **السياسات الافتراضية** في `decision/policy.ts` تطابق سلوك المحرك الحالي حرفيًا — لا تغيير ناتج بعد الحزمة 01 (يتحقق باختبارات الانحدار).
+
+### تصدير/استيراد إعداد المحرك (DM-14، FR-ES-14)
 
 - `serializeEngineConfig(config)` يصدر حزمة حتمية منظمة (`policies`، `rules`، `priorities`، `relations`، `contexts`، `merge-policies`، `schema-version`) مرتّبة بالمعرّفات، بلا طوابع زمنية؛ تغيير `priority` يغيّر سطر القيمة فقط.
-- `toCanonicalConfig(config)` متاح للتكاملات التي تحتاج الشكل المسطح الداخلي.
+- `toCanonicalConfig(config)` متاح للتكاملات التي تحتاج الشكل المسطح الداخلي (Git-friendly DM-13).
 - `validateEngineConfig(value)` يفحص الإصدار، الحقول، المعرّفات المكررة ومجموعات الأولوية.
 - `importEngineConfigText(text)` يحلل ويفحص ويطبّع دون الكتابة إلى التخزين؛ صفحة `/studio` تعرض المعاينة ثم تطبق الاستيراد كمسودة غير محفوظة.
 - `saveEngineConfig(config)` هو مسار الحفظ الوحيد لملف السياسة.
+- `toExportBundle(config)` يحول المسطح إلى حزمة منظمة للـ Git.
 
 إعدادات الرسم والترتيب القديمة (`engine-settings.ts`) لها واجهة تحرير واحدة في `/studio?section=settings`؛ تبويب `/admin` القديم يعيد توجيه المستخدم إليها ولا يملك نسخة ثانية.
+
+### الحفظ الآمن وتصدير حتمي (NFR-04، DM-13)
+
+- `atomicWrite(key, value)` كتابة ذرية للتخزين المحلي.
+- `backupBeforeMigration(doc)` و`backupBeforeWideOp(payload)` قبل الهجرات والعمليات الواسعة.
+- `AutoSaveManager` حفظ تلقائي دوري + عند العمليات الخطرة.
+- `stableStringify(value)` تصدير حتمي بترتيب مفاتيح ثابت — نفس البيانات ← نفس البايتات.
+
+### سجل التراجع الموحد (DM-15)
+
+- `CommandLog` في `src/lib/tashjeer/history/command-log.ts`:
+  - `record(label, kind, doFn, undoFn)` — يسجل أمرًا منفردًا.
+  - `transaction(label, fn)` — يجمع عدة أوامر في دفعة واحدة تُتراجع كوحدة.
+  - `undo() / redo() / jumpTo(depth) / history() / clear()`
+- `editor-store` يلتقط لقطة ثلاثية (مستند + استثناءات + قواعد) عبر `captureHistoryEntry` / `restoreHistoryEntry`.
+
+### الترحيل v7→v8 (DM-18)
+
+- `migrateDocumentToV8(doc)` — دالة نقية، تحفظ كل معرف (P-03)، تحسب `occurrenceIndex` (DM-09)، تحول `NO_WASL`→`FORBIDDEN_WASL`.
+- `migrateWithBackup(doc)` — مع نسخة احتياطية.
+- `importDocuments(json, overwrite)` — ترحيل تلقائي مع تقرير `migrated[]` و`warnings[]` ونسخ احتياطية بمفتاح `tashjeer:backup:`.
 
 ---
 

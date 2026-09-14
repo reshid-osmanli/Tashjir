@@ -22,26 +22,39 @@ import {
 } from './reading-plan';
 import { resolveScope } from './scope';
 import { narratorTayyibahOrder } from './symbols';
+import { resolveOrder } from './decision/api';
+import { DEFAULT_SYSTEM_PROFILE } from './decision/policy';
 
 /**
  * ترتيب موضعين من مواضع الآية.
  *
- *   1. الرتبة اليدوية `orderRank` إن ثبّتها المحقق: قرار صريح يسبق كل قاعدة.
+ *   1. الرتبة اليدوية `orderRank` إن ثبّتها المحقق: قرار صريح يسبق كل قاعدة — يُحسم عبر Decision API (DM-04).
  *   2. خطة القراءة (من آخر الآية إلى أولها) مع مراعاة الوقف والابتداء.
  *   3. المدى الأقصر أولا، ثم المعرّف حتى يكون الناتج حتميا.
+ *
+ * التوجيه عبر Decision API يضمن أن ترتيب الظهور يحكمه رقم صريح في البيانات (P-04) وأن أي سياسة
+ * ترتيب مستقبلية تمر من مكان واحد (FR-EN-01).
  */
 export function compareVariantsForReading(
   first: Variant,
   second: Variant,
   plan: ReadingPlan
 ): number {
+  // الرتبة الصريحة عبر Decision API (DM-04): لا نعتمد ترتيب الإدراج ولا الاسم.
   const firstRank = first.orderRank;
   const secondRank = second.orderRank;
-  if (typeof firstRank === 'number' && typeof secondRank === 'number' && firstRank !== secondRank) {
-    return firstRank - secondRank;
+  if (typeof firstRank === 'number' || typeof secondRank === 'number') {
+    const resolved = resolveOrder(
+      [
+        { id: first.id, explicitOrder: firstRank },
+        { id: second.id, explicitOrder: secondRank },
+      ],
+      DEFAULT_SYSTEM_PROFILE
+    );
+    const firstIndex = resolved.decision.orderedIds.indexOf(first.id);
+    const secondIndex = resolved.decision.orderedIds.indexOf(second.id);
+    if (firstIndex !== secondIndex) return firstIndex - secondIndex;
   }
-  if (typeof firstRank === 'number' && typeof secondRank !== 'number') return -1;
-  if (typeof firstRank !== 'number' && typeof secondRank === 'number') return 1;
 
   const firstAnchor = variantTraversalAnchor(first.startPosition, first.endPosition, plan.traversal);
   const secondAnchor = variantTraversalAnchor(
@@ -62,9 +75,21 @@ export function compareVariantsForReading(
   return first.id.localeCompare(second.id, 'ar');
 }
 
-/** المواضع مرتبة بترتيب المرور المعتمد. */
+/** المواضع مرتبة بترتيب المرور المعتمد — يمر عبر Decision API للرتبة الصريحة. */
 export function orderVariantsForReading(variants: Variant[], plan: ReadingPlan): Variant[] {
-  return [...variants].sort((first, second) => compareVariantsForReading(first, second, plan));
+  // للترتيب الجماعي نستخدم القرار المركزي للرتب الصريحة، ثم نطبق خطة القراءة.
+  const explicit = variants.filter((v) => typeof v.orderRank === 'number');
+  const implicit = variants.filter((v) => typeof v.orderRank !== 'number');
+  if (explicit.length > 1) {
+    const resolved = resolveOrder(
+      explicit.map((v) => ({ id: v.id, explicitOrder: v.orderRank })),
+      DEFAULT_SYSTEM_PROFILE
+    );
+    const orderMap = new Map(resolved.decision.orderedIds.map((id, idx) => [id, idx]));
+    explicit.sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
+  }
+  const all = [...explicit, ...implicit];
+  return [...all].sort((first, second) => compareVariantsForReading(first, second, plan));
 }
 
 /**
@@ -73,6 +98,8 @@ export function orderVariantsForReading(variants: Variant[], plan: ReadingPlan):
  * القاعدة المعتمدة: **قوة الوجه في الكتاب**، وقد صارت بعد دمج «الوجه
  * المقدَّم» مع القوة درجةً من سلّم قابل للتحرير. يُقدَّم الوجه ذو الرتبة
  * الأصغر، والوجه غير المدرَّج يأتي بعد المدرَّج.
+ *
+ * الترتيب الصريح يمر عبر Decision API (DM-04، FR-EN-03).
  */
 export function compareAlternatives(
   variant: Variant,
@@ -82,16 +109,24 @@ export function compareAlternatives(
   catalog?: TransmissionCatalog,
   strengthDegrees?: StrengthDegreeCatalog
 ): number {
-  // ترتيب صريح للأوجه في هذا الموضع بعينه: أقوى من أي قاعدة عامة.
+  // ترتيب صريح للأوجه في هذا الموضع بعينه: أقوى من أي قاعدة عامة — عبر Decision API.
   const explicit = variant.alternativeOrder ?? [];
   if (explicit.length > 0) {
-    const firstIndex = explicit.indexOf(first.id);
-    const secondIndex = explicit.indexOf(second.id);
-    if (firstIndex !== -1 && secondIndex !== -1 && firstIndex !== secondIndex) {
-      return firstIndex - secondIndex;
+    const orderMap = new Map(explicit.map((id, idx) => [id, idx]));
+    const firstExplicit = orderMap.has(first.id) ? orderMap.get(first.id) : undefined;
+    const secondExplicit = orderMap.has(second.id) ? orderMap.get(second.id) : undefined;
+    if (firstExplicit !== undefined || secondExplicit !== undefined) {
+      const resolved = resolveOrder(
+        [
+          { id: first.id, explicitOrder: firstExplicit },
+          { id: second.id, explicitOrder: secondExplicit },
+        ],
+        DEFAULT_SYSTEM_PROFILE
+      );
+      const firstIdx = resolved.decision.orderedIds.indexOf(first.id);
+      const secondIdx = resolved.decision.orderedIds.indexOf(second.id);
+      if (firstIdx !== secondIdx) return firstIdx - secondIdx;
     }
-    if (firstIndex !== -1 && secondIndex === -1) return -1;
-    if (firstIndex === -1 && secondIndex !== -1) return 1;
   }
 
   if (engine.alternativeOrder === 'MANUAL') {
