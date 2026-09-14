@@ -6,7 +6,7 @@ import { toArabicDigits as ar } from '@/lib/utils/arabic-numbers';
 /** Uses the existing document history, never a second competing command stack. */
 export function HistoryControls() {
   const { past, future, document } = useEditorStore();
-  const snapshots = [...past, ...(document ? [document] : []), ...future];
+  const snapshots = [...past.map((entry) => entry.document), ...(document ? [document] : []), ...future.map((entry) => entry.document)];
   const jump = async (index: number) => {
     const count = Math.abs(index - past.length);
     if (!count || !document) return;

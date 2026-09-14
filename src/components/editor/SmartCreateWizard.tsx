@@ -74,7 +74,7 @@ import {
 } from '@/lib/quran-logic/characters';
 import {
   createGlobalRuleId,
-
+  saveGlobalRuleBatch,
 } from '@/lib/storage/global-rules-store';
 import { decideMutualExclusion } from '@/lib/tashjeer/decision/resolver';
 import { resolveScope } from '@/lib/tashjeer/scope';
@@ -194,7 +194,8 @@ export function SmartCreateWizard({
   onComplete,
   onRequestFullBuilder,
 }: SmartCreateWizardProps) {
-
+  const { document, applySmartCreateBatch, transactExternal } = useEditorStore();
+  const strengthCatalog = useStrengthDegrees();
 
   const words = useMemo(() => (document ? documentWindowWords(document) : []), [document]);
   const wordLengths = useMemo(
@@ -609,7 +610,47 @@ export function SmartCreateWizard({
       return;
     }
 
-
+    // التعميم: قاعدة عامة حتمية لكل نوع، تُحفظ ذريًا (كله أو لا شيء) في
+    // معاملة تراجع موحدة مع سطر تتبع واحد — بلا نسخ آلاف المستندات.
+    try {
+      const inputs = selectedTypes.map((type) => {
+        const faces = variantsByType[type] ?? [];
+        return {
+          id: createGlobalRuleId(),
+          title: `${baseTitle} — ${CATEGORY_LABELS[type]}`,
+          category: type,
+          scope,
+          ruleLabel: faces[0]?.label,
+          pattern,
+          applyRange,
+          strengthDegreeId: faces[0]?.strengthDegreeId,
+          status: 'DRAFT' as const,
+          isActive: true,
+        };
+      });
+      transactExternal(
+        {
+          action: 'تعميم دفعي من المعالج',
+          targetType: 'RULE',
+          targetId: inputs.map((input) => input.id).join(','),
+          summary: `عمم المعالج ${toArabicDigits(inputs.length)} قواعد مستقلة على المصحف`,
+        },
+        () => {
+          saveGlobalRuleBatch(inputs);
+        }
+      );
+      const matchNote =
+        dryRun.phase === 'done'
+          ? ` — ${toArabicDigits(dryRun.counts.reduce((total, item) => total + item.count, 0))} موضعًا مطابقًا`
+          : '';
+      onComplete?.(
+        `عُمم ${toArabicDigits(selectedTypes.length)} قواعد مستقلة برتبها على المصحف في عملية واحدة${matchNote}.`
+      );
+      onClose();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'تعذّر حفظ القواعد المعممة.');
+    }
+  };
 
   const toggleType = (type: VariantCategory) => {
     setSelectedTypes((current) =>
