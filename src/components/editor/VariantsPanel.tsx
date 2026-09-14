@@ -463,6 +463,8 @@ export function VariantsPanel() {
                 isSelected={variant.id === selectedVariantId}
                 selectedAlternativeId={variant.id === selectedVariantId ? selectedAlternativeId : null}
                   rowRef={variant.id === selectedVariantId ? selectedRowRef : undefined}
+                  listIndex={index}
+                  onMeasure={(element) => range.measure(index, element)}
                   isChecked={multiSelection?.kind === 'DIFFERENCE' && multiSelection.ids.includes(variant.id)}
                   onSelect={(event) => {
                   // Shift للمدى وCtrl للإضافة على الاختلافات الظاهرة (FR-ED-07)؛
@@ -661,6 +663,7 @@ function VariantRow({
   isSelected,
   selectedAlternativeId,
   rowRef,
+  listIndex,
   onMeasure,
   onSelect,
   isChecked,
@@ -676,6 +679,8 @@ function VariantRow({
   isSelected: boolean;
   selectedAlternativeId: string | null;
   rowRef?: RefObject<HTMLLIElement | null>;
+  /** فهرس الصف في القائمة المرئية: يمكّن التمركز الدقيق (data-list-index). */
+  listIndex?: number;
   /** قياس ارتفاع الصف للتنافذ (اختياري). */
   onMeasure?: (element: HTMLLIElement | null) => void;
   isChecked?: boolean;
@@ -728,6 +733,7 @@ function VariantRow({
         onMeasure?.(element);
       }}
       data-difference-id={variant.id}
+      data-list-index={listIndex}
       className={
         isChecked
           ? 'bg-cyan-50 ring-2 ring-inset ring-cyan-300'

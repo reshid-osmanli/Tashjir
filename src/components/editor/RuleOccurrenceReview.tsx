@@ -30,6 +30,8 @@ import {
 import { useRuleOccurrences } from '@/hooks/useRuleOccurrences';
 import { useEditorStore } from '@/stores/editor-store';
 import { useStrengthDegrees } from '@/hooks/useStrengthDegrees';
+import { toArabicDigits } from '@/lib/utils/arabic-numbers';
+import { ScrollableList } from '@/components/ui/ScrollableList';
 import { describeScope } from '@/lib/tashjeer/scope';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import type { GlobalRule } from '@/lib/storage/global-rules-store';
@@ -293,10 +295,27 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
           </div>
         </header>
 
-        <div className="tashjeer-scroll-area flex-1 overflow-y-auto p-5">
+        <div className="flex min-h-0 flex-1 flex-col">
           {tab === 'LOG' ? (
-            <LogTable log={log} />
-          ) : scanning ? (
+            // سجل التتبع قائمة طويلة محتملة (حتى 200 مدخل): تُغلف بالقائمة
+            // الاحترافية — رأس ثابت بعدّ المدخلات وزرا صعود/نزول وزر أعلى
+            // القائمة وشريط مرئي (FR-ED-01، التتبع داخل المحرر).
+            <ScrollableList
+              itemCount={log.length}
+              ariaLabel="سجل تغييرات مواضع القاعدة"
+              estimateHeight={44}
+              contentClassName="p-5"
+              header={
+                <p className="px-5 py-2 text-xs text-stone-500">
+                  سجل التغييرات على مواضع هذه القاعدة ({toArabicDigits(log.length)} مدخلًا) — الحذف موضعي وقابل للإرجاع.
+                </p>
+              }
+            >
+              <LogTable log={log} />
+            </ScrollableList>
+          ) : (
+          <div className="tashjeer-scroll-area flex-1 overflow-y-auto p-5">
+          {scanning ? (
             <p className="rounded border border-dashed border-stone-300 bg-stone-50 px-4 py-8 text-center text-xs text-stone-600">
               يجري فحص المصحف كله لهذه القاعدة…
             </p>
@@ -360,6 +379,8 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
                 )
               )}
             </>
+          )}
+          </div>
           )}
         </div>
       </div>
@@ -680,7 +701,7 @@ function LogTable({ log }: { log: OccurrenceLogEntry[] }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded border border-stone-200">
+    <div className="rounded border border-stone-200">
       <table className="w-full text-xs">
         <thead className="bg-stone-50 text-stone-700">
           <tr>

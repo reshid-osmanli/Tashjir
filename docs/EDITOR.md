@@ -167,6 +167,13 @@ if (aStart !== bStart) return bStart - aStart;  // الأكبر موضعا أو�
 | `VariantEditor` | `components/editor/VariantEditor.tsx` | تحرير الأوجه والنطاقات والأدلة |
 | `WhyTraceDialog` | `components/editor/WhyTraceDialog.tsx` | «لماذا؟» في المحرر: أثر قرار الدمج والتتبع من نفس Decision Resolver |
 | `PropertiesPanel` | `components/editor/PropertiesPanel.tsx` | التفتيش والإحصاءات وتصفية الرواة |
+| `RelationsPanel` | `components/editor/RelationsPanel.tsx` | العلاقات والأجزاء: أوجه مركبة، دمج أسطر، ربط أجزاء — أطرافها قابلة للنقر للتحديد الموحّد |
+| `LineOrderEditor` | `components/editor/LineOrderEditor.tsx` | ترتيب الأسطر: سحب بإزاحة دقيقة، دمج، رتبة صريحة — داخل قائمة احترافية قابلة للتمرير |
+| `SelectionBreadcrumb` | `components/editor/SelectionBreadcrumb.tsx` | الشريط العلوي الرفيع: سلسلة سياق العنصر المحدد (الآية ← السطر ← الجزء ← الاختلاف ← الوجه) |
+| `SelectionDetailsPanel` | `components/editor/SelectionDetailsPanel.tsx` | لوحة تفاصيل العنصر النشط: المعرّف والرتبة والآية والقواعد والعلاقات والأوامر |
+| `SelectionFocusCard` | `components/editor/SelectionFocusCard.tsx` | بطاقة معلومات مصغرة تظهر فوق اللوحة عند الانتقال لعنصر محدد |
+| `SelectionContextMenu` | `components/editor/SelectionContextMenu.tsx` | قائمة أوامر الزر الأيمن للعنصر النشط (نسخ/قص/لصق/حذف/ترتيب/نسخ المعرّف) |
+| `ScrollableList` | `components/ui/ScrollableList.tsx` | القائمة الطويلة الاحترافية المشتركة: رأس ثابت، شريط مرئي، زرا صعود/نزول، تنافذ/تحميل تدريجي، Scroll Into View |
 | `ShortcutsDialog` | `components/editor/ShortcutsDialog.tsx` | مرجع الاختصارات |
 
 ### لماذا SVG وليس Canvas؟
@@ -247,6 +254,23 @@ if (aStart !== bStart) return bStart - aStart;  // الأكبر موضعا أو�
 (Virtualization) أو تحميل تدريجي للقوائم 1000+ — النواة الحسابية في
 `hooks/windowed-list-core.ts` مختبرة على 2000 عنصر
 (`tests/windowed-list-performance.test.ts`).
+
+تغطية القوائم: قائمة الاختلافات (`VariantsPanel` — بحث فوري بالنص/الفئة/
+المصدر/الحالة + تنافذ)، العلاقات والأجزاء (`RelationsPanel`)، ترتيب الأسطر
+(`LineOrderEditor` — رأس ثابت وأزرار تمرير مع حفظ سحب الإزاحة الدقيقة)،
+سجل تتبّع مواضع القاعدة (`RuleOccurrenceReview` ← تبويب السجل)، فهرس
+القواعد والاختلافات (`RulesIndexDialog`)، وقائمة قواعد الاستوديو
+(`RuleExplorer`).
+
+**عقد التمركز الدقيق:** منتج الصفوف يضع على كل صف سمة `data-list-index`
+بفهرسه في القائمة المرئية (ويقيس ارتفاعه عبر `range.measure`)، فتتمكن
+`ScrollableList.scrollToIndex` من وضع الصف المطلوب في **منتصف** منطقة
+الرؤية بموضعه المقيس لا بتقديره؛ وإن كان الصف خارج النافذة المرسومة تقفز
+القائمة بالتقدير فورًا ثم تعيد التمركز الدقيق حين يرسمه التنافذ (محاولات
+محدودة داخل ميزانية الـ 300ms). حاوية التمرير تحمل `data-scroll-viewport`
+ليكتشفها منطق خارجي يحتاج التمرير أثناء تفاعل خاص (كسحب الترتيب في
+`LineOrderEditor`). عقد الرسم النصي للقائمة محروس في
+`tests/scrollable-list-render.test.ts`.
 
 ### 5.2 مخزن المستندات (`lib/storage/document-store.ts`)
 
@@ -549,6 +573,10 @@ loadDocument / saveDocument / listDocuments / deleteDocument
 | `L` | بطاقات الأوجه |
 | `P` | لوحة الخصائص |
 | `B` | لوحة الاختلافات |
+| `N` | المعالج الذكي الموحّد (إنشاء اختلاف) |
+| `Ctrl + C` | نسخ العنصر المحدد (التحديد الموحّد) |
+| `Ctrl + X` | قص العنصر المحدد |
+| `Ctrl + V` | لصق عند العنصر المحدد |
 | `Esc` | إلغاء التعليم والتحديد |
 
 الاختصارات تُتجاهل أثناء الكتابة في حقول الإدخال.
@@ -637,8 +665,14 @@ npm run test:watch
 | `tests/reader-symbols.test.ts` | 11 | رمز الإمام، رمز الراوي، اسم الطريق، والارتفاع والنزول بينها |
 | `tests/reading-window.test.ts` | 10 | السطر الواحد، دقة مواضع الحروف، وصل الآيتين |
 | `tests/figure-render.test.ts` | 5 | ناتج الرسم: أحكام السطر كلها، الأرقام العربية، رمز الإمام، ظل المقطع |
+| `tests/selection-store.test.ts` | 15 | الحزمة 03: الكتابة الموحّدة للتحديد، تعدد اللوحات، سلسلة السياق، التنظيف الآمن، أوامر العنصر النشط |
+| `tests/selection-context.test.ts` | 11 | الحزمة 03: بناء السلسلة والوصف الموحّد لكل أنواع التحديد |
+| `tests/selection-focus.test.ts` | 13 | الحزمة 03: محددات أهداف اللوحة، كشف الخروج عن الرؤية، حساب pan التمركز، ميزانية ≤ 300ms |
+| `tests/windowed-list-performance.test.ts` | 11 | الحزمة 03: نافذة العرض على 2000 عنصر، أزرار الاتجاهات، أداء تصفية 1000 وتمرير 120 خطوة |
+| `tests/scrollable-list-render.test.ts` | 5 | الحزمة 03: عقد رسم القائمة الاحترافية — حاوية التمرير، الرأس الثابت، التنافذ، حالة الفراغ |
+| `tests/catalog-order.test.ts` | 11 | الترتيب الصريح وتعارضاته + حارس إعادة تسمية قارئ لا تغيّر ترتيبه (AC الحزمة 03) |
 
-**المجموع الحالي: 328 اختبارا.**
+**المجموع الحالي: 654 اختبارا** (656 مع المتخطَّين).
 
 اختبارات مهمة بوجه خاص:
 

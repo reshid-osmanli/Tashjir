@@ -7,8 +7,18 @@ import { planLineInsertion } from '@/lib/tashjeer/line-operations';
 import { confirmAction } from '@/lib/ui/confirm-store';
 import { toArabicDigits as ar } from '@/lib/utils/arabic-numbers';
 import { useEditorStore } from '@/stores/editor-store';
+import { ScrollableList } from '@/components/ui/ScrollableList';
 
 type Drag = { id: string; mode: 'ORDER' | 'MERGE'; gap: number | null; target: string | null };
+
+/**
+ * حاوية التمرير التي تلف القائمة (ScrollableList): حدود السحب والتمرير
+ * التلقائي أثناء السحب تُحسب عليها لا على القائمة نفسها — فامتداد القائمة
+ * أطول من منطقة الرؤية بعد التعميم على القائمة الاحترافية (FR-ED-01).
+ */
+function scrollViewportOf(element: HTMLOListElement | null): HTMLElement | null {
+  return (element?.closest('[data-scroll-viewport]') as HTMLElement | null) ?? element;
+}
 
 /** Pointer Events only: mouse, pen and touch share the same 350 ms gesture. */
 export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
@@ -96,12 +106,13 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
       return;
     }
     event.preventDefault();
-    const box = list.current?.getBoundingClientRect();
+    const viewport = scrollViewportOf(list.current);
+    const box = viewport?.getBoundingClientRect();
     if (!box || event.clientX < box.left || event.clientX > box.right || event.clientY < box.top - 24 || event.clientY > box.bottom + 24) {
       update({ ...active.current, gap: null, target: null }); return;
     }
-    if (event.clientY < box.top + 28) list.current!.scrollTop -= 18;
-    if (event.clientY > box.bottom - 28) list.current!.scrollTop += 18;
+    if (event.clientY < box.top + 28) viewport!.scrollTop -= 18;
+    if (event.clientY > box.bottom - 28) viewport!.scrollTop += 18;
     const rows = Array.from(list.current!.querySelectorAll<HTMLElement>('[data-order-line-id]'));
     const row = rows.find((item) => event.clientY < item.getBoundingClientRect().bottom) ?? rows.at(-1);
     if (!row) return;
@@ -122,20 +133,34 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
     }
   };
 
+  // سطر التحديد الموحّد: تُمرَّر القائمة إليه وتُميَّزه حين يُحدَّد من لوحة أخرى.
+  const activeLineIndex = selection?.kind === 'LINE' && selection.lineId ? ids.indexOf(selection.lineId) : -1;
+
   return <div dir="rtl" className="rounded-md border border-stone-200 p-2.5">
-    <p className="mb-2 text-[11px] text-stone-600">اضغط مطولًا على السطر ثم اسحب. ↳ للدمج. Alt+↑/↓ للنقل مع التأكيد. Esc للإلغاء.</p>
-    {document?.lineOrder?.length ? <button type="button" className="mb-2 text-xs text-emerald-800" onClick={async () => {
-      if (await confirmAction({ title: 'عودة لترتيب المحرك؟', impacts: [{ label: 'أسطر', count: ids.length }], undoable: true })) {
-        if (useEditorStore.getState().document === document) useEditorStore.getState().resetLineOrder();
+    <ScrollableList
+      itemCount={lines.length}
+      ariaLabel="ترتيب الأسطر"
+      estimateHeight={44}
+      className="max-h-80"
+      activeIndex={activeLineIndex >= 0 ? activeLineIndex : undefined}
+      header={
+        <div className="px-1 py-1.5">
+          <p className="text-[11px] text-stone-600">اضغط مطولًا على السطر ثم اسحب. ↳ للدمج. Alt+↑/↓ للنقل مع التأكيد. Esc للإلغاء.</p>
+          {document?.lineOrder?.length ? <button type="button" className="mt-1 text-xs text-emerald-800" onClick={async () => {
+            if (await confirmAction({ title: 'عودة لترتيب المحرك؟', impacts: [{ label: 'أسطر', count: ids.length }], undoable: true })) {
+              if (useEditorStore.getState().document === document) useEditorStore.getState().resetLineOrder();
+            }
+          }}>عودة لترتيب المحرك</button> : null}
+        </div>
       }
-    }}>عودة لترتيب المحرك</button> : null}
-    <ol ref={list} aria-label="ترتيب الأسطر" className="max-h-80 overflow-y-auto overscroll-contain py-1"
+    >
+    <ol ref={list} aria-label="ترتيب الأسطر" className="py-1"
       onPointerMove={move} onPointerUp={up} onPointerCancel={clear}
       onLostPointerCapture={() => { if (press.current) clear(); }}
       onClickCapture={(event) => { if (suppressClick.current) { event.preventDefault(); event.stopPropagation(); suppressClick.current = false; } }}>
       {lines.map((line, index) => <li key={line.id}>
         <div data-insert-gap={index} className={`h-1 rounded transition ${drag?.mode === 'ORDER' && drag.gap === index ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : ''}`} />
-        <div data-order-line-id={line.id} data-order-index={index} tabIndex={0}
+        <div data-order-line-id={line.id} data-order-index={index} data-list-index={index} tabIndex={0}
           onPointerDown={(event) => down(event, line.id, 'ORDER')}
           onClick={() => useEditorStore.getState().selectLine(line.id, line.variantId, line.startPosition)}
           onKeyDown={(event) => {
@@ -157,6 +182,7 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
       </li>)}
       <li data-insert-gap={ids.length} className={`h-1 rounded ${drag?.mode === 'ORDER' && drag.gap === ids.length ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : ''}`} />
     </ol>
+    </ScrollableList>
     <p role="status" className="mt-2 text-xs text-emerald-900">{notice}</p>
   </div>;
 }

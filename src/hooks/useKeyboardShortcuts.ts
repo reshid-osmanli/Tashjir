@@ -37,6 +37,13 @@ export const SHORTCUT_HINTS: ShortcutHint[] = [
   { keys: 'L', description: 'إظهار بطاقات الأوجه' },
   { keys: 'P', description: 'لوحة الخصائص' },
   { keys: 'B', description: 'لوحة الاختلافات' },
+  { keys: 'N', description: 'المعالج الذكي الموحّد (إنشاء اختلاف)' },
+
+  // أوامر العنصر النشط عبر التحديد الموحّد (FR-ED-02.6): تعمل على العنصر
+  // المحدد في أي لوحة — نفس أوامر قائمة السياق ولوحة التفاصيل.
+  { keys: 'Ctrl + C', description: 'نسخ العنصر المحدد' },
+  { keys: 'Ctrl + X', description: 'قص العنصر المحدد' },
+  { keys: 'Ctrl + V', description: 'لصق عند العنصر المحدد' },
   { keys: 'Esc', description: 'إلغاء التعليم والتحديد' },
 ];
 
