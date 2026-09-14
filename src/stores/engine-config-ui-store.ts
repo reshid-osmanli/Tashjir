@@ -17,8 +17,9 @@ import {
   addEngineRule,
   updateEngineRule,
   removeEngineRule,
-  setRulePriority,
+  applyPriorityShift,
   setRuleStatus,
+  type RulePriorityShift,
   addMergeMatrixEntry,
   updateMergeMatrixEntry,
   removeMergeMatrixEntry,
@@ -62,7 +63,8 @@ interface EngineStudioState {
   addRule: (rule: RuleDraft) => void;
   updateRule: (ruleId: string, patch: Partial<EngineRule>) => void;
   removeRule: (ruleId: string) => void;
-  setRulePriorityAction: (ruleId: string, priority: number) => void;
+  /** يثبّت الأولوية ويعيد تقرير الإزاحة (من زُيحت +1 لتفادي التصادم). */
+  setRulePriorityAction: (ruleId: string, priority: number) => RulePriorityShift[];
   setRuleStatusAction: (ruleId: string, status: EngineRule['status']) => void;
 
   addMergeEntry: (entry: MergeMatrixEntry) => void;
@@ -171,8 +173,11 @@ export const useEngineStudioStore = create<EngineStudioState>((set, get) => ({
       dirty: true,
       selectedRuleId: state.selectedRuleId === ruleId ? null : state.selectedRuleId,
     })),
-  setRulePriorityAction: (ruleId, priority) =>
-    set((state) => ({ config: setRulePriority(state.config, ruleId, priority), dirty: true })),
+  setRulePriorityAction: (ruleId, priority) => {
+    const { rules, shifts } = applyPriorityShift(get().config.rules, ruleId, priority);
+    set((state) => ({ config: { ...state.config, rules }, dirty: true }));
+    return shifts;
+  },
   setRuleStatusAction: (ruleId, status) =>
     set((state) => ({ config: setRuleStatus(state.config, ruleId, status), dirty: true })),
 

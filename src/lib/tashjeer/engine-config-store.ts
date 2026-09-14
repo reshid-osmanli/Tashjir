@@ -54,9 +54,17 @@ export function defaultEngineConfig(): EngineConfig {
 /**
  * قاعدة بصيغة كنسية قابلة للتصدير: مفاتيح بترتيب ثابت، بلا طوابع زمنية
  * متقلّبة، وبلا حقول اختيارية فارغة. هذا ما يُكتب في ملف Git (DM-13).
+ *
+ * حقل `version` (عدّاد مراجع القاعدة) خارج التصدير عمدًا: هو سجل داخلي
+ * يُزاد مع كل تعديل، فتغييره مع كل إزاحة أولوية يجعل diff أولوية واحدة
+ * سطرين بدل سطر واحد. الملف المصدَّر وثيقة سياسة: schema-version يوثّق
+ * الصيغة، وعدّاد المراجع المحلي يبقى محليًا (يُعاد من 1 عند الاستيراد).
  */
 export interface CanonicalEngineRule
-  extends Omit<EngineRule, 'createdAt' | 'updatedAt' | 'dependsOn' | 'overrides' | 'conflictsWith' | 'testCases' | 'protected'> {
+  extends Omit<
+    EngineRule,
+    'createdAt' | 'updatedAt' | 'version' | 'dependsOn' | 'overrides' | 'conflictsWith' | 'testCases' | 'protected'
+  > {
   protected?: boolean;
   dependsOn?: string[];
   overrides?: string[];
@@ -79,7 +87,6 @@ export function toCanonicalRule(rule: EngineRule): CanonicalEngineRule {
     specificity: rule.specificity,
     hardness: rule.hardness,
     status: rule.status,
-    version: rule.version,
   };
   if (rule.protected) canonical.protected = true;
   if (rule.dependsOn && rule.dependsOn.length > 0) canonical.dependsOn = [...rule.dependsOn].sort();
@@ -489,31 +496,67 @@ export function removeEngineRule(config: EngineConfig, ruleId: string): EngineCo
   return { ...config, rules: config.rules.filter((rule) => rule.id !== ruleId) };
 }
 
+/** نتيجة إزاحة تصادم الأولويات (FR-ES-01): من زُيحت وإلى أي رقم. */
+export interface RulePriorityShift {
+  ruleId: string;
+  ruleName: string;
+  from: number;
+  to: number;
+}
+
 /**
  * يثبّت أولوية قاعدة صراحةً (FR-ES-01).
- * إذا احتل الرقم قاعدة أخرى في المجموعة نفسها تُزاح القواعد اللاحقة خطوة واحدة؛
- * لا يبقى تعارض صامت، ولا تتغير المعرّفات (P-03).
+ * لا يُزاح إلا ما يتصادم بالرقم الجديد في المجموعة نفسها: القاعدة التي تحتل
+ * الرقم تُزاح +1، وما تحتل الرقم التالي يُزاح هي أيضًا (تسلسل) حتى لا يتكرر
+ * رقم. القواعد الأعلى بلا تصادم تبقى في أرقامها — فلا يتغير سطر في التصدير
+ * ما لم يتغير قراره. المعرّفات لا تتغير أبدًا (P-03).
  */
 export function setRulePriority(config: EngineConfig, ruleId: string, priority: number): EngineConfig {
   const target = config.rules.find((rule) => rule.id === ruleId);
   if (!target) return config;
   const nextPriority = Number.isFinite(priority) ? Math.round(priority) : target.priority;
-  const peers = config.rules
-    .filter((rule) => rule.id !== ruleId && rule.groupId === target.groupId)
-    .filter((rule) => rule.priority >= nextPriority)
-    .sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id, 'ar'));
-  const shifted = new Map(peers.map((rule) => [rule.id, rule.priority + 1]));
+  const { rules } = applyPriorityShift(config.rules, ruleId, nextPriority);
+  return { ...config, rules };
+}
+
+/**
+ * يطبّق إزاحة التصادم ويعيد القواعد الجديدة مع تقرير من زُيحت.
+ * يُستعمل أيضًا في إعادة ترقيم السحب (PriorityPipeline) حيث يجب أن يبقى
+ * الترقيم حتميًا بلا إزحات شاملة.
+ */
+export function applyPriorityShift(
+  rules: EngineRule[],
+  ruleId: string,
+  nextPriority: number
+): { rules: EngineRule[]; shifts: RulePriorityShift[] } {
+  const target = rules.find((rule) => rule.id === ruleId);
+  if (!target || target.priority === nextPriority) {
+    return { rules, shifts: [] };
+  }
+  // سلسلة التصادم: من يحتل الرقم ← +1، ومن يحتل الجديد ← +1... حتى التوقف.
+  const shifts = new Map<string, number>();
+  let cursor = nextPriority;
+  for (;;) {
+    const colliding = rules.filter(
+      (rule) => rule.id !== ruleId && rule.groupId === target.groupId && rule.priority === cursor && !shifts.has(rule.id)
+    );
+    if (colliding.length === 0) break;
+    for (const rule of colliding) shifts.set(rule.id, cursor + 1);
+    cursor += 1;
+  }
   const now = new Date().toISOString();
-  return {
-    ...config,
-    rules: config.rules.map((rule) => {
-      if (rule.id === ruleId) return { ...rule, priority: nextPriority, updatedAt: now, version: rule.version + 1 };
-      const shiftedPriority = shifted.get(rule.id);
-      return shiftedPriority === undefined
-        ? rule
-        : { ...rule, priority: shiftedPriority, updatedAt: now, version: rule.version + 1 };
-    }),
-  };
+  const nextRules = rules.map((rule) => {
+    if (rule.id === ruleId) return { ...rule, priority: nextPriority, updatedAt: now, version: rule.version + 1 };
+    const shifted = shifts.get(rule.id);
+    return shifted === undefined
+      ? rule
+      : { ...rule, priority: shifted, updatedAt: now, version: rule.version + 1 };
+  });
+  const report: RulePriorityShift[] = [...shifts.entries()].map(([id, to]) => {
+    const rule = rules.find((item) => item.id === id);
+    return { ruleId: id, ruleName: rule?.name ?? id, from: rule?.priority ?? to - 1, to };
+  });
+  return { rules: nextRules, shifts: report };
 }
 
 /** يغيّر حالة قاعدة (FR-ES-07). */

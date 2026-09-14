@@ -118,6 +118,49 @@ console.log(order.decision.orderedIds); // ['diff-a', 'diff-b']
 
 إعدادات الرسم والترتيب القديمة (`engine-settings.ts`) لها واجهة تحرير واحدة في `/studio?section=settings`؛ تبويب `/admin` القديم يعيد توجيه المستخدم إليها ولا يملك نسخة ثانية.
 
+### عمليات ملف المحرك النقيّة (FR-ES-01/04/05)
+
+كل عمليات الاستوديو دوال نقيّة في `src/lib/tashjeer/engine-config-store.ts` —
+الواجهة (Zustand) تنقلها فقط، ولا قرار يُحسم خارجها (P-07):
+
+```ts
+// يثبّت أولوية قاعدة صراحةً. يُزاح فقط ما يتصادم بالرقم الجديد في المجموعة
+// نفسها (سلسلة +1): لا إزاحة شاملة، فيبقى diff التصدير سطرًا واحدًا (DM-13).
+function setRulePriority(config: EngineConfig, ruleId: string, priority: number): EngineConfig
+
+// نفس الإزاحة مع تقرير «من زُيحت» لإشعار المستخدم (FR-ES-01):
+function applyPriorityShift(
+  rules: EngineRule[],
+  ruleId: string,
+  nextPriority: number
+): { rules: EngineRule[]; shifts: Array<{ ruleId: string; ruleName: string; from: number; to: number }> }
+
+// إضافة/تعديل/حذف صف مصفوفة الدمج — القرار التالٍ يقرأ الصف الجديد ويذكره في الأثر:
+function addMergeMatrixEntry(config: EngineConfig, entry: MergeMatrixEntry): EngineConfig
+function updateMergeMatrixEntry(config: EngineConfig, index: number, patch: Partial<MergeMatrixEntry>): EngineConfig
+function removeMergeMatrixEntry(config: EngineConfig, index: number): EngineConfig
+
+// ضبط سلم حل التعارض وترتيب التنفيذ (FR-ES-04/06):
+function setConflictPolicy(config: EngineConfig, policy: ConflictPolicyStep[]): EngineConfig
+function setExecutionOrder(config: EngineConfig, order: string[]): EngineConfig
+```
+
+وحدات قياس الأثر في `decision/resolver.ts` (تُستعمل في تحذير ما قبل حفظ ترتيب
+المراحل — FR-ES-04):
+
+```ts
+// مرحلة التنفيذ التابعة لإجراء القاعدة (BLOCK_RESULT ← BLOCKING،
+// OVERRIDE_RESULT ← EXCEPTIONS، MERGE/PREVENT_MERGE ← MERGE، ...):
+function executionStageOf(rule: EngineRule): string
+
+// الأثر المبدئي لتبديل ترتيب المراحل: المراحل التي تغيّر موضعها + القواعد
+// التي إجراءاتها فيها. تُعرض مع نتائج runProfileTests على الترتيب الجديد:
+function executionOrderImpact(
+  config: EngineConfig,
+  nextOrder: string[]
+): { changedStages: string[]; affectedRules: EngineRule[] }
+```
+
 ### الحفظ الآمن وتصدير حتمي (NFR-04، DM-13)
 
 - `atomicWrite(key, value)` كتابة ذرية للتخزين المحلي.

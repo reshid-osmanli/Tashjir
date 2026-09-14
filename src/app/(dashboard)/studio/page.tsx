@@ -12,7 +12,11 @@
 import { confirmAction } from '@/lib/ui/confirm-store';
 import { useEffect, useState } from 'react';
 import type { EngineRule } from '@/lib/tashjeer/model/v8';
+import { executionOrderImpact } from '@/lib/tashjeer/decision/resolver';
+import { runProfileTests } from '@/lib/tashjeer/decision/rule-test-runner';
 import { useEngineStudioStore } from '@/stores/engine-config-ui-store';
+import type { RulePriorityShift } from '@/lib/tashjeer/engine-config-store';
+import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { RuleExplorer } from '@/components/studio/RuleExplorer';
 import { RuleBuilder } from '@/components/studio/RuleBuilder';
 import { MergeMatrixPanel } from '@/components/studio/MergeMatrixPanel';
@@ -133,6 +137,31 @@ export default function EngineStudioPage() {
       addRule(rule as Omit<EngineRule, 'createdAt' | 'updatedAt' | 'version'>);
     }
     setCreatingNew(false);
+  };
+
+  /**
+   * إعادة ترتيب مراحل التنفيذ (FR-ES-04) بحذر: تحذير واضح + قياس أثر مبدئي
+   * (المراحل المتغيرة، القواعد المتأثرة، اختبارات القواعد على الترتيب الجديد)
+   * قبل الحفظ. إن أُلغي الحوار يبقى الترتيب على حاله.
+   */
+  const handleExecutionOrderChange = async (next: string[]) => {
+    if (next.join('|') === config.executionOrder.join('|')) return;
+    const impact = executionOrderImpact(config, next);
+    const report = runProfileTests({ ...config, executionOrder: next });
+    const ok = await confirmAction({
+      title: 'إعادة ترتيب مراحل التنفيذ',
+      message:
+        'ترتيب المراحل يغيّر أي قاعدة تُقيَّم أول عند تعارض (مثل: المنع قبل الدمج أو العكس). راجع الأثر المبدئي ثم قرّر؛ التراجع ممكن من سجل الإصدارات بعد الحفظ.',
+      impacts: [
+        { label: 'مرحلة تغيّر موضعها', count: impact.changedStages.length },
+        { label: 'قاعدة إجراءاتها في المراحل المتغيرة', count: impact.affectedRules.length },
+        { label: 'حالة اختبار فاشلة على الترتيب الجديد', count: report.failed },
+        { label: 'حالة اختبار مجرَّبة', count: report.total },
+      ],
+      undoable: false,
+      confirmLabel: 'تطبيق الترتيب الجديد',
+    });
+    if (ok) setExecutionOrderAction(next);
   };
 
   return (
@@ -289,7 +318,7 @@ export default function EngineStudioPage() {
               <PriorityPipeline
                 config={config}
                 onConflictPolicyChange={setConflictPolicyAction}
-                onExecutionOrderChange={setExecutionOrderAction}
+                onExecutionOrderChange={handleExecutionOrderChange}
                 onGroupChange={upsertGroup}
                 onRulePriorityChange={setRulePriorityAction}
                 onOpenRule={(ruleId) => {
@@ -358,10 +387,11 @@ function SelectedRuleActions({
   onRemove,
 }: {
   rule: EngineRule;
-  onPriority: (id: string, priority: number) => void;
+  onPriority: (id: string, priority: number) => RulePriorityShift[];
   onStatus: (id: string, status: EngineRule['status']) => void;
   onRemove: (id: string) => void;
 }) {
+  const [shifts, setShifts] = useState<RulePriorityShift[]>([]);
   return (
     <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
       <p className="mb-2 text-sm font-medium text-gray-600">إجراءات سريعة على المحدد</p>
@@ -370,7 +400,7 @@ function SelectedRuleActions({
         <input
           type="number"
           value={rule.priority}
-          onChange={(event) => onPriority(rule.id, Number(event.target.value))}
+          onChange={(event) => setShifts(onPriority(rule.id, Number(event.target.value)))}
           className="w-20 rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
         />
         <button
@@ -388,6 +418,11 @@ function SelectedRuleActions({
           حذف القاعدة
         </button>
       </div>
+      {shifts.length > 0 && (
+        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
+          الرقم كان مشغولًا: أُزيح بمقدار ١ — {shifts.map((item) => `«${item.ruleName}» ${toArabicDigits(item.from)} ← ${toArabicDigits(item.to)}`).join('، ')}
+        </p>
+      )}
     </div>
   );
 }
