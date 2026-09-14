@@ -571,6 +571,30 @@ function LinksList({
   const deleteLink = useEditorStore((state) => state.deleteLink);
   const updateLink = useEditorStore((state) => state.updateLink);
   const deleteSegment = useEditorStore((state) => state.deleteSegment);
+  const selection = useEditorStore((state) => state.selection);
+  const mergeRecords = useEditorStore((state) => state.document?.mergeRecords);
+  const requestUnmergeLines = useEditorStore((state) => state.requestUnmergeLines);
+  const [operationNotice, setOperationNotice] = useState('');
+
+  /** فك دمج سطرين مع عرض رسالة النتيجة داخل اللوحة. */
+  const unmerge = async (relationId: string): Promise<void> => {
+    setOperationNotice(await requestUnmergeLines(relationId));
+  };
+
+  /**
+   * تأكيد العمليات السابقة (تحويل علاقة أو حذفها أو حذف جزء): حوار كمي
+   * موحد بدل window.confirm، والتنفيذ بعده — كلها قابلة للتراجع (FR-ED-04.2).
+   */
+  const confirmLegacy = async (apply: () => void): Promise<void> => {
+    const accepted = await confirmAction({
+      title: 'تأكيد تعديل العلاقات؟',
+      message: 'تحويل علاقة أو حذفها أو حذف جزء — قابلة للتراجع فورًا.',
+      impacts: [{ label: 'عناصر', count: 1 }],
+      undoable: true,
+      tone: 'default',
+    });
+    if (accepted) apply();
+  };
 
   const segmentTitles = new Map(segments.map((segment) => [segment.id, segment.title]));
 
@@ -612,6 +636,12 @@ function LinksList({
         العلاقات والأجزاء المسجلة ({toArabicDigits(links.length + segments.length)})
       </p>
       <p role="status" className="text-xs text-amber-900">{operationNotice}</p>
+      <ScrollableList
+        itemCount={links.length + segments.length}
+        ariaLabel="العلاقات والأجزاء المسجلة"
+        estimateHeight={72}
+        threshold={999999}
+      >
       <ul className="space-y-1.5">
         {links.map((link) => {
           const active =
@@ -726,6 +756,7 @@ function LinksList({
           </li>
         ))}
       </ul>
+      </ScrollableList>
     </div>
   );
 }

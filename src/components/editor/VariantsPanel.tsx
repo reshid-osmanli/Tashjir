@@ -424,13 +424,32 @@ export function VariantsPanel() {
         )}
       </section>
 
-
+      <ScrollableList
+        itemCount={visibleVariants.length}
+        ariaLabel="قائمة اختلافات الآية"
+        estimateHeight={132}
+        header={
+          <div className="px-4 py-2">
+            <input
+              type="search"
+              value={listSearch}
+              onChange={(event) => setListSearch(event.target.value)}
+              placeholder="بحث فوري: نص، فئة، حالة، مصدر…"
+              aria-label="بحث في اختلافات الآية"
+              className="w-full rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-900 placeholder:text-stone-400 focus:border-emerald-500 focus:outline-none"
+            />
+          </div>
+        }
+        emptyState={
           <p className="px-4 py-6 text-center text-xs text-stone-500">
             {document.variants.length === 0
               ? 'لا توجد اختلافات مسجّلة في هذه الآية بعد.'
               : 'لا نتائج مطابقة للبحث أو التصفية.'}
           </p>
-
+        }
+        activeIndex={visibleVariants.findIndex((variant) => variant.id === selectedVariantId)}
+        renderWindow={(range) => (
+          <ul className="divide-y divide-stone-100">
             {visibleVariants.map((variant, index) => {
               // خارج النافذة: لا يُرسم إلا الصف المحدد (ليبقى التمرير إليه ممكنا).
               if (range.active && (index < range.start || index > range.end) && variant.id !== selectedVariantId) {
@@ -443,8 +462,27 @@ export function VariantsPanel() {
                 catalog={catalog}
                 isSelected={variant.id === selectedVariantId}
                 selectedAlternativeId={variant.id === selectedVariantId ? selectedAlternativeId : null}
-                rowRef={variant.id === selectedVariantId ? selectedRowRef : undefined}
-
+                  rowRef={variant.id === selectedVariantId ? selectedRowRef : undefined}
+                  isChecked={multiSelection?.kind === 'DIFFERENCE' && multiSelection.ids.includes(variant.id)}
+                  onSelect={(event) => {
+                  // Shift للمدى وCtrl للإضافة على الاختلافات الظاهرة (FR-ED-07)؛
+                  // النقرة العادية تحديد واحد عبر التحديد الموحد.
+                  if (event.shiftKey || event.ctrlKey || event.metaKey) {
+                    const ids = visibleVariants.map((item) => item.id);
+                    setMultiSelection(
+                      selectRange(
+                        multiSelection?.kind === 'DIFFERENCE'
+                          ? multiSelection
+                          : { kind: 'DIFFERENCE', ids: [] },
+                        variant.id,
+                        ids,
+                        { shift: event.shiftKey, toggle: event.ctrlKey || event.metaKey }
+                      )
+                    );
+                    return;
+                  }
+                  selectVariant(variant.id);
+                }}
                 onSelectAlternative={(alternativeId) => selectAlternative(variant.id, alternativeId)}
                 onRecitationModeChange={(recitationMode) => updateVariant(variant.id, { recitationMode })}
                 onEdit={() => setEditingVariantId(variant.id)}
@@ -690,7 +728,13 @@ function VariantRow({
         onMeasure?.(element);
       }}
       data-difference-id={variant.id}
-
+      className={
+        isChecked
+          ? 'bg-cyan-50 ring-2 ring-inset ring-cyan-300'
+          : isSelected
+            ? 'bg-emerald-50/70'
+            : undefined
+      }
     >
       <div className="px-4 py-3">
         <button type="button" onClick={onSelect} className="w-full text-start">

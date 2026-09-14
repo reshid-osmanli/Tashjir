@@ -488,6 +488,38 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   clipboardNotice: '',
   multiSelection: null,
   setMultiSelection: (multiSelection) => set({ multiSelection }),
+  requestDeleteItems: async (selection) => {
+    const document = get().document;
+    if (!document) return false;
+    const impact = deletionImpact(document, selection);
+    if (!impact.count) return false;
+    const isFace = selection.kind === 'FACE';
+    const count = isFace ? impact.faces.length : impact.differences.length;
+    const unit = isFace
+      ? count === 1 ? 'وجه' : count === 2 ? 'وجهين' : 'أوجه'
+      : count === 1 ? 'اختلاف' : count === 2 ? 'اختلافين' : 'اختلافات';
+    const accepted = await confirmAction({
+      title: count <= 2 ? `حذف ${unit}؟` : `حذف ${toArabicDigits(count)} ${unit}؟`,
+      message: 'تُحفظ المحذوفات وروابطها في أرشيف المستند، ويمكن التراجع فورًا.',
+      impacts: [
+        { label: isFace ? 'أوجه' : 'اختلافات', count },
+        { label: 'روابط ستُؤرشف', count: impact.links.length },
+      ],
+      undoable: true,
+      tone: 'danger',
+    });
+    if (!accepted) return false;
+    // تغيّر المستند أثناء التأكيد يُبطل الطلب حتى لا يُحذف غير المقصود.
+    if (get().document !== document) return false;
+    if (isFace && selection.ownerId) {
+      get().deleteAlternativesBulk(selection.ownerId, selection.ids);
+    } else if (!isFace) {
+      get().deleteVariantsBulk(selection.ids);
+    } else {
+      return false;
+    }
+    return true;
+  },
   lastLinkDecision: null,
   pendingWhy: null,
   smartWizardRequest: 0,
@@ -849,7 +881,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 
-
+  deleteAlternative: (variantId, alternativeId) => {
+    const faceSelection: MultiSelection = { kind: 'FACE', ownerId: variantId, ids: [alternativeId] };
+    const before = get().document?.variants.find((item) => item.id === variantId);
+    mutate(set, get, (document) => deleteItems(document, faceSelection), {
+      action: 'حذف وجه',
+      targetType: 'ALTERNATIVE',
+      targetId: alternativeId,
+      category: before?.category,
+      summary: `حذف المحرر وجهًا من «${before?.title ?? variantId}»`,
+    });
+    // تنظيف آمن للتحديد الموحّد: يبقى آخر تحديد صالح للعرض الرمادي (قرار محسوم).
+    set((state) => ({
+      ...selectionWrite(state, null, { center: false }),
+      selectedAlternativeId: null,
+      selectedBranchId: null,
+    }));
   },
 
   deleteAlternativesBulk: (variantId, alternativeIds) => {
@@ -863,7 +910,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   deleteVariantsBulk: (variantIds) => {
-
+    const selection: MultiSelection = { kind: 'DIFFERENCE', ids: variantIds };
+    mutate(set, get, (document) => deleteItems(document, selection), {
+      action: 'حذف جماعي للاختلافات',
+      targetType: 'VARIANT',
+      targetId: variantIds.join(','),
+      summary: `حذف المحرر ${toArabicDigits(variantIds.length)} اختلافات دفعة واحدة`,
+    });
+    // تنظيف آمن للتحديد الموحّد: يبقى آخر تحديد صالح للعرض الرمادي (قرار محسوم).
+    set((state) => ({
+      ...selectionWrite(state, null, { center: false }),
+      multiSelection: null,
+      selectedVariantId: null,
+      selectedAlternativeId: null,
+      selectedBranchId: null,
+    }));
   },
 
   setVariantOrderRank: (variantId, rank) => {
@@ -1568,7 +1629,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setMarkingMode: (mode) => set({ markingMode: mode, markedPositions: [], markedCharacters: [] }),
   selectWord: (wordId) => {
     const word = wordId ? documentWindowWords(get().document).find((item) => item.id === wordId) : undefined;
-
+    set((state) => ({
+      ...selectionWrite(state, word ? { kind: 'WORD', id: String(word.id), position: word.position } : null),
       selectedWordId: wordId,
       selectedAlternativeId: null,
     }));
@@ -1578,7 +1640,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const variant = variantId && currentDocument
       ? getEffectiveVariants(currentDocument).find((item) => item.id === variantId)
       : undefined;
-
+    set((state) => ({
+      ...selectionWrite(
+        state,
+        variant ? { kind: 'DIFFERENCE', id: variant.id, differenceId: variant.id, position: variant.startPosition } : null
+      ),
       selectedVariantId: variantId,
       selectedAlternativeId: null,
       selectedBranchId: null,
@@ -1589,7 +1655,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const variant = currentDocument
       ? getEffectiveVariants(currentDocument).find((item) => item.id === variantId)
       : undefined;
-
+    set((state) => ({
+      ...selectionWrite(state, {
+        kind: 'FACE',
+        id: alternativeId,
+        differenceId: variantId,
+        faceId: alternativeId,
+        position: variant?.startPosition,
+      }),
       selectedVariantId: variantId,
       selectedAlternativeId: alternativeId,
       selectedBranchId: null,
@@ -1597,13 +1670,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
   selectSegment: (segmentId) => {
     const segment = get().document?.segments?.find((item) => item.id === segmentId);
-
+    set((state) => ({
+      ...selectionWrite(
+        state,
+        segment ? { kind: 'SEGMENT', id: segment.id, position: segment.startPosition } : null
+      ),
       selectedVariantId: null,
       selectedAlternativeId: null,
       selectedBranchId: null,
     }));
   },
-
+  selectLine: (lineId, differenceId, position) => set((state) => ({
+    ...selectionWrite(state, { kind: 'LINE', id: lineId, lineId, differenceId, position }),
     selectedVariantId: differenceId ?? null,
     selectedAlternativeId: null,
     selectedBranchId: lineId,
@@ -1781,7 +1859,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const currentEntry = captureHistoryEntry(document);
     const restored = restoreHistoryEntry(entry);
     set({
-
+      document: restored,
       past: past.slice(0, -1),
       future: [currentEntry, ...get().future].slice(0, MAX_HISTORY),
       isDirty: true,
@@ -1796,7 +1874,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const currentEntry = captureHistoryEntry(document);
     const restored = restoreHistoryEntry(entry);
     set({
-
+      document: restored,
       future: future.slice(1),
       past: pushHistory(get().past, currentEntry),
       isDirty: true,
@@ -1862,14 +1940,15 @@ function captureHistoryEntry(document: TashjeerDocument): EditorHistoryEntry {
 }
 
 /**
- * يستعيد لقطة موحدة: المخازن أولا ثم المستند بخطوط مولّدة من القيم
- * المستعادة، فلا يبقى أثر معلق في مخزن دون آخر (FR-ED-10).
+ * يستعيد لقطة موحدة: المخازن أولا ثم المستند نفسه كما لُقط حرفيًا، فلا
+ * يبقى أثر معلق في مخزن دون آخر (FR-ED-10)، والتراجع/الإعادة يعيدان
+ * المستند المطابق بايتًا لما كان (بلا إعادة توليد تغيّر الخطوط).
  * الاستعادة نفسها تبث أحداث التغيير فتتحدث كل اللوحات المستمعة.
  */
 function restoreHistoryEntry(entry: EditorHistoryEntry): TashjeerDocument {
   restoreOccurrenceData(entry.occurrences);
   restoreGlobalRulesSnapshot(entry.globalRules);
-  return withRegeneratedBranches(entry.document);
+  return entry.document;
 }
 
 /** يلحق سطر سجل تعديل بالمستند إن كان التعديل حقيقيا (تغيرت بياناته). */
