@@ -14,7 +14,9 @@
 //   6. زر «إلى أعلى القائمة» بعد تمرير بعيد.
 //   7. Scroll Into View موحّد: حين يُحدَّد عنصر من خارج القائمة (التحديد
 //      الموحّد) تُمرَّر إليه وتُبرزه في منتصف الرؤية حيثما أمكن (AC: العنصر
-//      847 يظهر في المنتصف خلال خطوتين).
+//      847 يظهر في المنتصف خلال خطوتين). الصفوف التي تحمل سمة
+//      `data-list-index` تُمكِّن التمركز الدقيق المقيس؛ وحاوية التمرير تحمل
+//      `data-scroll-viewport` ليكتشفها أي منطق خارجي (كسحب الترتيب).
 //
 // التنافذ (Virtualization) اختياري عبر renderWindow: القوائم القصيرة تُرسم
 // كاملة، والطويلة (≥ threshold) تُنافذ عبر useWindowedList والنواة النقية
@@ -40,6 +42,26 @@ export interface ScrollableListApi {
   scrollToIndex: (index: number, options?: { center?: boolean }) => void;
   /** ارتفاع خطوة الصعود/النزول (متوسط ارتفاع الصف المقيس). */
   stepHeight: () => number;
+}
+
+/**
+ * يجد صف القائمة المرسوم بفهرسه (سمة data-list-index التي يضعها منتج
+ * الصفوف). بلا السمة يعتمد التمركز على التقدير الاحتياطي.
+ */
+function rowByListIndex(container: HTMLElement, index: number): HTMLElement | null {
+  const rows = container.querySelectorAll<HTMLElement>('[data-list-index]');
+  for (const row of rows) {
+    if (Number(row.dataset.listIndex) === index) return row;
+  }
+  return null;
+}
+
+/** يضع صفًا مرسومًا في منتصف منطقة الرؤية حيثما أمكن. */
+function centerRow(element: HTMLElement, row: HTMLElement, behavior: ScrollBehavior): void {
+  const rect = element.getBoundingClientRect();
+  const rowRect = row.getBoundingClientRect();
+  const offset = element.scrollTop + (rowRect.top - rect.top) - rect.height / 2 + rowRect.height / 2;
+  element.scrollTo({ top: Math.max(offset, 0), behavior });
 }
 
 interface ScrollableListProps {
@@ -77,6 +99,12 @@ interface ScrollableListProps {
 const HOLD_REPEAT_MS = 40;
 /** يبدأ التمرير المتواصل بعد ضغطة مستمرة بهذا الزمن (يبعد النقرة عن السحب). */
 const HOLD_DELAY_MS = 260;
+/**
+ * محاولات إعادة التمركز الدقيق بعد قفزة التقدير: الصف البعيد (خارج النافذة)
+ * يُرسم بعد القفزة إطارًا أو أكثر، فنعيد تمركزه على موضعه المقيس. الحد
+ * 12 إطارًا (~200ms على 60fps) يبقي العملية داخل ميزانية AC-06 (≤ 300ms).
+ */
+const CENTER_REFINE_FRAMES = 12;
 
 export function ScrollableList({
   itemCount,
@@ -152,27 +180,29 @@ export function ScrollableList({
       const element = listRef.current;
       if (!element || index < 0) return;
       if (options?.center !== false) {
-        const rect = element.getBoundingClientRect();
-        // الطريق الدقيق: صفّ القائمة المرسوم إن وُجد، وإلا الإزاحة التراكمية
-        // من الارتفاعات المقيسة (windowed-list-core).
-        const rows = element.querySelectorAll<HTMLElement>('[data-list-index]');
-        let target: HTMLElement | null = null;
-        for (const row of rows) {
-          if (Number(row.dataset.listIndex) === index) {
-            target = row;
-            break;
-          }
-        }
+        const target = rowByListIndex(element, index);
         if (target) {
-          const rowRect = target.getBoundingClientRect();
-          const offset = element.scrollTop + (rowRect.top - rect.top) - rect.height / 2 + rowRect.height / 2;
-          element.scrollTo({ top: Math.max(offset, 0), behavior: 'smooth' });
+          centerRow(element, target, 'smooth');
           return;
         }
       }
-      // بلا صف مرسوم (خارج النافذة): قفزة حسب الارتفاع التقديري ثم تمرير
-      // ناعم؛ بعد الرسم يلتقط تأثير activeIndex الصف الدقيق.
+      // بلا صف مرسوم (خارج النافذة): قفزة حسب الارتفاع التقديري فورًا، ثم
+      // إعادة تمركز دقيقة على الصف المقيس حين يرسمه التنافذ — محاولات
+      // محدودة بلا دورة لا نهائية (AC: العنصر ٨٤٧ يظهر في منتصف الرؤية).
       element.scrollTo({ top: index * estimateHeight - element.clientHeight / 2, behavior: 'auto' });
+      if (options?.center !== false) {
+        let attempts = 0;
+        const refine = () => {
+          attempts += 1;
+          const target = rowByListIndex(element, index);
+          if (target) {
+            centerRow(element, target, 'smooth');
+            return;
+          }
+          if (attempts < CENTER_REFINE_FRAMES) window.requestAnimationFrame(refine);
+        };
+        window.requestAnimationFrame(refine);
+      }
     },
     [estimateHeight]
   );
@@ -267,6 +297,7 @@ export function ScrollableList({
         tabIndex={0}
         role="region"
         aria-label={ariaLabel}
+        data-scroll-viewport=""
         className={`tashjeer-scroll-area min-h-0 flex-1 overscroll-contain overflow-y-scroll [scrollbar-gutter:stable] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 touch-pan-y ${contentClassName}`}
       >
         {itemCount === 0 ? (
