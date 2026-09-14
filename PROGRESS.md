@@ -8,7 +8,8 @@
 | الحزمة | الحالة | المنجز (بالمعرفات) | المتبقي (بالمعرفات + أولوية) | ملاحظات |
 |--------|--------|--------------------|------------------------------|---------|
 | خط الأساس (إصلاح ضرر الدمج) | مكتملة | إصلاح 5 ملفات + تحقق أخضر كامل: 604 اختبارًا ناجحًا، `typecheck` نظيف، `eslint` نظيف، `build` ناجح (17 مسارًا)، فحص دخاني لـ `/editor` `/studio` `/quran` `/tracking` | — | ضرر دمج PR #71 (سطور مأكولة في `editor-store` و3 مكوّنات) |
-| 01 → 12 | لم تبدأ | — | بانتظار استلام ملفات الحزم من صاحب المشروع (P0) | `docs/SRS_STATUS.md` يشير إلى تنفيذ واسع سابق؛ يُعتمد التحقق مقابل معايير قبول كل حزمة عند استلامها |
+| 01 — الأساس: نموذج البيانات v8 + الترحيل + التراجع + حلّ القرار | مكتملة | DM-01 Difference كيان كامل، DM-02 Variant مستقل، DM-03 Relation بمعرفات فقط، DM-04 رتبة صريحة Line.order/Variant.rank/displayOrder، DM-05 Source & Correction ثلاثية، DM-06 سياق وقف/وصل، DM-07 WaqfMark، DM-08 GlobalRule+RuleOccurrence+localOverride، DM-09 تعدد اختلافات لنفس القارئ+موضع مع occurrenceIndex، DM-10 Line، DM-11 RenderRange، DM-12 createBatchId، DM-13 حتمية تصدير Git-friendly، DM-14 engineConfig كتلة مستقلة، DM-15 سجل تراجع موحد CommandLog، DM-17 تمثيل السطر، DM-18 ترحيل v7→v8، FR-EN-01 فصل منطق عن سياسة، FR-EN-02 Decision Resolver مركزي، FR-EN-03 Decision API موحدة، FR-EN-04 ثلاثية محرك/محرر/نهائي، P-01→P-14 مبادئ ملزمة، NFR-04 حفظ آمن مع نسخ احتياطي، NFR-05 ترحيل آمن، NFR-06 حتمية، 624 اختبارًا ناجحًا + typecheck + build | — | استيراد jeson_exemp/tashjeer-2-4.json و tashjeer-2-45.json (v7) ← ترحيل تلقائي بنسخة احتياطية ← تصدير v8 ← إعادة استيراد بلا فقد، تصدير مرتين byte-stable، ناتج المحرك متطابق قبل/بعد، كل قرار دمج/ترتيب/تنافي عبر Decision API |
+| 02 → 12 | لم تبدأ | — | بانتظار استلام ملفات الحزم من صاحب المشروع (P0) | `docs/SRS_STATUS.md` يشير إلى تنفيذ واسع سابق؛ يُعتمد التحقق مقابل معايير قبول كل حزمة عند استلامها |
 
 ## قرارات تفسيرية
 
@@ -42,6 +43,18 @@
   الموجود وFR-ED-01.
 - [2026-09-14] خط الأساس: `HistoryControls` يقرأ `entry.document` من لقطات
   السجل الموحدة بدل افتراض أنها مستندات مباشرة.
+- [2026-09-14] الحزمة 01 — T1 نموذج البيانات v8: النموذج كان موجودًا جزئيًا في `src/lib/tashjeer/model/v8.ts` لكنه لم يغطِّ كل حقول المواصفة صراحة؛ أُضيف `safe-save.ts` لتحقيق NFR-04 (حفظ آمن + نسخ احتياطية قبل العمليات الواسعة) وDM-13 (تصدير حتمي Git-friendly). الأنواع DM-01→DM-12 وDM-17 موجودة كاملة مع أمثلة JSON في `docs/SCHEMA.md` ومخطط كامل في `docs/DATA.md`.
+- [2026-09-14] الحزمة 01 — T2 Decision Resolver: السياسات الافتراضية في `decision/policy.ts` تطابق سلوك المحرك الحالي حرفيًا (لا تغيير ناتج). المحركات `ordering`, `combination-engine`, `classic-tashjeer` وُجهت عبر Decision API:
+  - `ordering.ts`: كان يستخدم مقارنة مباشرة لـ `orderRank` و`alternativeOrder`؛ الآن يستدعي `resolveOrder` من `decision/api.ts` للرتب الصريحة (DM-04) قبل تطبيق خطة القراءة وقوة الوجه — الناتج متطابق بفضل نفس منطق الرتبة.
+  - `combination-engine.ts`: كان يحسب التنافي محليًا؛ الآن يمر عبر `resolveExclusiveGroups` في `decision/editor-bridge.ts` الذي يستدعي `resolveMerge` و`resolveRelationExclusion` من Decision API.
+  - `classic-tashjeer.ts`: يمرر `engineConfig` إلى `combination-engine` ويستخدم `chipsForUnits` التي تقرأ الرموز من الكتالوج مع `displayOrder` الصريح.
+  - قائمة الثوابت القديمة المحوّلة: `CATEGORY_PRIORITY` في `branch-engine.ts` أصبحت تُقرأ عبر `mergeMatrix` و`conflictPolicy` في `EngineConfig`؛ `DEFAULT_MERGE_MATRIX` في `policy.ts` هي المصدر الوحيد؛ `compareVariantsForReading` و`compareAlternatives` لم تعد تحتوي ثوابت ترتيب داخلية بل تستدعي `resolveOrder`.
+- [2026-09-14] الحزمة 01 — T3 ثلاثية المحرك/المحرر/النهائي: `Correction` موجودة وتُنشأ في `migrate-v7-v8.ts` (من `engineSnapshot`) وفي `merge-operations.ts` عند تجاوز يدوي لسياسة الدمج. `engineSnapshot` في `Difference` يحفظ A دائمًا، و`source/modified_by` يميز المحرك من المحرر (DM-05، P-06). بنية البيانات والتصنيف هنا؛ واجهات العرض في حزم لاحقة.
+- [2026-09-14] الحزمة 01 — T4 الترحيل v7→v8: `migrateDocumentToV8` دالة نقية لا تعدل الأصل، تحفظ كل معرف (P-03)، وتولد `occurrenceIndex` لتعدد الاختلافات (DM-09)، وتحوّل `NO_WASL`→`FORBIDDEN_WASL`. `importDocuments` ينشئ نسخة احتياطية بمفتاح `tashjeer:backup:` قبل الترحيل (NFR-04) ويبلغ عنها في `ImportResult.migrated[]`. اختبار الانحدار على `jeson_exemp/tashjeer-2-4.json` و`tashjeer-2-45.json` في `tests/jeson-exemp-v7-v8.test.ts`.
+- [2026-09-14] الحزمة 01 — T5 سجل التراجع الموحد: `CommandLog` يغطي كل العمليات المطلوبة (نقل، دمج، فصل، حذف فردي/جماعي، لصق، تعميم، إنشاء مجموعة، إعادة ترتيب، تعديل رتبة، وقف، تجاوز محلي) مع `transaction` للدفعات و`jumpTo`. `editor-store` يلتقط لقطة ثلاثية (مستند + استثناءات + قواعد) عبر `captureHistoryEntry`/`restoreHistoryEntry` فلا يبقى أثر معلق (FR-ED-10).
+- [2026-09-14] الحزمة 01 — T6 حتمية التصدير: `toCanonicalConfig` يرتب القواعد بمعرفها ومصفوفة الدمج بمفاتيحها بلا طوابع متقلبة (DM-13). `toStableV8` يولد معرفات حتمية للتصحيحات ونطاقات العرض من `ayahKey` و`targetId`. `buildExportBundle` يبني `v8[]` و`engineConfig` و`displayOrder[]` بترتيب حتمي. اختبار byte-stable في `import-migration-v8.test.ts` و`jeson-exemp-v7-v8.test.ts`.
+- [2026-09-14] الحزمة 01 — T7 الحفظ الآمن (P1): `safe-save.ts` يطبق كتابة ذرية `atomicWrite` (setItem مرة واحدة)، و`backupBeforeWideOp` قبل العمليات الواسعة، و`AutoSaveManager` للحفظ الدوري + عند العمليات الخطرة. `document-store.ts` يطبق `persistMigrationBackup` قبل كل ترحيل ويحفظ `displayOrder` مع التصدير. التأكيد الكمي قبل كل حذف/دمج عبر `confirmAction` (P-13).
+- [2026-09-14] الحزمة 01 — خارج النطاق: لم تُضف أي واجهة استخدام جديدة (المعالجات، السحب، التحديد الموحد، Engine Studio UI، الوقف/الوصل UI) — كلها حزم لاحقة. السياسات الافتراضية تطابق السلوك الحالي حرفيًا؛ لا تغيير قواعد فعلية.
 
 ## متابعة مقترحة لجلسات الحزم (غير حاجبة)
 

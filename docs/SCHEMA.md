@@ -2,18 +2,21 @@
 
 > وثيقة ملحقة بـ `docs/DATA.md` وتُفصّل النموذج الموحّد المُضاف في المرحلة **PH0**
 > (انظر `src/lib/tashjeer/model/v8.ts`). هذا النموذج هو أساس كل المتطلبات اللاحقة:
-> المحرر، Engine Studio، نواة المحرك، وطبقة السياسة.
+> المحرر، Engine Studio، نواة المحرك، وطبقة السياسة. يغطي المتطلبات DM-01→DM-18.
 
 ## المبدأ
 
 - **بناء لا حذف (P-01):** النموذج يوسّع النموذج القائم في `src/types/tashjeer.ts`
   (حيث `Variant≈Difference` القديم و`VariantAlternative≈الوجه`) ولا يكسره.
 - **معرّفات ثابتة (P-03):** كل كيان `id` مستقل بصيغة `<prefix>-<shortULID>` لا يتغير
-  بإعادة الترتيب/النقل/الدمج.
+  بإعادة الترتيب/النقل/الدمج. لا يُعاد استخدام معرّف أبدًا.
 - **ترتيب صريح رقمي (P-04):** كل ما يُعرض له رتبة: `Difference.rank`، `Variant.rank`،
-  `Line.order`، و`DisplayOrderEntry.displayOrder` للقراء/الرواة/الطرق.
+  `Line.order`، و`DisplayOrderEntry.displayOrder` للقراء/الرواة/الطرق. الترتيب الافتراضي
+  عند الغياب محدد سلفًا (تحقيق=1، أصول=2، فرش=3…) ولا يعتمد على ترتيب الإدراج.
 - **لا منطق مكرر (P-07):** كل قرار يصدر عن حلّ القرار المركزي
   (`src/lib/tashjeer/decision/`) لا من مكوّن واجهة.
+- **الإنشاء الجماعي لا يلغي الاستقلال (P-05):** `createBatchId` للتتبع فقط.
+- **المحرك يقترح والمحرر يقرر (P-06):** `Correction` تحفظ Engine=A و Editor=B و Final=B.
 
 ## الكيانات الأساسية
 
@@ -30,6 +33,200 @@
 | `EngineConfig` | `model/v8.ts` | — | ملف المحرك القابل للتصدير (DM-14، FR-ES-14) |
 | `Line` / `LineSegment` | `model/v8.ts` | `ManualTashjeerLine` + `LineSegment` | رتبة صريحة (DM-10) |
 | `RenderRange` | `model/v8.ts` | `readingWindow.focusSegment` | نطاق العرض عند الوقف الداخلي (DM-11) |
+
+## أمثلة JSON لكل كيان (DM-01→DM-12، DM-17)
+
+### DM-01 Difference — الاختلاف كيان أولي
+```jsonc
+{
+  "id": "v-2004-11-mt3y24ml-yp45",
+  "ayahKey": 2004,
+  "category": "FARSH",
+  "title": "مَٰلِكِ / مَلِكِ",
+  "locus": { "startPosition": 11, "endPosition": 11, "characterRange": { "start": { "position": 11, "characterIndex": 2 }, "end": { "position": 11, "characterIndex": 2 } } },
+  "occurrenceIndex": 1,
+  "context": "ALWAYS", // ALWAYS | WAQF_ONLY | WASL_ONLY (DM-06)
+  "scope": { "kind": "NARRATORS", "narratorIds": ["narrator-qalun"] },
+  "source": "editor",
+  "rank": 1,
+  "version": 1,
+  "status": "DRAFT",
+  "variants": ["face-..."],
+  "relations": ["rel-..."],
+  "orderRank": 3,
+  "createBatchId": "batch-mt3y...",
+  "createdAt": "2026-09-14T00:00:00.000Z",
+  "updatedAt": "2026-09-14T00:00:00.000Z"
+}
+```
+
+### DM-02 Variant — الوجه كيان مستقل
+```jsonc
+{
+  "id": "face-mt3y24ml-a1b2",
+  "text": "مَٰلِكِ",
+  "label": "بالألف",
+  "scope": { "kind": "NARRATORS", "narratorIds": ["narrator-qalun"] },
+  "isBase": false,
+  "strengthDegreeId": "muqaddam",
+  "strengthByNarrator": { "narrator-warsh": "rajih" },
+  "rank": 1,
+  "ruleLabel": "إمالة",
+  "maddHarakat": 2,
+  "source": "editor",
+  "createdAt": "2026-09-14T00:00:00.000Z",
+  "updatedAt": "2026-09-14T00:00:00.000Z"
+}
+```
+
+### DM-03 Relation — علاقة بمعرفات فقط
+```jsonc
+{
+  "id": "rel-mt3y24ml-xy12",
+  "type": "MUTUALLY_EXCLUSIVE", // MERGE | COMPOSITE | PART_OF | RELATED | MUTUALLY_EXCLUSIVE | MANUAL_LINK
+  "fromId": "v-2004-11-abc",
+  "toId": "v-2004-11-def",
+  "note": "مد ٢ ومد ٤ متنافيان",
+  "source": "engine",
+  "createdAt": "2026-09-14T00:00:00.000Z"
+}
+```
+
+### DM-04 رتبة صريحة — Display Order ≠ Creation Order ≠ Name Order
+```jsonc
+{
+  "id": "narrator-qalun",
+  "kind": "NARRATOR",
+  "displayOrder": 1
+}
+{
+  "id": "line-mt3y24ml-l1",
+  "order": 3, // Line.order
+  "ayahKey": 2004
+}
+```
+
+### DM-05 Source & Correction — ثلاثية المحرك/المحرر/النهائي
+```jsonc
+{
+  "id": "corr-mt3y24ml-1",
+  "targetId": "v-2004-11-abc",
+  "engineResult": { "title": "مد قديم", "category": "MADUD" },
+  "editorResult": { "title": "مد مصحح", "category": "MADUD" },
+  "finalResult": { "title": "مد مصحح", "category": "MADUD" },
+  "reason": "تصحيح يدوي من المحرر",
+  "at": "2026-09-14T00:00:00.000Z",
+  "source": "editor"
+}
+```
+
+### DM-06 سياق الوقف/الوصل على الاختلاف
+```jsonc
+{ "context": "WAQF_ONLY" } // يظهر عند الوقف فقط
+{ "context": "WASL_ONLY" } // يظهر عند الوصل فقط
+{ "context": "ALWAYS" }    // دائمًا
+```
+
+### DM-07 WaqfMark — علامة وقف/ابتداء/ممنوع وصل
+```jsonc
+{
+  "id": "waqf-mt3y24ml-1",
+  "ayahKey": 2004,
+  "position": 11,
+  "kind": "FORBIDDEN_WASL", // WAQF | IBTIDA | FORBIDDEN_WASL | WASL
+  "scope": "END_OF_AYAH",   // END_OF_AYAH | INTERNAL
+  "connectsToNextAyah": true,
+  "source": "editor",
+  "createdAt": "2026-09-14T00:00:00.000Z"
+}
+```
+
+### DM-08 GlobalRule و RuleOccurrence مع localOverride
+```jsonc
+{
+  "id": "global-mt3y24ml-g1",
+  "title": "صلة ميم الجمع",
+  "category": "USUL",
+  "pattern": { "kind": "CHARACTERS", "words": [{ "offset": 0, "constraints": [{ "baseLetter": "م", "harakaMode": "EXACT" }] }] },
+  "scope": { "kind": "NARRATORS", "narratorIds": ["narrator-qalun"] },
+  "priority": 80,
+  "status": "ACTIVE",
+  "version": 1,
+  "createdAt": "...",
+  "updatedAt": "..."
+}
+{
+  "id": "occ-mt3y24ml-1",
+  "globalRuleId": "global-mt3y24ml-g1",
+  "ayahKey": 2004,
+  "locus": { "startPosition": 11, "endPosition": 11 },
+  "localOverride": { "cancelled": true, "note": "استثناء محلي لا يمس القاعدة" }
+}
+```
+
+### DM-09 تعدد الاختلافات لنفس القارئ+الموضع
+```jsonc
+[
+  { "id": "v-2004-11-1", "locus": { "startPosition": 7, "endPosition": 7 }, "occurrenceIndex": 1, "scope": { "kind": "NARRATORS", "narratorIds": ["narrator-warsh"] } },
+  { "id": "v-2004-11-2", "locus": { "startPosition": 7, "endPosition": 7 }, "occurrenceIndex": 2, "scope": { "kind": "NARRATORS", "narratorIds": ["narrator-warsh"] } }
+]
+// لا دمج تلقائي لمجرد تطابق القارئ والموضع — المفتاح معرف مستقل، والتنافي يحدده Resolver بعلاقة MUTUALLY_EXCLUSIVE.
+```
+
+### DM-10 Line — سطر برتبة صريحة
+```jsonc
+{
+  "id": "line-mt3y24ml-1",
+  "order": 1,
+  "ayahKey": 2004,
+  "title": "قالون",
+  "category": "FARSH",
+  "readerScope": { "kind": "NARRATORS", "narratorIds": ["narrator-qalun"] },
+  "segments": [{ "id": "seg-1", "ayahKey": 2004, "title": "مد", "startPosition": 1, "endPosition": 2, "origin": "engine", "createdAt": "...", "updatedAt": "..." }],
+  "compositeFaceRefs": ["face-1", "face-2"],
+  "source": "engine",
+  "locked": false,
+  "createdAt": "...",
+  "updatedAt": "..."
+}
+```
+
+### DM-11 RenderRange — نطاق العرض المعزول
+```jsonc
+{
+  "id": "range-2004-1-5-1",
+  "ayahKey": 2004,
+  "fromPosition": 1,
+  "toPosition": 5,
+  "label": "مقطع الوقف الداخلي"
+}
+```
+
+### DM-12 createBatchId — تتبع دفعي دون ربط دلالي
+```jsonc
+{
+  "id": "v-2004-11-batch1",
+  "createBatchId": "batch-mt3y24ml-xyz",
+  "title": "فرش 1"
+}
+{
+  "id": "v-2004-11-batch2",
+  "createBatchId": "batch-mt3y24ml-xyz",
+  "title": "فرش 2"
+}
+// نفس الدفعة، كيانات مستقلة — تُتراجع كوحدة واحدة في CommandLog.
+```
+
+### DM-17 تمثيل السطر في الواجهات
+```jsonc
+{
+  "id": "line-1",
+  "readers": [{ "kind": "IMAM", "id": "imam-nafi", "symbol": "أ", "name": "نافع" }],
+  "category": "FARSH",
+  "entries": [{ "ruleLabel": "إمالة", "readingText": "مَٰلِكِ" }],
+  "order": 1
+}
+```
 
 ## ملف التصدير v8 (أعلى المستند)
 

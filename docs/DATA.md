@@ -217,21 +217,103 @@ npm run db:seed
 
 ---
 
-## 7. النموذج الموحّد v8 والترحيل (PH0 — DM-01..18، DM-18)
+## 7. النموذج الموحّد v8 والترحيل (PH0 — DM-01→DM-18)
 
 المرحلة PH0 أضافت نموذجًا موحّدًا في `src/lib/tashjeer/model/v8.ts` يوسّع النموذج
-القائم (انظر `docs/SCHEMA.md` للتفصيل الكامل). أبرز الإضافات:
+القائم (انظر `docs/SCHEMA.md` للتفصيل الكامل بأمثلة JSON لكل كيان). يغطي DM-01→DM-18.
 
-- **`Difference`** ككيان مستقل كامل (كان `Variant`) مع `locus` موحّد، `occurrenceIndex`
-  لتعدد الاختلافات في الموضع نفسه (DM-09)، `context` (وقف/وصل، DM-06)، و`relations`.
-- **`Variant` (الوجه)** ككيان مستقل بـ`id` و`rank` صريح (DM-02).
-- **`Relation`** تشير إلى معرّفات فقط بستة أنواع (DM-03).
-- **`WaqfMark`** بأربعة أنواع تشمل `FORBIDDEN_WASL` (DM-07).
-- **`Correction`** تحقّق الثلاثية Engine/Editor/Final (DM-05).
-- **`EngineConfig` / `EngineRule`** لطبقة السياسة (DM-14، FR-ES-02).
+### 7.1 DM-01 Difference — الاختلاف كيان من الدرجة الأولى
+- **ID مستقل**: بادئة + ULID قصير (مثل `v-2004-11-mt3y24ml-yp45`)، لا يتغير ولا يُعاد استخدامه (P-03).
+- **الموضع Locus**: `{ startPosition, endPosition, characterRange?, loci? }` — كلمة أو حرف أو مدى.
+- **الفئة**: `USUL | FARSH | MADUD | HAMZ | WAQF | TAJWEED`.
+- **سياق الوقف/الوصل (DM-06)**: `context: ALWAYS | WAQF_ONLY | WASL_ONLY`.
+- **النطاق**: بنية v7 نفسها `ReadingScope { kind: ALL|ALL_EXCEPT|IMAMS|NARRATORS|PATHS, ... }`.
+- **المصدر**: `source: engine|editor` + `modified_by?: editor` + `version` + `createdAt/updatedAt`.
+- **الرتبة الصريحة (DM-04)**: `rank` + `orderRank` + `variantOrder[]`.
+- **العلاقات**: `relations: Relation[]` بمعرفات فقط.
+- **الأوجه**: `variants: Variant[]`.
+- **تعدد الموضع (DM-09)**: `occurrenceIndex` (الأول/الثاني…) + `createBatchId?` للتتبع فقط (DM-12).
+- **الاشتقاق**: `isGlobalDerived?` + `globalRuleId?` + `engineSnapshot?`.
 
-### الترحيل v7 → v8
+### 7.2 DM-02 Variant — الوجه كيان مستقل
+- `id`, `text`, `label`, `scope`, `isBase?`, `strengthDegreeId?`, `strengthByNarrator?`, `rank` (صريح)، `ruleLabel?`, `maddHarakat?`, `notes?`, `evidences?`, `source`, `modified_by?`, `createdAt/updatedAt`.
 
+### 7.3 DM-03 Relation — علاقة بمعرفات فقط
+- `Relation { id, type: MERGE|COMPOSITE|PART_OF|RELATED|MUTUALLY_EXCLUSIVE|MANUAL_LINK, fromId, toId, note?, source, createdAt }` — ممنوع الإشارة إلى موضع مؤقت أو فهرس عرض.
+
+### 7.4 DM-04 رتبة صريحة لكل ما يُعرض
+- `Line.order`, `Variant.rank`, `Reader/Narrator/Path.displayOrder`, `Difference.rank/orderRank/variantOrder`.
+- **مبدأ**: Display Order ≠ Creation Order ≠ Name Order. الترتيب الافتراضي عند الغياب محدد سلفًا (تحقيق=1، أصول=2، فرش=3…) ولا يعتمد على ترتيب الإدراج.
+- يُحسم عبر Decision API `resolveOrder` — انظر `src/lib/tashjeer/ordering.ts`.
+
+### 7.5 DM-05 Source & Correction — ثلاثية المحرك/المحرر/النهائي
+- كل كيان `source: engine|editor` + `modified_by?: editor`.
+- `Correction { id, targetId, engineResult, editorResult, finalResult, reason?, at, source, promotedToRuleId? }` — Engine=A محفوظة لا تُحذف أبدًا، Final=B.
+- يُنشأ في `migrateDocumentToV8` من `engineSnapshot` القديم، وفي `merge-operations.ts` عند تجاوز يدوي لسياسة الدمج.
+
+### 7.6 DM-06 سياق الوقف/الوصل على الاختلاف
+- `context: ALWAYS | WAQF_ONLY | WASL_ONLY` — واجهة استخدامه في حزمة 08، لكن الحقل ومنطق قراءته في Resolver مبني الآن (`isContextActive`).
+
+### 7.7 DM-07 WaqfMark — علامة وقف/ابتداء/ممنوع وصل
+- `{ id, ayahKey, position, characterIndex?, kind: WAQF|IBTIDA|FORBIDDEN_WASL|WASL, scope: END_OF_AYAH|INTERNAL, connectsToNextAyah?, label?, notes?, source, createdAt }`.
+
+### 7.8 DM-08 GlobalRule و RuleOccurrence مع localOverride
+- `GlobalRule` كيان أولي: `id, title, category, pattern (حتمي CHARACTERS|MORPHOLOGY), scope, ruleLabel?, priority, status: DRAFT|ACTIVE|..., version, protected?, createdAt/updatedAt`.
+- `RuleOccurrence { id, globalRuleId, ayahKey, locus, confirmed?, modified?, cancelled?, localOverride?: { variantPatch?, cancelled?, note?, by?, at? } }` — تعديل/حذف محلي لا يمس القاعدة ولا بقية المواضع.
+
+### 7.9 DM-09 تعدد الاختلافات لنفس القارئ+الموضع
+- المفتاح ليس (قارئ+كلمة) بل معرف مستقل + `occurrenceIndex`.
+- لا دمج تلقائي لمجرد تطابق القارئ والموضع. النظام يميز المتنافي (علاقة `MUTUALLY_EXCLUSIVE` يحددها Resolver) من المدمج/المرتبط.
+- يُحسب في `migrateDocumentToV8` عبر `variantScopeKey`.
+
+### 7.10 DM-10 Line — سطر تشجير برتبة صريحة
+- `{ id, order, ayahKey, title, category, readerScope, segments[], compositeFaceRefs[], source, locked?, createdAt, updatedAt }`.
+- إعادة الترتيب تغير `order` فقط ولا تمس `id` ولا العلاقات (P-03).
+
+### 7.11 DM-11 RenderRange — نطاق العرض المعزول
+- `{ id, ayahKey, fromPosition, toPosition, label? }` — يحدد الجزء المعروض عند تفعيل عرض الجزء المحدد (يستهلك في حزمة 08).
+
+### 7.12 DM-12 createBatchId — تتبع دفعي دون ربط دلالي
+- عند الإنشاء الدفعي يوسم كل كيان بمعرف الدفعة لأغراض التتبع والتراجع الجماعي فقط — دون أي ربط دلالي يلغي الاستقلال (P-05). يُتراجع كوحدة واحدة في `CommandLog.transaction`.
+
+### 7.13 DM-13 حتمية التصدير Git-friendly
+- ترتيب مفاتيح ثابت محدد سلفًا، معرّفات صريحة، لا طوابع زمنية تتغير بلا سبب، ترتيب عناصر مستقر حسب معرّفاتها/رتبها — Git diff دقيق (`Rule A priority: 80 → 100`).
+- `toCanonicalConfig` يرتب القواعد بمعرفها، ومصفوفة الدمج بمفاتيحها، وبلا طوابع متقلبة.
+- `toStableV8` يولد معرّفات حتمية للتصحيحات ونطاقات العرض من `ayahKey` و`targetId`.
+
+### 7.14 DM-14 engineConfig كتلة مستقلة
+- `{ policies, rules, priorities, relations, contexts, merge-policies, schema-version }` — قابلة للتصدير المنفصل عبر `serializeEngineConfig`.
+- مخزن في `tashjeer:engine-config:v1` + سجل إصدارات `tashjeer:engine-config-history:v1`.
+
+### 7.15 DM-15 سجل التراجع الموحد
+- `CommandLog` يغطي: نقل، دمج، فصل، حذف فردي/جماعي، لصق، تعميم، إنشاء مجموعة، إعادة ترتيب، تعديل رتبة، وضع/إزالة علامات وقف، تعديلات محلية.
+- كل عملية تخزن Snapshot أو Inverse Operation كافية للتراجع الكامل دون فقد.
+- الدفعات تُتراجع كوحدة واحدة (`transaction`).
+
+### 7.16 DM-17 تمثيل السطر في الواجهات
+- يحمل نطاقه المختصر (رمز الإمام/الراوي/الطريق وفق قاعدة الاختصار) مع أنواع اختلافاته مرتبة برتبها الصريحة.
+
+### 7.17 DM-18 الترحيل v7→v8
 `src/lib/tashjeer/migration/migrate-v7-v8.ts` يحوّل `TashjeerDocument` القديم إلى
-النموذج الموحّد دون تعديل الأصل، ويُولّد نسخة احتياطية (`migrateWithBackup`) قبل
+النموذج الموحّد دون تعديل الأصل (دالة نقية)، ويُولّد نسخة احتياطية (`migrateWithBackup`) قبل
 الترحيل (NFR-04). كل معرّف يُحفظ (P-03)، ولا تُفقد بيانات (P-13).
+- `Variant` → `Difference` (مع `locus`, `occurrenceIndex`, `relations`, `rank`)
+- `Variant.alternatives[]` → `Difference.variants[]` (الوجه الأساسي يُستبعد)
+- `TashjeerLink` → `Relation`
+- `RecitationBoundary` → `WaqfMark` (`NO_WASL`→`FORBIDDEN_WASL`)
+- `Variant.engineSnapshot` → `Correction` + `Difference.engineSnapshot`
+- `Variant.origin` → `Difference.source`
+
+### 7.18 FR-EN-01→04 Decision Resolver + Policy Layer
+- **Engine Logic** (قياس، تخطيط، ضرب أوجه، توليد أسطر) كود في `lib/tashjeer/` دون تحويلها لإعدادات.
+- **Engine Policy** (أولويات، متى يُدمج/يُمنع/يُفصل، سياقات الوقف/الوصل، استثناءات، حل تعارض، ترتيب التنفيذ) في `EngineConfig` الموحد يُقرأ من Profile.
+- **Decision Resolver** (`decision/resolver.ts`) — المكان الوحيد الذي يحسم المطابقة والأولوية والخصوصية والتعارض والدمج والتنافي والترتيب، مع Trace قابل للتفسير.
+- **Decision API** (`decision/api.ts`): `resolveDifference`, `resolveMerge`, `resolveOrder`, `resolveRelation`, `resolveConnection`, `resolveVariant` — كل استدعاء يعيد النتيجة + القواعد المطابقة والفائزة والمتجاهلة وأسبابها.
+- المحركات القائمة `ordering`, `combination-engine`, `classic-tashjeer` تقرأ قراراتها عبر هذه الواجهات (موثق في PROGRESS.md).
+
+### 7.19 NFR-04 الحفظ الآمن
+- `atomicWrite` كتابة ذرية للتخزين المحلي.
+- `backupBeforeMigration` و `backupBeforeWideOp` قبل الهجرات والعمليات الواسعة.
+- `AutoSaveManager` حفظ تلقائي دوري + عند العمليات الخطرة.
+- تأكيد كمي ثم تراجع لكل عملية خطرة (P-13).
+
