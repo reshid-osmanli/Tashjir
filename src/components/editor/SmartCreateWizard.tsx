@@ -94,8 +94,8 @@ interface SmartCreateWizardProps {
   onRequestFullBuilder?: (seed: GlobalRuleSeed) => void;
 }
 
-/** علاقة النوع الأول بكل هدف على حدة (FR-ED-08.4). */
-type PerTargetRelation = 'RELATED' | 'MUTUALLY_EXCLUSIVE' | 'NONE';
+/** علاقة النوع الأول بكل هدف على حدة (FR-ED-08.4) — مع «جزء من» البنيوية (DM-03). */
+type PerTargetRelation = 'RELATED' | 'MUTUALLY_EXCLUSIVE' | 'PART_OF' | 'NONE';
 /** موضع مركّب واحد (loci) أم تكرار البنية لكل هدف (FR-ED-09). */
 type TargetMode = 'COMPOSITE' | 'PER_TARGET';
 
@@ -389,11 +389,27 @@ export function SmartCreateWizard({
               : 'MUTUALLY_EXCLUSIVE';
         return relation === 'NONE' ? null : { fromType: first, toType: type, type: relation };
       })
-      .filter((item): item is { fromType: VariantCategory; toType: VariantCategory; type: 'RELATED' | 'MUTUALLY_EXCLUSIVE' } => item !== null);
+      .filter((item): item is { fromType: VariantCategory; toType: VariantCategory; type: Exclude<PerTargetRelation, 'NONE'> } => item !== null);
   }, [perTargetRelations, relationMode, relationSuggestions, selectedTypes]);
 
+  /**
+   * عدد العلاقات المختارة المخالفة لاقتراح السياسة: تُوثَّق عند الإنشاء
+   * تصحيحات يدوية (Correction) تسبق السياسة عبر Resolver — حزمة 06 قاعدة 3.
+   */
+  const relationContradictions = useMemo(
+    () =>
+      relations.filter((relation) => {
+        if (relation.type === 'PART_OF') return false;
+        const suggestion = relationSuggestions.find((item) => item.type === relation.toType)?.suggested;
+        return Boolean(suggestion) && suggestion !== relation.type;
+      }).length,
+    [relationSuggestions, relations]
+  );
+
   const canCreateLocal = selectedTypes.length > 0 && loci.length > 0 && Boolean(baseTitle);
-  const isGeneralizing = applicationScope !== 'LOCAL';
+  /** نطاقات تُنشئ قاعدة عامة محفوظة (سورة/مدى آيات/مصحف). */
+  const isGeneralizing =
+    applicationScope === 'AYAH_RANGE' || applicationScope === 'SURAH' || applicationScope === 'MUSHAF';
 
   // ---------- النطاق الجغرافي والنمط الحتمي (الخطوة 6) ----------
 
@@ -438,7 +454,28 @@ export function SmartCreateWizard({
   }, [canCreateLocal, characterRange, document, harakaDefault, letterSetOverrides, loci, matchScope]);
 
   const canGeneralize = isGeneralizing && Boolean(generalPattern.pattern) && canCreateLocal;
-  const canCreate = applicationScope === 'LOCAL' ? canCreateLocal : canGeneralize;
+
+  /**
+   * مواضع الآية المطابقة للنمط الحتمي (مسار «الآية» المباشر — بلا قاعدة):
+   * عدّ فوري لآية واحدة لا يحتاج Dry-run غير حاجب (الحزمة 06 الخطوة 6).
+   */
+  const ayahMatches = useMemo(() => {
+    if (applicationScope !== 'AYAH' || !document) return [];
+    const pattern = generalPattern.pattern;
+    if (!pattern) return [];
+    try {
+      return findGlobalRuleMatchesInAyah({ id: 'ayah-direct', pattern }, document.ayahKey);
+    } catch {
+      return [];
+    }
+  }, [applicationScope, document, generalPattern]);
+
+  const canCreate =
+    applicationScope === 'LOCAL'
+      ? canCreateLocal
+      : applicationScope === 'AYAH'
+        ? canCreateLocal && Boolean(generalPattern.pattern) && ayahMatches.length > 0
+        : canGeneralize;
 
   const resetDryRun = () => {
     dryRunCancel.current = true;
@@ -572,22 +609,47 @@ export function SmartCreateWizard({
     if (!document) return;
     setError('');
 
+    // مدخل موحّد للمسارين المباشرين (الموضع والآية): نفس الأنواع والأوجه
+    // والعلاقات والسياق — يختلفان في قائمة الأهداف فقط.
+    const input: SmartCreateInput = {
+      ayahKey: document.ayahKey,
+      selection: loci,
+      baseTitle,
+      types: selectedTypes,
+      scope,
+      context,
+      contextByType: effectiveContextByType,
+      relations,
+      variants: variantsByType,
+    };
+
+    if (applicationScope === 'AYAH') {
+      if (!canCreateLocal || ayahMatches.length === 0) {
+        setError('لا مواضع مطابقة للنمط الحتمي في هذه الآية — عدّل التحديد أو إعدادات النمط.');
+        return;
+      }
+      // الآية كلها مباشرةً بلا قاعدة عامة: البنية نفسها تُنشأ على كل موضع
+      // مطابق في معاملة واحدة (ذرية: كله أو لا شيء، وتراجع واحد).
+      const result = buildSmartCreateMultiTargetBatch({
+        ...input,
+        targets: ayahMatches.map((match) => [
+          { startPosition: match.startPosition, endPosition: match.endPosition, characterRange: match.characterRange },
+        ]),
+        titles: ayahMatches.map((match) => match.matchedText),
+      });
+      applySmartCreateBatch(result);
+      onComplete?.(
+        `طبّق على الآية: أُنشئت ${toArabicDigits(result.differences.length)} اختلافات مستقلة على ${toArabicDigits(ayahMatches.length)} مواضع مطابقة مباشرةً بلا قاعدة عامة.`
+      );
+      onClose();
+      return;
+    }
+
     if (applicationScope === 'LOCAL') {
       if (!canCreateLocal) {
         setError('حدد موضعًا ونوعًا واحدًا على الأقل قبل الإنشاء.');
         return;
       }
-      const input: SmartCreateInput = {
-        ayahKey: document.ayahKey,
-        selection: loci,
-        baseTitle,
-        types: selectedTypes,
-        scope,
-        context,
-        contextByType: effectiveContextByType,
-        relations,
-        variants: variantsByType,
-      };
       // معاملة واحدة: اختلافات مستقلة + علاقاتها + سجل تتبع واحد + تراجع واحد.
       const result =
         targetMode === 'PER_TARGET' && targets.length > 1
@@ -1120,7 +1182,7 @@ export function SmartCreateWizard({
                 </label>
                 <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${relationMode === 'MUTUALLY_EXCLUSIVE' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
                   <input type="radio" checked={relationMode === 'MUTUALLY_EXCLUSIVE'} onChange={() => setRelationMode('MUTUALLY_EXCLUSIVE')} className="accent-emerald-600" />
-                  تنافٍ (لا يُضربّا معًا) بين النوع الأول وكل نوع لاحق
+                  تنافٍ (لا يُضربّا معًا) بين النوع الأول وكل نوع لاحق — يُحسم عبر Resolver، وما خالف اقتراح السياسة يُوثَّق تصحيحًا يسبقها
                 </label>
                 <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${relationMode === 'CUSTOM' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
                   <input type="radio" checked={relationMode === 'CUSTOM'} onChange={() => setRelationMode('CUSTOM')} className="accent-emerald-600" />
@@ -1146,6 +1208,7 @@ export function SmartCreateWizard({
                       >
                         <option value="RELATED">مرتبط</option>
                         <option value="MUTUALLY_EXCLUSIVE">تنافٍ</option>
+                        <option value="PART_OF">جزء من</option>
                         <option value="NONE">بلا علاقة</option>
                       </select>
                     </div>
@@ -1166,6 +1229,15 @@ export function SmartCreateWizard({
                 <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${applicationScope === 'LOCAL' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
                   <input type="radio" checked={applicationScope === 'LOCAL'} onChange={() => { setApplicationScope('LOCAL'); resetDryRun(); }} className="accent-emerald-600" />
                   هذا الموضع فقط
+                </label>
+                <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${applicationScope === 'AYAH' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
+                  <input
+                    type="radio"
+                    checked={applicationScope === 'AYAH'}
+                    onChange={() => { setApplicationScope('AYAH'); resetDryRun(); }}
+                    className="accent-emerald-600"
+                  />
+                  هذه الآية كلها: كل المواضع المطابقة فيها مباشرةً (بلا قاعدة عامة)
                 </label>
                 <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${applicationScope === 'AYAH_RANGE' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
                   <input
@@ -1222,7 +1294,7 @@ export function SmartCreateWizard({
                   المصحف كله (قاعدة عامة حتمية لكل نوع)
                 </label>
               </div>
-              {isGeneralizing && (
+              {applicationScope !== 'LOCAL' && (
                 <div className="space-y-3 rounded-lg border border-violet-200 bg-violet-50/40 p-3">
                   <p className="text-xs text-violet-900">
                     النمط حتمي من {characterRange ? 'الحروف المحددة' : 'الكلمات المحددة كاملة'} — يُنشأ لكل نوع مختار كيان مستقل برتبته
@@ -1290,7 +1362,18 @@ export function SmartCreateWizard({
                       </div>
                     </div>
                   )}
-                  {dryRun.phase === 'idle' && (
+                  {applicationScope === 'AYAH' && (
+                    <div className="rounded-lg border border-stone-200 bg-white p-3">
+                      <p className="text-xs text-stone-700">
+                        المواضع المطابقة للنمط في هذه الآية الآن: {toArabicDigits(ayahMatches.length)} موضعًا
+                      </p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-stone-500">
+                        إنشاء مباشر بلا قاعدة عامة: تُولد البنية نفسها (أنواع + أوجه + علاقات) على كل موضع
+                        مطابق في معاملة واحدة ذرية بتراجع واحد، وكل موضع كيان مستقل قابل للتعديل منفردًا.
+                      </p>
+                    </div>
+                  )}
+                  {isGeneralizing && dryRun.phase === 'idle' && (
                     <button
                       type="button"
                       onClick={() => void runDryRun()}
@@ -1300,7 +1383,7 @@ export function SmartCreateWizard({
                       معاينة عدد المواضع المتطابقة (Dry-run)
                     </button>
                   )}
-                  {dryRun.phase === 'running' && (
+                  {isGeneralizing && dryRun.phase === 'running' && (
                     <div className="rounded-lg border border-stone-200 bg-white p-3">
                       <div className="flex items-center justify-between text-[11px] text-stone-600">
                         <span>جارٍ فحص المصحف… السورة {toArabicDigits(dryRun.doneSurahs)} من {toArabicDigits(dryRun.totalSurahs)}</span>
@@ -1320,7 +1403,7 @@ export function SmartCreateWizard({
                       </div>
                     </div>
                   )}
-                  {dryRun.phase === 'cancelled' && (
+                  {isGeneralizing && dryRun.phase === 'cancelled' && (
                     <div className="flex items-center gap-2">
                       <p className="text-xs text-amber-800">أُلغيت المعاينة عند السورة {toArabicDigits(dryRun.doneSurahs)}.</p>
                       <button type="button" onClick={() => void runDryRun()} className="text-xs text-emerald-700 hover:underline">
@@ -1328,7 +1411,7 @@ export function SmartCreateWizard({
                       </button>
                     </div>
                   )}
-                  {dryRun.phase === 'done' && (
+                  {isGeneralizing && dryRun.phase === 'done' && (
                     <div className="rounded-lg border border-stone-200 bg-white p-3">
                       <ul className="space-y-1 text-xs text-stone-700">
                         {dryRun.counts.map(({ type, count }) => (
@@ -1343,7 +1426,7 @@ export function SmartCreateWizard({
                       </button>
                     </div>
                   )}
-                  {onRequestFullBuilder && (
+                  {isGeneralizing && onRequestFullBuilder && (
                     <button
                       type="button"
                       onClick={() =>
@@ -1421,12 +1504,18 @@ export function SmartCreateWizard({
                   <Summary value={toArabicDigits(preview.relations)} label="علاقة تلقائية" />
                 </div>
                 <p className="mt-2 text-xs leading-relaxed text-stone-600">
-                  الهدف: {applicationScope === 'LOCAL' ? 'هذه الآية' : applicationScope === 'SURAH' ? 'هذه السورة' : applicationScope === 'AYAH_RANGE' ? 'مدى آيات' : 'المصحف كله'}
-                  {' · '}الأهداف: {targetMode === 'PER_TARGET' && targets.length > 1 ? `${toArabicDigits(targets.length)} أهداف مستقلة` : 'موضع واحد'}
+                  الهدف: {applicationScope === 'LOCAL' ? 'هذا الموضع' : applicationScope === 'AYAH' ? 'هذه الآية كلها (مباشر بلا قاعدة)' : applicationScope === 'SURAH' ? 'هذه السورة' : applicationScope === 'AYAH_RANGE' ? 'مدى آيات' : 'المصحف كله'}
+                  {' · '}الأهداف: {applicationScope === 'AYAH' ? `${toArabicDigits(ayahMatches.length)} مواضع مطابقة` : targetMode === 'PER_TARGET' && targets.length > 1 ? `${toArabicDigits(targets.length)} أهداف مستقلة` : 'موضع واحد'}
                   {' · '}النطاق: من {selectedTextLabel(baseTitle)}
                   {' · '}العلاقات: {relationMode === 'NONE' ? 'لا تلقائية' : relationMode === 'RELATED_TREE' ? 'مرتبط' : relationMode === 'CUSTOM' ? 'لكل هدف' : 'متنافٍ'}
-                  {dryRun.phase === 'done' && ` · المعاينة: ${dryRun.counts.map(({ type, count }) => `${CATEGORY_LABELS[type]} ${toArabicDigits(count)}`).join('، ')}`}
+                  {isGeneralizing && dryRun.phase === 'done' && ` · المعاينة: ${dryRun.counts.map(({ type, count }) => `${CATEGORY_LABELS[type]} ${toArabicDigits(count)}`).join('، ')}`}
                 </p>
+                {relationContradictions > 0 && (
+                  <p className="mt-1 rounded bg-amber-50 px-2 py-1.5 text-[11px] leading-relaxed text-amber-900">
+                    {toArabicDigits(relationContradictions)} {relationContradictions === 1 ? 'علاقة تخالف' : 'علاقات تخالف'} اقتراح السياسة (Resolver) — ستُوثَّق
+                    تصحيحًا يدويًا (Correction) يسبق السياسة في محرك التراكيب، ويظهر في التتبع.
+                  </p>
+                )}
                 <p className="mt-1 text-[11px] text-stone-500">
                   التنفيذ ذري (كله أو لا شيء) بدفعة تراجع واحدة، ويُسجَّل في التتبع.
                 </p>

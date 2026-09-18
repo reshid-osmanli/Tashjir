@@ -14,8 +14,12 @@ export type WizardRelationMode = 'RELATED_TREE' | 'MUTUALLY_EXCLUSIVE' | 'NONE' 
 /** سياق الوقف/الوصل الافتراضي للمجموعة (الخطوة 7). */
 export type WizardContextMode = 'ALWAYS' | 'WAQF_ONLY' | 'WASL_ONLY';
 
-/** نطاق التطبيق الجغرافي (الخطوة 6). */
-export type WizardApplicationScope = 'LOCAL' | 'SURAH' | 'AYAH_RANGE' | 'MUSHAF';
+/**
+ * نطاق التطبيق الجغرافي (الخطوة 6). AYAH: كل المواضع المطابقة في هذه الآية
+ * تُنشأ مباشرةً بلا قاعدة — مطابقة حتمية بالنمط نفسه، بلا كيان قاعدة (الحزمة
+ * 06 الخطوة 6: «على مستوى الموضع/الآية: الإنشاء مباشر بلا قاعدة»).
+ */
+export type WizardApplicationScope = 'LOCAL' | 'AYAH' | 'SURAH' | 'AYAH_RANGE' | 'MUSHAF';
 
 /** إعداد معالج محفوظ: كل ما يلزم لإعادة الإنشاء بنقرة واحدة. */
 export interface WizardTemplateConfig {
@@ -75,6 +79,7 @@ function sanitizeConfig(value: unknown): WizardTemplateConfig | null {
   const context: WizardContextMode =
     config.context === 'WAQF_ONLY' || config.context === 'WASL_ONLY' ? config.context : 'ALWAYS';
   const applicationScope: WizardApplicationScope =
+    config.applicationScope === 'AYAH' ||
     config.applicationScope === 'SURAH' ||
     config.applicationScope === 'AYAH_RANGE' ||
     config.applicationScope === 'MUSHAF'

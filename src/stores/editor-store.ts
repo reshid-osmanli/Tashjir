@@ -948,12 +948,67 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const faceByDifference = new Map(
         result.differences.map((difference) => [difference.id, difference.variants[0]?.id])
       );
+      const variantByDifference = new Map(variants.map((variant) => [variant.id, variant]));
+      // علاقات المعالج تمر عبر Resolver (قرار واحد في مكان واحد — حزمة 06
+      // قاعدة 3): تُعرض اقتراحات السياسة في الخطوة 5، وما وافقها يبقى رابطًا
+      // بنيويًا مرجعيًا، وما خالفها يُوثَّق علاقةً يدويةً بCorrection تسبق
+      // السياسة في محرك التراكيب (حزمة 05/T2) — لا علاقات خفية ولا ميّتة.
+      const profile = loadEngineConfig();
       const links: TashjeerLink[] = [];
+      // نسخة جديدة دائما: لا يُدفَع في مصفوفة المستند القائم نفسها، وإلا شاركتها
+      // لقطة التراجع وبقي التصحيح بعد Undo.
+      const corrections = [...(document.corrections ?? [])];
       for (const relation of result.relations) {
         const fromFace = faceByDifference.get(relation.fromId);
         const toFace = faceByDifference.get(relation.toId);
         if (!fromFace || !toFace) continue;
         const now = new Date().toISOString();
+
+        if (relation.type === 'RELATED' || relation.type === 'MUTUALLY_EXCLUSIVE') {
+          const first = variantByDifference.get(relation.fromId);
+          const second = variantByDifference.get(relation.toId);
+          if (first && second) {
+            // اقتراح المحرك (A) عبر Resolver حصرا.
+            const proposal = resolveLocusRelation(first, second, profile);
+            const manualExclusive = relation.type === 'MUTUALLY_EXCLUSIVE';
+            const diverges = (proposal.decision.status === 'EXCLUSIVE') !== manualExclusive;
+            if (diverges) {
+              // القرار اليدوي يخالف السياسة: يُسجَّل علاقة يدوية موثقة (B)
+              // ويسبقها في resolveExclusiveGroups، مع Correction (النهائي = B).
+              corrections.push({
+                id: createEntityId('corr'),
+                targetId: relation.fromId,
+                engineResult: {
+                  status: proposal.decision.status,
+                  reason: proposal.decision.reason,
+                  trace: proposal.trace,
+                },
+                editorResult: { relation: relation.type, reason: relation.note ?? null },
+                finalResult: { relation: relation.type, reason: relation.note ?? null },
+                reason: relation.note?.trim() || 'تصحيح يدوي لعلاقة تنافي اختلافين أنشأهما المعالج الذكي',
+                at: now,
+                source: 'editor' as const,
+              });
+              links.push({
+                id: `rel-${document.ayahKey}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+                ayahKey: document.ayahKey,
+                kind: 'DIFFERENCE_TO_DIFFERENCE',
+                relation: 'REFERENCE',
+                differenceRelation: relation.type,
+                from: { type: 'RULE', id: relation.fromId },
+                to: { type: 'RULE', id: relation.toId },
+                notes: relation.note,
+                origin: 'EDITOR',
+                createdAt: now,
+                updatedAt: now,
+              });
+              continue;
+            }
+          }
+        }
+
+        // الرابط البنيوي للعرض: ربط مرجعي موثق لا يغيّر شكل الأسطر (ومعه
+        // PART_OF البنيوي بين الفرع وأصله — لا دلالة تنافٍ له).
         links.push({
           id: `link-${document.ayahKey}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
           ayahKey: document.ayahKey,
@@ -961,7 +1016,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           relation: relationTypeToLinkRelation(relation.type),
           from: { type: 'FACE', id: faceEndpointKey(relation.fromId, fromFace) },
           to: { type: 'FACE', id: faceEndpointKey(relation.toId, toFace) },
-          notes: relation.note,
+          notes: relation.note ?? (relation.type === 'PART_OF' ? 'جزء من' : undefined),
           origin: 'EDITOR',
           createdAt: now,
           updatedAt: now,
@@ -969,18 +1024,24 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       }
 
       notice = multiDifferenceNotice(document.variants, variants);
+      const documentedCorrections = corrections.length - (document.corrections?.length ?? 0);
       return withLoggedEdit(
         {
           ...document,
           variants: [...document.variants, ...variants].sort(compareVariants),
           links: [...(document.links ?? []), ...links],
+          corrections,
         },
         {
           action: 'إنشاء مجموعة ذكية',
           targetType: 'VARIANT',
           targetId: result.batchId,
           category: result.differences[0]?.category,
-          summary: `أنشأ المحرر ${result.differences.length} اختلافات مستقلة بعلاقاتها في عملية معالج ذكي واحدة`,
+          summary:
+            `أنشأ المحرر ${result.differences.length} اختلافات مستقلة بعلاقاتها في عملية معالج ذكي واحدة` +
+            (documentedCorrections > 0
+              ? ` مع ${documentedCorrections} تصحيحات يدوية موثقة تخالف اقتراح السياسة`
+              : ''),
         },
         document
       );
