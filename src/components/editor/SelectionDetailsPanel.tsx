@@ -358,6 +358,7 @@ function linkKindLabel(kind: TashjeerLink['kind']): string {
     LINE_TO_LINE: 'سطر بسطر',
     SEGMENT_TO_LINE: 'جزء بسطر',
     SEGMENT_TO_RULE: 'جزء بقاعدة',
+    DIFFERENCE_TO_LINE: 'اختلاف ملحق بسطر',
   };
   return labels[kind];
 }

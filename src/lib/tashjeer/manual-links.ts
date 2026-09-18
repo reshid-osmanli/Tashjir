@@ -10,6 +10,11 @@
 //     SEGMENT_TO_LINE جزء محدد من السطر يتبع سطرا آخر (Line→Segment→Line).
 //     SEGMENT_TO_RULE جزء محدد من السطر يرتبط بقاعدة في سطر آخر
 //                     (Line→Segment→Rule) دون إنشاء سطر جديد كامل.
+//     DIFFERENCE_TO_LINE اختلاف محدد يُلحق بسطر هدف (بناءة آلية الحافظة
+//                     FR-ED-06): تنقل أحكام الاختلاف وحدها من أسطرها
+//                     الطبيعية إلى سطر المرساة الوجهي، ويُسقط ما فرغ منها.
+//                     تختلف عن LINE_TO_LINE بأنها لا تسحب معها بقية أحكام
+//                     السطر الطبيعي — «العنصران فقط لا السطر كله».
 //
 //   والعلاقة إما MERGE (تغيّر شكل العرض: سطر واحد يحمل الطرفين) أو
 //   REFERENCE (تسجَّل وتُعرض في التتبع والخصائص دون تغيير الأسطر).
@@ -116,6 +121,15 @@ export function applyManualLinks(
       continue;
     }
 
+    if (link.kind === 'DIFFERENCE_TO_LINE') {
+      const result = moveDifferenceIntoLine(current, link);
+      if (result) {
+        current = result;
+        appliedMergeIds.push(link.id);
+      }
+      continue;
+    }
+
     if (link.kind === 'SEGMENT_TO_LINE' || link.kind === 'SEGMENT_TO_RULE') {
       const segment = segments.find((item) => item.id === link.from.id);
       if (!segment) continue;
@@ -214,6 +228,94 @@ export function mergeTwoLines(from: ClassicLine, to: ClassicLine): ClassicLine {
     linkIds: [],
     mergedFrom: [],
   };
+}
+
+// ==================== إلحاق اختلاف بسطر (DIFFERENCE_TO_LINE) ====================
+
+/**
+ * يعيد بناء الحقول المشتقة من الأحكام بعد تغيّر قائمة entries: العلامات
+ * والمدى ونصوص الوصف. حقول هوية السطر (معرّفه، وحدات قراءته، رموز قرائه)
+ * لا تُمسّ — الوحدات خاصية التركيب لا الأحكام المعروضة، فإخلاء حكم من سطر
+ * لا يغيّر من يقرأ بذلك التركيب.
+ *
+ * تُستعمل لسطر المصدر بعد نزع أحكامه، ولسطر الهدف بعد إلحاقها في آخره
+ * (أدنى رتبة متاحة — القرار المحسوم في FR-ED-06).
+ */
+export function rebuildLineFromEntries(
+  line: ClassicLine,
+  entries: ClassicLineEntry[],
+  linkId?: string
+): ClassicLine {
+  const marks = entries
+    .flatMap((entry) => entry.marks)
+    .sort((first, second) => first.position - second.position);
+  const join = (values: Array<string | undefined>, separator: string) =>
+    [...new Set(values.filter((value): value is string => Boolean(value)))].join(separator);
+  return {
+    ...line,
+    entries,
+    marks,
+    startPosition: Math.min(...entries.map((entry) => entry.startPosition)),
+    endPosition: Math.max(...entries.map((entry) => entry.endPosition)),
+    ruleLabel: join(entries.map((entry) => entry.ruleLabel), ' + '),
+    readingLabel: join(entries.map((entry) => entry.readingLabel), ' + '),
+    readingText: join(entries.map((entry) => entry.readingText), ' … '),
+    linkIds: linkId ? [...(line.linkIds ?? []), linkId] : line.linkIds,
+  };
+}
+
+/**
+ * ينقل أحكام اختلاف محدد من أسطرها الطبيعية إلى السطر الذي يحمل وجه
+ * المرساة (طرف to من نوع FACE)، ويسقط السطر الذي يفرغ من أحكامه.
+ *
+ * يرجع null عند عدم التطبيق: المرساة غير موجودة، أو الاختلاف بلا أحكام
+ * ظاهرة (وجهه المصحفي لا يُرسم)، أو كل أحكامه في سطر الهدف أصلًا —
+ * فيبقى الرابط مسجلا في لوحة العلاقات بلا أثر مرئي مضلل.
+ */
+export function moveDifferenceIntoLine(
+  lines: ClassicLine[],
+  link: TashjeerLink
+): ClassicLine[] | null {
+  const target = linesForEndpoint(lines, link.to)[0];
+  if (!target) return null;
+
+  const moved: ClassicLineEntry[] = [];
+  let removedAny = false;
+  const seen = new Set<string>(target.entries.map((entry) => `${entry.variantId}::${entry.alternativeId}`));
+  const survivors: ClassicLine[] = [];
+  for (const line of lines) {
+    if (line === target) {
+      survivors.push(line);
+      continue;
+    }
+    const own = line.entries.filter((entry) => entry.variantId === link.from.id);
+    if (own.length === 0) {
+      survivors.push(line);
+      continue;
+    }
+    removedAny = true;
+    for (const entry of own) {
+      // الوجه نفسه قد يظهر في تراكيب عدة بما فيها الهدف أصلًا؛ الإضافة تُزال
+      // ازدواجًا بمفتاح الوجه، لكن الإزالة من الأسطر الأخرى أثر قائم بذاته —
+      // فالاختلاف يصير معروضًا في سطر الهدف وحده.
+      const key = `${entry.variantId}::${entry.alternativeId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      moved.push(entry);
+    }
+    const remaining = line.entries.filter((entry) => entry.variantId !== link.from.id);
+    // بلا بقايا يُسقط السطر الصوري كله؛ اختلافه الوحيد انتقل بلا نسخ.
+    if (remaining.length === 0) continue;
+    survivors.push(rebuildLineFromEntries(line, remaining));
+  }
+  // لا تطبيق بلا إزالة: الاختلاف إما بلا أحكام ظاهرة، أو هو في الهدف وحده أصلًا.
+  if (!removedAny) return null;
+
+  const targetIndex = survivors.indexOf(target);
+  survivors[targetIndex] = moved.length
+    ? rebuildLineFromEntries(target, [...target.entries, ...moved], link.id)
+    : { ...target, linkIds: [...(target.linkIds ?? []), link.id] };
+  return survivors;
 }
 
 /** بناء حكم «جزء مرتبط» يلحق بالسطر الهدف. */

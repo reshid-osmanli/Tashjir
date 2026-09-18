@@ -424,12 +424,26 @@ export function VariantsPanel() {
         )}
       </section>
 
+      <div
+        onKeyDown={(event) => {
+          // Ctrl+A داخل القائمة يحدد كل المعروض/المصفّى (FR-ED-07) — لا
+          // يلزم تركيز صف بعينه: أي تركيز داخل اللوحة (الرأس أو منطقة
+          // التمرير) يكفي، وحقول الإدخال مستثناة عبر فحص الهدف.
+          if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+            const tag = (event.target as HTMLElement).tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+            event.preventDefault();
+            setMultiSelection({ kind: 'DIFFERENCE', ids: visibleVariants.map((item) => item.id) });
+          }
+        }}
+        className="flex min-h-0 flex-1 flex-col"
+      >
       <ScrollableList
         itemCount={visibleVariants.length}
         ariaLabel="قائمة اختلافات الآية"
         estimateHeight={132}
         header={
-          <div className="px-4 py-2">
+          <div className="space-y-2 px-4 py-2">
             <input
               type="search"
               value={listSearch}
@@ -438,6 +452,42 @@ export function VariantsPanel() {
               aria-label="بحث في اختلافات الآية"
               className="w-full rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-900 placeholder:text-stone-400 focus:border-emerald-500 focus:outline-none"
             />
+            {multiSelection?.kind === 'DIFFERENCE' && multiSelection.ids.length > 0 && (
+              <div
+                role="toolbar"
+                aria-label="إجراءات التحديد المتعدد"
+                className="flex flex-wrap items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50/80 px-2 py-1.5"
+              >
+                <span className="text-[11px] font-medium text-emerald-900">
+                  المحدد: {toArabicDigits(multiSelection.ids.length)} {multiSelection.ids.length === 1 ? 'اختلاف' : multiSelection.ids.length === 2 ? 'اختلافان' : 'اختلافات'}
+                </span>
+                <button
+                  type="button"
+                  className="rounded border border-rose-300 bg-white px-2 py-0.5 text-[11px] font-medium text-rose-700 hover:bg-rose-50"
+                  onClick={() => void requestDeleteItems({ kind: 'DIFFERENCE', ids: multiSelection.ids })}
+                  title="حذف كل الاختلافات المحددة دفعة واحدة — بتأكيد كمي وقابل للتراجع"
+                >
+                  حذف المحدد
+                </button>
+                <button
+                  type="button"
+                  className="rounded border border-stone-300 bg-white px-2 py-0.5 text-[11px] text-stone-700 hover:bg-stone-50"
+                  onClick={() => useEditorStore.getState().copySelection()}
+                  title="نسخ المحدد إلى الحافظة (Ctrl+C) ثم الصقه بـ Ctrl+V"
+                >
+                  نسخ
+                </button>
+                <button
+                  type="button"
+                  className="rounded border border-stone-300 bg-white px-2 py-0.5 text-[11px] text-stone-700 hover:bg-stone-50"
+                  onClick={() => setMultiSelection(null)}
+                  title="تفريغ التحديد المتعدد"
+                >
+                  تفريغ
+                </button>
+                <span className="ms-auto text-[10px] text-stone-400">Ctrl+نقر إضافة · Shift+نقر مدى · Ctrl+A كل المعروض</span>
+              </div>
+            )}
           </div>
         }
         emptyState={
@@ -520,6 +570,7 @@ export function VariantsPanel() {
           </ul>
         )}
       />
+      </div>
 
       {editingVariant && (
         <VariantEditor

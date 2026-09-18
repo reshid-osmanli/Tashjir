@@ -552,6 +552,7 @@ const KIND_LABELS: Record<TashjeerLinkKind, string> = {
   LINE_TO_LINE: 'سطر ↔ سطر',
   SEGMENT_TO_LINE: 'جزء → سطر',
   SEGMENT_TO_RULE: 'جزء → قاعدة',
+  DIFFERENCE_TO_LINE: 'اختلاف → سطر',
 };
 
 const RELATION_LABELS: Record<TashjeerLinkRelation, string> = {
