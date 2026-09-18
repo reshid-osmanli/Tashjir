@@ -264,7 +264,12 @@ npm run db:seed
 ### 7.9 DM-09 تعدد الاختلافات لنفس القارئ+الموضع
 - المفتاح ليس (قارئ+كلمة) بل معرف مستقل + `occurrenceIndex`.
 - لا دمج تلقائي لمجرد تطابق القارئ والموضع. النظام يميز المتنافي (علاقة `MUTUALLY_EXCLUSIVE` يحددها Resolver) من المدمج/المرتبط.
-- يُحسب في `migrateDocumentToV8` عبر `variantScopeKey`.
+- **مجموعة التعدد** = حدود الموضع (start/end) + مفتاح نطاق القرّاء (اتحاد معرّفات أوجه الاختلاف؛ `ALL` عند الغياب). اختلافان بمفتاح واحد هما «اختلافان لموضع واحد» ويُفهران ١ و٢.
+- **الحساب في مكان واحد**: `lib/tashjeer/difference-occurrences.ts` (`differenceOccurrenceKey` · `assignOccurrenceIndices` · `sortLocusDifferences` · `multiDifferenceNotice`) — يستعمله المحرر (لوحة التفاصيل ورسالة الحالة) والترحيل `migrateDocumentToV8` والاختبارات، فالفهرس مشتق اشتقاقًا حتميًا من ترتيب المستند ولا يُخزَّن (لا يتقادم ولا يتصادم؛ التصدير مستقر بايتًا).
+- **ترتيب عرض اختلافات الموضع** (قرار محسوم): المصدر (engine ثم editor) ← الرتبة الصريحة (`orderRank`) ← فهرس التعدد ← المعرّف.
+- **قرار التنافي/الارتباط عبر Resolver حصرًا** (`resolveLocusRelation` في `decision/editor-bridge.ts`): فئة واحدة في كلمة واحدة = متنافيان (`EXCLUSIVE`، لا يُضربان)؛ فئتان مختلفتان = مرتبطان إن دمجتهما مصفوفة الدمج (`RELATED`، مثل مد+تحقيق) أو مستقلان (`INDEPENDENT`، مثل فرش+مد)؛ وقاعدة `PREVENT_MERGE` بـ`params.exclusive=true` تنفيًا صريحًا بين فئتين.
+- **التصحيح اليدوي الموثق**: رابط `DIFFERENCE_TO_DIFFERENCE` (طرفا `RULE` بمعرّفي اختلافين) مع `differenceRelation` = `MUTUALLY_EXCLUSIVE | RELATED` يسبق السياسة في `resolveExclusiveGroups` ومحرك التراكيب؛ وعند مخالفة اقتراح المحرك تُنشأ `Correction` (A=قرار السياسة، B=قرار المحرر، النهائي=B). يُصدَّر إلى v8 كعلاقة بنوع المحرر الصريح، وحذف أحد الطرفين ينظف العلاقة (تنظيف الروابط القائم).
+- عند التصدير v8 يظهر كل اختلاف كيانًا مستقلًا في `differences[]` بمعرّفه و`occurrenceIndex`، وإعادة الاستيراد تحفظها كما هي.
 
 ### 7.10 DM-10 Line — سطر تشجير برتبة صريحة
 - `{ id, order, ayahKey, title, category, readerScope, segments[], compositeFaceRefs[], source, locked?, createdAt, updatedAt }`.

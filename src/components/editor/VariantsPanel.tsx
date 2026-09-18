@@ -61,6 +61,9 @@ export function VariantsPanel() {
     refreshDerivedBranches,
     openAyah,
   } = useEditorStore();
+  // رسالة حالة تعدد الاختلافات لموضع واحد (حزمة 05 — معيار القبول ٢).
+  const multiDifferenceNotice = useEditorStore((state) => state.multiDifferenceNotice);
+  const clearMultiDifferenceNotice = useEditorStore((state) => state.clearMultiDifferenceNotice);
 
   const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
   const [showGlobalBuilder, setShowGlobalBuilder] = useState(false);
@@ -261,6 +264,25 @@ export function VariantsPanel() {
         علّم الكلمات أو الحروف المتباعدة: كل موضع علامة مستقلة على السطر نفسه، بلا خط يملأ ما
         بينهما. سجّل المد والفرش والأصول اختلافا اختلافا؛ يجمعها المحرك في سطر الراوي ويضرب أوجهه.
       </p>
+
+      {/* رسالة حالة تعدد الاختلافات لموضع واحد (حزمة 05/AC-2): الإضافة استقلت
+          ولم تستبدل السابق ولا تدمجه — والقرار (تنافٍ/ارتباط) على المحرك. */}
+      {multiDifferenceNotice && (
+        <div
+          role="status"
+          className="flex items-start justify-between gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2"
+        >
+          <p className="text-[11px] leading-relaxed text-amber-950">{multiDifferenceNotice}</p>
+          <button
+            type="button"
+            onClick={clearMultiDifferenceNotice}
+            className="shrink-0 rounded border border-amber-300 px-1.5 py-0.5 text-[10px] text-amber-900 hover:bg-amber-100"
+            title="إخفاء الرسالة"
+          >
+            إخفاء
+          </button>
+        </div>
+      )}
 
       {/* القواعد العامة المطبقة على هذه الآية، مع بقائها محفوظة مرة واحدة فقط. */}
       <section className="border-b border-stone-200 bg-violet-50/50 px-4 py-3">

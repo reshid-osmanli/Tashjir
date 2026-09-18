@@ -54,6 +54,7 @@ import {
 } from '@/lib/tashjeer/wizard-templates';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { clusterCharacterAnchors, describeLoci, normalizeLocus } from '@/lib/tashjeer/loci';
+import { occurrenceIndexOf, sortLocusDifferences } from '@/lib/tashjeer/difference-occurrences';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { useEditorStore } from '@/stores/editor-store';
 import { useStrengthDegrees } from '@/hooks/useStrengthDegrees';
@@ -707,6 +708,17 @@ export function SmartCreateWizard({
   const startWordText = words.find((word) => word.position === primaryStart)?.text ?? '';
   const endWordText = words.find((word) => word.position === primaryEnd)?.text ?? '';
 
+  // اختلافات قائمة في هذا الموضع (حزمة 05/T3): يُعرض وجودها ليكون «إضافة
+  // اختلاف ثانٍ لنفس القارئ والكلمة» مباشرًا ومعلومًا — الإنشاء يضيف كيانًا
+  // مستقلًا جديدًا ولا يستبدل القائمة ولا يدمجها.
+  const existingAtPrimary = useMemo(() => {
+    if (!document) return [];
+    const covering = document.variants.filter(
+      (variant) => variant.startPosition <= primaryEnd && variant.endPosition >= primaryStart
+    );
+    return sortLocusDifferences(covering);
+  }, [document, primaryStart, primaryEnd]);
+
   const patternWords = generalPattern.pattern?.kind === 'CHARACTERS' ? generalPattern.pattern.words : [];
 
   return (
@@ -788,6 +800,41 @@ export function SmartCreateWizard({
                   <span className="rounded bg-amber-50 px-2 py-1 text-amber-800">انقر كلمة النهاية لتثبيت المدى</span>
                 )}
               </div>
+              {existingAtPrimary.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-2.5">
+                  <p className="text-[11px] font-medium text-amber-950">
+                    في هذا الموضع {toArabicDigits(existingAtPrimary.length)}{' '}
+                    {existingAtPrimary.length === 1 ? 'اختلاف مسجّل' : 'اختلافات مسجّلة'} — الإنشاء هنا يضيف
+                    اختلافًا مستقلًا جديدًا بمعرّفه ولا يستبدلها ولا يدمجها:
+                  </p>
+                  <ul className="mt-1.5 space-y-1">
+                    {existingAtPrimary.map((variant) => (
+                      <li key={variant.id} className="flex flex-wrap items-center gap-1 text-[10.5px] text-stone-700">
+                        <span className="rounded bg-stone-800 px-1 py-0.5 text-[9px] text-white">
+                          اختلاف {toArabicDigits(occurrenceIndexOf(variant, existingAtPrimary))}
+                        </span>
+                        <span className="min-w-0 truncate">{variant.title}</span>
+                        <span className="rounded bg-white px-1 py-0.5 text-[9px] text-stone-500">
+                          {CATEGORY_LABELS[variant.category] ?? variant.category}
+                        </span>
+                        <span
+                          className={`rounded px-1 py-0.5 text-[9px] ${
+                            variant.origin === 'ENGINE' || variant.isGlobalDerived
+                              ? 'bg-sky-100 text-sky-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {variant.origin === 'ENGINE' || variant.isGlobalDerived ? 'محرك' : 'محرر'}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-1.5 text-[10px] leading-relaxed text-amber-900/80">
+                    التنافي بينها (مدّان لا يُضربان) والارتباط يحسمهما محرك التراكيب من سياسات الاستوديو،
+                    ويصحّحه المحرر يدويًا من لوحة التفاصيل («متنافيان/مرتبطان») بتوثيق Correction.
+                  </p>
+                </div>
+              )}
               <div className="rounded-lg border border-stone-200 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-xs font-semibold text-stone-700">تحديد الحروف داخل المدى (اختياري)</p>

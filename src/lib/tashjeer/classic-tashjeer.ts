@@ -88,6 +88,7 @@ import { positionsOfVariant } from './loci';
 import type { EngineConfig } from './model/v8';
 import { marksForWordRange as marksForRange, marksForVariant } from './line-marks';
 import { applyManualLinks, sortLinesByManualOrder } from './manual-links';
+import { manualDifferenceRelationsOf } from './decision/editor-bridge';
 
 // ==================== الإعدادات ====================
 
@@ -481,7 +482,8 @@ export function generateClassicTashjeer(
           catalog,
           strengthDegrees,
           overrideByKey,
-          runtime.engineConfig
+          runtime.engineConfig,
+          runtime.links
         );
 
   // الأسطر اليدوية لا تتجاوز التصفية؛ وهي تتبع نطاقها إن حُدد.
@@ -776,13 +778,17 @@ function buildCombinedLines(
   catalog: TransmissionCatalog | undefined,
   strengthDegrees: StrengthDegreeCatalog,
   overrideByKey: Map<string, TashjeerBranch>,
-  engineConfig?: EngineConfig
+  engineConfig?: EngineConfig,
+  links?: TashjeerLink[]
 ): ClassicLine[] {
   const combinations = buildReadingCombinations(variants, plan, {
     catalog,
     engine,
     strengthDegrees,
     engineConfig,
+    // علاقات التنافي/الارتباط اليدوية الموثقة بين اختلافين تسبق السياسة
+    // (تصحيح المحرر — حزمة 05/T2)، وتمر عبر الـ Resolver نفسه (P-07).
+    manualRelations: manualDifferenceRelationsOf(links ?? []),
   }).filter((combination) => {
     if (filter.narratorIds.length === 0) return true;
     return filter.narratorIds.some((narratorId) => combination.narratorIds.includes(narratorId));

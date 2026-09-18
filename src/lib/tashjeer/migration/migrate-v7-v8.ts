@@ -34,21 +34,15 @@ import type {
   EntityId,
 } from '@/lib/tashjeer/model/v8';
 import { createEntityId, linkKindToRelationType } from '@/lib/tashjeer/model/v8';
+import { differenceScopeKey } from '@/lib/tashjeer/difference-occurrences';
 
 /**
  * مفتاح نطاق للتجميع عند تعدد الاختلافات في الموضع نفسه (DM-09).
- * النطاق في النموذج القديم على الأوجه (VariantAlternative) لا على الاختلاف
- * (Variant)، فنجمع معرّفات كل الأوجه. عند غيابها نسقط إلى النطاق العام.
+ * انتقل الحساب إلى `difference-occurrences.ts` ليكون قرارًا واحدًا في مكان
+ * واحد (P-07): المحرر والترحيل والاختبارات تفهرس المجموعات نفسها.
  */
 function variantScopeKey(variant: Variant): string {
-  const ids = new Set<string>();
-  for (const alt of variant.alternatives) {
-    for (const id of alt.scope?.narratorIds ?? []) ids.add(id);
-    for (const id of alt.scope?.imamIds ?? []) ids.add(id);
-    for (const id of alt.scope?.pathIds ?? []) ids.add(id);
-  }
-  const sorted = [...ids].sort();
-  return sorted.length > 0 ? `SCOPED:${sorted.join(',')}` : 'ALL';
+  return differenceScopeKey(variant);
 }
 
 /** يحوّل سياق الأداء القديم إلى الجديد (DM-06). */
@@ -163,6 +157,19 @@ export function migrateVariantToDifference(
 
 /** يحوّل رابطا قديما إلى علاقة موحّدة (DM-03). */
 export function migrateLinkToRelation(link: TashjeerLink): Relation {
+  // علاقة اختلافين اليدوية (تصحيح التنافي — حزمة 05/T2): النوع هو قرار
+  // المحرر الموثق نفسه (متنافيان/مرتبطان)، لا ترجمة عامة للنوع.
+  if (link.kind === 'DIFFERENCE_TO_DIFFERENCE' && link.differenceRelation) {
+    return {
+      id: link.id,
+      type: link.differenceRelation,
+      fromId: link.from.id,
+      toId: link.to.id,
+      note: link.notes,
+      source: link.origin === 'ENGINE' ? 'engine' : 'editor',
+      createdAt: link.createdAt,
+    };
+  }
   const type: RelationType = linkKindToRelationType(link.kind);
   return {
     id: link.id,

@@ -97,8 +97,21 @@
 - **FR-ED-07 (تحديد متعدد وحذف جماعي):** `editor-store.ts` + `tests/editor-bulk-actions.test.ts`.
 
 ### PH4 — تعدد الاختلافات (FR-ED-03، DM-09)
-- `editor-store.ts` يدعم عدة اختلافات لنفس القارئ/الموضع. الاختبار:
-  `tests/editor-multi-difference.test.ts` (منفّذ على المدود وعلاقات التنافي).
+- `editor-store.ts` يدعم عدة اختلافات لنفس القارئ/الموضع بلا استبدال ولا دمج
+  تلقائي؛ الفهرسة الحتمية (occurrenceIndex) وترتيب العرض ورسالة «اختلافان
+  لموضع واحد» في `lib/tashjeer/difference-occurrences.ts` (المكان الواحد
+  الذي يستهلكه المحرر والترحيل v7→v8 معًا).
+- قرار التنافي/الارتباط (متنافٍ/مرتبط/مستقل) عبر Resolver حصرًا
+  (`resolveLocusRelation` في `decision/editor-bridge.ts`)، وتصحيح يدوي موثق
+  برابط `DIFFERENCE_TO_DIFFERENCE` يسبق السياسة في محرك التراكيب مع
+  Correction عند المخالفة (`editor-store.setDifferenceRelation`).
+- الواجهة: لوحة تفاصيل العنصر تعرض اختلافات الموضع بشارات
+  الفهرس/النوع/المصدر/الحالة مع زرّي «متنافيان/مرتبطان»؛ والمعالج الذكي
+  يعرض القائمة القائمة عند التحديد.
+- الاختبارات: `tests/editor-multi-difference.test.ts` (الأساس) و
+  `tests/package05-multi-difference.test.ts` (الحزمة كاملة: المثال المرجعي
+  بالأربعة، المتنافي لا يُضرب، المستقل معًا، حذف لا يمس، تصحيح + تصدير
+  v8 واستيراد).
 
 ### PH5 — الإنشاء الذكي الموحّد (FR-ED-08، 09)
 - `src/lib/tashjeer/smart-create.ts` + `src/lib/tashjeer/smart-create-store.ts`
@@ -176,6 +189,7 @@
 | AC-02 / DM-11 | ثلاثية التصحيح (المحرك أ ← المحرر ب ← المعتمد) في صفوف التتبع مع رابط «قاعدة من هذا التصحيح» | `tracking-store.ts` (`correctionTripletOf`), `tracking/page.tsx` | `manual-correction.test.ts` |
 | FR-ES-15 | روابط عميقة: `/studio?section=&rule=&differenceType=&engineMerged=&editorWantsMerge=` و`/editor?ayah=&variant=&why=1&rule=` | `studio/page.tsx` (`readDeepLink`), `editor/page.tsx`, `PropertiesPanel.tsx` (`pendingWhy`) | — (واجهة) |
 | FR-ED-04.2 / NFR-05 | حوار تأكيد كمي موحّد لكل عملية مدمّرة (15 موضعًا كانت `window.confirm`)، يبيّن الأثر بالأرقام وهل هي قابلة للتراجع | `lib/ui/confirm-store.ts`, `ui/ConfirmDialogHost.tsx` | `confirm-store.test.ts` |
+| FR-ED-03 / DM-09 | تعدد الاختلافات المستقلة لنفس القارئ والموضع: فهرسة حتمية مشتقة (`difference-occurrences.ts`) + قرار ثلاثي (متنافٍ/مرتبط/مستقل) عبر Resolver + تصحيح يدوي موثق (`DIFFERENCE_TO_DIFFERENCE` + Correction) يسبق السياسة في محرك التراكيب + شارات ورسالة حالة في الواجهة + تصدير v8 بمعرّف وفهرس كل اختلاف | `difference-occurrences.ts`, `decision/editor-bridge.ts` (`resolveLocusRelation`, `resolveExclusiveGroups`), `combination-engine.ts`, `classic-tashjeer.ts`, `editor-store.ts` (`setDifferenceRelation`, `multiDifferenceNotice`), `SelectionDetailsPanel.tsx`, `VariantsPanel.tsx`, `SmartCreateWizard.tsx` | `package05-multi-difference.test.ts` |
 | FR-ED-06 / FR-ED-07 | حافظة متعددة: نسخ أوجه مختارة (`FACES`) وسطر كامل (`LINE`)؛ تحديد بالمدى (Shift) والإضافة (Ctrl) وCtrl+A داخل قائمة الأوجه | `editor-store.ts` (`copyFaces`, `copyLine`), `VariantsPanel.tsx`, `PropertiesPanel.tsx` | `editor-manual-actions.test.ts` |
 | FR-ED-04.3 / NFR-06 | سحب باللمس (ضغط مطوّل ثم تحريك) لإعادة ترتيب الأسطر ودمجها بنفس التأكيد | `RelationsPanel.tsx` | — (واجهة) |
 | FR-ES-03 | مجموعات شروط «أو» و«ليس» في منشئ القواعد، ومفتاح «تنافٍ» لإجراء `PREVENT_MERGE` (`params.exclusive`) | `studio/RuleBuilder.tsx` | `decision-editor-bridge.test.ts` |

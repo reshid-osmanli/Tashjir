@@ -553,11 +553,18 @@ const KIND_LABELS: Record<TashjeerLinkKind, string> = {
   SEGMENT_TO_LINE: 'جزء → سطر',
   SEGMENT_TO_RULE: 'جزء → قاعدة',
   DIFFERENCE_TO_LINE: 'اختلاف → سطر',
+  DIFFERENCE_TO_DIFFERENCE: 'اختلاف ↔ اختلاف',
 };
 
 const RELATION_LABELS: Record<TashjeerLinkRelation, string> = {
   MERGE: 'دمج في سطر واحد',
   REFERENCE: 'ربط مرجعي',
+};
+
+/** تسمية تصنيف علاقة الاختلافين اليدوية (حزمة 05/T2). */
+const DIFFERENCE_RELATION_LABELS: Record<'MUTUALLY_EXCLUSIVE' | 'RELATED', string> = {
+  MUTUALLY_EXCLUSIVE: 'متنافيان (وجهان لموضع واحد لا يُضربان)',
+  RELATED: 'مرتبطان (يُطبقان معًا في سطر الراوي)',
 };
 
 function LinksList({
@@ -658,7 +665,10 @@ function LinksList({
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[10.5px] font-medium text-stone-800">
-                    {KIND_LABELS[link.kind]} · {RELATION_LABELS[link.relation]}
+                    {KIND_LABELS[link.kind]} ·{' '}
+                    {link.kind === 'DIFFERENCE_TO_DIFFERENCE' && link.differenceRelation
+                      ? DIFFERENCE_RELATION_LABELS[link.differenceRelation]
+                      : RELATION_LABELS[link.relation]}
                   </p>
                   <p className="truncate text-[10px] text-stone-600" title={`${describe(link.from)} → ${describe(link.to)}`}>
                     <button
@@ -687,7 +697,24 @@ function LinksList({
                   >
                     {active ? 'مفعّلة' : 'معلّقة'}
                   </span>
-                  {link.relation === 'MERGE' ? (
+                  {link.kind === 'DIFFERENCE_TO_DIFFERENCE' && link.differenceRelation ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void useEditorStore.getState().setDifferenceRelation({
+                          fromId: link.from.id,
+                          toId: link.to.id,
+                          relation:
+                            link.differenceRelation === 'MUTUALLY_EXCLUSIVE' ? 'RELATED' : 'MUTUALLY_EXCLUSIVE',
+                          reason: link.notes,
+                        })
+                      }
+                      className="rounded border border-stone-200 px-1.5 py-0.5 text-[9px] text-stone-600 hover:bg-stone-50"
+                      title="قلب تصنيف العلاقة اليدوية بين الاختلافين (متنافيان ↔ مرتبطان) — بقرار Resolver وتوثيق Correction عند مخالفة السياسة"
+                    >
+                      {link.differenceRelation === 'MUTUALLY_EXCLUSIVE' ? 'اجعلهما مرتبطين' : 'اجعلهما متنافيين'}
+                    </button>
+                  ) : link.relation === 'MERGE' ? (
                     <button
                       type="button"
                       onClick={() =>
