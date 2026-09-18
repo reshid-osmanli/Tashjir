@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ClassicTashjeer } from '@/lib/tashjeer/classic-tashjeer';
 import { coalesceLineOrder, moveLineToIndex } from '@/lib/tashjeer/manual-links';
+import { selectRange } from '@/lib/tashjeer/multi-selection';
 import { planLineInsertion } from '@/lib/tashjeer/line-operations';
 import { confirmAction } from '@/lib/ui/confirm-store';
 import { toArabicDigits as ar } from '@/lib/utils/arabic-numbers';
@@ -26,6 +27,10 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
   const filter = useEditorStore((s) => s.filter);
   const isFiltered = filter.categories.length !== 6 || filter.narratorIds.length > 0 || Boolean(document?.readingWindow?.focusSegment);
   const selection = useEditorStore((s) => s.selection);
+  // تحديد متعدد للأسطر (FR-ED-07): نفس المخزن المشترك، ونفس مفاتيح التعديل.
+  const multiSelection = useEditorStore((s) => s.multiSelection);
+  const setMultiSelection = useEditorStore((s) => s.setMultiSelection);
+  const requestDeleteItems = useEditorStore((s) => s.requestDeleteItems);
   const ids = useMemo(() => coalesceLineOrder(document?.lineOrder, classic.lines.map((line) => line.id)), [document?.lineOrder, classic.lines]);
   const lines = ids.map((id) => classic.lines.find((line) => line.id === id)!);
   const list = useRef<HTMLOListElement>(null);
@@ -59,6 +64,17 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
   }, [clear]);
   useEffect(() => { clear(); }, [document, classic, clear]);
 
+  const checkedLineIds = new Set(multiSelection?.kind === 'LINE' ? multiSelection.ids : []);
+  const chooseLine = (lineId: string, modifiers: { shift?: boolean; toggle?: boolean }) =>
+    setMultiSelection(
+      selectRange(
+        multiSelection?.kind === 'LINE' ? multiSelection : { kind: 'LINE', ids: [] },
+        lineId,
+        ids,
+        modifiers
+      )
+    );
+
   const confirmOrder = async (id: string, order: string[]) => {
     if (isFiltered) { setNotice('ألغِ تصفية الأسطر قبل النقل لحماية ترتيب الأسطر المخفية.'); return; }
     if (!document || ids.every((item, index) => item === order[index])) return;
@@ -84,8 +100,22 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
     setNotice(await useEditorStore.getState().requestMergeLines(lines, from, to));
   };
 
+  /**
+   * حذف جماعي للأسطر المحددة (FR-ED-07): يُمرَّر الرسم الحالي ليحسب المخزن
+   * الاختلافات الحصرية. موقوف أثناء التصفية لأن الأسطر المخفية ليست في
+   * `lines`، فحساب «الحصري» حينها قد يمسّ قراءة لا يراها المحقق.
+   */
+  const bulkDelete = async () => {
+    if (!multiSelection?.ids.length) return;
+    if (isFiltered) { setNotice('ألغِ تصفية الأسطر قبل الحذف الجماعي لحماية الأسطر المخفية.'); return; }
+    const done = await requestDeleteItems({ kind: 'LINE', ids: multiSelection.ids }, { rendered: lines });
+    setNotice(done ? 'حُذفت الأسطر المحددة وما تختص به. يمكن التراجع.' : useEditorStore.getState().clipboardNotice);
+  };
+
   const down = (event: React.PointerEvent<HTMLElement>, id: string, mode: Drag['mode']) => {
     if (!event.isPrimary || event.button !== 0) return;
+    // مفاتيح التعديل للتحديد المتعدد لا للسحب: Ctrl/Shift+ضغط مطول لا يبدأ سحبًا.
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     if (isFiltered) { setNotice('ألغِ التصفية قبل السحب لحماية الأسطر المخفية.'); return; }
     if (mode === 'ORDER' && (event.target as HTMLElement).closest('button,input')) return;
     event.stopPropagation();
@@ -136,7 +166,18 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
   // سطر التحديد الموحّد: تُمرَّر القائمة إليه وتُميَّزه حين يُحدَّد من لوحة أخرى.
   const activeLineIndex = selection?.kind === 'LINE' && selection.lineId ? ids.indexOf(selection.lineId) : -1;
 
-  return <div dir="rtl" className="rounded-md border border-stone-200 p-2.5">
+  return <div
+    dir="rtl"
+    className="rounded-md border border-stone-200 p-2.5"
+    onKeyDown={(event) => {
+      // Ctrl+A يحدد كل الأسطر المعروضة (FR-ED-07)، وحقول الرتبة مستثناة.
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+        if ((event.target as HTMLElement).tagName === 'INPUT') return;
+        event.preventDefault();
+        setMultiSelection({ kind: 'LINE', ids });
+      }
+    }}
+  >
     <ScrollableList
       itemCount={lines.length}
       ariaLabel="ترتيب الأسطر"
@@ -145,7 +186,34 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
       activeIndex={activeLineIndex >= 0 ? activeLineIndex : undefined}
       header={
         <div className="px-1 py-1.5">
-          <p className="text-[11px] text-stone-600">اضغط مطولًا على السطر ثم اسحب. ↳ للدمج. Alt+↑/↓ للنقل مع التأكيد. Esc للإلغاء.</p>
+          <p className="text-[11px] text-stone-600">اضغط مطولًا على السطر ثم اسحب. ↳ للدمج. Alt+↑/↓ للنقل مع التأكيد. Ctrl+نقر لتحديد عدة أسطر. Esc للإلغاء.</p>
+          {multiSelection?.kind === 'LINE' && multiSelection.ids.length > 0 && (
+            <div
+              role="toolbar"
+              aria-label="إجراءات التحديد المتعدد للأسطر"
+              className="mt-1 flex flex-wrap items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50/80 px-2 py-1.5"
+            >
+              <span className="text-[11px] font-medium text-emerald-900">
+                المحدد: {ar(multiSelection.ids.length)} {multiSelection.ids.length === 1 ? 'سطر' : multiSelection.ids.length === 2 ? 'سطران' : 'أسطر'}
+              </span>
+              <button
+                type="button"
+                className="rounded border border-rose-300 bg-white px-2 py-0.5 text-[11px] font-medium text-rose-700 hover:bg-rose-50"
+                onClick={() => void bulkDelete()}
+                title="حذف الأسطر المحددة وما تختص به من اختلافات — بتأكيد كمي يبيّن المشترك الباقي، وقابل للتراجع"
+              >
+                حذف المحدد
+              </button>
+              <button
+                type="button"
+                className="rounded border border-stone-300 bg-white px-2 py-0.5 text-[11px] text-stone-700 hover:bg-stone-50"
+                onClick={() => setMultiSelection(null)}
+              >
+                تفريغ
+              </button>
+              <span className="ms-auto text-[10px] text-stone-400">Shift+نقر مدى · Ctrl+A كل المعروض</span>
+            </div>
+          )}
           {document?.lineOrder?.length ? <button type="button" className="mt-1 text-xs text-emerald-800" onClick={async () => {
             if (await confirmAction({ title: 'عودة لترتيب المحرك؟', impacts: [{ label: 'أسطر', count: ids.length }], undoable: true })) {
               if (useEditorStore.getState().document === document) useEditorStore.getState().resetLineOrder();
@@ -162,7 +230,16 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
         <div data-insert-gap={index} className={`h-1 rounded transition ${drag?.mode === 'ORDER' && drag.gap === index ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : ''}`} />
         <div data-order-line-id={line.id} data-order-index={index} data-list-index={index} tabIndex={0}
           onPointerDown={(event) => down(event, line.id, 'ORDER')}
-          onClick={() => useEditorStore.getState().selectLine(line.id, line.variantId, line.startPosition)}
+          onClick={(event) => {
+            if (event.shiftKey || event.ctrlKey || event.metaKey) {
+              event.preventDefault();
+              chooseLine(line.id, { shift: event.shiftKey, toggle: event.ctrlKey || event.metaKey });
+              return;
+            }
+            useEditorStore.getState().selectLine(line.id, line.variantId, line.startPosition);
+            // نقرة مفردة تستبدل التحديد المتعدد القائم ولا تُنشئه من فراغ.
+            if (multiSelection?.kind === 'LINE') chooseLine(line.id, {});
+          }}
           onKeyDown={(event) => {
             if ((event.target as HTMLElement).tagName === 'INPUT') return;
             if (event.altKey && ['ArrowUp', 'ArrowDown'].includes(event.key)) {
@@ -170,7 +247,7 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
               void confirmOrder(line.id, moveLineToIndex(ids, line.id, index + 1 + (event.key === 'ArrowUp' ? -1 : 1)));
             }
           }}
-          className={`flex touch-none select-none items-center gap-1 rounded border px-2 py-2 text-xs ${drag?.id === line.id ? 'border-emerald-600 bg-emerald-100 opacity-60' : drag?.mode === 'MERGE' && drag.target === line.id ? 'border-violet-600 bg-violet-100 ring-2 ring-violet-400' : selection?.id === line.id ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200 bg-white'}`}>
+          className={`flex touch-none select-none items-center gap-1 rounded border px-2 py-2 text-xs ${drag?.id === line.id ? 'border-emerald-600 bg-emerald-100 opacity-60' : drag?.mode === 'MERGE' && drag.target === line.id ? 'border-violet-600 bg-violet-100 ring-2 ring-violet-400' : checkedLineIds.has(line.id) ? 'border-emerald-400 bg-emerald-50 ring-2 ring-inset ring-emerald-300' : selection?.id === line.id ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200 bg-white'}`}>
           <span aria-hidden>⠿</span>
           <span className="w-6">{ar(index + 1)}</span>
           <button type="button" className="touch-none rounded border px-1 text-violet-700" aria-label={`مقبض دمج السطر ${ar(index + 1)}`} onPointerDown={(event) => down(event, line.id, 'MERGE')}>↳</button>

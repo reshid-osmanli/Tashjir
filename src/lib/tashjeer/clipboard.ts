@@ -1,13 +1,21 @@
 import type { LineSegment, TashjeerDocument, TashjeerLink, Variant, VariantAlternative } from '@/types/tashjeer';
+import type { GlobalRule } from '@/lib/storage/global-rules-store';
 import { createEntityId } from './model/v8';
 
+/**
+ * مستويات الحافظة الموحّدة (FR-ED-06): سطر كامل (بأجزائه) · جزء من سطر
+ * (اختلافات محدّدة) · اختلاف واحد · وجه · قاعدة عامة. مستوى واحد لكل كيان،
+ * وخوارزمية استنساخ واحدة: معرّفات جديدة + `copiedFrom` + طوابع جديدة.
+ */
 export type ClipboardPayload =
   | { kind: 'DIFFERENCE'; value: Variant }
   | { kind: 'DIFFERENCES'; value: Variant[] }
   | { kind: 'FACE'; value: VariantAlternative; sourceVariantId?: string }
   | { kind: 'FACES'; value: VariantAlternative[]; sourceVariantId: string }
   | { kind: 'SEGMENT'; value: LineSegment }
-  | { kind: 'LINE'; value: { lineId: string; label: string; variants: Variant[] } };
+  | { kind: 'LINE'; value: { lineId: string; label: string; variants: Variant[]; segments?: LineSegment[] } }
+  | { kind: 'RULE'; value: GlobalRule }
+  | { kind: 'RULES'; value: GlobalRule[] };
 export type EditorClipboard = (ClipboardPayload & { mode?: 'COPY' | 'CUT'; sourceAyahKey?: number; links?: TashjeerLink[] }) | null;
 export interface SuspendedLink { id: string; original: TashjeerLink; mappedFrom?: string; mappedTo?: string; reason: string; at: string }
 
@@ -17,6 +25,28 @@ export function clipboardCount(clipboard: NonNullable<EditorClipboard>): number 
 }
 export function snapshotClipboard(document: TashjeerDocument, payload: ClipboardPayload): NonNullable<EditorClipboard> {
   return structuredClone({ ...payload, mode: 'COPY', sourceAyahKey: document.ayahKey, links: document.links ?? [] });
+}
+
+/**
+ * استنساخ قواعد عامة للصقها (FR-ED-06 — مستوى «قاعدة»): معرّفات جديدة،
+ * `copiedFrom` يوثّق الأصل، طوابع `createdAt/updatedAt` جديدة، وحالة «مسودة»
+ * لأن النسخة لم تُراجع بعد (P-06: التوثيق لا يُورَّث). القاعدة الأم لا تُمس،
+ * والدفعة تشترك في `createBatchId` واحد ليعرف التراجع أنها وحدة (DM-08/DM-12).
+ */
+export function cloneRulesForClipboard(rules: GlobalRule[], batchId?: string): GlobalRule[] {
+  const now = new Date().toISOString();
+  const sharedBatch = rules.length > 1 ? batchId ?? createEntityId('gbatch') : undefined;
+  return rules.map((rule) => ({
+    ...structuredClone(rule),
+    id: createEntityId('rule'),
+    copiedFrom: rule.id,
+    title: `${rule.title} — نسخة`,
+    status: 'DRAFT' as const,
+    isActive: rule.isActive ?? true,
+    createBatchId: sharedBatch ?? rule.createBatchId,
+    createdAt: now,
+    updatedAt: now,
+  }));
 }
 
 /**
@@ -65,6 +95,11 @@ function differenceToLineLink(document: TashjeerDocument, differenceId: string, 
  */
 export function pasteClipboard(document: TashjeerDocument, clipboard: NonNullable<EditorClipboard>, targetId?: string, pasteAnchor?: PasteLineAnchor): { document: TashjeerDocument; ids: string[]; error?: string } {
   const reject = (error: string) => ({ document, ids: [], error });
+  // القواعد العامة ليست كيانات مستند: لصقها يمرّ بمخزن القواعد عبر
+  // `requestPasteSelection`. لا يُلمس المستند هنا ولا تُرمى القواعد فيه.
+  if (clipboard.kind === 'RULE' || clipboard.kind === 'RULES') {
+    return reject('لصق القواعد العامة يمرّ بمخزن القواعد لا بالمستند؛ لم يتغير شيء.');
+  }
   const now = new Date().toISOString();
   const mapping = new Map<string, string>();
   const cloneEntity = <T extends { id: string }>(value: T): T & { copiedFrom: string; createdAt: string; updatedAt: string } => {
@@ -139,7 +174,19 @@ export function pasteClipboard(document: TashjeerDocument, clipboard: NonNullabl
     } else {
       const sources = clipboard.kind === 'LINE' ? clipboard.value.variants : clipboard.kind === 'DIFFERENCES' ? clipboard.value : [clipboard.value];
       const copies = sources.map(cloneDifference);
-      ids = copies.map((item) => item.id); next = { ...document, variants: [...document.variants, ...copies] };
+      ids = copies.map((item) => item.id);
+      // أجزاء السطر المنسوخ (FR-ED-06 «نسخ سطر كامل»): تُستنسخ بمعرّفات جديدة
+      // و`copiedFrom` وطوابع جديدة، وتدخل خريطة الربط فتتبعها روابطها
+      // (SEGMENT_TO_LINE/SEGMENT_TO_RULE) إلى الأطراف الجديدة، أو تُعلَّق
+      // dangling إن أشارت إلى عنصر خارج مجموعة النسخ.
+      const segmentCopies = clipboard.kind === 'LINE'
+        ? (clipboard.value.segments ?? []).map((segment) => ({ ...cloneEntity(segment), ayahKey: document.ayahKey, origin: 'EDITOR' as const }))
+        : [];
+      next = {
+        ...document,
+        variants: [...document.variants, ...copies],
+        segments: segmentCopies.length ? [...(document.segments ?? []), ...segmentCopies] : document.segments,
+      };
     }
   }
   const links: TashjeerLink[] = [];

@@ -51,3 +51,36 @@ export interface DeletedItems {
   entities: unknown[];
   links: TashjeerLink[];
 }
+
+/** سطر مرسوم بأحكامه، بالقدر الذي تحتاجه هذه الوحدة (بلا استيراد المحرك). */
+export interface RenderedLineShape {
+  id: string;
+  entries: Array<{ variantId: string }>;
+}
+
+/**
+ * اختلافات الأسطر المحددة «الحصرية» (FR-ED-07 — حذف جماعي للأسطر).
+ *
+ * أسطر المحرر مشتقة من الاختلافات، والسطر الواحد قد يشترك في اختلاف مع سطر
+ * آخر (الأسطر المركّبة). فحذف أسطر لا يجوز أن يمسّ قراءة يعرضها سطر باقٍ:
+ * يُحذف الاختلاف الذي لا يظهر في أي سطر خارج التحديد، ويُبلَّغ عن المشترك
+ * ليبقى. الأجزاء (`segment:`) ليست اختلافات فتُستثنى من العدّ.
+ */
+export function exclusiveLineDifferences(
+  lines: RenderedLineShape[],
+  lineIds: string[]
+): { exclusive: string[]; shared: string[] } {
+  const selected = new Set(lineIds);
+  const inside = new Set<string>();
+  const outside = new Set<string>();
+  for (const line of lines) {
+    for (const entry of line.entries) {
+      if (!entry.variantId || entry.variantId.startsWith('segment:')) continue;
+      (selected.has(line.id) ? inside : outside).add(entry.variantId);
+    }
+  }
+  const exclusive: string[] = [];
+  const shared: string[] = [];
+  for (const id of inside) (outside.has(id) ? shared : exclusive).push(id);
+  return { exclusive, shared };
+}

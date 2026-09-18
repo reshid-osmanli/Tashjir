@@ -274,7 +274,16 @@ export function PropertiesPanel() {
               const variantIds = [...new Set(selectedLine.entries.map((entry) => entry.variantId))].filter((id) =>
                 (document?.variants ?? []).some((variant) => variant.id === id)
               );
-              copyLine(selectedLine.id, selectedLine.label, variantIds);
+              // أجزاء السطر (FR-ED-06.1): أحكام الجزء تحمل معرّفه مسبوقًا بـ
+              // «segment:»، فتُنسخ مع السطر بمعرّفات جديدة.
+              const segmentIds = [
+                ...new Set(
+                  selectedLine.entries
+                    .filter((entry) => entry.variantId.startsWith('segment:'))
+                    .map((entry) => entry.variantId.slice(8))
+                ),
+              ];
+              copyLine(selectedLine.id, selectedLine.label, variantIds, segmentIds);
             }}
             className="mt-2 w-full rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-1.5 text-xs font-semibold text-cyan-900 hover:bg-cyan-100"
             title="ينسخ كل اختلافات هذا السطر بأوجهها؛ اللصق (Ctrl+V) ينشئ نسخا مستقلة بمعرّفات جديدة"

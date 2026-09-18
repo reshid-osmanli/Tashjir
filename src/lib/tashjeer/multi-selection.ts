@@ -1,6 +1,14 @@
-/** One range/toggle algorithm, independent of virtualized DOM rows. */
+/**
+ * One range/toggle algorithm, independent of virtualized DOM rows.
+ *
+ * FR-ED-07: the same multi-selection contract serves every element list —
+ * faces, differences, lines, rules and rule occurrences — so Ctrl/Shift/Ctrl+A
+ * behave identically everywhere and bulk actions read one shape.
+ * `ownerId` scopes the selection to its parent (faces → difference,
+ * occurrences → rule).
+ */
 export interface MultiSelection {
-  kind: 'DIFFERENCE' | 'FACE';
+  kind: 'DIFFERENCE' | 'FACE' | 'LINE' | 'RULE' | 'OCCURRENCE';
   ownerId?: string;
   ids: string[];
   anchor?: string;

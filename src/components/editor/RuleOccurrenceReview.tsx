@@ -29,6 +29,7 @@ import {
 } from '@/lib/storage/rule-occurrences-store';
 import { useRuleOccurrences } from '@/hooks/useRuleOccurrences';
 import { useEditorStore } from '@/stores/editor-store';
+import { selectRange } from '@/lib/tashjeer/multi-selection';
 import { useStrengthDegrees } from '@/hooks/useStrengthDegrees';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { ScrollableList } from '@/components/ui/ScrollableList';
@@ -137,6 +138,45 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
   }, [jumped, scanning, startAtAyahKey, visible]);
 
   const current = visible[index];
+
+  // ---------- تحديد متعدد للمواضع وحذفها جملة واحدة (FR-ED-07) ----------
+  // الحذف الجماعي هنا موضعي بطبيعته: localOverride لكل موضع على حدة في خطوة
+  // تراجع واحدة، والقاعدة الأم باقية — القرار المحسوم في FR-ED-07.4.
+  const multiSelection = useEditorStore((state) => state.multiSelection);
+  const setMultiSelection = useEditorStore((state) => state.setMultiSelection);
+  const requestDeleteOccurrencesBulk = useEditorStore((state) => state.requestDeleteOccurrencesBulk);
+  const checkedOccurrences = new Set(multiSelection?.kind === 'OCCURRENCE' && multiSelection.ownerId === rule.id ? multiSelection.ids : []);
+  const chooseOccurrence = (occurrenceId: string, modifiers: { shift?: boolean; toggle?: boolean }) =>
+    setMultiSelection(
+      selectRange(
+        multiSelection?.kind === 'OCCURRENCE' && multiSelection.ownerId === rule.id
+          ? multiSelection
+          : { kind: 'OCCURRENCE', ownerId: rule.id, ids: [] },
+        occurrenceId,
+        visible.map((row) => row.id),
+        modifiers
+      )
+    );
+
+  const bulkDelete = async () => {
+    if (multiSelection?.kind !== 'OCCURRENCE' || multiSelection.ownerId !== rule.id) return;
+    // يُحذف ما هو معروض ومحدد فقط: ما أخفاه المرشّح لا يُمس (حماية البيانات).
+    const chosen = visible.filter((row) => checkedOccurrences.has(row.id));
+    if (!chosen.length) return;
+    const done = await requestDeleteOccurrencesBulk(rule.id, chosen.map((row) => row.match), reason.trim() || undefined);
+    if (done) {
+      setReason('');
+      occurrences.refresh();
+    }
+  };
+
+  // إغلاق الشاشة يفرّغ تحديدها المتعدد.
+  useEffect(
+    () => () => {
+      if (useEditorStore.getState().multiSelection?.kind === 'OCCURRENCE') useEditorStore.getState().setMultiSelection(null);
+    },
+    []
+  );
 
   // لوحة المفاتيح: الأسهم للتنقل كما في التنقل بين الآيات.
   useEffect(() => {
@@ -344,6 +384,99 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
                   </button>
                 ))}
               </div>
+
+              {visible.length > 0 && (
+                <div
+                  className="mt-3"
+                  onKeyDown={(event) => {
+                    // Ctrl+A يحدد كل المواضع المعروضة (بعد التصفية) لا المصحف كله.
+                    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+                      const tag = (event.target as HTMLElement).tagName;
+                      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setMultiSelection({ kind: 'OCCURRENCE', ownerId: rule.id, ids: visible.map((row) => row.id) });
+                    }
+                  }}
+                >
+                  <ScrollableList
+                    itemCount={visible.length}
+                    ariaLabel="مواضع القاعدة القابلة للتحديد"
+                    estimateHeight={34}
+                    className="max-h-56"
+                    activeIndex={index}
+                    header={
+                      <div className="px-2 py-1.5">
+                        <p className="text-[11px] text-stone-600">
+                          نقرة لاستعراض الموضع · Ctrl+نقر لتحديد عدة مواضع · Shift+نقر للمدى · Ctrl+A لكل المعروض
+                        </p>
+                        {multiSelection?.kind === 'OCCURRENCE' && multiSelection.ownerId === rule.id && multiSelection.ids.length > 0 && (
+                          <div
+                            role="toolbar"
+                            aria-label="إجراءات التحديد المتعدد للمواضع"
+                            className="mt-1 flex flex-wrap items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50/80 px-2 py-1.5"
+                          >
+                            <span className="text-[11px] font-medium text-emerald-900">
+                              المحدد: {toArabicDigits(multiSelection.ids.length)} {multiSelection.ids.length === 1 ? 'موضع' : multiSelection.ids.length === 2 ? 'موضعان' : 'مواضع'}
+                            </span>
+                            <button
+                              type="button"
+                              className="rounded border border-rose-300 bg-white px-2 py-0.5 text-[11px] font-medium text-rose-700 hover:bg-rose-50"
+                              onClick={() => void bulkDelete()}
+                              title="حذف المواضع المحددة محليًا دفعة واحدة — القاعدة الأم باقية، بتأكيد كمي وخطوة تراجع واحدة"
+                            >
+                              حذف المحدد موضعيًا
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded border border-stone-300 bg-white px-2 py-0.5 text-[11px] text-stone-700 hover:bg-stone-50"
+                              onClick={() => setMultiSelection(null)}
+                            >
+                              تفريغ
+                            </button>
+                            <span className="ms-auto text-[10px] text-stone-500">السبب المكتوب أعلاه يُسجَّل لكل موضع</span>
+                          </div>
+                        )}
+                      </div>
+                    }
+                  >
+                    <ul className="divide-y divide-stone-100">
+                      {visible.map((row, rowIndex) => {
+                        const ayah = row.match.ayahKey ? getAyahByKey(row.match.ayahKey) : undefined;
+                        const surah = ayah ? getSurahOrFirst(ayah.surahNumber) : undefined;
+                        return (
+                          <li
+                            key={row.id}
+                            data-list-index={rowIndex}
+                            onClick={(event) => {
+                              if (event.shiftKey || event.ctrlKey || event.metaKey) {
+                                chooseOccurrence(row.id, { shift: event.shiftKey, toggle: event.ctrlKey || event.metaKey });
+                                return;
+                              }
+                              setIndex(rowIndex);
+                              if (multiSelection?.kind === 'OCCURRENCE' && multiSelection.ownerId === rule.id) chooseOccurrence(row.id, {});
+                            }}
+                            className={`flex cursor-pointer items-center gap-2 px-2 py-1.5 text-[11px] ${
+                              checkedOccurrences.has(row.id)
+                                ? 'bg-emerald-50 ring-2 ring-inset ring-emerald-300'
+                                : rowIndex === index
+                                  ? 'bg-emerald-50/50'
+                                  : 'hover:bg-stone-50'
+                            }`}
+                          >
+                            <span className="w-8 shrink-0 text-stone-500">{toArabicDigits(rowIndex + 1)}</span>
+                            <span className="w-32 shrink-0 truncate text-stone-600">
+                              {surah ? `${surah.name}${ayah ? ` ${ayah.ayahNumber}` : ''}` : 'بلا آية'}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate font-semibold text-stone-800">{row.match.matchedText}</span>
+                            <StateBadge override={row.override} />
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </ScrollableList>
+                </div>
+              )}
 
               {visible.length === 0 ? (
                 <p className="mt-4 rounded border border-dashed border-stone-300 bg-stone-50 px-4 py-8 text-center text-xs text-stone-600">
