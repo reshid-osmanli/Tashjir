@@ -17,12 +17,12 @@
 import { create } from 'zustand';
 import { mergeLines, unmergeLines } from '@/lib/tashjeer/merge-operations';
 import { resolveLineMerge } from '@/lib/tashjeer/decision/line-merge';
-import { snapshotClipboard, pasteClipboard, clipboardCount, pasteAnchorFace, type EditorClipboard, type PasteLineAnchor } from '@/lib/tashjeer/clipboard';
+import { snapshotClipboard, pasteClipboard, clipboardCount, pasteAnchorFace, cloneRulesForClipboard, type EditorClipboard, type PasteLineAnchor } from '@/lib/tashjeer/clipboard';
 export type { EditorClipboard } from '@/lib/tashjeer/clipboard';
 import { confirmAction } from '@/lib/ui/confirm-store';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import type { MultiSelection } from '@/lib/tashjeer/multi-selection';
-import { deleteItems, deletionImpact } from '@/lib/tashjeer/bulk-operations';
+import { deleteItems, deletionImpact, exclusiveLineDifferences } from '@/lib/tashjeer/bulk-operations';
 import { applyLineRanks, captureLines } from '@/lib/tashjeer/line-operations';
 import { generateClassicTashjeer, type ClassicLine } from '@/lib/tashjeer/classic-tashjeer';
 import { readStrengthDegrees } from '@/lib/tashjeer/strength-degrees';
@@ -55,13 +55,21 @@ import type { DecisionTraceStep } from '@/lib/tashjeer/decision/resolver';
 import { documentWindowWords } from '@/lib/tashjeer/reading-window';
 import { layoutAyah } from '@/lib/tashjeer/layout-engine';
 import { generateBranches } from '@/lib/tashjeer/branch-engine';
-import { getEffectiveVariants, matchFromDerivedVariant } from '@/lib/quran-logic/global-rule-engine';
+import {
+  findGlobalRuleMatches,
+  getEffectiveVariants,
+  matchFromDerivedVariant,
+  type GlobalRuleMatch,
+} from '@/lib/quran-logic/global-rule-engine';
 import { readTransmissionCatalog } from '@/lib/transmissions/catalog';
 import { readEngineSettings } from '@/lib/tashjeer/engine-settings';
 import { moveLineToIndex } from '@/lib/tashjeer/manual-links';
 import {
   deleteOccurrence,
   exportOccurrenceData,
+  listOccurrenceOverrides,
+  occurrenceIdFor,
+  occurrenceStats,
   overrideById,
   restoreOccurrence,
   restoreOccurrenceData,
@@ -72,9 +80,11 @@ import {
   type OccurrenceStoreShape,
 } from '@/lib/storage/rule-occurrences-store';
 import {
+  deleteGlobalRulesBatch,
   exportGlobalRulesSnapshot,
   listGlobalRules,
   restoreGlobalRulesSnapshot,
+  saveGlobalRule,
   type GlobalRule,
 } from '@/lib/storage/global-rules-store';
 import {
@@ -88,6 +98,14 @@ import {
 /** أدوات المحرر المتاحة في شريط الأدوات. */
 /** نمط التعليم داخل أداة التعليم: كلمة كاملة أو حرف مرئي مع تشكيله. */
 export type MarkingMode = 'WORDS' | 'CHARACTERS';
+
+/**
+ * ما يلزم الحذف الجماعي من سياق لا يملكه المخزن (FR-ED-07): الأسطر المرسومة
+ * عند حذف أسطر، لأن «الأسطر» كيانات مشتقة تُحسب من الاختلافات وقت الرسم.
+ */
+export interface BulkDeleteContext {
+  rendered?: Array<{ id: string; entries: Array<{ variantId: string }> }>;
+}
 
 export type EditorTool =
   /** تحديد وتفحص */
@@ -281,7 +299,17 @@ interface EditorState {
   clipboard: EditorClipboard;
   multiSelection: MultiSelection | null;
   setMultiSelection: (selection: MultiSelection | null) => void;
-  requestDeleteItems: (selection: MultiSelection) => Promise<boolean>;
+  /**
+   * حذف جماعي بتأكيد كمي (FR-ED-07): أوجه/اختلافات/أسطر من المستند، أو قواعد
+   * عامة من مخزنها. `context.rendered` يلزم لتحديد الأسطر لأنه يحمل الأسطر
+   * المرسومة التي تُحسب منها الاختلافات الحصرية.
+   */
+  requestDeleteItems: (selection: MultiSelection, context?: BulkDeleteContext) => Promise<boolean>;
+  /**
+   * حذف جماعي لمواضع قاعدة مشتقة: تجاوز محلي (localOverride) لكل موضع على
+   * حدة في خطوة تراجع واحدة، والقاعدة الأم باقية (FR-ED-07.4).
+   */
+  requestDeleteOccurrencesBulk: (ruleId: string, matches: GlobalRuleMatch[], reason?: string) => Promise<boolean>;
   currentTool: EditorTool;
   /** الفئة المستخدمة عند إنشاء اختلاف جديد */
   draftCategory: VariantCategory;
@@ -445,9 +473,12 @@ interface EditorState {
   copyFaces: (variantId: string, faceIds: string[]) => void;
   /**
    * ينسخ سطرا كاملا: كل الاختلافات التي يمر بها السطر بأوجهها التي تخص
-   * قرّاءه. اللصق ينشئ نسخا مستقلة بمعرّفات جديدة (FR-ED-06.2).
+   * قرّاءه، وأجزاءه (LineSegment) المرتبطة به. اللصق ينشئ نسخا مستقلة
+   * بمعرّفات جديدة (FR-ED-06.1/2).
    */
-  copyLine: (lineId: string, label: string, variantIds: string[]) => void;
+  copyLine: (lineId: string, label: string, variantIds: string[], segmentIds?: string[]) => void;
+  /** ينسخ قواعد عامة إلى الحافظة (مستوى «قاعدة» في FR-ED-06). */
+  copyRules: (ruleIds: string[]) => void;
   setTool: (tool: EditorTool) => void;
   setDraftCategory: (category: VariantCategory) => void;
 
@@ -502,9 +533,91 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   clipboardNotice: '',
   multiSelection: null,
   setMultiSelection: (multiSelection) => set({ multiSelection }),
-  requestDeleteItems: async (selection) => {
+  requestDeleteItems: async (selection, context) => {
     const document = get().document;
     if (!document) return false;
+
+    // ---------- قواعد عامة (FR-ED-07 + القرار المحسوم «حذف القاعدة الأم») ----------
+    // الحذف الجماعي للقواعد من مخزنها، في معاملة واحدة تلتقط القواعد ومخزن
+    // المواضع معًا، فخطوة تراجع واحدة تعيد القواعد واستثناءاتها.
+    if (selection.kind === 'RULE') {
+      const wanted = new Set(selection.ids);
+      const rules = listGlobalRules().filter((rule) => wanted.has(rule.id));
+      if (!rules.length) return false;
+      const stats = rules.map((rule) => ({
+        matches: rule.pattern ? findGlobalRuleMatches(rule, { limit: 5000 }).length : 0,
+        overrides: listOccurrenceOverrides(rule.id).length,
+        deleted: occurrenceStats(rule.id).deleted,
+      }));
+      const total = (pick: (item: (typeof stats)[number]) => number) => stats.reduce((sum, item) => sum + pick(item), 0);
+      const accepted = await confirmAction({
+        title: rules.length === 1
+          ? `حذف القاعدة العامة «${rules[0].title}»؟`
+          : `حذف ${toArabicDigits(rules.length)} قواعد عامة؟`,
+        message:
+          'حذف الأمّ يمحو الحكم من المصحف كله مع كل ما سُجِّل على مواضعها. لحذف مواضع محدّدة دون المساس بالقاعدة، استعمل الحذف الموضعي من تتبّع المواضع.',
+        impacts: [
+          { label: 'قواعد عامة', count: rules.length },
+          { label: 'مواضع مشتقة في المصحف', count: total((item) => item.matches) },
+          { label: 'استثناءات موضعية مسجّلة', count: total((item) => item.overrides) },
+          { label: 'منها محذوف موضعيًا', count: total((item) => item.deleted) },
+        ],
+        undoable: true,
+        tone: 'danger',
+        confirmLabel: rules.length === 1 ? 'حذف القاعدة كلها' : 'حذف القواعد المحددة',
+      });
+      if (!accepted) return false;
+      const ids = rules.map((rule) => rule.id);
+      get().transactExternal(
+        {
+          action: 'حذف جماعي لقواعد عامة',
+          targetType: 'RULE',
+          targetId: ids.join(','),
+          summary: `حذف المحرر ${toArabicDigits(ids.length)} قواعد عامة مع استثناءات مواضعها`,
+          changes: [{ field: 'globalRules', before: rules.map((rule) => rule.title), after: [] }],
+        },
+        () => deleteGlobalRulesBatch(ids)
+      );
+      set({ multiSelection: null });
+      return true;
+    }
+
+    // ---------- أسطر (FR-ED-07): يُحذف ما تختص به وحدها ----------
+    // السطر كيان مشتق، فالحذف يمسّ الاختلافات التي لا يعرضها سطر باقٍ، ويُبلَّغ
+    // عن المشتركة فتبقى — لا تُحذف قراءة يعرضها سطر لم يُحدَّد.
+    if (selection.kind === 'LINE') {
+      const { exclusive, shared } = exclusiveLineDifferences(context?.rendered ?? [], selection.ids);
+      const lineCount = selection.ids.length;
+      if (!exclusive.length) {
+        set({
+          clipboardNotice: shared.length
+            ? `الأسطر المحددة لا تملك اختلافات حصرية؛ ${toArabicDigits(shared.length)} اختلافات يشترك فيها سطر باقٍ فبقيت كلها. لم يُحذف شيء.`
+            : 'الأسطر المحددة لا تحمل اختلافات قابلة للحذف. لم يُحذف شيء.',
+        });
+        return false;
+      }
+      const impact = deletionImpact(document, { kind: 'DIFFERENCE', ids: exclusive });
+      const accepted = await confirmAction({
+        title: lineCount === 1 ? 'حذف السطر؟' : `حذف ${toArabicDigits(lineCount)} أسطر؟`,
+        message: shared.length
+          ? `يُحذف ما تختص به هذه الأسطر وحدها؛ ${toArabicDigits(shared.length)} اختلافات يشترك فيها سطر باقٍ فتبقى كما هي. تُحفظ المحذوفات وروابطها في أرشيف المستند.`
+          : 'تُحفظ المحذوفات وروابطها في أرشيف المستند، ويمكن التراجع فورًا.',
+        impacts: [
+          { label: 'أسطر', count: lineCount },
+          { label: 'اختلافات حصرية', count: exclusive.length },
+          { label: 'أوجه تُحذف معها', count: impact.differences.reduce((sum, item) => sum + item.alternatives.length, 0) },
+          { label: 'روابط ستُؤرشف', count: impact.links.length },
+          { label: 'اختلافات مشتركة تبقى', count: shared.length },
+        ],
+        undoable: true,
+        tone: 'danger',
+      });
+      if (!accepted) return false;
+      if (get().document !== document) return false;
+      get().deleteVariantsBulk(exclusive);
+      return true;
+    }
+
     const impact = deletionImpact(document, selection);
     if (!impact.count) return false;
     const isFace = selection.kind === 'FACE';
@@ -534,6 +647,53 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }
     return true;
   },
+
+  requestDeleteOccurrencesBulk: async (ruleId, matches, reason) => {
+    const document = get().document;
+    if (!matches.length) return false;
+    const title = listGlobalRules().find((rule) => rule.id === ruleId)?.title ?? ruleId;
+    // عدّ ما هو محذوف سابقًا بالمعرّف الرسمي للموضع (لا صيغة مُخمَّنة).
+    const alreadyDeleted = matches.filter((match) => overrideById(occurrenceIdFor(ruleId, match))?.state === 'DELETED').length;
+    const accepted = await confirmAction({
+      title: matches.length === 1
+        ? `حذف موضع من «${title}»؟`
+        : matches.length === 2
+          ? `حذف موضعين من «${title}»؟`
+          : `حذف ${toArabicDigits(matches.length)} مواضع من «${title}»؟`,
+      message:
+        'حذف موضعي (تجاوز محلي) لكل موضع على حدة: القاعدة الأم باقية، وبقية مواضعها في المصحف لا تُمس، ويمكن إرجاع أي موضع من سجل التغييرات.',
+      impacts: [
+        { label: 'مواضع تُحذف محليًا', count: matches.length },
+        { label: 'منها محذوف سابقًا', count: alreadyDeleted },
+        { label: 'قواعد أم تبقى', count: 1 },
+      ],
+      undoable: true,
+      tone: 'danger',
+      confirmLabel: 'حذف المواضع المحددة',
+    });
+    if (!accepted) return false;
+    const apply = () => {
+      for (const match of matches) deleteOccurrence(ruleId, match, reason);
+    };
+    if (!document) {
+      // بلا مستند مفتوح (صفحة المكتبة) لا لقطة تراجع؛ يُنفَّذ الحذف وحده.
+      apply();
+    } else {
+      get().transactExternal(
+        {
+          action: 'حذف جماعي لمواضع قاعدة',
+          targetType: 'RULE',
+          targetId: ruleId,
+          summary: `حذف المحرر ${toArabicDigits(matches.length)} مواضع من قاعدة «${title}» محليًا (القاعدة باقية)`,
+          changes: [{ field: 'occurrences', before: matches.map((match) => match.matchedText), after: [] }],
+        },
+        apply
+      );
+    }
+    set({ multiSelection: null });
+    return true;
+  },
+
   lastLinkDecision: null,
   pendingWhy: null,
   smartWizardRequest: 0,
@@ -1742,6 +1902,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       if (value.length) set({ clipboard: snapshotClipboard(doc, value.length === 1 ? { kind: 'DIFFERENCE', value: value[0] } : { kind: 'DIFFERENCES', value }), clipboardNotice: 'نُسخت الاختلافات المحددة.' });
       return;
     }
+    if (multi?.kind === 'RULE' && multi.ids.length > 0) { state.copyRules(multi.ids); return; }
     if (!selection) return;
     if (selection.kind === 'DIFFERENCE') {
       const value = doc.variants.find((item) => item.id === selection.id);
@@ -1751,6 +1912,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     } else if (selection.kind === 'SEGMENT') {
       const value = doc.segments?.find((item) => item.id === selection.id);
       if (value) set({ clipboard: snapshotClipboard(doc, { kind: 'SEGMENT', value }), clipboardNotice: 'نُسخ الجزء.' });
+    } else if (selection.kind === 'RULE') {
+      // مستوى «قاعدة» في الحافظة الموحّدة (FR-ED-06).
+      state.copyRules([selection.id]);
     } else if (selection.kind === 'LINE' && selection.differenceId) {
       // تحديد سطر بلا تحديد متعدد: يُنسخ اختلاف المرساة فيه (الذي نقره
       // المستخدم)، ونسخ السطر كاملًا بكل اختلافاته من زر لوحة الخصائص.
@@ -1767,11 +1931,29 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (!faces.length) return;
     set({ clipboard: snapshotClipboard(doc, faces.length === 1 ? { kind: 'FACE', value: faces[0], sourceVariantId: variantId } : { kind: 'FACES', value: faces, sourceVariantId: variantId }), clipboardNotice: `نُسخ ${toArabicDigits(faces.length)} أوجه.` });
   },
-  copyLine: (lineId, label, variantIds) => {
+  copyLine: (lineId, label, variantIds, segmentIds) => {
     const doc = get().document;
     if (!doc) return;
     const variants = doc.variants.filter((item) => variantIds.includes(item.id));
-    if (variants.length) set({ clipboard: snapshotClipboard(doc, { kind: 'LINE', value: { lineId, label, variants } }), clipboardNotice: 'نُسخت اختلافات السطر. حدد سطرًا آخر ثم الصق لإلحاق النسخة به، أو الصق بلا تحديد سطر لإضافتها للمستند.' });
+    // أجزاء السطر المرتبطة به (FR-ED-06.1): تُنسخ معه فتأتي النسخة كاملة،
+    // وروابطها تتبعها أو تُعلَّق للمراجعة بحسب أطرافها.
+    const wantedSegments = new Set(segmentIds ?? []);
+    const segments = (doc.segments ?? []).filter((item) => wantedSegments.has(item.id));
+    if (variants.length) set({
+      clipboard: snapshotClipboard(doc, { kind: 'LINE', value: { lineId, label, variants, segments } }),
+      clipboardNotice: `نُسخت اختلافات السطر${segments.length ? ` وأجزاؤه (${toArabicDigits(segments.length)})` : ''}. حدد سطرًا آخر ثم الصق لإلحاق النسخة به، أو الصق بلا تحديد سطر لإضافتها للمستند.`,
+    });
+  },
+  copyRules: (ruleIds) => {
+    const doc = get().document;
+    if (!doc) return;
+    const wanted = new Set(ruleIds);
+    const rules = listGlobalRules().filter((rule) => wanted.has(rule.id));
+    if (!rules.length) return;
+    set({
+      clipboard: snapshotClipboard(doc, rules.length === 1 ? { kind: 'RULE', value: rules[0] } : { kind: 'RULES', value: rules }),
+      clipboardNotice: rules.length === 1 ? `نُسخت القاعدة «${rules[0].title}». اللصق ينشئ نسخة مستقلة بمعرّف جديد.` : `نُسخت ${toArabicDigits(rules.length)} قواعد عامة. اللصق ينشئ نسخًا مستقلة بمعرّفات جديدة.`,
+    });
   },
   cutSelection: () => {
     get().copySelection();
@@ -1781,6 +1963,50 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   requestPasteSelection: async () => {
     const { document, clipboard, selection, selectedVariantId } = get();
     if (!document || !clipboard) return;
+
+    // ---------- لصق/نقل قواعد عامة (مستوى «قاعدة» في FR-ED-06) ----------
+    // القواعد تسكن مخزنها لا المستند، فمسارها معاملة خارجية واحدة: لقطة
+    // تراجع موحّدة تلتقط القواعد والمواضيع والمستند معًا (DM-15).
+    if (clipboard.kind === 'RULE' || clipboard.kind === 'RULES') {
+      const sources = clipboard.kind === 'RULE' ? [clipboard.value] : clipboard.value;
+      const accepted = await confirmAction({
+        title: clipboard.mode === 'CUT' ? 'تأكيد نقل القواعد العامة؟' : 'تأكيد لصق نسخ مستقلة من القواعد العامة؟',
+        message: clipboard.mode === 'CUT'
+          ? 'تُنشأ نسخ بمعرّفات جديدة ثم تُحذف القواعد الأصول ومخازن مواضعها؛ يمكن التراجع عن النقل كله دفعة واحدة.'
+          : 'تُنشأ نسخ مستقلة بمعرّفات جديدة وحالة «مسودة» ووسم الأصل في copiedFrom، والقواعد الأم لا تُمس.',
+        impacts: [{ label: 'قواعد عامة', count: sources.length }],
+        undoable: true,
+        confirmLabel: 'تأكيد',
+        tone: 'default',
+      });
+      if (!accepted) return;
+      if (get().clipboard !== clipboard) { set({ clipboardNotice: 'تغيّرت الحافظة أثناء التأكيد؛ أعد طلب اللصق.' }); return; }
+      const clones = cloneRulesForClipboard(sources);
+      get().transactExternal(
+        {
+          action: clipboard.mode === 'CUT' ? 'نقل قواعد من الحافظة' : 'لصق قواعد من الحافظة',
+          targetType: 'RULE',
+          targetId: clones.map((rule) => rule.id).join(','),
+          summary: `${clipboard.mode === 'CUT' ? 'نقل' : 'لصق'} ${toArabicDigits(clones.length)} قواعد عامة بمعرّفات جديدة`,
+          changes: [{ field: 'globalRules', before: clipboard.mode === 'CUT' ? sources.map((rule) => rule.title) : [], after: clones.map((rule) => rule.title) }],
+        },
+        () => {
+          // حفظ قاعدة قاعدة: القواعد الوصفية بلا نمط آلي مقبولة هنا، ودفعة
+          // saveGlobalRulesBatch ترفضها. الذرّية مؤمَّنة بلقطة التراجع.
+          for (const rule of clones) saveGlobalRule(rule);
+          if (clipboard.mode === 'CUT') deleteGlobalRulesBatch(sources.map((rule) => rule.id));
+        }
+      );
+      set({
+        multiSelection: null,
+        clipboard: clipboard.mode === 'CUT' ? null : clipboard,
+        clipboardNotice: clipboard.mode === 'CUT'
+          ? 'نُقلت القواعد بمعرّفات جديدة وحُذفت الأصول؛ يمكن التراجع دفعة واحدة.'
+          : 'لُصقت نسخ مستقلة من القواعد بمعرّفات جديدة وحالة مسودة؛ يمكن التراجع.',
+      });
+      return;
+    }
+
     const target = document.variants.find((item) => item.id === selectedVariantId);
     // سطر الهدف من التحديد الموحد (AC-04): تحديد LINE باختلاف مرسى يفعّل
     // اللصق الجزئي داخل ذلك السطر عبر رابط DIFFERENCE_TO_LINE لا رميًا عامًا.

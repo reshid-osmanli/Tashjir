@@ -79,6 +79,11 @@ export interface GlobalRule {
    * مستقلة في التحرير والحذف اللاحقين.
    */
   createBatchId?: string;
+  /**
+   * توثيق النسخ (FR-ED-06): معرّف القاعدة الأم التي نُسخت منها هذه القاعدة
+   * من الحافظة. المعرّف جديد دائما؛ الحقل يوثّق الأصل فقط.
+   */
+  copiedFrom?: string;
   createdAt: string;
   updatedAt: string;
 }

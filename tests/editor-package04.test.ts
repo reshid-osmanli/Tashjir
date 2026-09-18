@@ -358,3 +358,347 @@ describe('DIFFERENCE_TO_LINE — نقل أحكام الاختلاف وحدها �
     expect(rebuilt.id).toBe('ln'); // الهوية لا تُمس
   });
 });
+
+// ==================== FR-ED-07: تحديد متعدد وحذف جماعي في كل القوائم ====================
+
+/** أسطر مرسومة مصطنعة: d1 مشترك بين سطرين، وd2/d3 حصريان. */
+function bulkLines() {
+  return [
+    { id: 'line-1', entries: [{ variantId: 'd1' }] },
+    { id: 'line-2', entries: [{ variantId: 'd1' }, { variantId: 'd2' }] },
+    { id: 'line-3', entries: [{ variantId: 'd3' }] },
+  ];
+}
+
+async function setupWithConfirm() {
+  const { useEditorStore } = await import('@/stores/editor-store');
+  const { useConfirmStore } = await import('@/lib/ui/confirm-store');
+  useEditorStore.setState({ document: ph3Document(), past: [], future: [], selection: null, multiSelection: null, clipboard: null });
+  useConfirmStore.getState().setHostMounted(true);
+  return { store: useEditorStore, confirm: useConfirmStore };
+}
+
+describe('FR-ED-07 — حذف جماعي للأسطر: الحصري وحده', () => {
+  it('exclusiveLineDifferences: الحصري يُحذف والمشترك مع سطر باقٍ يبقى', async () => {
+    const { exclusiveLineDifferences } = await import('@/lib/tashjeer/bulk-operations');
+    expect(exclusiveLineDifferences(bulkLines(), ['line-1'])).toEqual({ exclusive: [], shared: ['d1'] });
+    expect(exclusiveLineDifferences(bulkLines(), ['line-2', 'line-3'])).toEqual({
+      exclusive: ['d2', 'd3'],
+      shared: ['d1'],
+    });
+    // الأجزاء ليست اختلافات فلا تُحسب.
+    expect(exclusiveLineDifferences([{ id: 'l', entries: [{ variantId: 'segment:s1' }] }], ['l'])).toEqual({
+      exclusive: [],
+      shared: [],
+    });
+  });
+
+  it('تحديد سطرين وحذفهما: تأكيد كمي بالحصري والمشترك، ثم تراجع واحد', async () => {
+    const { store, confirm } = await setupWithConfirm();
+    const before = store.getState().document!;
+
+    store.getState().setMultiSelection({ kind: 'LINE', ids: ['line-2', 'line-3'] });
+    let pending = store.getState().requestDeleteItems({ kind: 'LINE', ids: ['line-2', 'line-3'] }, { rendered: bulkLines() });
+    expect(confirm.getState().pending?.title).toBe('حذف ٢ أسطر؟');
+    // أسطر · اختلافات حصرية · أوجه · روابط · مشترك يبقى
+    expect(confirm.getState().pending?.impacts).toEqual([
+      { label: 'أسطر', count: 2 },
+      { label: 'اختلافات حصرية', count: 2 },
+      { label: 'أوجه تُحذف معها', count: 10 },
+      { label: 'روابط ستُؤرشف', count: 1 },
+      { label: 'اختلافات مشتركة تبقى', count: 1 },
+    ]);
+
+    // الإلغاء لا يمسّ شيئا ولا يترك خطوة تراجع.
+    confirm.getState().resolve(false);
+    await pending;
+    expect(store.getState().document).toBe(before);
+    expect(store.getState().past).toHaveLength(0);
+
+    pending = store.getState().requestDeleteItems({ kind: 'LINE', ids: ['line-2', 'line-3'] }, { rendered: bulkLines() });
+    confirm.getState().resolve(true);
+    await pending;
+
+    const after = store.getState().document!;
+    expect(after.variants.map((variant) => variant.id)).toEqual(['d1']); // المشترك بقي
+    expect(after.deletedItems?.[0].kind).toBe('DIFFERENCE');
+    // الرابط الذي طرفاه في المحذوف أُرشيف وحده؛ ورابط d1 الداخلي بقي سليمًا.
+    expect(after.links?.map((link) => link.id)).toEqual(['inside']);
+    expect(after.deletedItems?.[0].links.map((link) => link.id)).toEqual(['outside']);
+    expect(store.getState().past).toHaveLength(1); // دفعة واحدة = خطوة واحدة
+    expect(store.getState().multiSelection).toBeNull();
+
+    store.getState().undo();
+    expect(store.getState().document).toEqual(before);
+  });
+
+  it('أسطر بلا اختلاف حصري: لا يُحذف شيء ويُبلَّغ بالسبب', async () => {
+    const { store } = await setupWithConfirm();
+    const before = store.getState().document!;
+    const done = await store.getState().requestDeleteItems({ kind: 'LINE', ids: ['line-1'] }, { rendered: bulkLines() });
+    expect(done).toBe(false);
+    expect(store.getState().document).toBe(before);
+    expect(store.getState().clipboardNotice).toContain('لا تملك اختلافات حصرية');
+    expect(store.getState().past).toHaveLength(0);
+  });
+});
+
+describe('FR-ED-07 — حذف جماعي للقواعد العامة', () => {
+  async function seedRules() {
+    const context = await setupWithConfirm();
+    const { saveGlobalRule } = await import('@/lib/storage/global-rules-store');
+    const { buildCharacterPattern } = await import('@/lib/quran-logic/global-rule-engine');
+    const pattern = buildCharacterPattern(makeAyahKey(1, 1), {
+      start: { position: 1, characterIndex: 1 },
+      end: { position: 1, characterIndex: 3 },
+    });
+    const first = saveGlobalRule({ id: 'rule-a', title: 'قاعدة ألف', category: 'MADUD', scope: { kind: 'ALL' }, pattern, status: 'APPROVED', isActive: true, createdAt: '2000-01-01' });
+    const second = saveGlobalRule({ id: 'rule-b', title: 'قاعدة باء', category: 'USUL', scope: { kind: 'ALL' }, pattern, status: 'DRAFT', isActive: true, createdAt: '2000-01-02' });
+    return { ...context, rules: [first, second] };
+  }
+
+  it('تحديد قاعدتين وحذفهما: تأكيد كمي بمواضعها واستثناءاتها، وتراجع يعيدهما معا', async () => {
+    const { store, confirm, rules } = await seedRules();
+    const { listGlobalRules, deleteGlobalRule } = await import('@/lib/storage/global-rules-store');
+    const { deleteOccurrence } = await import('@/lib/storage/rule-occurrences-store');
+    const { findGlobalRuleMatches } = await import('@/lib/quran-logic/global-rule-engine');
+
+    // استثناء موضعي مسجّل على القاعدة الأولى: يجب أن يُذكر في التأكيد ويعود مع التراجع.
+    const matches = findGlobalRuleMatches({ id: rules[0].id, pattern: rules[0].pattern }, { limit: 10 });
+    deleteOccurrence(rules[0].id, matches[0], 'خطأ في هذا الموضع');
+    expect(listGlobalRules()).toHaveLength(2);
+
+    let pending = store.getState().requestDeleteItems({ kind: 'RULE', ids: ['rule-a', 'rule-b'] });
+    expect(confirm.getState().pending?.title).toBe('حذف ٢ قواعد عامة؟');
+    expect(confirm.getState().pending?.impacts?.[0]).toEqual({ label: 'قواعد عامة', count: 2 });
+    expect(confirm.getState().pending?.impacts?.[1].count).toBeGreaterThan(0); // مواضع مشتقة
+    expect(confirm.getState().pending?.impacts?.[2].count).toBe(1); // استثناء مسجّل
+
+    confirm.getState().resolve(false);
+    await pending;
+    expect(listGlobalRules()).toHaveLength(2); // الإلغاء لا يمسّ المخزن
+
+    pending = store.getState().requestDeleteItems({ kind: 'RULE', ids: ['rule-a', 'rule-b'] });
+    confirm.getState().resolve(true);
+    await pending;
+    expect(listGlobalRules()).toHaveLength(0);
+    expect(store.getState().past).toHaveLength(1); // القاعدتان في خطوة واحدة
+    expect(store.getState().document?.editLog?.at(-1)?.action).toBe('حذف جماعي لقواعد عامة');
+
+    store.getState().undo();
+    expect(listGlobalRules().map((rule) => rule.id).sort()).toEqual(['rule-a', 'rule-b']);
+    // الاستثناء الموضعي عاد مع القاعدة (اللقطة الموحّدة تلتقط المخزنين).
+    const { overrideById, occurrenceIdFor } = await import('@/lib/storage/rule-occurrences-store');
+    expect(overrideById(occurrenceIdFor('rule-a', matches[0]))?.state).toBe('DELETED');
+    // والقاعدة المحذوفة منفردة تبقى ممكنة (لم تُكسر).
+    deleteGlobalRule('rule-a');
+    expect(listGlobalRules().map((rule) => rule.id)).toEqual(['rule-b']);
+  });
+});
+
+describe('FR-ED-07.4 — حذف جماعي لمواضع قاعدة كـ localOverride', () => {
+  it('يُسجَّل تجاوز محلي لكل موضع، والقاعدة الأم باقية، وتراجع واحد يعيد الكل', async () => {
+    const { store, confirm } = await setupWithConfirm();
+    const { saveGlobalRule, listGlobalRules } = await import('@/lib/storage/global-rules-store');
+    const { buildCharacterPattern, findGlobalRuleMatches } = await import('@/lib/quran-logic/global-rule-engine');
+    const { overrideById, occurrenceIdFor } = await import('@/lib/storage/rule-occurrences-store');
+
+    const pattern = buildCharacterPattern(makeAyahKey(1, 1), {
+      start: { position: 1, characterIndex: 1 },
+      end: { position: 1, characterIndex: 3 },
+    });
+    const rule = saveGlobalRule({ id: 'rule-c', title: 'قاعدة جيم', category: 'FARSH', scope: { kind: 'ALL' }, pattern, status: 'DRAFT', isActive: true, createdAt: '2000-01-01' });
+    const matches = findGlobalRuleMatches({ id: rule.id, pattern: rule.pattern }, { limit: 5 });
+    expect(matches.length).toBeGreaterThan(2);
+    const chosen = matches.slice(0, 2);
+
+    let pending = store.getState().requestDeleteOccurrencesBulk(rule.id, chosen, 'موضعان لا ينطبقان');
+    expect(confirm.getState().pending?.title).toBe('حذف موضعين من «قاعدة جيم»؟');
+    expect(confirm.getState().pending?.impacts?.[0]).toEqual({ label: 'مواضع تُحذف محليًا', count: 2 });
+    expect(confirm.getState().pending?.impacts?.[2]).toEqual({ label: 'قواعد أم تبقى', count: 1 });
+
+    confirm.getState().resolve(false);
+    await pending;
+    expect(chosen.every((match) => overrideById(occurrenceIdFor(rule.id, match)) === undefined)).toBe(true);
+
+    pending = store.getState().requestDeleteOccurrencesBulk(rule.id, chosen, 'موضعان لا ينطبقان');
+    confirm.getState().resolve(true);
+    await pending;
+
+    // localOverride لكل موضع: القاعدة باقية وبقية مواضعها لم تُمس.
+    expect(listGlobalRules().map((item) => item.id)).toEqual(['rule-c']);
+    for (const match of chosen) {
+      const override = overrideById(occurrenceIdFor(rule.id, match))!;
+      expect(override.state).toBe('DELETED');
+      expect(override.reason).toBe('موضعان لا ينطبقان');
+    }
+    expect(overrideById(occurrenceIdFor(rule.id, matches[2]))).toBeUndefined();
+    expect(store.getState().past).toHaveLength(1);
+    expect(store.getState().document?.editLog?.at(-1)?.action).toBe('حذف جماعي لمواضع قاعدة');
+
+    store.getState().undo();
+    expect(chosen.every((match) => overrideById(occurrenceIdFor(rule.id, match)) === undefined)).toBe(true);
+  });
+});
+
+// ==================== FR-ED-06: مستوى «قاعدة» ونسخ السطر بأجزائه ====================
+
+async function seedTwoRules() {
+  const { store, confirm } = await setupWithConfirm();
+  const { saveGlobalRule } = await import('@/lib/storage/global-rules-store');
+  const { buildCharacterPattern } = await import('@/lib/quran-logic/global-rule-engine');
+  const pattern = buildCharacterPattern(makeAyahKey(1, 1), {
+    start: { position: 1, characterIndex: 1 },
+    end: { position: 1, characterIndex: 3 },
+  });
+  const first = saveGlobalRule({
+    id: 'rule-src-1', title: 'مد منفصل', category: 'MADUD', scope: { kind: 'NARRATORS', narratorIds: ['narrator-warsh'] },
+    pattern, maddHarakat: 4, status: 'APPROVED', isActive: true, createdAt: '2000-01-01',
+  });
+  const second = saveGlobalRule({
+    id: 'rule-src-2', title: 'إمالة', category: 'USUL', scope: { kind: 'ALL' },
+    pattern, status: 'REVIEW', isActive: false, createdAt: '2000-01-02',
+  });
+  return { store, confirm, rules: [first, second] };
+}
+
+describe('FR-ED-06 — مستوى «قاعدة» في الحافظة الموحّدة', () => {
+  it('cloneRulesForClipboard: معرّفات جديدة وcopiedFrom ومسودة ودفعة مشتركة', async () => {
+    const { cloneRulesForClipboard } = await import('@/lib/tashjeer/clipboard');
+    const { rules } = await seedTwoRules();
+
+    const clones = cloneRulesForClipboard(rules);
+    expect(clones.map((clone) => clone.copiedFrom)).toEqual(['rule-src-1', 'rule-src-2']);
+    expect(clones.every((clone) => clone.id !== 'rule-src-1' && clone.id !== 'rule-src-2')).toBe(true);
+    expect(clones.every((clone) => clone.status === 'DRAFT')).toBe(true); // التوثيق لا يُورَّث
+    expect(clones[0].createBatchId).toBe(clones[1].createBatchId); // دفعة واحدة للتراجع (DM-08)
+    expect(clones.every((clone) => clone.createdAt !== '2000-01-01')).toBe(true);
+    expect(clones[0].title).toBe('مد منفصل — نسخة');
+    expect(clones[1].isActive).toBe(false); // حالة التفعيل تُحفظ كما هي
+    // الأصل لا يُمس والنطاق مستقل.
+    expect(rules[0].title).toBe('مد منفصل');
+    expect(rules[0].scope).not.toBe(clones[0].scope);
+
+    // قاعدة واحدة: لا دفعة جديدة، و`copiedFrom` يوثّق الأصل وحده.
+    const single = cloneRulesForClipboard([rules[0]]);
+    expect(single[0].createBatchId).toBeUndefined();
+    expect(single[0].copiedFrom).toBe('rule-src-1');
+  });
+
+  it('نسخ قاعدتين ← Ctrl+V: نسخ مستقلة بمعرّفات جديدة، تعديلها لا يمس الأصل، وتراجع واحد', async () => {
+    const { store, confirm } = await seedTwoRules();
+    const { listGlobalRules, saveGlobalRule } = await import('@/lib/storage/global-rules-store');
+
+    store.getState().setMultiSelection({ kind: 'RULE', ids: ['rule-src-1', 'rule-src-2'] });
+    store.getState().copySelection();
+    expect(store.getState().clipboard?.kind).toBe('RULES');
+
+    const pending = store.getState().requestPasteSelection();
+    expect(confirm.getState().pending?.title).toContain('لصق نسخ مستقلة من القواعد العامة');
+    expect(confirm.getState().pending?.impacts?.[0]).toEqual({ label: 'قواعد عامة', count: 2 });
+    confirm.getState().resolve(true);
+    await pending;
+
+    const after = listGlobalRules();
+    expect(after).toHaveLength(4);
+    const clones = after.filter((rule) => rule.copiedFrom);
+    expect(clones).toHaveLength(2);
+    expect(clones.map((rule) => rule.copiedFrom).sort()).toEqual(['rule-src-1', 'rule-src-2']);
+    expect(store.getState().past).toHaveLength(1); // اللصق كله خطوة واحدة
+
+    // تعديل النسخة لا يمس الأصل.
+    saveGlobalRule({ ...clones[0], title: 'معدّل على النسخة' });
+    expect(listGlobalRules().find((rule) => rule.id === 'rule-src-1')?.title).toBe('مد منفصل');
+
+    store.getState().undo();
+    expect(listGlobalRules().map((rule) => rule.id).sort()).toEqual(['rule-src-1', 'rule-src-2']);
+  });
+
+  it('القص ينقل القاعدة: تُحذف الأصول بعد التأكيد، والتراجع يعيدها', async () => {
+    const { store, confirm } = await seedTwoRules();
+    const { listGlobalRules } = await import('@/lib/storage/global-rules-store');
+
+    store.getState().setSelection({ kind: 'RULE', id: 'rule-src-1' });
+    store.getState().cutSelection();
+    expect(store.getState().clipboard?.kind).toBe('RULE');
+    expect(store.getState().clipboard?.mode).toBe('CUT');
+    expect(listGlobalRules()).toHaveLength(2); // القص وحده لا يغيّر المخزن
+
+    const pending = store.getState().requestPasteSelection();
+    expect(confirm.getState().pending?.title).toContain('نقل القواعد العامة');
+    confirm.getState().resolve(true);
+    await pending;
+
+    const after = listGlobalRules();
+    expect(after).toHaveLength(2); // نُقلت لا نُسخت
+    expect(after.map((rule) => rule.id)).not.toContain('rule-src-1');
+    expect(after.find((rule) => rule.copiedFrom === 'rule-src-1')).toBeDefined();
+    expect(store.getState().clipboard).toBeNull(); // فُرّغت بعد النقل
+    expect(store.getState().past).toHaveLength(1);
+
+    store.getState().undo();
+    expect(listGlobalRules().some((rule) => rule.id === 'rule-src-1')).toBe(true);
+  });
+
+  it('مسار المستند يرفض حمولة قواعد صراحة ولا يلمس المستند', async () => {
+    const document = ph3Document();
+    const { rules } = await seedTwoRules();
+    const clipboard = snapshotClipboard(document, { kind: 'RULE', value: rules[0] });
+    const result = pasteClipboard(document, clipboard);
+    expect(result.error).toContain('مخزن القواعد');
+    expect(result.document).toBe(document);
+    expect(result.ids).toEqual([]);
+  });
+});
+
+describe('FR-ED-06.1 — نسخ سطر كامل بأجزائه', () => {
+  it('الأجزاء تُستنسخ بمعرّفات جديدة وcopiedFrom، وروابطها الخارجة تُعلَّق للمراجعة', async () => {
+    const { store } = await setup();
+    const withSegment = {
+      ...store.getState().document!,
+      segments: [
+        {
+          id: 'seg-1', ayahKey: 1004, title: 'جزء الاختبار', startPosition: 1, endPosition: 2,
+          origin: 'EDITOR' as const, createdAt: '2000-01-01', updatedAt: '2000-01-02',
+        },
+      ],
+      links: [
+        ...(store.getState().document!.links ?? []),
+        {
+          id: 'seg-link', ayahKey: 1004, kind: 'SEGMENT_TO_LINE' as const, relation: 'MERGE' as const,
+          from: { type: 'SEGMENT' as const, id: 'seg-1' }, to: { type: 'LINE' as const, id: 'line-9' },
+          origin: 'EDITOR' as const, createdAt: '2000', updatedAt: '2000',
+        },
+      ],
+    };
+    store.setState({ document: withSegment });
+
+    store.getState().copyLine('line-1', 'سطر ١', ['d1', 'd2'], ['seg-1']);
+    const clipboard = store.getState().clipboard!;
+    expect(clipboard.kind).toBe('LINE');
+    expect(clipboard.kind === 'LINE' && clipboard.value.segments).toHaveLength(1);
+
+    store.getState().pasteSelection();
+    const after = store.getState().document!;
+
+    // الاختلافات والأجزاء معا: نسخ مستقلة بمعرّفات جديدة وتوثيق الأصل.
+    expect(after.variants).toHaveLength(5);
+    expect(after.segments).toHaveLength(2);
+    const segmentCopy = after.segments!.at(-1)!;
+    expect(segmentCopy.id).not.toBe('seg-1');
+    expect(segmentCopy.copiedFrom).toBe('seg-1');
+    expect(segmentCopy.createdAt).not.toBe('2000-01-01');
+    expect(segmentCopy.origin).toBe('EDITOR');
+
+    // رابط الجزء يشير إلى سطر خارج مجموعة النسخ: يُعلَّق ولا يُستنسخ خطأ.
+    expect(after.links?.some((link) => link.id === 'seg-link')).toBe(true);
+    expect(after.suspendedLinks?.some((item) => item.original.id === 'seg-link')).toBe(true);
+    expect(after.suspendedLinks?.at(-1)?.mappedFrom).toBe(segmentCopy.id);
+
+    // الأصل لم يتغير.
+    expect(after.segments![0]).toBe(withSegment.segments![0]);
+
+    store.getState().undo();
+    expect(store.getState().document).toEqual(withSegment);
+  });
+});

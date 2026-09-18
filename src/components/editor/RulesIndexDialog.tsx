@@ -26,6 +26,7 @@ import {
   type GlobalRule,
 } from '@/lib/storage/global-rules-store';
 import { useEditorStore } from '@/stores/editor-store';
+import { selectRange } from '@/lib/tashjeer/multi-selection';
 import { listDocuments, loadDocument } from '@/lib/storage/document-store';
 import { listOccurrenceOverrides, occurrenceStats } from '@/lib/storage/rule-occurrences-store';
 import { RuleOccurrenceReview } from './RuleOccurrenceReview';
@@ -88,6 +89,12 @@ export function RulesIndexDialog({
 
   const refresh = () => setVersion((current) => current + 1);
   const transactExternal = useEditorStore((state) => state.transactExternal);
+  // تحديد متعدد للقواعد (FR-ED-07): نفس مخزن التحديد المتعدد الذي تقرأه
+  // قوائم الأوجه والاختلافات والأسطر، فلا نظام تحديد محلي في هذه اللوحة.
+  const multiSelection = useEditorStore((state) => state.multiSelection);
+  const setMultiSelection = useEditorStore((state) => state.setMultiSelection);
+  const requestDeleteItems = useEditorStore((state) => state.requestDeleteItems);
+  const copyRules = useEditorStore((state) => state.copyRules);
 
   // التراجع عن حذف قاعدة أو تحريرها يعيدها إلى المخزن؛ نستمع لحدث القواعد
   // ليتحدث الفهرس دون إغلاق وإعادة فتح.
@@ -128,6 +135,31 @@ export function RulesIndexDialog({
   useEffect(() => {
     setRenderLimit(60);
   }, [category, query, readerId, type]);
+
+  // القواعد العامة الظاهرة وحدها قابلة للتحديد المتعدد: صفوف «اختلاف آية»
+  // تخص مستندات آيات أخرى، فحذفها الجماعي من هنا غير آمن ولا يُعرض.
+  const selectableRuleIds = useMemo(
+    () => visible.filter((row) => row.globalRule).map((row) => row.globalRule!.id),
+    [visible]
+  );
+  const checkedRuleIds = new Set(multiSelection?.kind === 'RULE' ? multiSelection.ids : []);
+  const chooseRule = (ruleId: string, modifiers: { shift?: boolean; toggle?: boolean }) =>
+    setMultiSelection(
+      selectRange(
+        multiSelection?.kind === 'RULE' ? multiSelection : { kind: 'RULE', ids: [] },
+        ruleId,
+        selectableRuleIds,
+        modifiers
+      )
+    );
+
+  // إغلاق الفهرس يفرّغ تحديده المتعدد حتى لا يبقى شريط إجراءات بلا قائمة.
+  useEffect(
+    () => () => {
+      if (useEditorStore.getState().multiSelection?.kind === 'RULE') useEditorStore.getState().setMultiSelection(null);
+    },
+    []
+  );
 
   // Escape يغلق الفهرس، إلا إذا كانت نافذة تتبع أو تحرير فوقه فهي أولى.
   useEffect(() => {
@@ -194,6 +226,15 @@ export function RulesIndexDialog({
       role="dialog"
       aria-modal="true"
       aria-label="فهرس القواعد والاختلافات"
+      onKeyDown={(event) => {
+        // Ctrl+A يحدد كل القواعد المعروضة/المصفّاة (FR-ED-07) — لا كل الفهرس.
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a' && selectableRuleIds.length) {
+          const tag = (event.target as HTMLElement).tagName;
+          if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+          event.preventDefault();
+          setMultiSelection({ kind: 'RULE', ids: selectableRuleIds });
+        }
+      }}
     >
       <div className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
         <header className="border-b border-stone-200 px-5 py-4">
@@ -251,6 +292,44 @@ export function RulesIndexDialog({
               ))}
             </select>
           </div>
+
+          {multiSelection?.kind === 'RULE' && multiSelection.ids.length > 0 && (
+            <div
+              role="toolbar"
+              aria-label="إجراءات التحديد المتعدد للقواعد"
+              className="mt-3 flex flex-wrap items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50/80 px-2 py-1.5"
+            >
+              <span className="text-[11px] font-medium text-emerald-900">
+                المحدد: {toArabicDigits(multiSelection.ids.length)}{' '}
+                {multiSelection.ids.length === 1 ? 'قاعدة' : multiSelection.ids.length === 2 ? 'قاعدتان' : 'قواعد'}
+              </span>
+              <button
+                type="button"
+                className="rounded border border-rose-300 bg-white px-2 py-0.5 text-[11px] font-medium text-rose-700 hover:bg-rose-50"
+                onClick={() => void requestDeleteItems({ kind: 'RULE', ids: multiSelection.ids })}
+                title="حذف القواعد العامة المحددة دفعة واحدة — بتأكيد كمي يبيّن المواضع والاستثناءات، وقابل للتراجع"
+              >
+                حذف المحدد
+              </button>
+              <button
+                type="button"
+                className="rounded border border-stone-300 bg-white px-2 py-0.5 text-[11px] text-stone-700 hover:bg-stone-50"
+                onClick={() => copyRules(multiSelection.ids)}
+                title="نسخ القواعد المحددة إلى الحافظة (Ctrl+C) ثم لصقها نسخًا مستقلة بمعرّفات جديدة (Ctrl+V)"
+              >
+                نسخ
+              </button>
+              <button
+                type="button"
+                className="rounded border border-stone-300 bg-white px-2 py-0.5 text-[11px] text-stone-700 hover:bg-stone-50"
+                onClick={() => setMultiSelection(null)}
+                title="تفريغ التحديد المتعدد"
+              >
+                تفريغ
+              </button>
+              <span className="ms-auto text-[10px] text-stone-400">Ctrl+نقر إضافة · Shift+نقر مدى · Ctrl+A كل المعروض</span>
+            </div>
+          )}
         </header>
 
         <ScrollableList
@@ -268,8 +347,31 @@ export function RulesIndexDialog({
           ) : (
             <>
             <ul className="space-y-2">
-              {visible.slice(0, renderLimit).map((row) => (
-                <li key={row.key} className="rounded-lg border border-stone-200 p-3">
+              {visible.slice(0, renderLimit).map((row) => {
+                const ruleId = row.globalRule?.id;
+                const isChecked = Boolean(ruleId && checkedRuleIds.has(ruleId));
+                return (
+                <li
+                  key={row.key}
+                  onClick={(event) => {
+                    if (!ruleId) return;
+                    // النقر على أزرار الصف (تحرير/حذف/تتبع/فتح) ليس تحديدًا.
+                    if ((event.target as HTMLElement).closest('button,a,input,select')) return;
+                    if (event.shiftKey || event.ctrlKey || event.metaKey) {
+                      chooseRule(ruleId, { shift: event.shiftKey, toggle: event.ctrlKey || event.metaKey });
+                      return;
+                    }
+                    // نقرة مفردة: التحديد الموحّد (FR-ED-02)، وتستبدل التحديد
+                    // المتعدد إن كان قائمًا — ولا تُنشئ شريط إجراءات من فراغ.
+                    useEditorStore.getState().setSelection({ kind: 'RULE', id: ruleId });
+                    if (multiSelection?.kind === 'RULE') chooseRule(ruleId, {});
+                  }}
+                  className={`rounded-lg border p-3 ${
+                    isChecked
+                      ? 'border-emerald-400 bg-emerald-50/70 ring-2 ring-inset ring-emerald-300'
+                      : 'border-stone-200'
+                  } ${ruleId ? 'cursor-pointer' : ''}`}
+                >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -373,7 +475,8 @@ export function RulesIndexDialog({
                     </div>
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
             {renderLimit < visible.length && (
               <button
