@@ -13,7 +13,7 @@
 // متصفح، ويقرأ الملف المفعّل عند الطلب فقط.
 
 import type { VariantCategory } from '@/types';
-import type { LinkEndpoint, TashjeerLinkKind, TashjeerLinkRelation, Variant } from '@/types/tashjeer';
+import type { LinkEndpoint, TashjeerLink, TashjeerLinkKind, TashjeerLinkRelation, Variant } from '@/types/tashjeer';
 import type { EngineConfig } from '@/lib/tashjeer/model/v8';
 import { variantsSharePosition } from '@/lib/tashjeer/loci';
 import { resolveMerge, resolveRelation, resolveRelationExclusion } from './api';
@@ -61,12 +61,74 @@ export function studioTypeToEditorCategory(type: string): VariantCategory {
 
 // ==================== تنافي المواضع ====================
 
+/**
+ * حالة العلاقة بين اختلافين في الموضع الواحد (حزمة 05): المتنافي لا يُضرب
+ * (وجهان لموضع واحد)، والمرتبطان يجتمعان في سطر الراوي، والمستقلان بُعدان
+ * قائمان بذاتهما يُطبقان معًا. قرار واحد في مكان واحد: هنا.
+ */
+export type LocusRelationStatus = 'EXCLUSIVE' | 'RELATED' | 'INDEPENDENT';
+
 /** قرار تنافٍ بين اختلافين في الآية. */
 export interface LocusExclusionDecision {
   exclusive: boolean;
   reason: string;
   /** هل يتقاطع الموضعان في كلمة واحدة على الأقل؟ */
   sharePosition: boolean;
+  /**
+   * حالة العلاقة الثلاثية (حزمة 05/T3): متنافٍ (لا يُضربان) أو مرتبطان
+   * (يجتمعان في سطر — كالمد مع التحقيق) أو مستقلان (كلٌّ بُعد قائم بذاته).
+   */
+  status: LocusRelationStatus;
+}
+
+/**
+ * علاقة يدوية موثقة بين اختلافين — تصحيح المحرر لقرار التنافي (حزمة 05/T2):
+ * المحرك يقترح عبر السياسات، والمحرر يقرر، والقرار اليدوي يسبق السياسة (P-06).
+ */
+export interface ManualDifferenceRelation {
+  fromId: string;
+  toId: string;
+  relation: 'MUTUALLY_EXCLUSIVE' | 'RELATED';
+  note?: string;
+  /** معرّف الرابط في المستند إن وُجد (للتتبع والعرض). */
+  linkId?: string;
+}
+
+/** يستخرج علاقات التنافي/الارتباط اليدوية من روابط المستند (دالة نقية). */
+export function manualDifferenceRelationsOf(links: TashjeerLink[]): ManualDifferenceRelation[] {
+  const relations: ManualDifferenceRelation[] = [];
+  for (const link of links) {
+    if (link.kind !== 'DIFFERENCE_TO_DIFFERENCE') continue;
+    const relation = link.differenceRelation;
+    if (relation !== 'MUTUALLY_EXCLUSIVE' && relation !== 'RELATED') continue;
+    relations.push({
+      fromId: link.from.id,
+      toId: link.to.id,
+      relation,
+      note: link.notes,
+      linkId: link.id,
+    });
+  }
+  return relations;
+}
+
+/** مفتاح زوج معرّفات مرتّب: العلاقة بين طرفين لا تعتمد على ترتيبهما. */
+function differencePairKey(a: string, b: string): string {
+  return [a, b].sort().join('|');
+}
+
+/**
+ * يفهرس العلاقات اليدوية بمفتاح الزوج. عند تكرار (ملف مستورد مثلًا) يفوز
+ * الأخير في ترتيب المصفوفة — الأحدث إدراجًا هو الأحدث قرارًا، وحتمي دائمًا.
+ */
+export function manualRelationByPair(
+  manuals: ManualDifferenceRelation[]
+): Map<string, ManualDifferenceRelation> {
+  const map = new Map<string, ManualDifferenceRelation>();
+  for (const item of manuals) {
+    map.set(differencePairKey(item.fromId, item.toId), item);
+  }
+  return map;
 }
 
 /**
@@ -98,7 +160,7 @@ export function resolveLocusExclusion(
       status: 'applied',
     });
     return {
-      decision: { exclusive: false, reason: 'موضعان منفصلان', sharePosition },
+      decision: { exclusive: false, reason: 'موضعان منفصلان', sharePosition, status: 'INDEPENDENT' },
       appliedRules: [],
       skippedRules: [],
       trace,
@@ -117,7 +179,12 @@ export function resolveLocusExclusion(
     const inner = resolveRelationExclusion(a, b, profile);
     trace.push(...inner.trace);
     return {
-      decision: { exclusive: true, reason: 'وجهان من فئة واحدة في موضع واحد', sharePosition },
+      decision: {
+        exclusive: true,
+        reason: 'وجهان من فئة واحدة في موضع واحد',
+        sharePosition,
+        status: 'EXCLUSIVE',
+      },
       appliedRules: inner.appliedRules,
       skippedRules: inner.skippedRules,
       trace,
@@ -133,11 +200,16 @@ export function resolveLocusExclusion(
     )
   );
   const exclusive = explicit.length > 0;
+  const status: LocusRelationStatus = exclusive
+    ? 'EXCLUSIVE'
+    : merge.decision.merge
+      ? 'RELATED'
+      : 'INDEPENDENT';
   trace.push({
     stage: 'EXCLUSION',
     message: exclusive
       ? `تنافٍ صريح بقاعدة: ${explicit.map((rule) => rule.name).join(' + ')}`
-      : `فئتان مختلفتان في موضع واحد: مستقلتان (${merge.decision.merge ? 'تجتمعان في سطر' : 'كل واحدة في سطرها'})`,
+      : `فئتان مختلفتان في موضع واحد: ${merge.decision.merge ? 'مرتبطان يجتمعان في سطر' : 'مستقلتان'} (${merge.decision.reason})`,
     status: exclusive ? 'blocked' : 'applied',
   });
 
@@ -146,12 +218,79 @@ export function resolveLocusExclusion(
       exclusive,
       reason: exclusive
         ? `تنافٍ صريح: ${explicit.map((rule) => rule.name).join(' + ')}`
-        : `مستقلتان: ${merge.decision.reason}`,
+        : merge.decision.merge
+          ? `مرتبطان: ${merge.decision.reason}`
+          : `مستقلتان: ${merge.decision.reason}`,
       sharePosition,
+      status,
     },
     appliedRules: merge.appliedRules,
     skippedRules: merge.skippedRules,
     trace,
+  };
+}
+
+/** قرار علاقة اختلافين بالحالة الثلاثية: متنافٍ/مرتبط/مستقل (حزمة 05/T3). */
+export interface LocusRelationDecision {
+  status: LocusRelationStatus;
+  reason: string;
+  sharePosition: boolean;
+  /** هل حُسم القرار بتصحيح يدوي موثق يسبق السياسة؟ */
+  manual: boolean;
+}
+
+/**
+ * يحسم علاقة اختلافين في الموضع (متنافٍ/مرتبط/مستقل) — القرار الواحد الذي
+ * تستهلكه شارات الواجهة ومحرك التراكيب على السواء:
+ *
+ *   1) علاقة يدوية موثقة بين الاختلافين تسبق السياسة (المحرر يقرر — P-06):
+ *      متنافيان ← EXCLUSIVE، مرتبطان ← RELATED.
+ *   2) وإلا فسياسة المحرك عبر `resolveLocusExclusion` (Resolver حصريًا).
+ */
+export function resolveLocusRelation(
+  first: Variant,
+  second: Variant,
+  profile: EngineConfig = DEFAULT_SYSTEM_PROFILE,
+  manual?: ManualDifferenceRelation,
+  ctx?: DecisionContext
+): DecisionResult<LocusRelationDecision> {
+  if (manual) {
+    const status: LocusRelationStatus =
+      manual.relation === 'MUTUALLY_EXCLUSIVE' ? 'EXCLUSIVE' : 'RELATED';
+    const label = status === 'EXCLUSIVE' ? 'متنافيان' : 'مرتبطان';
+    const reason = manual.note?.trim()
+      ? `علاقة يدوية موثقة (${label}): ${manual.note.trim()}`
+      : `علاقة يدوية موثقة من المحرر: ${label}`;
+    return {
+      decision: {
+        status,
+        reason,
+        sharePosition: variantsSharePosition(first, second),
+        manual: true,
+      },
+      appliedRules: [],
+      skippedRules: [],
+      trace: [
+        {
+          stage: 'MANUAL_RELATION',
+          message: `${reason} — تسبق سياسة المحرك`,
+          status: status === 'EXCLUSIVE' ? 'blocked' : 'applied',
+        },
+      ],
+    };
+  }
+
+  const inner = resolveLocusExclusion(first, second, profile, ctx);
+  return {
+    decision: {
+      status: inner.decision.status,
+      reason: inner.decision.reason,
+      sharePosition: inner.decision.sharePosition,
+      manual: false,
+    },
+    appliedRules: inner.appliedRules,
+    skippedRules: inner.skippedRules,
+    trace: inner.trace,
   };
 }
 
@@ -160,14 +299,22 @@ export function resolveLocusExclusion(
  * الاختلافات التي حكم الـ Resolver بتنافيها (في الموضع نفسه) تجتمع في مجموعة
  * واحدة (اتحاد-وجود)، والمستقلة تبقى كل واحدة بمفردها.
  *
+ * علاقات التنافي/الارتباط اليدوية الموثقة (حزمة 05/T2) تُطبَّق قبل السياسة:
+ * «متنافيان» يضم الاختلافين إلى مجموعة واحدة ولو خالفا السياسة، و«مرتبطان»
+ * يمنع ضمهما ولو كانت السياسة تنافيهما (مثل مدّين مسجّلين اختلافين مستقلين).
+ * العلاقة اليدوية بين موضعين منفصلين لا أثر لها هنا — التنافي لا معنى له
+ * إلا بين اختلافين يتقاطعان في كلمة.
+ *
  * البديل القديم `exclusiveGroupKeys` في loci.ts يبقى للاختبارات الهندسية،
  * لكن المحرك يمر من هنا كي لا يكون له قرار خاص (P-07).
  */
 export function resolveExclusiveGroups(
   variants: Variant[],
-  profile: EngineConfig = DEFAULT_SYSTEM_PROFILE
+  profile: EngineConfig = DEFAULT_SYSTEM_PROFILE,
+  manualRelations: ManualDifferenceRelation[] = []
 ): { groups: Map<string, string>; decisions: Array<{ firstId: string; secondId: string; result: DecisionResult<LocusExclusionDecision> }> } {
   const parent = new Map(variants.map((variant) => [variant.id, variant.id]));
+  const manualByPair = manualRelationByPair(manualRelations);
   const decisions: Array<{ firstId: string; secondId: string; result: DecisionResult<LocusExclusionDecision> }> = [];
 
   const find = (id: string): string => {
@@ -184,7 +331,33 @@ export function resolveExclusiveGroups(
       const second = variants[j];
       // تحسين: لا نستدعي الـ Resolver لمواضع لا تتقاطع أصلا.
       if (!variantsSharePosition(first, second)) continue;
-      const result = resolveLocusExclusion(first, second, profile);
+      const manual = manualByPair.get(differencePairKey(first.id, second.id));
+      const base = resolveLocusExclusion(first, second, profile);
+      let result = base;
+      if (manual) {
+        const exclusive = manual.relation === 'MUTUALLY_EXCLUSIVE';
+        const label = exclusive ? 'متنافيان' : 'مرتبطان';
+        result = {
+          decision: {
+            exclusive,
+            status: exclusive ? 'EXCLUSIVE' : 'RELATED',
+            reason: manual.note?.trim()
+              ? `علاقة يدوية موثقة (${label}): ${manual.note.trim()}`
+              : `علاقة يدوية موثقة من المحرر: ${label}`,
+            sharePosition: base.decision.sharePosition,
+          },
+          appliedRules: [],
+          skippedRules: base.appliedRules.map((rule) => ({ rule, reason: 'علاقة يدوية موثقة تسبق السياسة' })),
+          trace: [
+            {
+              stage: 'MANUAL_RELATION',
+              message: `تصحيح يدوي موثق: ${label}${manual.note ? ` — ${manual.note}` : ''} (يتقدم على قرار السياسة)`,
+              status: exclusive ? 'blocked' : 'applied',
+            },
+            ...base.trace.map((step) => ({ ...step, status: 'skipped' as const })),
+          ],
+        };
+      }
       decisions.push({ firstId: first.id, secondId: second.id, result });
       if (!result.decision.exclusive) continue;
       const a = find(first.id);

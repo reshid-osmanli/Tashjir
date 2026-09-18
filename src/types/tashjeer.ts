@@ -630,7 +630,15 @@ export type TashjeerLinkKind =
    * تُنقل أحكام الاختلاف (entries) من أسطرها الطبيعية إلى سطر المرساة،
    * ويُسقط السطر الذي يفرغ من أحكامه، بلا مساس بكيان الاختلاف ولا بمعرّفاته.
    */
-  | 'DIFFERENCE_TO_LINE';
+  | 'DIFFERENCE_TO_LINE'
+  /**
+   * علاقة يدوية موثقة بين اختلافين (حزمة 05/T2 — تصحيح قرار التنافي):
+   * «الطرفان = طرفا RULE بمعرّفي اختلافين». المحرك يقترح (سياسات الاستوديو)،
+   * والمحرر يقرر: متنافيان (وجهان لموضع واحد لا يُضربان) أو مرتبطان (بُعدان
+   * يجتمعان في سطر الراوي). تصحيح المحرر يسبق السياسة في محرك التراكيب، ويُوثق
+   * بعلاقة + Correction عند مخالفة اقتراح المحرك.
+   */
+  | 'DIFFERENCE_TO_DIFFERENCE';
 
 /** أثر العلاقة في العرض. */
 export type TashjeerLinkRelation =
@@ -647,6 +655,13 @@ export interface TashjeerLink {
   relation: TashjeerLinkRelation;
   from: LinkEndpoint;
   to: LinkEndpoint;
+  /**
+   * تصنيف العلاقة بين اختلافين عند kind = DIFFERENCE_TO_DIFFERENCE (حزمة
+   * 05/T2): متنافيان (MUTUALLY_EXCLUSIVE — وجهان لموضع واحد لا يُضربان) أو
+   * مرتبطان (RELATED — بُعدان مستقلان يجتمعان في سطر الراوي). تصحيح يدوي
+   * يسبق سياسة المحرك، ويُصدَّر إلى علاقة v8 بالنوع نفسه.
+   */
+  differenceRelation?: 'MUTUALLY_EXCLUSIVE' | 'RELATED';
   notes?: string;
   origin: EditOrigin;
   createdAt: string;
@@ -687,6 +702,7 @@ export type DocumentEditTargetType =
   | 'RULE'
   | 'FACE_LINK'
   | 'LINE_LINK'
+  | 'DIFFERENCE_LINK'
   | 'SEGMENT'
   | 'LINE_ORDER'
   | 'DOCUMENT';

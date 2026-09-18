@@ -155,6 +155,21 @@ export function applyManualLinks(
   }
 
   for (const link of referenceLinks) {
+    // علاقة اختلافين اليدوية (حزمة 05/T2): أثرها الحاسم في محرك التراكيب
+    // (تنافٍ/ارتباط قبل توليد الأسطر) لا في دمجها هنا؛ لذا تُوسم أسطر الطرفين
+    // فتُعدّ مفعّلة متى ظهر أحد الاختلافين في العرض.
+    if (link.kind === 'DIFFERENCE_TO_DIFFERENCE') {
+      const owners = [
+        ...linesForRuleTarget(current, link.from.id),
+        ...linesForRuleTarget(current, link.to.id),
+      ];
+      if (owners.length === 0) continue;
+      for (const owner of owners) {
+        owner.linkIds = [...(owner.linkIds ?? []), link.id];
+      }
+      appliedReferenceIds.push(link.id);
+      continue;
+    }
     const owners = linesForEndpoint(current, link.from).concat(linesForEndpoint(current, link.to));
     if (owners.length === 0) continue;
     for (const owner of owners) {

@@ -16,6 +16,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 import { getSurah, getWordById } from '@/data/quran';
 import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
+import { useEngineConfig } from '@/hooks/useEngineConfig';
 import {
   buildSelectionBreadcrumb,
   describeSelection,
@@ -28,6 +29,17 @@ import { getCategoryColor } from '@/lib/tashjeer/color-system';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 import { coalesceLineOrder, orderSnapshotOf } from '@/lib/tashjeer/manual-links';
 import { listGlobalRules } from '@/lib/storage/global-rules-store';
+import {
+  differencesCoveringPosition,
+  differenceSourceOf,
+  occurrenceIndexOf,
+} from '@/lib/tashjeer/difference-occurrences';
+import {
+  manualDifferenceRelationsOf,
+  manualRelationByPair,
+  resolveLocusRelation,
+  type LocusRelationStatus,
+} from '@/lib/tashjeer/decision/editor-bridge';
 import type { ClassicTashjeer } from '@/lib/tashjeer/classic-tashjeer';
 import type { EditorSelection, TashjeerLink } from '@/types/tashjeer';
 
@@ -113,10 +125,57 @@ export function SelectionDetailsPanel({ classic, onRequestWhy }: SelectionDetail
 
   const coveredDifferences = useMemo(() => {
     if (!active || typeof active.position !== 'number') return [];
-    return effectiveVariants.filter(
-      (item) => active.position! >= item.startPosition && active.position! <= item.endPosition
-    );
+    return differencesCoveringPosition(effectiveVariants, active.position);
   }, [active, effectiveVariants]);
+
+  /**
+   * حالة كل اختلاف في الموضع تجاه بقية اختلافاته (حزمة 05/T3): القرار من
+   * Resolver حصرا (P-07) — متنافٍ مع أيٍّ منها ← «متنافٍ»، وإلا مرتبط مع
+   * أيٍّ منها ← «مرتبط»، وإلا «مستقل». العلاقة اليدوية الموثقة تسبق السياسة.
+   */
+  const engineConfig = useEngineConfig();
+  const lastDifferenceRelationDecision = useEditorStore(
+    (state) => state.lastDifferenceRelationDecision
+  );
+  const locusStatuses = useMemo(() => {
+    const manuals = manualDifferenceRelationsOf(document?.links ?? []);
+    const manualByPair = manualRelationByPair(manuals);
+    const pairKey = (a: string, b: string) => [a, b].sort().join('|');
+    const statusOf = (item: (typeof coveredDifferences)[number]): {
+      status: LocusRelationStatus;
+      manual: boolean;
+    } => {
+      const others = coveredDifferences.filter((other) => other.id !== item.id);
+      let related = false;
+      let manual = false;
+      for (const other of others) {
+        const decision = resolveLocusRelation(
+          item,
+          other,
+          engineConfig,
+          manualByPair.get(pairKey(item.id, other.id))
+        ).decision;
+        if (decision.status === 'EXCLUSIVE') return { status: 'EXCLUSIVE', manual: decision.manual };
+        if (decision.status === 'RELATED') related = true;
+        if (decision.manual) manual = true;
+      }
+      return { status: related ? 'RELATED' : 'INDEPENDENT', manual };
+    };
+    const byId = new Map<string, { status: LocusRelationStatus; manual: boolean }>();
+    for (const item of coveredDifferences) byId.set(item.id, statusOf(item));
+    return byId;
+  }, [coveredDifferences, document, engineConfig]);
+
+  /** العلاقة اليدوية القائمة بين كل صف واختلاف الموضع المحدد (لعرض الحالة). */
+  const manualWithSelected = useMemo(() => {
+    if (!variant || coveredDifferences.length < 2) return new Map<string, 'MUTUALLY_EXCLUSIVE' | 'RELATED'>();
+    const map = new Map<string, 'MUTUALLY_EXCLUSIVE' | 'RELATED'>();
+    for (const relation of manualDifferenceRelationsOf(document?.links ?? [])) {
+      if (relation.fromId === variant.id) map.set(relation.toId, relation.relation);
+      else if (relation.toId === variant.id) map.set(relation.fromId, relation.relation);
+    }
+    return map;
+  }, [variant, coveredDifferences.length, document]);
 
   const lineOrderRank = useMemo(() => {
     if (!active?.lineId || !classic) return undefined;
@@ -225,22 +284,120 @@ export function SelectionDetailsPanel({ classic, onRequestWhy }: SelectionDetail
         {variant && <Detail label="حالة التصحيح" value={statusLabel(variant.status)} />}
       </dl>
 
-      {/* الاختلافات الواقعة في هذا الموضع */}
+      {/* اختلافات الموضع كاملة (حزمة 05/T3): مرتبة بالمصدر ثم الرتبة ثم الفهرس،
+          بشارات النوع/المصدر/الحالة/الفهرس، وكل صف قابل للتحديد المستقل. */}
       {coveredDifferences.length > 0 && (
-        <DetailList title={`اختلافات في الموضع (${toArabicDigits(coveredDifferences.length)})`}>
-          {coveredDifferences.slice(0, 6).map((item) => (
-            <li key={item.id}>
-              <button
-                type="button"
-                onClick={() => useEditorStore.getState().selectVariant(item.id)}
-                className="selection-row-focus w-full truncate rounded px-1.5 py-0.5 text-right text-[11px] text-stone-700 hover:bg-white"
-                title="انتقل إلى هذا الاختلاف"
-              >
-                {item.title}
-              </button>
-            </li>
-          ))}
+        <DetailList title={`اختلافات الموضع (${toArabicDigits(coveredDifferences.length)})`}>
+          {coveredDifferences.map((item) => {
+            const status = locusStatuses.get(item.id);
+            const occurrence = occurrenceIndexOf(item, effectiveVariants);
+            const source = differenceSourceOf(item);
+            const manualRelation = manualWithSelected.get(item.id);
+            return (
+              <li key={item.id} className="rounded px-1 py-1 hover:bg-white/70">
+                <div className="flex flex-wrap items-center gap-1">
+                  <span className="rounded bg-stone-800 px-1 py-0.5 text-[9.5px] font-medium text-white">
+                    اختلاف {toArabicDigits(occurrence)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => useEditorStore.getState().selectVariant(item.id)}
+                    className={`selection-row-focus min-w-0 flex-1 truncate rounded px-1.5 py-0.5 text-right text-[11px] hover:bg-white ${
+                      item.id === variant?.id ? 'bg-emerald-50 font-medium text-emerald-900' : 'text-stone-700'
+                    }`}
+                    title="انتقل إلى هذا الاختلاف واعرض تفاصيله كاملة"
+                  >
+                    {item.title}
+                  </button>
+                  <span
+                    className="shrink-0 rounded px-1 py-0.5 text-[9px] text-white"
+                    style={{ backgroundColor: getCategoryColor(item.category) }}
+                    title={`النوع: ${CATEGORY_LABELS[item.category] ?? item.category}`}
+                  >
+                    {CATEGORY_LABELS[item.category] ?? item.category}
+                  </span>
+                  <span
+                    className={`shrink-0 rounded px-1 py-0.5 text-[9px] ${
+                      source === 'engine' ? 'bg-sky-100 text-sky-800' : 'bg-amber-100 text-amber-800'
+                    }`}
+                    title={source === 'engine' ? 'المصدر: المحرك' : 'المصدر: المحرر'}
+                  >
+                    {source === 'engine' ? 'محرك' : 'محرر'}
+                  </span>
+                  {status && coveredDifferences.length > 1 && (
+                    <span
+                      className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-medium ${
+                        status.status === 'EXCLUSIVE'
+                          ? 'bg-rose-100 text-rose-800'
+                          : status.status === 'RELATED'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-stone-100 text-stone-600'
+                      }`}
+                      title={`الحالة تجاه بقية اختلافات الموضع (${status.manual ? 'بعلاقة يدوية موثقة' : 'بسياسة المحرك'}): ${
+                        status.status === 'EXCLUSIVE' ? 'متنافٍ — لا يُضرب معها' : status.status === 'RELATED' ? 'مرتبط — يجتمع معها في السطر' : 'مستقل — يُطبق معها'
+                      }`}
+                    >
+                      {status.status === 'EXCLUSIVE' ? 'متنافٍ' : status.status === 'RELATED' ? 'مرتبط' : 'مستقل'}
+                      {status.manual ? ' ·يدوي' : ''}
+                    </span>
+                  )}
+                </div>
+                {/* تصحيح يدوي موثق لعلاقة هذا الصف مع المحدد (حزمة 05/T2):
+                    المحرك يقترح والمحرر يقرر، بCorrection عند مخالفة السياسة. */}
+                {variant && variant.id !== item.id && (
+                  <div className="mt-0.5 flex items-center gap-1 text-[9.5px] text-stone-500">
+                    <span>مع المحدد:</span>
+                    {(['MUTUALLY_EXCLUSIVE', 'RELATED'] as const).map((relation) => (
+                      <button
+                        key={relation}
+                        type="button"
+                        onClick={() =>
+                          void useEditorStore.getState().setDifferenceRelation({
+                            fromId: variant.id,
+                            toId: item.id,
+                            relation,
+                          })
+                        }
+                        className={`rounded border px-1 py-0.5 transition-colors ${
+                          manualRelation === relation
+                            ? 'border-emerald-600 bg-emerald-600 text-white'
+                            : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+                        }`}
+                        title={
+                          relation === 'MUTUALLY_EXCLUSIVE'
+                            ? 'سجّلهما متنافيين: وجهان لموضع واحد لا يُضربان في التركيب'
+                            : 'سجّلهما مرتبطين: بُعدان يُطبقان معًا في سطر الراوي'
+                        }
+                      >
+                        {relation === 'MUTUALLY_EXCLUSIVE' ? 'متنافيان' : 'مرتبطان'}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </DetailList>
+      )}
+
+      {/* آخر قرار علاقة اختلافين (اقتراح المحرك وقرار المحرر) */}
+      {lastDifferenceRelationDecision && (
+        <p
+          role="status"
+          className={`mt-2 rounded px-2 py-1 text-[10px] leading-relaxed ${
+            lastDifferenceRelationDecision.allowed
+              ? lastDifferenceRelationDecision.overridesPolicy
+                ? 'bg-amber-50 text-amber-900'
+                : 'bg-emerald-50 text-emerald-800'
+              : 'bg-red-50 text-red-800'
+          }`}
+        >
+          {lastDifferenceRelationDecision.allowed
+            ? lastDifferenceRelationDecision.overridesPolicy
+              ? 'علاقة يدوية موثقة تخالف سياسة المحرك — حُفظت مع Correction، وتسبق السياسة في محرك التراكيب.'
+              : 'علاقة يدوية موثقة — تسبق السياسة عند العرض.'
+            : lastDifferenceRelationDecision.reason}
+        </p>
       )}
 
       {/* القواعد المرتبطة */}
@@ -359,6 +516,7 @@ function linkKindLabel(kind: TashjeerLink['kind']): string {
     SEGMENT_TO_LINE: 'جزء بسطر',
     SEGMENT_TO_RULE: 'جزء بقاعدة',
     DIFFERENCE_TO_LINE: 'اختلاف ملحق بسطر',
+    DIFFERENCE_TO_DIFFERENCE: 'علاقة اختلافين',
   };
   return labels[kind];
 }

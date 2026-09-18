@@ -39,7 +39,7 @@ import { allNarratorIds, resolveScope } from './scope';
 import { pathsOfNarrator, type ReadingUnit } from './reader-symbols';
 import { narratorTayyibahOrder } from './symbols';
 import type { EngineConfig } from './model/v8';
-import { resolveExclusiveGroups } from './decision/editor-bridge';
+import { resolveExclusiveGroups, type ManualDifferenceRelation } from './decision/editor-bridge';
 
 /** اختيار وجه في موضع من مواضع الآية. */
 export interface CombinationPick {
@@ -77,6 +77,12 @@ export interface CombinationOptions {
    * النظام الافتراضية.
    */
   engineConfig?: EngineConfig;
+  /**
+   * علاقات يدوية موثقة بين اختلافين (حزمة 05/T2 — تصحيح المحرر): «متنافيان»
+   * يجعل وجهين لموضع واحد لا يُضربان ولو خالفا السياسة، و«مرتبطان» يضربهما
+   * معًا ولو كانت السياسة تنافيهما. تمر عبر الـ Resolver نفسه (P-07).
+   */
+  manualRelations?: ManualDifferenceRelation[];
 }
 
 const DEFAULT_MAX_PER_UNIT = 48;
@@ -98,8 +104,13 @@ export function buildReadingCombinations(
 
   const orderedVariants = orderVariantsForReading(variants, plan);
   const units = buildReadingUnits(orderedVariants, catalog);
-  // مجموعات التنافي تُحسم مرة واحدة لكل الوحدات من Decision Resolver.
-  const exclusiveGroups = resolveExclusiveGroups(orderedVariants, options.engineConfig).groups;
+  // مجموعات التنافي تُحسم مرة واحدة لكل الوحدات من Decision Resolver،
+  // والعلاقات اليدوية الموثقة تسبق السياسة (تصحيح المحرر — حزمة 05/T2).
+  const exclusiveGroups = resolveExclusiveGroups(
+    orderedVariants,
+    options.engineConfig,
+    options.manualRelations ?? []
+  ).groups;
 
   interface Draft {
     picks: CombinationPick[];

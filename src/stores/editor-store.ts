@@ -48,8 +48,9 @@ import {
 } from '@/types/tashjeer';
 import { parseAyahKey } from '@/data/quran';
 import type { SmartCreateResult } from '@/lib/tashjeer/smart-create';
-import { relationTypeToLinkRelation } from '@/lib/tashjeer/model/v8';
-import { resolveLinkPolicy, type LinkPolicyDecision } from '@/lib/tashjeer/decision/editor-bridge';
+import { createEntityId, relationTypeToLinkRelation } from '@/lib/tashjeer/model/v8';
+import { resolveLinkPolicy, resolveLocusRelation, type LinkPolicyDecision } from '@/lib/tashjeer/decision/editor-bridge';
+import { multiDifferenceNotice } from '@/lib/tashjeer/difference-occurrences';
 import { loadEngineConfig } from '@/lib/tashjeer/engine-config-store';
 import type { DecisionTraceStep } from '@/lib/tashjeer/decision/resolver';
 import { documentWindowWords } from '@/lib/tashjeer/reading-window';
@@ -244,6 +245,26 @@ export interface LinkDecisionNotice extends LinkPolicyDecision {
 }
 
 /**
+ * قرار علاقة اختلافين (حزمة 05/T2): اقتراح المحرك (السياسة) وقرار المحرر
+ * (متنافيان/مرتبطان) وحالهما، مع معرّف الرابط والتصحيح إن خُلفت السياسة.
+ */
+export interface DifferenceRelationNotice {
+  allowed: boolean;
+  relation: 'MUTUALLY_EXCLUSIVE' | 'RELATED';
+  /** ما كانت السياسة ستقرره (A) — للحفظ في Correction والتتبع. */
+  policyStatus: 'EXCLUSIVE' | 'RELATED' | 'INDEPENDENT';
+  /** هل خالف قرار المحرر اقتراح المحرك فيُنشأ Correction موثق؟ */
+  overridesPolicy: boolean;
+  reason: string;
+  warning?: string;
+  trace: DecisionTraceStep[];
+  appliedRuleNames: string[];
+  linkId?: string;
+  correctionId?: string;
+  at: string;
+}
+
+/**
  * لقطة تراجع موحدة (FR-ED-10): المستند مع الاستثناءات والقواعد العامة
  * معًا، فالتراجع عن تحرير موضعي يعيد القيم الثلاث دفعة واحدة ولا يترك
  * أثرًا معلقًا في مخزن دون آخر.
@@ -417,8 +438,31 @@ interface EditorState {
     to: LinkEndpoint;
     notes?: string;
   }) => LinkDecisionNotice;
-  updateLink: (linkId: string, patch: Partial<Pick<TashjeerLink, 'relation' | 'notes' | 'from' | 'to'>>) => void;
+  updateLink: (linkId: string, patch: Partial<Pick<TashjeerLink, 'relation' | 'notes' | 'from' | 'to' | 'differenceRelation'>>) => void;
   deleteLink: (linkId: string) => void;
+  /**
+   * يثبّت علاقة يدوية موثقة بين اختلافين (حزمة 05/T2 — تصحيح قرار التنافي):
+   * «متنافيان» (وجهان لموضع واحد لا يُضربان) أو «مرتبطان» (بُعدان يجتمعان في
+   * سطر الراوي). المحرك يقترح عبر السياسات (A)، والمحرر يقرر (B)؛ فإن خالف
+   * اقتراح المحرك سُجِّلت Correction محفوظة (Engine/Editor/Final — DM-05).
+   * العلاقة تسبق السياسة في محرك التراكيب عبر Resolver حصرا (P-07).
+   */
+  setDifferenceRelation: (input: {
+    fromId: string;
+    toId: string;
+    relation: 'MUTUALLY_EXCLUSIVE' | 'RELATED';
+    reason?: string;
+  }) => Promise<DifferenceRelationNotice>;
+  /** آخر قرار علاقة اختلافين (يعرض في لوحة التفاصيل مع أثره). */
+  lastDifferenceRelationDecision: DifferenceRelationNotice | null;
+  clearDifferenceRelationDecision: () => void;
+  /**
+   * رسالة حالة تعدد الاختلافات لموضع واحد (حزمة 05 — معيار القبول ٢):
+   * «اختلافان لموضع واحد» عند إضافة ثانٍ لنفس القارئ والكلمة؛ إعلام بأن
+   * الإضافة استقلت ولم تغيّر السابق. تُعرض في لوحة الاختلافات.
+   */
+  multiDifferenceNotice: string | null;
+  clearMultiDifferenceNotice: () => void;
   /** ينشئ جزءا من سطر: مدى كلمات/حروف له روابطه وقواعده الخاصة. */
   addSegment: (segment: {
     title: string;
@@ -697,6 +741,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   lastLinkDecision: null,
   pendingWhy: null,
   smartWizardRequest: 0,
+  lastDifferenceRelationDecision: null,
+  multiDifferenceNotice: null,
   currentTool: 'select',
   draftCategory: 'FARSH',
 
@@ -778,6 +824,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   // ==================== الاختلافات ====================
 
   addVariant: (variant) => {
+    // رسالة تعدد الاختلافات (حزمة 05 — معيار القبول ٢): إن كان في الموضع
+    // نفسه ولنطاق القرّاء نفسه اختلاف قائم فالإضافة ثانٍ مستقل لا استبدال.
+    const before = get().document;
+    const notice = before
+      ? multiDifferenceNotice(before.variants, [
+          { ...variant, ayahKey: before.ayahKey, origin: 'EDITOR' as const },
+        ])
+      : null;
     mutate(
       set,
       get,
@@ -796,11 +850,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         summary: `أضاف المحرر اختلاف «${variant.title}» (${variant.startPosition}–${variant.endPosition})`,
       }
     );
-    set({ markedPositions: [], markedCharacters: [] });
+    set({ markedPositions: [], markedCharacters: [], multiDifferenceNotice: notice });
   },
 
   addVariantGroup: (variants) => {
     if (variants.length === 0) return;
+    const before = get().document;
+    const notice = before
+      ? multiDifferenceNotice(
+          before.variants,
+          variants.map((variant) => ({ ...variant, ayahKey: before.ayahKey, origin: 'EDITOR' as const }))
+        )
+      : null;
     mutate(
       set,
       get,
@@ -822,12 +883,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         summary: `أنشأ المحرر ${variants.length} اختلافات مستقلة في عملية واحدة`,
       }
     );
-    set({ markedPositions: [], markedCharacters: [] });
+    set({ markedPositions: [], markedCharacters: [], multiDifferenceNotice: notice });
   },
 
   applySmartCreateBatch: (result) => {
     if (result.differences.length === 0 || !get().document) return;
 
+    // رسالة تعدد الاختلافات (حزمة 05 — معيار القبول ٢): تُحسب على المستند
+    // قبل الإضافة داخل المعاملة نفسها، فتظهر متى صنع الإنشاء موضعًا متعددًا.
+    let notice: string | null = null;
     mutate(set, get, (document) => {
       const variants: Variant[] = result.differences.map((difference) => {
         const hasCharacters = Boolean(
@@ -904,6 +968,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         });
       }
 
+      notice = multiDifferenceNotice(document.variants, variants);
       return withLoggedEdit(
         {
           ...document,
@@ -920,7 +985,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         document
       );
     });
-    set({ markedPositions: [], markedCharacters: [] });
+    set({ markedPositions: [], markedCharacters: [], multiDifferenceNotice: notice });
   },
 
   updateVariant: (variantId, patch) => {
@@ -1541,6 +1606,164 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       );
     });
   },
+
+  // ==================== علاقات الاختلافات (تعدد الموضع الواحد — حزمة 05) ====================
+
+  setDifferenceRelation: async ({ fromId, toId, relation, reason }) => {
+    const rejected = (why: string): DifferenceRelationNotice => ({
+      allowed: false,
+      relation,
+      policyStatus: 'INDEPENDENT',
+      overridesPolicy: false,
+      reason: why,
+      trace: [],
+      appliedRuleNames: [],
+      at: new Date().toISOString(),
+    });
+    const document = get().document;
+    if (!document) return rejected('لا مستند مفتوح.');
+    const first = document.variants.find((variant) => variant.id === fromId);
+    const second = document.variants.find((variant) => variant.id === toId);
+    if (!first || !second) return rejected('الاختلافان غير موجودين في هذه الآية.');
+    if (first.id === second.id) return rejected('اختر اختلافين مختلفين للموضع نفسه.');
+
+    // اقتراح المحرك (A) عبر Resolver حصرا (P-07): لا قرار خاص هنا.
+    const profile = loadEngineConfig();
+    const proposal = resolveLocusRelation(first, second, profile);
+    const policyStatus = proposal.decision.status;
+    const manualExclusive = relation === 'MUTUALLY_EXCLUSIVE';
+    const overridesPolicy = (policyStatus === 'EXCLUSIVE') !== manualExclusive;
+    const statusLabel =
+      policyStatus === 'EXCLUSIVE' ? 'متنافيين (لا يُضربان)' : policyStatus === 'RELATED' ? 'مرتبطين (يجتمعان في سطر)' : 'مستقلين (يُطبقان معًا)';
+
+    const accepted = await confirmAction({
+      title: overridesPolicy
+        ? 'تسجيل علاقة يدوية تخالف سياسة المحرك؟'
+        : 'تسجيل علاقة يدوية بين اختلافين؟',
+      message: toArabicDigits(
+        `«${first.title}» و«${second.title}» في الموضع نفسه. سياسة المحرك تراهما ${statusLabel}.` +
+          (overridesPolicy
+            ? ` قرارك اليدوي (${manualExclusive ? 'متنافيان' : 'مرتبطان'}) يخالفها فيُحفظ مع Correction موثقة، ويسبق السياسة في محرك التراكيب.`
+            : ' قرارك اليدوي يوثَّق كعلاقة صريحة تسبق السياسة عند العرض.')
+      ),
+      impacts: [
+        { label: 'اختلافات', count: 2 },
+        {
+          label: 'أوجه الطرفين',
+          count:
+            first.alternatives.filter((alt) => !alt.isBase).length +
+            second.alternatives.filter((alt) => !alt.isBase).length,
+        },
+        ...(overridesPolicy ? [{ label: 'تصحيح موثق (Correction)', count: 1 }] : []),
+      ],
+      undoable: true,
+      confirmLabel: overridesPolicy ? 'تجاوز بقرار يدوي موثق' : 'تأكيد',
+      tone: 'default',
+    });
+    if (!accepted) return rejected('أُلغي التسجيل؛ لم تتغير البيانات.');
+    if (get().document !== document) return rejected('تغيّر المستند أثناء التأكيد؛ أعد الطلب.');
+
+    const now = new Date().toISOString();
+    let linkId: string | undefined;
+    let correctionId: string | undefined;
+
+    mutate(set, get, (current) => {
+      // علاقة قائمة بين الاختلافين نفسهما تُحدَّث ولا تتكرر (قرار واحد لكل زوج).
+      const existing = (current.links ?? []).find(
+        (link) =>
+          link.kind === 'DIFFERENCE_TO_DIFFERENCE' &&
+          [link.from.id, link.to.id].includes(fromId) &&
+          [link.from.id, link.to.id].includes(toId)
+      );
+      if (existing) {
+        linkId = existing.id;
+      } else {
+        linkId = `rel-${current.ayahKey}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      }
+      const link: TashjeerLink = {
+        id: linkId,
+        ayahKey: current.ayahKey,
+        kind: 'DIFFERENCE_TO_DIFFERENCE',
+        // ربط مرجعي: أثرها في محرك التراكيب عبر Resolver لا عبر دمج الأسطر.
+        relation: 'REFERENCE',
+        differenceRelation: relation,
+        from: { type: 'RULE', id: fromId },
+        to: { type: 'RULE', id: toId },
+        notes: reason?.trim() || undefined,
+        origin: 'EDITOR',
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      };
+
+      // التصحيح الموثق (DM-05): المحرك اقترح A، والمحرر قرر B، والنهائي = B.
+      let corrections = current.corrections ?? [];
+      if (overridesPolicy) {
+        correctionId = createEntityId('corr');
+        corrections = [
+          ...corrections,
+          {
+            id: correctionId,
+            targetId: fromId,
+            engineResult: {
+              status: policyStatus,
+              reason: proposal.decision.reason,
+              trace: proposal.trace,
+            },
+            editorResult: { relation, reason: reason ?? null },
+            finalResult: { relation, reason: reason ?? null },
+            reason: reason?.trim() || 'تصحيح يدوي لعلاقة تنافي اختلافين في موضع واحد',
+            at: now,
+            source: 'editor' as const,
+          },
+        ];
+      }
+
+      return withLoggedEdit(
+        {
+          ...current,
+          links: [
+            ...(current.links ?? []).filter((item) => item.id !== linkId),
+            link,
+          ],
+          corrections,
+        },
+        {
+          action: 'تسجيل علاقة اختلافين',
+          targetType: 'DIFFERENCE_LINK',
+          targetId: linkId,
+          summary: `${manualExclusive ? 'متنافيان' : 'مرتبطان'}: «${first.title}» و«${second.title}»` +
+            (overridesPolicy ? ' (تصحيح يدوي يخالف سياسة المحرك)' : ''),
+          changes: [
+            { field: 'differenceRelation', before: existing?.differenceRelation, after: relation },
+            { field: 'policyStatus', after: policyStatus },
+          ],
+        },
+        current
+      );
+    });
+
+    const notice: DifferenceRelationNotice = {
+      allowed: true,
+      relation,
+      policyStatus,
+      overridesPolicy,
+      reason: overridesPolicy
+        ? 'سُجّل التصحيح اليدوي مع Correction موثقة؛ يسبق سياسة المحرك في محرك التراكيب.'
+        : 'سُجّلت العلاقة اليدوية؛ توثق العلاقة وتسبق السياسة عند العرض.',
+      warning: overridesPolicy ? `سياسة المحرك كانت تراهما ${statusLabel}` : undefined,
+      trace: proposal.trace,
+      appliedRuleNames: proposal.appliedRules.map((rule) => rule.name),
+      linkId,
+      correctionId,
+      at: now,
+    };
+    set({ lastDifferenceRelationDecision: notice });
+    return notice;
+  },
+
+  clearDifferenceRelationDecision: () => set({ lastDifferenceRelationDecision: null }),
+
+  clearMultiDifferenceNotice: () => set({ multiDifferenceNotice: null }),
 
   addSegment: ({ title, startPosition, endPosition, characterRange, notes }) => {
     const document = get().document;
@@ -2297,6 +2520,7 @@ function linkTargetTypeOf(
 ): import('@/types/tashjeer').DocumentEditTargetType {
   if (kind === 'FACE_TO_FACE') return 'FACE_LINK';
   if (kind === 'LINE_TO_LINE') return 'LINE_LINK';
+  if (kind === 'DIFFERENCE_TO_DIFFERENCE') return 'DIFFERENCE_LINK';
   return 'SEGMENT';
 }
 
