@@ -19,8 +19,51 @@ export function snapshotClipboard(document: TashjeerDocument, payload: Clipboard
   return structuredClone({ ...payload, mode: 'COPY', sourceAyahKey: document.ayahKey, links: document.links ?? [] });
 }
 
-/** Pure transaction: no deletion can happen before destination validation succeeds. */
-export function pasteClipboard(document: TashjeerDocument, clipboard: NonNullable<EditorClipboard>, targetId?: string): { document: TashjeerDocument; ids: string[]; error?: string } {
+/**
+ * مرساة سطر اللصق (FR-ED-06): مفتاح وجه داخل السطر الهدف يرسو عليه رابط
+ * DIFFERENCE_TO_LINE. يُفضَّل أول وجه غير مصحفي لأن الوجه المصحفي لا يُرسم
+ * (فلا تعثر عليه مطابقة الأطراف وتبقى العناصر في أسطرها الطبيعية).
+ * الوجه مفتاح مستقر عبر إعادة توليد الأسطر بخلاف معرّف السطر المرئي.
+ */
+export function pasteAnchorFace(document: TashjeerDocument, differenceId: string | null | undefined): string | null {
+  if (!differenceId) return null;
+  const difference = document.variants.find((item) => item.id === differenceId);
+  if (!difference) return null;
+  const rendered = difference.alternatives.find((face) => !face.isBase) ?? difference.alternatives[0];
+  return rendered ? `${difference.id}::${rendered.id}` : null;
+}
+
+/** وجهة اللصق داخل سطر: مرساة وجه من ذلك السطر (فرضًا من تحديد LINE الموحد). */
+export interface PasteLineAnchor {
+  faceKey: string;
+}
+
+/** يبني رابط إلحاق اختلاف بسطر مرساة، بمصدر المحرر وطوابع اللحظة. */
+function differenceToLineLink(document: TashjeerDocument, differenceId: string, anchor: PasteLineAnchor, mode: 'COPY' | 'CUT'): TashjeerLink {
+  const now = new Date().toISOString();
+  return {
+    id: createEntityId('link'),
+    ayahKey: document.ayahKey,
+    kind: 'DIFFERENCE_TO_LINE',
+    relation: 'MERGE',
+    from: { type: 'RULE', id: differenceId },
+    to: { type: 'FACE', id: anchor.faceKey },
+    notes: mode === 'CUT' ? 'نقل إلى سطر محدد عبر الحافظة (القص)' : 'إلحاق نسخة بسطر محدد عبر الحافظة (اللصق)',
+    origin: 'EDITOR',
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/**
+ * معاملة نقية: لا حذف قبل نجاح تحقق الوجهة.
+ *
+ * `pasteAnchor` يفعّل «اللصق داخل سطر هدف» (AC-04): الاختلافات تلحق بالسطر
+ * الذي يحمل وجه المرساة عبر رابط DIFFERENCE_TO_LINE بدل رميها في المستند —
+ * نسخة (COPY) تستنسخ بمعرّفات جديدة ثم تُرسى على السطر، ونقل (CUT) يرسو
+ * بالأصل بلا استنساخ فيختفي من سطره الطبيعي ومعرّفه محفوظ.
+ */
+export function pasteClipboard(document: TashjeerDocument, clipboard: NonNullable<EditorClipboard>, targetId?: string, pasteAnchor?: PasteLineAnchor): { document: TashjeerDocument; ids: string[]; error?: string } {
   const reject = (error: string) => ({ document, ids: [], error });
   const now = new Date().toISOString();
   const mapping = new Map<string, string>();
@@ -74,8 +117,22 @@ export function pasteClipboard(document: TashjeerDocument, clipboard: NonNullabl
     ids = faces.map((face) => face.id);
     next = { ...document, variants: document.variants.map((item) => item.id === target.id ? { ...item, alternatives: [...item.alternatives, ...faces], alternativeOrder: item.alternativeOrder ? [...item.alternativeOrder, ...ids] : undefined } : item) };
   } else {
-    // Legacy differences/segments have no independent line ownership. Never fake a move.
-    if (clipboard.mode === 'CUT') return reject('نقل الاختلاف/الجزء بين سطرين يحتاج ملكية أسطر مستقلة غير متاحة بعد؛ المصدر محفوظ. استخدم النسخ.');
+    if (clipboard.mode === 'CUT') {
+      // نقل الاختلافات إلى سطر هدف (AC-04: «القص ينقل ولا يكرر»): رابط
+      // إلحاق لكل مقصوص بمرساة السطر — نقل حقيقي بلا استنساخ، المعرّفات
+      // والعلاقات محفوظة، والاختفاء من السطر الطبيعي أثر عرضي للرابط.
+      if (clipboard.kind === 'SEGMENT') return reject('نقل الأجزاء بين الأسطر غير متاح بعد؛ المصدر محفوظ. استخدم النسخ.');
+      if (!pasteAnchor) return reject('حدد سطرًا في اللوحة أو لوحة الترتيب ثم ألصق لنقل المقصوص إليه؛ المصدر محفوظ.');
+      const sources = clipboard.kind === 'LINE' ? clipboard.value.variants : clipboard.kind === 'DIFFERENCES' ? clipboard.value : [clipboard.value];
+      const anchorDifferenceId = pasteAnchor.faceKey.split('::')[0];
+      if (sources.some((source) => source.id === anchorDifferenceId)) return reject('لا يمكن نقل اختلاف إلى سطر يُرسى على وجه منه هو نفسه.');
+      if (sources.some((source) => !document.variants.some((item) => item.id === source.id))) return reject('أحد المقصوصات لم يعد في المستند؛ أعد القص.');
+      if (sources.some((source) => JSON.stringify(document.variants.find((item) => item.id === source.id)) !== JSON.stringify(source))) return reject('تغيّر المصدر بعد القص؛ أعد تحديده وقصه.');
+      ids = sources.map((source) => source.id);
+      const anchorLinks = ids.map((id) => differenceToLineLink(document, id, pasteAnchor, 'CUT'));
+      next = { ...document, links: [...(document.links ?? []), ...anchorLinks] };
+      return { document: next, ids };
+    }
     if (clipboard.kind === 'SEGMENT') {
       const segment = { ...cloneEntity(clipboard.value), ayahKey: document.ayahKey, origin: 'EDITOR' as const };
       ids = [segment.id]; next = { ...document, segments: [...(document.segments ?? []), segment] };
@@ -93,5 +150,11 @@ export function pasteClipboard(document: TashjeerDocument, clipboard: NonNullabl
     if (from && to) links.push({ ...structuredClone(relation), id: createEntityId('link'), ayahKey: document.ayahKey, from: { ...relation.from, id: from }, to: { ...relation.to, id: to }, createdAt: now, updatedAt: now, origin: 'EDITOR' });
     else suspended.push({ id: createEntityId('dangling'), original: structuredClone(relation), mappedFrom: from, mappedTo: to, reason: 'طرف العلاقة خارج مجموعة النسخ؛ معلّقة للمراجعة ولم تُطبّق.', at: now });
   }
-  return { document: { ...next, links: [...(next.links ?? []), ...links], suspendedLinks: [...(document.suspendedLinks ?? []), ...suspended] }, ids };
+  // روابط الرسوّ البنائية تُضاف بعد حساب التعليق حتى لا تُعلَّق هي نفسها:
+  // طرفها الخارجي (مرساة السطر) مقصود بالتصميم لا علاقة منسوخة.
+  const anchorLinks =
+    pasteAnchor && (clipboard.kind === 'DIFFERENCE' || clipboard.kind === 'DIFFERENCES' || clipboard.kind === 'LINE')
+      ? ids.map((id) => differenceToLineLink(document, id, pasteAnchor, 'COPY'))
+      : [];
+  return { document: { ...next, links: [...(next.links ?? []), ...links, ...anchorLinks], suspendedLinks: [...(document.suspendedLinks ?? []), ...suspended] }, ids };
 }

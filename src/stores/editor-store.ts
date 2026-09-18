@@ -17,7 +17,7 @@
 import { create } from 'zustand';
 import { mergeLines, unmergeLines } from '@/lib/tashjeer/merge-operations';
 import { resolveLineMerge } from '@/lib/tashjeer/decision/line-merge';
-import { snapshotClipboard, pasteClipboard, clipboardCount, type EditorClipboard } from '@/lib/tashjeer/clipboard';
+import { snapshotClipboard, pasteClipboard, clipboardCount, pasteAnchorFace, type EditorClipboard, type PasteLineAnchor } from '@/lib/tashjeer/clipboard';
 export type { EditorClipboard } from '@/lib/tashjeer/clipboard';
 import { confirmAction } from '@/lib/ui/confirm-store';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
@@ -125,6 +125,20 @@ const INITIAL_SELECTION_FOCUS: SelectionFocus = { token: 0, center: false, at: 0
  * الكتابة المركزية للتحديد — «قرار واحد في مكان واحد». كل إجراءات
  * select* تعود إليها، فلا لوحة تحتفظ بتحديد محلي مناقض ولا منطق مكرر.
  */
+/**
+ * مرساة «اللصق داخل سطر» من التحديد الموحد (AC-04): فقط حين يكون المحدد
+ * سطرًا باختلاف مرسى صالح. تعيد undefined في بقية الحالات فيبقى اللصق
+ * بسلوكه العام (وجهة الاختلاف للأوجه، أو وجهة المستند للاختلافات).
+ */
+function linePasteAnchorOf(
+  document: TashjeerDocument,
+  selection: EditorSelection | null
+): PasteLineAnchor | undefined {
+  if (selection?.kind !== 'LINE' || !selection.differenceId) return undefined;
+  const faceKey = pasteAnchorFace(document, selection.differenceId);
+  return faceKey ? { faceKey } : undefined;
+}
+
 function selectionWrite(
   state: Pick<EditorState, 'selection' | 'selectionFocus'>,
   selection: EditorSelection | null,
@@ -1737,6 +1751,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     } else if (selection.kind === 'SEGMENT') {
       const value = doc.segments?.find((item) => item.id === selection.id);
       if (value) set({ clipboard: snapshotClipboard(doc, { kind: 'SEGMENT', value }), clipboardNotice: 'نُسخ الجزء.' });
+    } else if (selection.kind === 'LINE' && selection.differenceId) {
+      // تحديد سطر بلا تحديد متعدد: يُنسخ اختلاف المرساة فيه (الذي نقره
+      // المستخدم)، ونسخ السطر كاملًا بكل اختلافاته من زر لوحة الخصائص.
+      const value = doc.variants.find((item) => item.id === selection.differenceId);
+      if (value) set({ clipboard: snapshotClipboard(doc, { kind: 'DIFFERENCE', value }), clipboardNotice: 'نُسخ اختلاف السطر المحدد. لنسخ السطر كاملًا استعمل «نسخ السطر» في لوحة الخصائص.' });
     } else {
       set({ clipboard: null, clipboardNotice: 'النسخ بهذا المستوى غير متاح بعد؛ حُفظت البيانات دون تغيير.' });
     }
@@ -1752,7 +1771,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const doc = get().document;
     if (!doc) return;
     const variants = doc.variants.filter((item) => variantIds.includes(item.id));
-    if (variants.length) set({ clipboard: snapshotClipboard(doc, { kind: 'LINE', value: { lineId, label, variants } }), clipboardNotice: 'نُسخت اختلافات السطر؛ لا تُنشأ ملكية سطر مستقلة في نموذج التوافق.' });
+    if (variants.length) set({ clipboard: snapshotClipboard(doc, { kind: 'LINE', value: { lineId, label, variants } }), clipboardNotice: 'نُسخت اختلافات السطر. حدد سطرًا آخر ثم الصق لإلحاق النسخة به، أو الصق بلا تحديد سطر لإضافتها للمستند.' });
   },
   cutSelection: () => {
     get().copySelection();
@@ -1763,14 +1782,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { document, clipboard, selection, selectedVariantId } = get();
     if (!document || !clipboard) return;
     const target = document.variants.find((item) => item.id === selectedVariantId);
-    const preview = pasteClipboard(document, clipboard, selectedVariantId ?? undefined);
+    // سطر الهدف من التحديد الموحد (AC-04): تحديد LINE باختلاف مرسى يفعّل
+    // اللصق الجزئي داخل ذلك السطر عبر رابط DIFFERENCE_TO_LINE لا رميًا عامًا.
+    const lineAnchor = linePasteAnchorOf(document, selection);
+    const preview = pasteClipboard(document, clipboard, selectedVariantId ?? undefined, lineAnchor);
     if (preview.error) { set({ clipboardNotice: preview.error }); return; }
-    if (selection?.kind === 'LINE' && clipboard.kind !== 'FACE' && clipboard.kind !== 'FACES') {
-      set({ clipboardNotice: 'اللصق الجزئي داخل سطر يحتاج ملكية أسطر مستقلة غير متاحة بعد. حدد اختلافًا للصق الأوجه أو وجهة المستند لنسخ الاختلافات.' }); return;
-    }
     const accepted = await confirmAction({
       title: clipboard.mode === 'CUT' ? 'تأكيد نقل العناصر المقصوصة؟' : 'تأكيد لصق نسخة مستقلة؟',
-      message: target && (clipboard.kind === 'FACE' || clipboard.kind === 'FACES') ? `في نهاية أوجه «${target.title}».` : 'إضافة الاختلافات/الأجزاء إلى المستند الحالي، دون تغيير بقية عناصره.',
+      message: target && (clipboard.kind === 'FACE' || clipboard.kind === 'FACES')
+        ? `في نهاية أوجه «${target.title}».`
+        : lineAnchor && selection?.kind === 'LINE' && selection.differenceId
+          ? `في سطر اختلاف «${document.variants.find((item) => item.id === selection.differenceId)?.title ?? 'السطر المحدد'}» — تظهر العناصر في نهاية أحكامه ولا يتغيّر شيء آخر فيه${clipboard.mode === 'CUT' ? ' (نقل بلا نسخ؛ المعرّفات محفوظة)' : ''}.`
+          : 'إضافة الاختلافات/الأجزاء إلى المستند الحالي، دون تغيير بقية عناصره.',
       impacts: [{ label: 'عناصر', count: clipboardCount(clipboard) }, { label: 'علاقات ستُعلّق للمراجعة', count: (preview.document.suspendedLinks?.length ?? 0) - (document.suspendedLinks?.length ?? 0) }], undoable: true, confirmLabel: 'تأكيد', tone: 'default',
     });
     if (!accepted) return;
@@ -1778,16 +1801,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     get().pasteSelection();
   },
   pasteSelection: () => {
-    const { document, clipboard, selectedVariantId } = get();
+    const { document, clipboard, selection, selectedVariantId } = get();
     if (!document || !clipboard) return;
-    const result = pasteClipboard(document, clipboard, selectedVariantId ?? undefined);
+    const lineAnchor = linePasteAnchorOf(document, selection);
+    const result = pasteClipboard(document, clipboard, selectedVariantId ?? undefined, lineAnchor);
     if (result.error) { set({ clipboardNotice: result.error }); return; }
     mutate(set, get, () => result.document, {
       action: clipboard.mode === 'CUT' ? 'نقل من الحافظة' : 'لصق من الحافظة', targetType: 'DOCUMENT', targetId: result.ids.join(','),
-      summary: `${clipboard.mode === 'CUT' ? 'نقل' : 'لصق'} ${toArabicDigits(result.ids.length)} عناصر من الحافظة`,
+      summary: `${clipboard.mode === 'CUT' ? 'نقل' : 'لصق'} ${toArabicDigits(result.ids.length)} عناصر من الحافظة${lineAnchor ? ' داخل السطر المحدد' : ''}`,
       changes: [{ field: 'clipboard', before: { variants: document.variants, links: document.links, segments: document.segments }, after: { variants: result.document.variants, links: result.document.links, segments: result.document.segments } }],
     });
-    set({ multiSelection: null, clipboard: clipboard.mode === 'CUT' ? null : clipboard, clipboardNotice: 'تم اللصق. العلاقات الخارجية معلّقة للمراجعة عند وجودها؛ يمكن التراجع.' });
+    const doneNotice = lineAnchor
+      ? clipboard.mode === 'CUT'
+        ? 'نُقلت العناصر إلى السطر المحدد بلا نسخ — معرّفاتها محفوظة وعلاقاتها قائمة؛ يمكن التراجع.'
+        : 'لُصقت النسخة في نهاية أحكام السطر المحدد بمعرّفات مستقلة؛ يمكن التراجع.'
+      : 'تم اللصق. العلاقات الخارجية معلّقة للمراجعة عند وجودها؛ يمكن التراجع.';
+    set({ multiSelection: null, clipboard: clipboard.mode === 'CUT' ? null : clipboard, clipboardNotice: doneNotice });
   },
   setTool: (tool) =>
     set({
