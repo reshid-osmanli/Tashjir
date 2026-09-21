@@ -4,6 +4,7 @@
 // أو أصلا يخص قارئا/رواية في المصحف كله. تحفظ مستقلة عن مستندات الآيات حتى
 // لا نكررها 6236 مرة، وتدخل في كل ملف JSON مصدّر لإبقاء سياق العمل كاملا.
 
+import { DEFAULT_TYPE_RANK } from '@/lib/tashjeer/type-ranks';
 import type { VariantCategory } from '@/types';
 import type {
   GlobalRulePattern,
@@ -43,6 +44,7 @@ export interface GlobalRule {
   category: VariantCategory;
   /** من تنطبق عليه القاعدة. */
   scope: ReadingScope;
+  recitationMode?: import('@/types/tashjeer').RecitationMode;
   /** اسم الحكم المختصر المستخدم في التشجير والتصفية. */
   ruleLabel?: string;
   /** قيمة المد إن كانت القاعدة من المدود. */
@@ -113,12 +115,12 @@ export function saveGlobalRule(rule: Omit<GlobalRule, 'createdAt' | 'updatedAt'>
  * يحفظ دفعة قواعد (أنواع متعددة من معالج واحد) كمجموعة واحدة:
  * وسم دفعي مشترك + إدراج رتبي يحافظ على الترتيب الصريح (DM-08).
  *
- * تُحجز الرتب الجديدة أولا بإزاحة المشغولة، ثم تُدرج القواعد بالترتيب
- * المعطى، فتبقى (تحقيق=1، أصول=2، فرش=3) متجاورة دائما.
+ * في المسار القديم تُحجز الرتب الجديدة بإزاحة المشغولة، ثم تُدرج القواعد بالترتيب
+ * المعطى. مع rankMode=TYPE تُحفظ رتب الأنواع الصريحة بلا إزاحة دفعات سابقة.
  */
 export function saveGlobalRuleBatch(
   inputs: Array<Omit<GlobalRule, 'createdAt' | 'updatedAt'> & Partial<Pick<GlobalRule, 'createdAt' | 'createBatchId'>>>,
-  options?: { startRank?: number },
+  options?: { startRank?: number; rankMode?: 'TYPE' },
 ): { rules: GlobalRule[]; batchId: string } {
   const batchId = createGlobalRuleBatchId();
   if (inputs.length === 0) return { rules: [], batchId };
@@ -135,7 +137,7 @@ export function saveGlobalRuleBatch(
 
   // إزاحة كل من يقع عند خانات الكتلة الجديدة فما بعدها.
   let cursor = startRank + inputs.length;
-  const displaced = ranked.filter((rule) => (rule.orderRank ?? 0) >= startRank);
+  const displaced = options?.rankMode === 'TYPE' ? [] : ranked.filter((rule) => (rule.orderRank ?? 0) >= startRank);
   for (const rule of displaced) {
     rule.orderRank = cursor;
     cursor += 1;
@@ -146,7 +148,7 @@ export function saveGlobalRuleBatch(
     return normalizeRule({
       ...input,
       createBatchId: input.createBatchId ?? batchId,
-      orderRank: startRank + index,
+      orderRank: options?.rankMode === 'TYPE' ? input.orderRank ?? DEFAULT_TYPE_RANK[input.category] : startRank + index,
       title: input.title.trim(),
       createdAt: existing?.createdAt ?? input.createdAt ?? now,
       updatedAt: now,

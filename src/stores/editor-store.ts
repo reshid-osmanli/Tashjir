@@ -78,6 +78,10 @@ import {
   clearLocalOverride,
   setOccurrenceOrderRank,
   type LocalOverridePatch,
+  localOverrideValues,
+  effectiveOverrideValues,
+  isValidOccurrencePlacement,
+  type OccurrencePlacement,
   type OccurrenceStoreShape,
 } from '@/lib/storage/rule-occurrences-store';
 import {
@@ -154,8 +158,24 @@ function linePasteAnchorOf(
   selection: EditorSelection | null
 ): PasteLineAnchor | undefined {
   if (selection?.kind !== 'LINE' || !selection.differenceId) return undefined;
-  const faceKey = pasteAnchorFace(document, selection.differenceId);
+  const faceKey = pasteAnchorFace(document, selection.differenceId, getEffectiveVariants(document));
   return faceKey ? { faceKey } : undefined;
+}
+
+/** موضع مشتق واحد → كلمة هدف، داخل الآية أو عبر الآيات (FR-ED-10). */
+function planOccurrencePaste(document: TashjeerDocument, clipboard: EditorClipboard, selection: EditorSelection | null):
+  { source: Variant; placement: OccurrencePlacement; error?: undefined } | { error: string } | null {
+  if (selection?.kind !== 'WORD' || clipboard?.kind !== 'DIFFERENCE' || !clipboard.value.isGlobalDerived) return null;
+  const position = documentWindowWords(document).find(word => word.id === Number(selection.id))?.position;
+  if (!position) return { error: 'حدد كلمة صحيحة في الآية الهدف.' };
+  const source = clipboard.value;
+  const placement = { ayahKey: document.ayahKey, startPosition: position, endPosition: position + source.endPosition - source.startPosition };
+  if (!isValidOccurrencePlacement(placement)) return { error: 'مدى العنصر يتجاوز الآية الهدف؛ المصدر محفوظ.' };
+  if (clipboard.mode === 'CUT') {
+    const live = getEffectiveVariants(createDocument(source.ayahKey)).find(v => v.id === source.id);
+    if (JSON.stringify(live) !== JSON.stringify(source)) return { error: 'تغيّر الموضع بعد القص؛ أعد القص. لم يُنقل شيء.' };
+  }
+  return { source, placement };
 }
 
 function selectionWrite(
@@ -180,7 +200,7 @@ const MAX_HISTORY = 60;
 
 /** التصفية الافتراضية: كل الفئات ظاهرة. */
 const DEFAULT_FILTER: ViewFilter = {
-  categories: ['USUL', 'FARSH', 'MADUD', 'HAMZ', 'WAQF', 'TAJWEED'],
+  categories: ['TAHQIQ', 'USUL', 'FARSH', 'MADUD', 'HAMZ', 'WAQF', 'TAJWEED'],
   narratorIds: [],
   showLabels: true,
   showGrid: false,
@@ -431,6 +451,7 @@ interface EditorState {
    * يمرّ أولا على Decision Resolver: الرابط المحظور بقاعدة لا يُسجَّل، والمخالف
    * لمصفوفة الدمج يُسجَّل بتحذير (المحرر يقرر). يعيد القرار للمستدعي.
    */
+  requestAddLink: (input: Parameters<EditorState['addLink']>[0]) => Promise<LinkDecisionNotice | undefined>;
   addLink: (link: {
     kind: TashjeerLinkKind;
     relation: TashjeerLinkRelation;
@@ -589,9 +610,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const rules = listGlobalRules().filter((rule) => wanted.has(rule.id));
       if (!rules.length) return false;
       const stats = rules.map((rule) => ({
-        matches: rule.pattern ? findGlobalRuleMatches(rule, { limit: 5000 }).length : 0,
+        matches: rule.pattern ? findGlobalRuleMatches(rule).length : 0,
         overrides: listOccurrenceOverrides(rule.id).length,
         deleted: occurrenceStats(rule.id).deleted,
+        local: occurrenceStats(rule.id).local,
       }));
       const total = (pick: (item: (typeof stats)[number]) => number) => stats.reduce((sum, item) => sum + pick(item), 0);
       const accepted = await confirmAction({
@@ -605,6 +627,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           { label: 'مواضع مشتقة في المصحف', count: total((item) => item.matches) },
           { label: 'استثناءات موضعية مسجّلة', count: total((item) => item.overrides) },
           { label: 'منها محذوف موضعيًا', count: total((item) => item.deleted) },
+          { label: 'تجاوزات محلية قائمة (دون تكرار)', count: total((item) => item.local) },
         ],
         undoable: true,
         tone: 'danger',
@@ -640,7 +663,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         });
         return false;
       }
-      const impact = deletionImpact(document, { kind: 'DIFFERENCE', ids: exclusive });
+      const impact = deletionImpact({ ...document, variants: getEffectiveVariants(document) }, { kind: 'DIFFERENCE', ids: exclusive });
       const accepted = await confirmAction({
         title: lineCount === 1 ? 'حذف السطر؟' : `حذف ${toArabicDigits(lineCount)} أسطر؟`,
         message: shared.length
@@ -662,7 +685,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return true;
     }
 
-    const impact = deletionImpact(document, selection);
+    const impact = deletionImpact({ ...document, variants: getEffectiveVariants(document) }, selection);
     if (!impact.count) return false;
     const isFace = selection.kind === 'FACE';
     const count = isFace ? impact.faces.length : impact.differences.length;
@@ -1050,6 +1073,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   updateVariant: (variantId, patch) => {
+    const current = get().document;
+    if (current && getEffectiveVariants(current).some(v => v.id === variantId && v.isGlobalDerived)) {
+      const local: LocalOverridePatch = {};
+      for (const key of ['title', 'category', 'description', 'sourceRef', 'orderRank'] as const) {
+        if (key in patch) Object.assign(local, { [key]: patch[key] });
+      }
+      get().setDerivedLocalOverride(variantId, local);
+      return;
+    }
     mutate(set, get, (document) => {
       const before = document.variants.find((variant) => variant.id === variantId);
       return withLoggedEdit(
@@ -1094,6 +1126,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   deleteVariant: (variantId) => {
+    const current = get().document;
+    if (current && getEffectiveVariants(current).some(v => v.id === variantId && v.isGlobalDerived)) {
+      get().deleteVariantsBulk([variantId]);
+      return;
+    }
     mutate(set, get, (document) => {
       const before = document.variants.find((variant) => variant.id === variantId);
       return withLoggedEdit(
@@ -1148,6 +1185,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   updateAlternative: (variantId, alternativeId, patch) => {
+    const current = get().document;
+    const derived = current && getEffectiveVariants(current).find(v => v.id === variantId && v.isGlobalDerived);
+    if (derived) {
+      if (!derived.alternatives.some(a => a.id === alternativeId)) return;
+      const local: LocalOverridePatch = {};
+      for (const key of ['text', 'label', 'scope', 'ruleLabel', 'maddHarakat', 'notes', 'strengthDegreeId', 'strengthByNarrator'] as const) {
+        if (key in patch) Object.assign(local, { [key]: patch[key] });
+      }
+      get().setDerivedLocalOverride(variantId, local);
+      return;
+    }
     mutate(set, get, (document) => {
       const owner = document.variants.find((variant) => variant.id === variantId);
       const before = owner?.alternatives.find((item) => item.id === alternativeId);
@@ -1182,6 +1230,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   deleteAlternative: (variantId, alternativeId) => {
+    const current = get().document;
+    if (current && getEffectiveVariants(current).some(v => v.id === variantId && v.isGlobalDerived)) {
+      get().deleteAlternativesBulk(variantId, [alternativeId]);
+      return;
+    }
     const faceSelection: MultiSelection = { kind: 'FACE', ownerId: variantId, ids: [alternativeId] };
     const before = get().document?.variants.find((item) => item.id === variantId);
     mutate(set, get, (document) => deleteItems(document, faceSelection), {
@@ -1200,6 +1253,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   deleteAlternativesBulk: (variantId, alternativeIds) => {
+    const current = get().document;
+    const derived = current && getEffectiveVariants(current).find(v => v.id === variantId && v.isGlobalDerived);
+    if (derived) {
+      if (derived.alternatives.some(a => alternativeIds.includes(a.id))) get().deleteVariantsBulk([variantId]);
+      return;
+    }
     const selection: MultiSelection = { kind: 'FACE', ownerId: variantId, ids: alternativeIds };
     mutate(set, get, (document) => deleteItems(document, selection), {
       action: 'حذف جماعي للأوجه', targetType: 'ALTERNATIVE', targetId: alternativeIds.join(','),
@@ -1210,6 +1269,28 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   deleteVariantsBulk: (variantIds) => {
+    const current = get().document;
+    if (!current) return;
+    const derived = getEffectiveVariants(current).filter((v) => v.isGlobalDerived && variantIds.includes(v.id));
+    if (derived.length) {
+      const history = captureHistoryEntry(current);
+      for (const variant of derived) {
+        const match = matchFromDerivedVariant(variant);
+        if (match && variant.globalRuleId) deleteOccurrence(variant.globalRuleId, match);
+      }
+      const next = deleteItems(current, { kind: 'DIFFERENCE', ids: variantIds });
+      set((state) => ({
+        past: pushHistory(state.past, history), future: [], isDirty: true,
+        document: withRegeneratedBranches(withLoggedEdit({ ...next }, {
+          action: 'حذف محلي للاختلافات', targetType: 'VARIANT', targetId: variantIds.join(','),
+          summary: 'حذف العناصر المحددة وحدها؛ القواعد الأم وبقية المواضع محفوظة',
+          changes: [{ field: 'occurrences', before: derived.map(v => v.id), after: [] }],
+        }, current)),
+        ...selectionWrite(state, null, { center: false }), multiSelection: null,
+        selectedVariantId: null, selectedAlternativeId: null, selectedBranchId: null,
+      }));
+      return;
+    }
     const selection: MultiSelection = { kind: 'DIFFERENCE', ids: variantIds };
     mutate(set, get, (document) => deleteItems(document, selection), {
       action: 'حذف جماعي للاختلافات',
@@ -1313,6 +1394,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const match = matchFromDerivedVariant(derived);
     if (!match) return;
 
+    const rule = listGlobalRules().find(item => item.id === derived.globalRuleId);
+    if (!rule) return;
+    const base: LocalOverridePatch = {
+      title: rule.title, category: rule.category, description: rule.description,
+      sourceRef: rule.sourceRef, ruleLabel: rule.ruleLabel, maddHarakat: rule.maddHarakat,
+      scope: rule.scope, text: match.matchedText, label: rule.ruleLabel ?? rule.title,
+      notes: rule.description, orderRank: rule.orderRank, strengthDegreeId: rule.strengthDegreeId,
+      strengthByNarrator: rule.strengthByNarrator,
+    };
+    const before = effectiveOverrideValues(base, localOverrideValues(overrideById(variantId)));
+    const after = effectiveOverrideValues(base, { ...localOverrideValues(overrideById(variantId)), ...patch });
     get().transactExternal(
       {
         action: 'تجاوز محلي لموضع قاعدة',
@@ -1320,9 +1412,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         targetId: variantId,
         category: derived.category,
         summary: `تجاوز محلي للموضع «${derived.title}» في هذه الآية وحدها`,
-        changes: Object.entries(patch).map(([field, after]) => ({ field, after })),
+        changes: Object.keys(patch).map((field) => ({
+          field,
+          before: before[field as keyof LocalOverridePatch],
+          after: after[field as keyof LocalOverridePatch],
+        })),
       },
-      () => setLocalOverride(derived.globalRuleId!, match, patch)
+      () => setLocalOverride(derived.globalRuleId!, match, patch, base)
     );
   },
 
@@ -1547,6 +1643,24 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   requestWhy: (request) => set({ pendingWhy: request }),
   requestSmartWizard: () => set((state) => ({ smartWizardRequest: state.smartWizardRequest + 1 })),
 
+  requestAddLink: async (input) => {
+    const document = get().document;
+    if (!document) return;
+    const variants = getEffectiveVariants(document);
+    const policy = resolveLinkPolicy({ ...input,
+      fromCategory: variants.find(v => v.id === input.from.id.split('::')[0])?.category,
+      toCategory: variants.find(v => v.id === input.to.id.split('::')[0])?.category,
+    }, loadEngineConfig());
+    if (!policy.decision.allowed) return get().addLink(input);
+    const accepted = await confirmAction({
+      title: input.relation === 'MERGE' ? 'دمج العنصر المحدد محليًا؟' : 'إضافة علاقة محلية؟',
+      message: 'العلاقة تخص هذه الآية وحدها ولا تعدّل القاعدة الأم ولا بقية المواضع. دمج النوع المشتق ينقل أحكامه وحده، ويمكن فصله بحذف العلاقة.' + (policy.decision.warning ? ` تحذير السياسة: ${policy.decision.warning} — التأكيد يسجل تصحيحًا يدويًا موثقًا.` : ''),
+      impacts: [{ label: 'علاقات محلية', count: 1 }], undoable: true,
+    });
+    if (!accepted || get().document !== document) return;
+    return get().addLink(input);
+  },
+
   addLink: ({ kind, relation, from, to, notes }) => {
     const current = get().document;
     const rejected = (reason: string): LinkDecisionNotice => ({
@@ -1562,7 +1676,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const categoryOfEndpoint = (endpoint: LinkEndpoint): VariantCategory | undefined => {
       if (endpoint.type !== 'FACE') return undefined;
       const variantId = endpoint.id.split('::')[0];
-      return current.variants.find((variant) => variant.id === variantId)?.category;
+      return getEffectiveVariants(current).find((variant) => variant.id === variantId)?.category;
     };
     const policy = resolveLinkPolicy(
       {
@@ -1599,14 +1713,28 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         from,
         to,
         notes: notes?.trim() || undefined,
+        // دمج نوع مشتق لا يجرّ إخوته معه من السطر المركب: الرسوّ على وجه
+        // الهدف ينقل أحكام هذا النوع وحده (ويبقى الفك بحذف الرابط).
+        ...(kind === 'FACE_TO_FACE' && relation === 'MERGE' &&
+          getEffectiveVariants(current).some(v => v.id === from.id.split('::')[0] && v.isGlobalDerived)
+          ? { kind: 'DIFFERENCE_TO_LINE' as const, from: { type: 'RULE' as const, id: from.id.split('::')[0] } }
+          : {}),
         origin: 'EDITOR',
         createdAt: now,
         updatedAt: now,
       };
       return withLoggedEdit(
-        { ...document, links: [...(document.links ?? []), link] },
+        { ...document, links: [...(document.links ?? []), link],
+          corrections: policy.decision.warning ? [...(document.corrections ?? []), {
+            id: createEntityId('correction'), targetId: id,
+            engineResult: { decision: policy.decision, trace: policy.trace },
+            editorResult: link, finalResult: link, reason: notes?.trim() || policy.decision.warning,
+            source: 'editor' as const, at: now,
+          }] : document.corrections,
+        },
         {
           action: 'إنشاء علاقة',
+          changes: [{ field: 'links', before: [], after: [link] }],
           targetType: linkTargetTypeOf(kind),
           targetId: id,
           summary:
@@ -1659,6 +1787,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         },
         {
           action: 'حذف علاقة',
+          changes: [{ field: 'links', before: before ? [before] : [], after: [] }],
           targetType: linkTargetTypeOf(before?.kind ?? 'LINE_TO_LINE'),
           targetId: linkId,
           summary: `حذف العلاقة بين ${describeEndpoint(before?.from)} و${describeEndpoint(before?.to)}`,
@@ -1683,8 +1812,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
     const document = get().document;
     if (!document) return rejected('لا مستند مفتوح.');
-    const first = document.variants.find((variant) => variant.id === fromId);
-    const second = document.variants.find((variant) => variant.id === toId);
+    const effective = getEffectiveVariants(document);
+    const first = effective.find((variant) => variant.id === fromId);
+    const second = effective.find((variant) => variant.id === toId);
     if (!first || !second) return rejected('الاختلافان غير موجودين في هذه الآية.');
     if (first.id === second.id) return rejected('اختر اختلافين مختلفين للموضع نفسه.');
 
@@ -2182,14 +2312,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const multi = state.multiSelection;
     if (multi?.kind === 'FACE' && multi.ownerId && multi.ids.length) { state.copyFaces(multi.ownerId, multi.ids); return; }
     if (multi?.kind === 'DIFFERENCE' && multi.ids.length > 0) {
-      const value = doc.variants.filter((item) => multi.ids.includes(item.id));
+      const value = getEffectiveVariants(doc).filter((item) => multi.ids.includes(item.id));
       if (value.length) set({ clipboard: snapshotClipboard(doc, value.length === 1 ? { kind: 'DIFFERENCE', value: value[0] } : { kind: 'DIFFERENCES', value }), clipboardNotice: 'نُسخت الاختلافات المحددة.' });
       return;
     }
     if (multi?.kind === 'RULE' && multi.ids.length > 0) { state.copyRules(multi.ids); return; }
     if (!selection) return;
     if (selection.kind === 'DIFFERENCE') {
-      const value = doc.variants.find((item) => item.id === selection.id);
+      const value = getEffectiveVariants(doc).find((item) => item.id === selection.id);
       if (value) set({ clipboard: snapshotClipboard(doc, { kind: 'DIFFERENCE', value }), clipboardNotice: 'نُسخ الاختلاف.' });
     } else if (selection.kind === 'FACE' && selection.differenceId) {
       state.copyFaces(selection.differenceId, [selection.id]);
@@ -2202,7 +2332,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     } else if (selection.kind === 'LINE' && selection.differenceId) {
       // تحديد سطر بلا تحديد متعدد: يُنسخ اختلاف المرساة فيه (الذي نقره
       // المستخدم)، ونسخ السطر كاملًا بكل اختلافاته من زر لوحة الخصائص.
-      const value = doc.variants.find((item) => item.id === selection.differenceId);
+      const value = getEffectiveVariants(doc).find((item) => item.id === selection.differenceId);
       if (value) set({ clipboard: snapshotClipboard(doc, { kind: 'DIFFERENCE', value }), clipboardNotice: 'نُسخ اختلاف السطر المحدد. لنسخ السطر كاملًا استعمل «نسخ السطر» في لوحة الخصائص.' });
     } else {
       set({ clipboard: null, clipboardNotice: 'النسخ بهذا المستوى غير متاح بعد؛ حُفظت البيانات دون تغيير.' });
@@ -2211,14 +2341,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   copyFaces: (variantId, faceIds) => {
     const doc = get().document;
     if (!doc) return;
-    const faces = doc.variants.find((item) => item.id === variantId)?.alternatives.filter((item) => faceIds.includes(item.id)) ?? [];
+    const faces = getEffectiveVariants(doc).find((item) => item.id === variantId)?.alternatives.filter((item) => faceIds.includes(item.id)) ?? [];
     if (!faces.length) return;
     set({ clipboard: snapshotClipboard(doc, faces.length === 1 ? { kind: 'FACE', value: faces[0], sourceVariantId: variantId } : { kind: 'FACES', value: faces, sourceVariantId: variantId }), clipboardNotice: `نُسخ ${toArabicDigits(faces.length)} أوجه.` });
   },
   copyLine: (lineId, label, variantIds, segmentIds) => {
     const doc = get().document;
     if (!doc) return;
-    const variants = doc.variants.filter((item) => variantIds.includes(item.id));
+    const variants = getEffectiveVariants(doc).filter((item) => variantIds.includes(item.id));
     // أجزاء السطر المرتبطة به (FR-ED-06.1): تُنسخ معه فتأتي النسخة كاملة،
     // وروابطها تتبعها أو تُعلَّق للمراجعة بحسب أطرافها.
     const wantedSegments = new Set(segmentIds ?? []);
@@ -2241,12 +2371,29 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
   cutSelection: () => {
     get().copySelection();
-    const clipboard = get().clipboard;
+    let clipboard = get().clipboard;
+    const document = get().document;
+    if (document && clipboard && (clipboard.kind === 'FACE' || clipboard.kind === 'FACES')) {
+      const sourceVariantId = clipboard.sourceVariantId;
+      const derived = getEffectiveVariants(document).find(v => v.id === sourceVariantId && v.isGlobalDerived);
+      if (derived) clipboard = snapshotClipboard(document, { kind: 'DIFFERENCE', value: derived });
+    }
     if (clipboard) set({ clipboard: { ...clipboard, mode: 'CUT' }, clipboardNotice: 'جاهز للنقل: المصدر يبقى كما هو حتى تأكيد لصق صالح. نقل الأوجه متاح داخل المستند.' });
   },
   requestPasteSelection: async () => {
     const { document, clipboard, selection, selectedVariantId } = get();
     if (!document || !clipboard) return;
+    const placementPlan = planOccurrencePaste(document, clipboard, selection);
+    if (placementPlan) {
+      if (placementPlan.error) { set({ clipboardNotice: placementPlan.error }); return; }
+      const accepted = await confirmAction({
+        title: clipboard.mode === 'CUT' ? 'نقل هذا النوع إلى الكلمة المحددة؟' : 'نسخ هذا النوع إلى الكلمة المحددة؟',
+        message: 'الهدف مدى كلمات يبدأ بالكلمة المحددة. النقل يحفظ المعرّف كتجاوز محلي بلا نسخ، والنسخ ينشئ كيانًا مستقلًا. العلاقات مع عناصر خارج مجموعة النقل تبقى في المصدر ولا تُطبّق في الآية الأخرى.',
+        impacts: [{ label: 'أنواع مستقلة', count: 1 }], undoable: true,
+      });
+      if (accepted && get().document === document && get().clipboard === clipboard && get().selection === selection) get().pasteSelection();
+      return;
+    }
 
     // ---------- لصق/نقل قواعد عامة (مستوى «قاعدة» في FR-ED-06) ----------
     // القواعد تسكن مخزنها لا المستند، فمسارها معاملة خارجية واحدة: لقطة
@@ -2295,7 +2442,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     // سطر الهدف من التحديد الموحد (AC-04): تحديد LINE باختلاف مرسى يفعّل
     // اللصق الجزئي داخل ذلك السطر عبر رابط DIFFERENCE_TO_LINE لا رميًا عامًا.
     const lineAnchor = linePasteAnchorOf(document, selection);
-    const preview = pasteClipboard(document, clipboard, selectedVariantId ?? undefined, lineAnchor);
+    const preview = pasteClipboard(document, clipboard, selectedVariantId ?? undefined, lineAnchor, getEffectiveVariants(document));
     if (preview.error) { set({ clipboardNotice: preview.error }); return; }
     const accepted = await confirmAction({
       title: clipboard.mode === 'CUT' ? 'تأكيد نقل العناصر المقصوصة؟' : 'تأكيد لصق نسخة مستقلة؟',
@@ -2313,8 +2460,35 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   pasteSelection: () => {
     const { document, clipboard, selection, selectedVariantId } = get();
     if (!document || !clipboard) return;
+    const placementPlan = planOccurrencePaste(document, clipboard, selection);
+    if (placementPlan) {
+      if (placementPlan.error) { set({ clipboardNotice: placementPlan.error }); return; }
+      if (!('source' in placementPlan)) return;
+      const { source, placement } = placementPlan;
+      if (clipboard.mode === 'CUT') {
+        const match = matchFromDerivedVariant(source);
+        if (!match || !source.globalRuleId) return;
+        get().transactExternal({
+          action: 'نقل موضع مشتق محليًا', targetType: 'RULE', targetId: source.id,
+          summary: 'نقل النوع وحده إلى كلمة هدف؛ الهوية والقاعدة الأم وبقية الأنواع محفوظة',
+          changes: [{ field: 'placement', before: { ayahKey: source.ayahKey, startPosition: source.startPosition, endPosition: source.endPosition }, after: placement }],
+        }, () => setLocalOverride(source.globalRuleId!, match, { placement }, { placement: { ayahKey: match.ayahKey!, startPosition: match.startPosition, endPosition: match.endPosition } }));
+        set({ clipboard: null, clipboardNotice: 'نُقل الموضع بتجاوز محلي بلا نسخ؛ يمكن التراجع أو إلغاء التجاوز لإعادته إلى أصله.' });
+      } else {
+        const result = pasteClipboard(document, clipboard);
+        if (result.error) { set({ clipboardNotice: result.error }); return; }
+        const moved = { ...result.document, variants: result.document.variants.map(v => result.ids.includes(v.id)
+          ? { ...v, ...placement, targetKind: 'WORDS' as const, characterRange: undefined, loci: undefined } : v) };
+        mutate(set, get, () => moved, { action: 'نسخ موضع مشتق إلى كلمة', targetType: 'VARIANT', targetId: result.ids.join(','),
+          summary: 'نسخة مستقلة بمعرّف جديد وcopiedFrom؛ لا تعديل على المصدر',
+          changes: [{ field: 'variants', before: [], after: moved.variants.filter(v => result.ids.includes(v.id)) }],
+        });
+        set({ clipboardNotice: 'نُسخ النوع إلى الكلمة المحددة بمعرّف مستقل؛ يمكن التراجع.' });
+      }
+      return;
+    }
     const lineAnchor = linePasteAnchorOf(document, selection);
-    const result = pasteClipboard(document, clipboard, selectedVariantId ?? undefined, lineAnchor);
+    const result = pasteClipboard(document, clipboard, selectedVariantId ?? undefined, lineAnchor, getEffectiveVariants(document));
     if (result.error) { set({ clipboardNotice: result.error }); return; }
     mutate(set, get, () => result.document, {
       action: clipboard.mode === 'CUT' ? 'نقل من الحافظة' : 'لصق من الحافظة', targetType: 'DOCUMENT', targetId: result.ids.join(','),

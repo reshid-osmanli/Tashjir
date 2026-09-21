@@ -12,6 +12,7 @@
 // ومتى ولماذا، فيبقى عمل المحقق قابلا للمراجعة والتراجع.
 
 import type { VariantCategory } from '@/types';
+import { getAyahWordsByKey } from '@/data/quran';
 import type { ReaderStrengthMap, ReadingScope } from '@/types/tashjeer';
 import type { GlobalRuleMatch } from '@/lib/quran-logic/global-rule-engine';
 
@@ -63,7 +64,25 @@ export interface RuleOccurrenceOverride {
  * حقول القاعدة القابلة للتجاوز في موضع واحد (FR-ED-10/T2).
  * كل حقل غائب يبقى مشتقا من القاعدة الأمّ.
  */
+export interface OccurrencePlacement {
+  ayahKey: number;
+  startPosition: number;
+  endPosition: number;
+}
+
+/** نقل محلي إلى مدى كلمات صالح، لا يعيد كتابة مرساة الهوية الأصلية. */
+export function isValidOccurrencePlacement(value: unknown): value is OccurrencePlacement {
+  if (!value || typeof value !== 'object') return false;
+  const p = value as OccurrencePlacement;
+  return Number.isInteger(p.ayahKey) && Number.isInteger(p.startPosition) && Number.isInteger(p.endPosition) &&
+    p.startPosition >= 1 && p.endPosition >= p.startPosition && p.endPosition <= getAyahWordsByKey(p.ayahKey).length;
+}
+
 export interface LocalOverridePatch {
+  placement?: OccurrencePlacement;
+  orderRank?: number;
+  strengthDegreeId?: string;
+  strengthByNarrator?: ReaderStrengthMap;
   title?: string;
   category?: VariantCategory;
   description?: string;
@@ -93,6 +112,8 @@ export interface OccurrenceLogEntry {
   occurrenceId: string;
   ayahKey: number;
   action: 'DELETE' | 'RESTORE' | 'CONFIRM' | 'EDIT';
+  /** مصدر القرار المحلي؛ اختياري لتوافق السجلات القديمة. */
+  source?: 'editor';
   reason?: string;
   matchedText?: string;
   /** قيم الحقول قبل التعديل وبعده (FR-ED-10: تتبع قبل/بعد). */
@@ -160,9 +181,12 @@ export function occurrenceStats(ruleId: string): {
   deleted: number;
   confirmed: number;
   edited: number;
+  /** اتحاد المحذوف والمعدل، بلا عدّ الموضع مرتين. */
+  local: number;
 } {
   const overrides = listOccurrenceOverrides(ruleId);
   return {
+    local: overrides.filter((item) => item.state === 'DELETED' || hasLocalOverride(item)).length,
     deleted: overrides.filter((item) => item.state === 'DELETED').length,
     confirmed: overrides.filter((item) => item.state === 'CONFIRMED').length,
     edited: overrides.filter(
@@ -205,7 +229,7 @@ export function deleteOccurrence(
     state: 'DELETED',
     reason: reason?.trim() || undefined,
   });
-  appendLog(override, 'DELETE', reason);
+  appendLogWithChanges(override, 'DELETE', [{ field: 'الحالة', before: current?.state ?? 'APPLIED', after: 'DELETED' }], reason);
   return override;
 }
 
@@ -228,7 +252,7 @@ export function restoreOccurrence(occurrenceId: string): void {
     overrides: stillUseful
       ? store.overrides.map((item) => (item.id === occurrenceId ? next : item))
       : store.overrides.filter((item) => item.id !== occurrenceId),
-    log: pushLog(store.log, entryFrom(next, 'RESTORE')),
+    log: pushLog(store.log, entryFrom(next, 'RESTORE', undefined, [{ field: 'الحالة', before: existing.state, after: 'APPLIED' }])),
   });
 }
 
@@ -263,7 +287,10 @@ export function setOccurrenceStrength(
     orderRank: current?.orderRank,
     patch: current?.patch,
   });
-  appendLog(override, 'EDIT');
+  appendLogWithChanges(override, 'EDIT', diffPatch(
+    { strengthDegreeId: current?.strengthDegreeId, strengthByNarrator: current?.strengthByNarrator },
+    strength
+  ));
   return override;
 }
 
@@ -278,6 +305,7 @@ export function setOccurrenceOrderRank(
   match: GlobalRuleMatch,
   orderRank: number | null
 ): RuleOccurrenceOverride {
+  if (orderRank !== null && !Number.isFinite(orderRank)) throw new Error('رتبة غير صالحة');
   const current = findOverride(occurrenceIdFor(ruleId, match));
   const base = overrideBaseFrom(ruleId, match);
   const override = upsertOverride({
@@ -289,9 +317,10 @@ export function setOccurrenceOrderRank(
     orderRank: orderRank === null ? undefined : Math.max(1, Math.round(orderRank)),
     patch: current?.patch,
   });
-  appendLog(
+  appendLogWithChanges(
     override,
     'EDIT',
+    diffPatch({ orderRank: current?.orderRank }, { orderRank: override.orderRank }),
     orderRank === null ? 'إلغاء ترتيب السطر اليدوي للموضع' : `تعديل ترتيب السطر إلى ${orderRank}`
   );
   return override;
@@ -307,11 +336,14 @@ export function setOccurrenceOrderRank(
 export function setLocalOverride(
   ruleId: string,
   match: GlobalRuleMatch,
-  patch: LocalOverridePatch
+  patch: LocalOverridePatch,
+  base: LocalOverridePatch = {}
 ): RuleOccurrenceOverride {
+  if (patch.placement !== undefined && !isValidOccurrencePlacement(patch.placement)) throw new Error('موضع النقل خارج الآية');
   const current = findOverride(occurrenceIdFor(ruleId, match));
   const merged: LocalOverridePatch = { ...(current?.patch ?? {}) };
   for (const [key, value] of Object.entries(patch) as Array<[keyof LocalOverridePatch, unknown]>) {
+    if (key === 'orderRank' || key === 'strengthDegreeId' || key === 'strengthByNarrator') continue;
     if (value === undefined) delete merged[key];
     else (merged as Record<string, unknown>)[key] = value;
   }
@@ -325,8 +357,11 @@ export function setLocalOverride(
     strengthByNarrator: current?.strengthByNarrator,
     orderRank: current?.orderRank,
     patch: nextPatch,
+    ...('orderRank' in patch ? { orderRank: typeof patch.orderRank === 'number' && Number.isFinite(patch.orderRank) ? Math.max(1, Math.round(patch.orderRank)) : undefined } : {}),
+    ...('strengthDegreeId' in patch ? { strengthDegreeId: patch.strengthDegreeId } : {}),
+    ...('strengthByNarrator' in patch ? { strengthByNarrator: patch.strengthByNarrator } : {}),
   });
-  appendLogWithChanges(override, 'EDIT', diffPatch(current?.patch, nextPatch), patch.note?.trim() || undefined);
+  appendLogWithChanges(override, 'EDIT', diffPatch(effectiveOverrideValues(base, localOverrideValues(current)), effectiveOverrideValues(base, localOverrideValues(override))), patch.note?.trim() || undefined);
   return override;
 }
 
@@ -354,9 +389,7 @@ export function clearLocalOverride(occurrenceId: string, note?: string): void {
     overrides: store.overrides.map((item) => (item.id === occurrenceId ? next : item)),
     log: pushLog(
       store.log,
-      entryFrom(next, 'EDIT', note?.trim() || 'إلغاء التجاوز المحلي: عودة إلى قيم القاعدة الأمّ', [
-        { field: 'التجاوز المحلي', before: 'قيم مخصصة', after: 'قيم القاعدة الأمّ' },
-      ])
+      entryFrom(next, 'EDIT', note?.trim() || 'إلغاء التجاوز المحلي: عودة إلى قيم القاعدة الأمّ', diffPatch(localOverrideValues(existing), {}))
     ),
   });
 }
@@ -407,7 +440,22 @@ export function restoreOccurrenceData(snapshot: OccurrenceStoreShape): void {
 }
 
 /** التسميات العربية لحقول الترقيع في سجل قبل/بعد. */
+/** غياب الحقل أو تحريره بـundefined يعني اتباع الأمّ، لا محو قيمتها. */
+export function effectiveOverrideValues(base: LocalOverridePatch, patch: LocalOverridePatch): LocalOverridePatch {
+  return { ...base, ...Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)) };
+}
+
+/** طبقة التجاوز الموحدة مع إبقاء بنية التخزين القديمة سليمة. */
+export function localOverrideValues(override?: RuleOccurrenceOverride): LocalOverridePatch {
+  return { ...override?.patch, orderRank: override?.orderRank,
+    strengthDegreeId: override?.strengthDegreeId, strengthByNarrator: override?.strengthByNarrator };
+}
+
 export const PATCH_FIELD_LABELS: Record<keyof LocalOverridePatch, string> = {
+  placement: 'موضع العرض المحلي',
+  orderRank: 'الرتبة',
+  strengthDegreeId: 'درجة القوة',
+  strengthByNarrator: 'القوة بحسب الراوي',
   title: 'العنوان',
   category: 'النوع',
   description: 'الوصف',
@@ -444,15 +492,7 @@ function formatPatchValue(value: unknown): string | undefined {
   if (value === undefined || value === null || value === '') return undefined;
   if (typeof value === 'string' || typeof value === 'number') return String(value);
   if (typeof value === 'object') {
-    const scope = value as { kind?: unknown; narratorIds?: unknown; imamIds?: unknown; pathIds?: unknown };
-    if (typeof scope.kind === 'string') {
-      if (scope.kind === 'ALL') return 'الكل';
-      const count = [scope.narratorIds, scope.imamIds, scope.pathIds]
-        .filter(Array.isArray)
-        .reduce((total, ids) => total + (ids as unknown[]).length, 0);
-      return `${scope.kind} (${count})`;
-    }
-    return 'مخصص';
+    return JSON.stringify(value);
   }
   return String(value);
 }
@@ -525,6 +565,7 @@ function entryFrom(
     occurrenceId: override.id,
     ayahKey: override.ayahKey,
     action,
+    source: 'editor',
     reason: reason?.trim() || override.reason,
     matchedText: override.matchedText,
     changes: changes && changes.length > 0 ? changes : undefined,
@@ -561,6 +602,7 @@ function sanitizeOverride(item: RuleOccurrenceOverride): RuleOccurrenceOverride 
   if (!item.patch || typeof item.patch !== 'object') return { ...item, patch: undefined };
   const patch = item.patch as Record<string, unknown>;
   const next: LocalOverridePatch = {};
+  if (isValidOccurrencePlacement(patch.placement)) next.placement = patch.placement;
   if (typeof patch.title === 'string' && patch.title.trim()) next.title = patch.title;
   if (typeof patch.category === 'string' && patch.category) next.category = patch.category as VariantCategory;
   if (typeof patch.description === 'string') next.description = patch.description;

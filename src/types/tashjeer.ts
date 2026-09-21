@@ -457,6 +457,12 @@ export interface Variant extends CopyProvenance {
   isGlobalDerived?: boolean;
   /** معرّف القاعدة العامة التي اشتُق منها، عند العرض والتدقيق. */
   globalRuleId?: string;
+  /** وسم دفعة الإنشاء؛ لا يربط التحرير بين أفرادها. */
+  createBatchId?: string;
+  /** نص المطابقة الأصلي؛ لا يُستخرج من عنوان قابل للتحرير. */
+  globalMatchedText?: string;
+  /** مرساة الهوية الأصلية تبقى ثابتة حتى عند النقل المحلي إلى آية أخرى. */
+  globalMatch?: { ayahKey: number; startPosition: number; endPosition: number; characterRange: CharacterRange; matchedText: string };
   /**
    * هل يحمل هذا الاختلاف المشتق تجاوزًا محليًا (FR-ED-10)؟
    * يضبطه محرك الاشتقاق عند وجود استثناء مسجَّل على الموضع.

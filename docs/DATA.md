@@ -322,3 +322,62 @@ npm run db:seed
 - `AutoSaveManager` حفظ تلقائي دوري + عند العمليات الخطرة.
 - تأكيد كمي ثم تراجع لكل عملية خطرة (P-13).
 
+
+
+### 7.8.1 طبقة التشغيل الفعلية للتجاوزات — PH6 / FR-ED-10
+
+`RuleOccurrence.localOverride` في نموذج v8 هو العقد المفاهيمي. في صيغة
+التخزين المحلي القائمة لم نغيّر أسماء المفاتيح ولم نستبدلها بهيكل منافس:
+
+```ts
+ruleOccurrences: Array<{
+  id: string; // global:<ruleId>:<originalAyahKey>:<start>:<end>:<charStart>:<charEnd>
+  ruleId: string;
+  ayahKey: number; // آية المطابقة الأصلية، حتى بعد النقل
+  startPosition: number; endPosition: number;
+  characterStart: number; characterEnd: number;
+  matchedText?: string; // النص الأصلي، لا النص المحرَّر
+  state: 'APPLIED' | 'CONFIRMED' | 'DELETED';
+  patch?: {
+    title?: string; category?: VariantCategory; description?: string;
+    sourceRef?: string; ruleLabel?: string; maddHarakat?: number;
+    scope?: ReadingScope; text?: string; label?: string; notes?: string; note?: string;
+    placement?: { ayahKey: number; startPosition: number; endPosition: number };
+  };
+  orderRank?: number;
+  strengthDegreeId?: string;
+  strengthByNarrator?: Record<string, string>;
+  reason?: string;
+  updatedAt: string;
+}>;
+```
+
+- **localOverride التشغيلية** = `patch` + `orderRank` + حقول القوة + حالة الحذف.
+  العلاقات تبقى في `document.links` بمعرّفات الموضع/الوجه (DM-03)، لا في الأمّ.
+  `setLocalOverride` يقبل الرتبة والقوة مع باقي الحقول في عملية واحدة، لكنه
+  يحفظهما في حقولهما القديمة لضمان توافق الاستيراد. `localOverrideValues`
+  واجهة قراءة موحدة لهذا الغرض، وليست نسخة بيانات جديدة.
+- المفاتيح غير المذكورة لا تتغير؛ `undefined` يحرّر تخصيص الحقل. التطبيق
+  النهائي **قاعدة + تجاوز** حقلًا بحقل. الحذف لا يمحو قيم الترقيع. الإلغاء
+  لا يلغي الاعتماد ولا يعيد المحذوف دون طلب إرجاع صريح.
+- `placement` نطاق كلمات محلي صالح. النقل لا يعيد كتابة `id` أو `ayahKey`
+  أو مدى المطابقة الأصلي؛ `getEffectiveVariants` يُخفي الأصل من آيته ويُظهر
+  الموضع في الوجهة عند الطلب. الاستثناءات الداخلة فقط تُفحص في الوجهة،
+  بلا مسح المصحف ولا نسخ مستندات. إلغاء التجاوز يُرجع اتباع الموضع الأصلي.
+- المشتق المؤقت يحمل `globalMatch` و`globalMatchedText` لحفظ مرساة المطابقة
+  مستقلة عن النص والعنوان القابلين للتعديل. كلاهما **وصف عرض مشتق** وليس
+  نسخة محفوظة من القاعدة. النسخ المقصود يزيل `isGlobalDerived` و`globalRuleId`
+  و`globalMatch` و`globalMatchedText` و`hasLocalOverride` ويحفظ `copiedFrom`.
+- `occurrenceLog` يبقى السجل نفسه (`id/ruleId/occurrenceId/ayahKey/action/at`)
+  مع `changes[{field,before,after}]` و`source?: 'editor'` (اختياري لتوافق
+  السجلات القديمة). تغيير نطاق/خريطة قوة إلى عناصر مختلفة بالعدد نفسه
+  يسجل القيم الفعلية، لا العدد فقط.
+- يصدّر `exportDocument(s)` الاستثناءات والسجل إلى `ruleOccurrences` و
+  `occurrenceLog` القائمين؛ وتُستعاد بالقواعد أثناء Undo/Redo والاستيراد.
+  لا ترحيل مدمّر ولا تغيير لمعرّفات عينتي `jeson_exemp` ولا زيادة لإصدار الملف.
+- `TAHQIQ` فئة تحقيق مستقلة **جديدة**؛ لا تحويل لفئة `USUL` القديمة إليها.
+  `DEFAULT_TYPE_RANK` = تحقيق ١، أصول ٢، فرش ٣، مدود ٤، همز ٥، وقف ٦، تجويد ٧
+  للإنشاء الجديد فقط. `rankMode: TYPE` في إنشاء القواعد يستخدم الرتب الصريحة
+  ولا يزيح دفعات سابقة. القراءة لا تستنتج الرتبة من الفئة أو الاسم؛ تحترم
+  القيم المحفوظة والتجاوز المحلي (P-04). `createBatchId` و`recitationMode`
+  يصلان إلى المشتق كما هما؛ لا منطق وقف/وصل جديد في PH6.

@@ -232,7 +232,7 @@ export function PropertiesPanel() {
             selectedVariant={selectedVariant}
             variants={effectiveVariants}
             onCompose={(from, to, relation) =>
-              addLink({
+              void useEditorStore.getState().requestAddLink({
                 kind: 'FACE_TO_FACE',
                 relation,
                 from: { type: 'FACE', id: from },
@@ -272,7 +272,7 @@ export function PropertiesPanel() {
             type="button"
             onClick={() => {
               const variantIds = [...new Set(selectedLine.entries.map((entry) => entry.variantId))].filter((id) =>
-                (document?.variants ?? []).some((variant) => variant.id === id)
+                effectiveVariants.some((variant) => variant.id === id)
               );
               // أجزاء السطر (FR-ED-06.1): أحكام الجزء تحمل معرّفه مسبوقًا بـ
               // «segment:»، فتُنسخ مع السطر بمعرّفات جديدة.

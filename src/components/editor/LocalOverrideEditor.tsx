@@ -7,12 +7,15 @@
 'use client';
 
 import { useState } from 'react';
+import { toArabicDigits, fromArabicDigits } from '@/lib/utils/arabic-numbers';
 import type { VariantCategory } from '@/types';
 import type { ReadingScope, Variant } from '@/types/tashjeer';
 import type { GlobalRule } from '@/lib/storage/global-rules-store';
 import type { LocalOverridePatch } from '@/lib/storage/rule-occurrences-store';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { ScopePicker } from './VariantEditor';
+import { StrengthDegreePicker } from './StrengthDegreePicker';
+import { OrderRankControl } from './OrderRankControl';
 
 interface LocalOverrideEditorProps {
   /** الاختلاف المشتق الظاهر (بعد دمج أي ترقيع سابق). */
@@ -48,10 +51,13 @@ export function LocalOverrideEditor({
   const [text, setText] = useState(patch.text ?? '');
   const [label, setLabel] = useState(patch.label ?? '');
   const [notes, setNotes] = useState(patch.notes ?? '');
-  const [madd, setMadd] = useState(patch.maddHarakat !== undefined ? String(patch.maddHarakat) : '');
+  const [madd, setMadd] = useState(patch.maddHarakat !== undefined ? toArabicDigits(patch.maddHarakat) : '');
   const [note, setNote] = useState(patch.note ?? '');
   const [customScope, setCustomScope] = useState(patch.scope !== undefined);
   const [scope, setScope] = useState<ReadingScope>(patch.scope ?? rule.scope);
+
+  const [orderRank, setOrderRank] = useState(patch.orderRank);
+  const [strength, setStrength] = useState({ degreeId: patch.strengthDegreeId, byNarrator: patch.strengthByNarrator });
 
   const handleSave = () => {
     // ما ساوى قيمة القاعدة الأمّ يُحرَّر من التجاوز (undefined) فيعود مشتقًا.
@@ -70,9 +76,10 @@ export function LocalOverrideEditor({
     const nextLabel = trimmed(label);
     const nextNotes = trimmed(notes);
     const nextNote = trimmed(note);
-    const maddNumber = madd.trim() === '' ? undefined : Number(madd);
+    const maddNumber = madd.trim() === '' ? undefined : Number(fromArabicDigits(madd));
 
     const next: LocalOverridePatch = {
+      orderRank, strengthDegreeId: strength.degreeId, strengthByNarrator: strength.byNarrator,
       title: differs(nextTitle, rule.title) ? nextTitle : undefined,
       category: category !== rule.category ? category : undefined,
       ruleLabel: differs(nextRuleLabel, rule.ruleLabel) ? nextRuleLabel : undefined,
@@ -112,6 +119,10 @@ export function LocalOverrideEditor({
         </header>
 
         <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4 text-xs">
+          <OrderRankControl value={orderRank} inherited={rule.orderRank} onChange={rank => setOrderRank(rank ?? undefined)} />
+          <StrengthDegreePicker scope={customScope ? scope : rule.scope} degreeId={strength.degreeId}
+            byNarrator={strength.byNarrator} onChange={next => setStrength({ degreeId: next.degreeId, byNarrator: next.byNarrator })}
+            hint="تجاوز قوة هذا الموضع فقط؛ بلا تخصيص يتبع درجة القاعدة الأمّ." />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block font-medium text-stone-700">العنوان</span>
@@ -149,11 +160,12 @@ export function LocalOverrideEditor({
             <label className="block">
               <span className="mb-1 block font-medium text-stone-700">المد بالحركات</span>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 min={1}
                 max={6}
                 value={madd}
-                onChange={(event) => setMadd(event.target.value)}
+                onChange={(event) => setMadd(toArabicDigits(event.target.value))}
                 placeholder={rule.maddHarakat !== undefined ? String(rule.maddHarakat) : '—'}
                 className="w-full rounded border border-stone-300 px-2 py-1.5"
               />

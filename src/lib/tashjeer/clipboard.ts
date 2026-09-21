@@ -55,9 +55,9 @@ export function cloneRulesForClipboard(rules: GlobalRule[], batchId?: string): G
  * (فلا تعثر عليه مطابقة الأطراف وتبقى العناصر في أسطرها الطبيعية).
  * الوجه مفتاح مستقر عبر إعادة توليد الأسطر بخلاف معرّف السطر المرئي.
  */
-export function pasteAnchorFace(document: TashjeerDocument, differenceId: string | null | undefined): string | null {
+export function pasteAnchorFace(document: TashjeerDocument, differenceId: string | null | undefined, variants = document.variants): string | null {
   if (!differenceId) return null;
-  const difference = document.variants.find((item) => item.id === differenceId);
+  const difference = variants.find((item) => item.id === differenceId);
   if (!difference) return null;
   const rendered = difference.alternatives.find((face) => !face.isBase) ?? difference.alternatives[0];
   return rendered ? `${difference.id}::${rendered.id}` : null;
@@ -93,7 +93,7 @@ function differenceToLineLink(document: TashjeerDocument, differenceId: string, 
  * نسخة (COPY) تستنسخ بمعرّفات جديدة ثم تُرسى على السطر، ونقل (CUT) يرسو
  * بالأصل بلا استنساخ فيختفي من سطره الطبيعي ومعرّفه محفوظ.
  */
-export function pasteClipboard(document: TashjeerDocument, clipboard: NonNullable<EditorClipboard>, targetId?: string, pasteAnchor?: PasteLineAnchor): { document: TashjeerDocument; ids: string[]; error?: string } {
+export function pasteClipboard(document: TashjeerDocument, clipboard: NonNullable<EditorClipboard>, targetId?: string, pasteAnchor?: PasteLineAnchor, availableVariants = document.variants): { document: TashjeerDocument; ids: string[]; error?: string } {
   const reject = (error: string) => ({ document, ids: [], error });
   // القواعد العامة ليست كيانات مستند: لصقها يمرّ بمخزن القواعد عبر
   // `requestPasteSelection`. لا يُلمس المستند هنا ولا تُرمى القواعد فيه.
@@ -118,7 +118,7 @@ export function pasteClipboard(document: TashjeerDocument, clipboard: NonNullabl
       const next = cloneFace(face); mapping.set(`${source.id}::${face.id}`, `${copy.id}::${next.id}`); return next;
     });
     copy.alternativeOrder = source.alternativeOrder?.map((id) => mapping.get(id)!).filter(Boolean);
-    delete copy.engineSnapshot; delete copy.editorModifiedAt; delete copy.isGlobalDerived; delete copy.globalRuleId;
+    delete copy.engineSnapshot; delete copy.editorModifiedAt; delete copy.isGlobalDerived; delete copy.globalRuleId; delete copy.hasLocalOverride; delete copy.globalMatchedText; delete copy.globalMatch;
     return copy;
   };
 
@@ -157,12 +157,13 @@ export function pasteClipboard(document: TashjeerDocument, clipboard: NonNullabl
       // إلحاق لكل مقصوص بمرساة السطر — نقل حقيقي بلا استنساخ، المعرّفات
       // والعلاقات محفوظة، والاختفاء من السطر الطبيعي أثر عرضي للرابط.
       if (clipboard.kind === 'SEGMENT') return reject('نقل الأجزاء بين الأسطر غير متاح بعد؛ المصدر محفوظ. استخدم النسخ.');
+      if (clipboard.sourceAyahKey !== document.ayahKey) return reject('النقل بين آيتين غير متاح بأمان؛ استخدم النسخ. المصدر محفوظ.');
       if (!pasteAnchor) return reject('حدد سطرًا في اللوحة أو لوحة الترتيب ثم ألصق لنقل المقصوص إليه؛ المصدر محفوظ.');
       const sources = clipboard.kind === 'LINE' ? clipboard.value.variants : clipboard.kind === 'DIFFERENCES' ? clipboard.value : [clipboard.value];
       const anchorDifferenceId = pasteAnchor.faceKey.split('::')[0];
       if (sources.some((source) => source.id === anchorDifferenceId)) return reject('لا يمكن نقل اختلاف إلى سطر يُرسى على وجه منه هو نفسه.');
-      if (sources.some((source) => !document.variants.some((item) => item.id === source.id))) return reject('أحد المقصوصات لم يعد في المستند؛ أعد القص.');
-      if (sources.some((source) => JSON.stringify(document.variants.find((item) => item.id === source.id)) !== JSON.stringify(source))) return reject('تغيّر المصدر بعد القص؛ أعد تحديده وقصه.');
+      if (sources.some((source) => !availableVariants.some((item) => item.id === source.id))) return reject('أحد المقصوصات لم يعد في المستند؛ أعد القص.');
+      if (sources.some((source) => JSON.stringify(availableVariants.find((item) => item.id === source.id)) !== JSON.stringify(source))) return reject('تغيّر المصدر بعد القص؛ أعد تحديده وقصه.');
       ids = sources.map((source) => source.id);
       const anchorLinks = ids.map((id) => differenceToLineLink(document, id, pasteAnchor, 'CUT'));
       next = { ...document, links: [...(document.links ?? []), ...anchorLinks] };
