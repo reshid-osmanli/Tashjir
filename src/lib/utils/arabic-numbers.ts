@@ -26,3 +26,9 @@ export function formatPercent(ratio: number): string {
 export function formatHarakat(count: number): string {
   return toArabicDigits(count);
 }
+
+/** يقبل الأرقام العربية والفارسية في الحقول الرقمية، دون تغيير قيم JSON. */
+export function fromArabicDigits(value: string): string {
+  return value.replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)));
+}

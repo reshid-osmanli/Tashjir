@@ -14,6 +14,7 @@ import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
 import {
   listOccurrenceOverrides,
   overrideById,
+  localOverrideValues,
 } from '@/lib/storage/rule-occurrences-store';
 import { OrderRankControl } from './OrderRankControl';
 import { LocalOverrideEditor } from './LocalOverrideEditor';
@@ -604,13 +605,14 @@ export function TashjeerOrderControls() {
     setEffectiveOrderRank,
     moveAlternative,
     resetAlternativeOrder,
-    addVariant,
+    copySelection,
+    cutSelection,
     setDerivedLocalOverride,
     clearDerivedLocalOverride,
     deleteDerivedOccurrence,
     restoreDerivedOccurrence,
   } = useEditorStore();
-  const { rules } = useGlobalRules();
+  const { rules, key: rulesKey } = useGlobalRules();
   const occurrences = useRuleOccurrences();
   const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
   const [deletingVariantId, setDeletingVariantId] = useState<string | null>(null);
@@ -619,6 +621,7 @@ export function TashjeerOrderControls() {
   const ruleById = useMemo(() => new Map(rules.map((rule) => [rule.id, rule])), [rules]);
 
   const ordered = useMemo(() => {
+    void rulesKey; void occurrences.key;
     if (!document) return [];
     // نعرض المواضع الظاهرة كلها — بما فيها المشتقة من القواعد العامة —
     // بالترتيب الذي يرسمه المحرك فعلا.
@@ -632,14 +635,14 @@ export function TashjeerOrderControls() {
       if (typeof firstRank !== 'number' && typeof secondRank === 'number') return 1;
       return second.endPosition - first.endPosition || second.startPosition - first.startPosition;
     });
-  }, [document]);
+  }, [document, rulesKey, occurrences.key]);
 
   // المواضع المحذوفة في هذه الآية وحدها، ليعيدها المحقق دون مغادرة اللوحة.
   const deletedInAyah = useMemo(() => {
     if (!document) return [];
     void occurrences.key;
     return listOccurrenceOverrides()
-      .filter((item) => item.state === 'DELETED' && item.ayahKey === document.ayahKey)
+      .filter((item) => item.state === 'DELETED' && (item.patch?.placement?.ayahKey ?? item.ayahKey) === document.ayahKey)
       .sort((first, second) => second.updatedAt.localeCompare(first.updatedAt));
   }, [document, occurrences.key]);
 
@@ -650,29 +653,6 @@ export function TashjeerOrderControls() {
     : null;
   const editingRule = editingVariant?.globalRuleId ? ruleById.get(editingVariant.globalRuleId) ?? null : null;
 
-  /** ينسخ موضعًا مشتقًا اختلافًا محليًا مستقلًا قابلًا للتحرير الحر. */
-  const copyDerivedAsLocal = (variantId: string) => {
-    const variant = ordered.find((item) => item.id === variantId);
-    if (!variant || !variant.isGlobalDerived) return;
-    const face = variant.alternatives[0];
-    if (!face) return;
-    const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    addVariant({
-      id: `local-${stamp}`,
-      category: variant.category,
-      title: face.text,
-      startPosition: variant.startPosition,
-      endPosition: variant.endPosition,
-      targetKind: variant.targetKind,
-      characterRange: variant.characterRange,
-      loci: variant.loci,
-      status: 'DRAFT',
-      description: variant.description,
-      sourceRef: variant.sourceRef,
-      orderRank: variant.orderRank,
-      alternatives: [{ ...face, id: `local-${stamp}-alt` }],
-    });
-  };
 
   return (
     <Section title="ترتيب التشجير في هذه الآية">
@@ -727,10 +707,10 @@ export function TashjeerOrderControls() {
                   </span>
                 </div>
 
-                {isDerived && (
+                {(
                   <div className="mt-1 flex flex-wrap items-center gap-1">
                     <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[9px] font-medium text-stone-600">
-                      قاعدة عامة{rule ? ` · ${rule.title}` : ''}
+                      {isDerived ? 'قاعدة عامة' : variant.origin === 'EDITOR' ? 'يدوي' : 'محرك'}{rule ? ` · ${rule.title}` : ''}
                     </span>
                     {variant.hasLocalOverride && (
                       <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-900">
@@ -821,11 +801,16 @@ export function TashjeerOrderControls() {
                         )}
                         <button
                           type="button"
-                          onClick={() => copyDerivedAsLocal(variant.id)}
+                          onClick={() => { useEditorStore.getState().setMultiSelection(null); selectVariant(variant.id); copySelection(); }}
                           title="نسخ الموضع اختلافًا محليًا مستقلًا قابلًا للتحرير الحر"
                           className="rounded border border-stone-200 px-1.5 py-0.5 text-[10px] text-stone-700 hover:bg-stone-50"
                         >
-                          نسخ مستقل
+                          نسخ
+                        </button>
+                        <button type="button" onClick={() => { useEditorStore.getState().setMultiSelection(null); selectVariant(variant.id); cutSelection(); }}
+                          title="قص هذا النوع وحده، ثم حدد كلمة (في أي آية) أو سطر هدف والصق؛ المصدر محفوظ حتى التأكيد"
+                          className="rounded border border-stone-200 px-1.5 py-0.5 text-[10px] text-stone-700 hover:bg-stone-50">
+                          نقل
                         </button>
                       </div>
                     )}
@@ -922,9 +907,9 @@ export function TashjeerOrderControls() {
         <LocalOverrideEditor
           variant={editingVariant}
           rule={editingRule}
-          currentPatch={overrideById(editingVariant.id)?.patch}
+          currentPatch={localOverrideValues(overrideById(editingVariant.id))}
           originalText={
-            overrideById(editingVariant.id)?.matchedText ??
+            editingVariant.globalMatchedText ?? overrideById(editingVariant.id)?.matchedText ??
             editingVariant.alternatives[0]?.text ??
             ''
           }

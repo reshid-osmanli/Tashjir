@@ -7,7 +7,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { toArabicDigits } from '@/lib/utils/arabic-numbers';
+import { toArabicDigits, fromArabicDigits } from '@/lib/utils/arabic-numbers';
 
 export function OrderRankControl({
   value,
@@ -25,10 +25,10 @@ export function OrderRankControl({
   compact?: boolean;
 }) {
   const effective = typeof value === 'number' ? value : inherited;
-  const [draft, setDraft] = useState(typeof effective === 'number' ? String(effective) : '');
+  const [draft, setDraft] = useState(typeof effective === 'number' ? toArabicDigits(effective) : '');
 
   useEffect(() => {
-    setDraft(typeof effective === 'number' ? String(effective) : '');
+    setDraft(typeof effective === 'number' ? toArabicDigits(effective) : '');
   }, [effective]);
 
   const apply = (raw: string) => {
@@ -36,7 +36,7 @@ export function OrderRankControl({
       onChange(null);
       return;
     }
-    const parsed = Number(raw);
+    const parsed = Number(fromArabicDigits(raw));
     if (!Number.isFinite(parsed)) return;
     onChange(Math.max(1, Math.round(parsed)));
   };
@@ -61,10 +61,10 @@ export function OrderRankControl({
       </div>
       <div className="mt-1.5 flex items-center gap-1.5">
         <input
-          type="number"
-          min={1}
+          type="text"
+          inputMode="numeric"
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => setDraft(toArabicDigits(event.target.value))}
           onBlur={(event) => apply(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter') apply((event.target as HTMLInputElement).value);

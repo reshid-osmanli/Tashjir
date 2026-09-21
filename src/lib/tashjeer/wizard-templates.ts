@@ -54,7 +54,7 @@ function isBrowser(): boolean {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 }
 
-const KNOWN_CATEGORIES: VariantCategory[] = ['USUL', 'FARSH', 'MADUD', 'HAMZ', 'WAQF', 'TAJWEED'];
+const KNOWN_CATEGORIES: VariantCategory[] = ['TAHQIQ', 'USUL', 'FARSH', 'MADUD', 'HAMZ', 'WAQF', 'TAJWEED'];
 
 function sanitizeConfig(value: unknown): WizardTemplateConfig | null {
   if (!value || typeof value !== 'object') return null;

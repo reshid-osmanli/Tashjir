@@ -702,15 +702,26 @@ export function getEffectiveVariants(document: TashjeerDocument): Variant[] {
   const derived: Variant[] = [];
   const overrides = occurrenceOverrideMap();
 
-  for (const rule of listGlobalRules()) {
+  const rules = listGlobalRules();
+  for (const rule of rules) {
     if (!rule.isActive || !rule.pattern) continue;
     for (const match of findGlobalRuleMatchesInAyah(rule, document.ayahKey)) {
       const override = overrides.get(occurrenceIdFor(rule.id, match));
       if (override?.state === 'DELETED') continue;
+      if (override?.patch?.placement && override.patch.placement.ayahKey !== document.ayahKey) continue;
       derived.push(variantFromGlobalMatch(rule, match, override));
     }
   }
 
+  // الداخلون بنقل محلي: نفحص الاستثناءات القليلة فقط، لا ننسخ مستند المصدر
+  // ولا نفحص المصحف. القاعدة المعطلة/المحذوفة أو المطابقة الزائلة لا تشتق شيئًا.
+  for (const override of overrides.values()) {
+    if (override.state === 'DELETED' || override.ayahKey === document.ayahKey || override.patch?.placement?.ayahKey !== document.ayahKey) continue;
+    const rule = rules.find(r => r.id === override.ruleId && r.isActive && r.pattern);
+    if (!rule) continue;
+    const match = findGlobalRuleMatchesInAyah(rule, override.ayahKey).find(m => occurrenceIdFor(rule.id, m) === override.id);
+    if (match) derived.push(variantFromGlobalMatch(rule, match, override));
+  }
   return [...document.variants, ...derived];
 }
 
@@ -719,7 +730,9 @@ export function getEffectiveVariants(document: TashjeerDocument): Variant[] {
  * دون المرور بشاشة تتبّع المواضع.
  */
 export function matchFromDerivedVariant(variant: Variant): GlobalRuleMatch | null {
-  if (!variant.isGlobalDerived || !variant.globalRuleId || !variant.characterRange) return null;
+  if (!variant.isGlobalDerived || !variant.globalRuleId) return null;
+  if (variant.globalMatch) return { ...variant.globalMatch, ruleId: variant.globalRuleId };
+  if (!variant.characterRange) return null;
   // النص المطابَق مُلحق آخر العنوان؛ الأخير لا الأول، فقد يحمل العنوان
   // المرقَّع محليًا الفاصل نفسه (FR-ED-10).
   const separator = variant.title.lastIndexOf(' · ');
@@ -729,7 +742,7 @@ export function matchFromDerivedVariant(variant: Variant): GlobalRuleMatch | nul
     startPosition: variant.startPosition,
     endPosition: variant.endPosition,
     characterRange: variant.characterRange,
-    matchedText: separator === -1 ? variant.title : variant.title.slice(separator + 3),
+    matchedText: variant.globalMatchedText ?? (separator === -1 ? variant.title : variant.title.slice(separator + 3)),
   };
 }
 
@@ -761,6 +774,10 @@ export function variantFromGlobalMatch(
     status: rule.status,
     isGlobalDerived: true,
     globalRuleId: rule.id,
+    globalMatchedText: match.matchedText,
+    globalMatch: { ...match, ayahKey: match.ayahKey ?? 0 },
+    createBatchId: rule.createBatchId,
+    recitationMode: rule.recitationMode,
     hasLocalOverride: hasLocalOverride(override),
     // المحرك مصدر هذا الموضع؛ التصحيح اليدوي يظهر في سجل التعديل والتتبع.
     origin: 'ENGINE',
@@ -784,6 +801,9 @@ export function variantFromGlobalMatch(
         strengthByNarrator: override?.strengthByNarrator ?? rule.strengthByNarrator,
       },
     ],
+    ...(patch?.placement ? {
+      ...patch.placement, targetKind: 'WORDS' as const, characterRange: undefined,
+    } : {}),
   };
 }
 

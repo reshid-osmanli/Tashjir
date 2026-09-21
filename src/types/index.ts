@@ -53,7 +53,7 @@ export interface Word {
 
 export type TransmissionNodeKind = 'IMAM' | 'NARRATOR' | 'TARIQ' | 'SUB_TARIQ' | 'WAJH' | 'BOOK';
 export type ApplicabilityScope = 'ALL' | 'IMAM' | 'NARRATOR' | 'PATH_GROUP' | 'SINGLE_PATH' | 'CUSTOM';
-export type VariantCategory = 'USUL' | 'FARSH' | 'MADUD' | 'HAMZ' | 'WAQF' | 'TAJWEED';
+export type VariantCategory = 'TAHQIQ' | 'USUL' | 'FARSH' | 'MADUD' | 'HAMZ' | 'WAQF' | 'TAJWEED';
 export type RuleStatus = 'DRAFT' | 'REVIEW' | 'APPROVED' | 'REJECTED';
 
 export interface ReadingImam {
@@ -208,7 +208,7 @@ export interface VariantReading {
 
 // ==================== التشجير ====================
 
-export type LineType = 'USUL' | 'FARSH' | 'MADUD' | 'HAMZ' | 'WAQF' | 'TAJWEED';
+export type LineType = 'TAHQIQ' | 'USUL' | 'FARSH' | 'MADUD' | 'HAMZ' | 'WAQF' | 'TAJWEED';
 export type NodePosition = 'TOP' | 'MIDDLE' | 'BOTTOM';
 
 export interface TashjeerLine {

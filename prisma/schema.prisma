@@ -455,6 +455,7 @@ enum ApplicabilityScope {
 }
 
 enum VariantCategory {
+  TAHQIQ
   USUL
   FARSH
   MADUD
@@ -471,6 +472,7 @@ enum RuleStatus {
 }
 
 enum LineType {
+  TAHQIQ
   USUL
   FARSH
   MADUD
