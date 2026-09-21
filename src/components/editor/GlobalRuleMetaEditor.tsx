@@ -12,7 +12,7 @@
 
 import { useMemo, useState } from 'react';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
-import { describeGlobalPattern, findGlobalRuleMatches } from '@/lib/quran-logic/global-rule-engine';
+import { describeGlobalPattern } from '@/lib/quran-logic/global-rule-engine';
 import { resolveScope } from '@/lib/tashjeer/scope';
 import { pruneStrengthMap } from '@/lib/tashjeer/strength-degrees';
 import { readTransmissionCatalog } from '@/lib/transmissions/catalog';
@@ -97,22 +97,20 @@ export function GlobalRuleMetaEditor({
       setError('اختر قارئا أو راويا واحدا على الأقل لهذه القاعدة.');
       return;
     }
-    const currentStats = occurrenceStats(rule.id);
-    const affected = currentStats.local;
-    {
+    const affected = overrideStats.deleted + overrideStats.edited;
+    if (affected > 0) {
       const undoable = useEditorStore.getState().document !== null;
       const ok = await confirmAction({
-        title: `تحرير القاعدة الأم «${rule.title}»؟`,
+        title: `تحرير القاعدة «${rule.title}» وعليها تجاوزات محلية`,
         message:
-          'التجاوز المحلي يغلب تعديل الأمّ في مواضعه: القيم المتجاوزة محليًا لن تتأثر، والحقول غير المتجاوزة تواصل اتباع القاعدة الأمّ.',
+          'التجاوز المحلي يغلب تعديل الأمّ في مواضعه: هذه المواضع لن تتغير مهما حررت هنا حتى تُلغي تجاوزها.',
         impacts: [
-          { label: 'مواضع مشتقة في المصحف', count: rule.pattern ? findGlobalRuleMatches(rule).length : 0 },
-          { label: 'مواضع محمية بتجاوز محلي', count: affected },
-          { label: 'منها معدَّل محليًا', count: currentStats.edited },
-          { label: 'منها محذوف موضعيًا', count: currentStats.deleted },
+          { label: 'موضعًا لن يطاله التحرير', count: affected },
+          { label: 'منها معدَّل محليًا', count: overrideStats.edited },
+          { label: 'منها محذوف موضعيًا', count: overrideStats.deleted },
         ],
         undoable,
-        confirmLabel: 'تأكيد تحرير الأمّ',
+        confirmLabel: 'تحرير الأمّ رغم ذلك',
       });
       if (!ok) return;
     }
@@ -123,7 +121,7 @@ export function GlobalRuleMetaEditor({
         targetType: 'RULE',
         targetId: rule.id,
         category,
-        summary: `تحرير بيانات القاعدة العامة «${title.trim()}»${affected > 0 ? ` (${toArabicDigits(affected)} مواضع بقيم متجاوزة لن تتغير)` : ''}`,
+        summary: `تحرير بيانات القاعدة العامة «${title.trim()}»${affected > 0 ? ` (${affected} موضعًا متجاوزًا لن يتغير)` : ''}`,
       },
       () => {
         saved = saveGlobalRule({
@@ -188,7 +186,7 @@ export function GlobalRuleMetaEditor({
           <p className="mt-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
             تنبيه: على هذه القاعدة {toArabicDigits(overrideStats.edited)} موضعًا معدَّلًا محليًا و
             {toArabicDigits(overrideStats.deleted)} محذوفًا موضعيًا — التجاوز المحلي يغلب تحرير
-            الأمّ، فالقيم المتجاوزة لن تتغير هنا، وتبقى الحقول الأخرى تابعة للأمّ.
+            الأمّ، فهذه المواضع لن تتغير هنا.
           </p>
         )}
 

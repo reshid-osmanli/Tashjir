@@ -28,7 +28,7 @@ import type { TashjeerDocument, ViewFilter } from '@/types/tashjeer';
 
 /** تصفية كاملة: كل الفئات وكل الرواة، كما يرسم المحرر افتراضيا. */
 const FULL_FILTER: ViewFilter = {
-  categories: ['TAHQIQ', 'USUL', 'FARSH', 'MADUD', 'HAMZ', 'WAQF', 'TAJWEED'],
+  categories: ['USUL', 'FARSH', 'MADUD', 'HAMZ', 'WAQF', 'TAJWEED'],
   narratorIds: [],
   showLabels: true,
   showGrid: false,

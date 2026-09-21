@@ -552,7 +552,7 @@ function ClassicLineShape({
  */
 function ClassicEntryShape({
   entry,
-  rowY: lineRowY,
+  rowY,
   textBottom,
   strokeWidth,
   opacity,
@@ -581,8 +581,6 @@ function ClassicEntryShape({
 }) {
   if (entry.marks.length === 0) return null;
 
-  const rowY = lineRowY + (entry.rowOffset ?? 0);
-  const sourceLabel = entry.source === 'GLOBAL_RULE' ? 'قاعدة عامة' : entry.source === 'EDITOR' ? 'يدوي' : 'محرك';
   const color = entry.color;
   const madd = typeof entry.maddHarakat === 'number' ? toArabicDigits(entry.maddHarakat) : '';
   const ruleText = madd ? `${entry.ruleLabel} ${madd}` : entry.ruleLabel;
@@ -602,9 +600,6 @@ function ClassicEntryShape({
     <g
       data-entry-variant={entry.variantId}
       data-entry-alternative={entry.alternativeId}
-      data-entry-source={entry.source ?? 'ENGINE'}
-      data-local-override={entry.hasLocalOverride || undefined}
-      data-entry-rank={entry.orderRank}
       data-emphases={emphases.length}
       onClick={
         onClick
@@ -712,12 +707,7 @@ function ClassicEntryShape({
         </g>
       ))}
 
-      <text x={entry.labelX} y={rowY + 13} textAnchor="middle" fontSize={9}
-        fill={entry.hasLocalOverride ? '#92400e' : '#57534e'}
-        style={{ direction: 'rtl', userSelect: 'none' }}>
-        {sourceLabel}{entry.hasLocalOverride ? ' · متجاوز محليًا' : ''}
-      </text>
-      <title>{`${sourceLabel}${entry.hasLocalOverride ? ' — متجاوز محليًا' : ''} — ${entry.ruleLabel} — ${entry.categoryLabel}${
+      <title>{`${entry.ruleLabel} — ${entry.categoryLabel}${
         typeof entry.maddHarakat === 'number' ? ` — ${toArabicDigits(entry.maddHarakat)} حركات` : ''
       }`}</title>
     </g>

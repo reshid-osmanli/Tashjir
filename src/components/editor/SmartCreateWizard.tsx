@@ -14,8 +14,6 @@
 
 'use client';
 
-import { DEFAULT_TYPE_RANK, ORDERED_VARIANT_CATEGORIES } from '@/lib/tashjeer/type-ranks';
-
 import { useMemo, useRef, useState } from 'react';
 import type { VariantCategory } from '@/types';
 import type {
@@ -162,7 +160,7 @@ const WIZARD_TEMPLATES: WizardTemplate[] = [
   },
 ];
 
-const CATEGORY_ORDER = ORDERED_VARIANT_CATEGORIES;
+const CATEGORY_ORDER: VariantCategory[] = ['USUL', 'FARSH', 'MADUD', 'HAMZ', 'WAQF', 'TAJWEED'];
 
 const STEP_LABELS = ['التحديد', 'الأنواع', 'الأوجه', 'القرّاء', 'العلاقات', 'النطاق', 'المراجعة'] as const;
 
@@ -212,7 +210,7 @@ export function SmartCreateWizard({
 
   const [step, setStep] = useState(0);
   const [advanced, setAdvanced] = useState(() => readWizardPrefs().advanced);
-  const [selectedTypes, setSelectedTypes] = useState<VariantCategory[]>(['TAHQIQ', 'USUL', 'FARSH']);
+  const [selectedTypes, setSelectedTypes] = useState<VariantCategory[]>(['USUL', 'FARSH', 'MADUD']);
   const [variantsText, setVariantsText] = useState<Record<string, string>>({});
   const [typeStrength, setTypeStrength] = useState<Record<string, string>>({});
   const [typeText, setTypeText] = useState<Record<string, string>>({});
@@ -546,7 +544,7 @@ export function SmartCreateWizard({
   );
 
   const applyTemplateConfig = (config: WizardTemplateConfig) => {
-    setSelectedTypes([...config.types].sort((a, b) => DEFAULT_TYPE_RANK[a] - DEFAULT_TYPE_RANK[b]));
+    setSelectedTypes(config.types);
     setVariantsText((current) => ({ ...current, ...config.faces }));
     setRelationMode(config.relationMode);
     setContext(config.context);
@@ -585,7 +583,6 @@ export function SmartCreateWizard({
       selection: loci,
       baseTitle,
       types: selectedTypes,
-      typeRanks: DEFAULT_TYPE_RANK,
       scope,
       context,
       contextByType: effectiveContextByType,
@@ -619,7 +616,6 @@ export function SmartCreateWizard({
       selection: loci,
       baseTitle,
       types: selectedTypes,
-      typeRanks: DEFAULT_TYPE_RANK,
       scope,
       context,
       contextByType: effectiveContextByType,
@@ -686,8 +682,6 @@ export function SmartCreateWizard({
           id: createGlobalRuleId(),
           title: `${baseTitle} — ${CATEGORY_LABELS[type]}`,
           category: type,
-          orderRank: DEFAULT_TYPE_RANK[type],
-          recitationMode: (effectiveContextByType[type] ?? context) === 'ALWAYS' ? undefined : (effectiveContextByType[type] ?? context) as 'WAQF_ONLY' | 'WASL_ONLY',
           scope,
           ruleLabel: faces[0]?.label,
           pattern,
@@ -705,7 +699,7 @@ export function SmartCreateWizard({
           summary: `عمم المعالج ${toArabicDigits(inputs.length)} قواعد مستقلة على المصحف`,
         },
         () => {
-          saveGlobalRuleBatch(inputs, { rankMode: 'TYPE' });
+          saveGlobalRuleBatch(inputs);
         }
       );
       const matchNote =
@@ -723,7 +717,7 @@ export function SmartCreateWizard({
 
   const toggleType = (type: VariantCategory) => {
     setSelectedTypes((current) =>
-      (current.includes(type) ? current.filter((item) => item !== type) : [...current, type]).sort((a, b) => DEFAULT_TYPE_RANK[a] - DEFAULT_TYPE_RANK[b])
+      current.includes(type) ? current.filter((item) => item !== type) : [...current, type]
     );
   };
 
@@ -1101,7 +1095,7 @@ export function SmartCreateWizard({
                 ))}
               </div>
               <p className="text-xs text-stone-500">
-                الرتب: {selectedTypes.map((type) => `${toArabicDigits(DEFAULT_TYPE_RANK[type])} = ${CATEGORY_LABELS[type]}`).join(' · ') || '—'}
+                الرتب: {selectedTypes.map((type, index) => `${toArabicDigits(index + 1)} = ${CATEGORY_LABELS[type]}`).join(' · ') || '—'}
               </p>
             </div>
           )}
@@ -1304,7 +1298,7 @@ export function SmartCreateWizard({
                 <div className="space-y-3 rounded-lg border border-violet-200 bg-violet-50/40 p-3">
                   <p className="text-xs text-violet-900">
                     النمط حتمي من {characterRange ? 'الحروف المحددة' : 'الكلمات المحددة كاملة'} — يُنشأ لكل نوع مختار كيان مستقل برتبته
-                    ({selectedTypes.map((type) => `${toArabicDigits(DEFAULT_TYPE_RANK[type])}=${CATEGORY_LABELS[type]}`).join('، ')})؛
+                    ({selectedTypes.map((type, index) => `${toArabicDigits(index + 1)}=${CATEGORY_LABELS[type]}`).join('، ')})؛
                     التجميع في «عملية إنشاء» فقط لا في كيان واحد.
                   </p>
                   {generalPattern.error && (

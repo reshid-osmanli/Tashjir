@@ -204,12 +204,6 @@ export interface ClassicMark {
  * الراوي يقرأ الآية مرات.
  */
 export interface ClassicLineEntry {
-  /** مصدر وشارة الاستقلال يصلان إلى الرسم المشترك للمحرر والمصحف. */
-  source?: 'GLOBAL_RULE' | 'EDITOR' | 'ENGINE';
-  /** فصل بصري للأحكام المتراكبة على الكلمات نفسها داخل السطر المركب. */
-  rowOffset?: number;
-  hasLocalOverride?: boolean;
-  orderRank?: number;
   variantId: string;
   alternativeId: string;
   category: VariantCategory;
@@ -529,27 +523,11 @@ export function generateClassicTashjeer(
     lines.push(...ordered);
   }
 
-  // رتب الأنواع مستقلة عن الأسماء، حتى بعد الدمج اليدوي. الأحكام في
-  // الموضع نفسه تأخذ مسارات فرعية لكي لا تُطبع ثلاثة نصوص فوق بعضها.
-  let entryStackHeight = 0;
-  const entryGap = Math.max(opts.fontSize * 1.1, 36);
-  for (const line of lines) {
-    line.entries.sort((a, b) => (a.orderRank ?? Infinity) - (b.orderRank ?? Infinity));
-    const lanes: ClassicLineEntry[][] = [];
-    for (const entry of line.entries) {
-      let lane = lanes.findIndex(items => items.every(other =>
-        !other.marks.some(mark => entry.marks.some(own => own.position === mark.position))));
-      if (lane < 0) lane = lanes.length;
-      (lanes[lane] ??= []).push(entry);
-      entry.rowOffset = lane * entryGap;
-      entryStackHeight = Math.max(entryStackHeight, entry.rowOffset);
-    }
-  }
   assignClassicLanes(lines);
 
   // 3. الحساب الهندسي. كل الأسطر تنزل تحت النص واحدا تلو الآخر.
   const rowGap = Math.max(opts.fontSize * 1.3 * engine.textToTreeGap, 30 * engine.textToTreeGap);
-  const rowHeight = Math.max(opts.fontSize * 1.15 * engine.rowSpacing, 30 * engine.rowSpacing) + entryStackHeight;
+  const rowHeight = Math.max(opts.fontSize * 1.15 * engine.rowSpacing, 30 * engine.rowSpacing);
   const firstRowY = textBottom + rowGap;
   const firstTopRowY = textTop - rowGap;
 
@@ -866,9 +844,6 @@ function combinationToLine(
     if (marks.length === 0) continue;
 
     entries.push({
-      source: pick.variant.isGlobalDerived ? 'GLOBAL_RULE' : pick.variant.origin === 'EDITOR' ? 'EDITOR' : 'ENGINE',
-      hasLocalOverride: pick.variant.hasLocalOverride,
-      orderRank: pick.variant.orderRank,
       variantId: pick.variant.id,
       alternativeId: pick.alternative.id,
       category: pick.variant.category,
@@ -1068,9 +1043,6 @@ function alternativeToLine(
     alt.ruleLabel?.trim() || alt.label?.trim() || CATEGORY_LABELS[variant.category];
   const entries: ClassicLineEntry[] = [
     {
-      source: variant.isGlobalDerived ? 'GLOBAL_RULE' : variant.origin === 'EDITOR' ? 'EDITOR' : 'ENGINE',
-      hasLocalOverride: variant.hasLocalOverride,
-      orderRank: variant.orderRank,
       variantId: variant.id,
       alternativeId: alt.id,
       category: variant.category,
@@ -1176,7 +1148,6 @@ function manualToLine(
     ruleLabel: manual.label?.trim() || manual.title,
     entries: [
       {
-        source: 'EDITOR',
         variantId: '',
         alternativeId: '',
         category: manual.category,

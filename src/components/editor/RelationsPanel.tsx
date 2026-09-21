@@ -158,7 +158,7 @@ function LinkDecisionNoticeCard() {
 
 function FaceLinkEditor({ classic }: { classic: ClassicTashjeer }) {
   const document = useEditorStore((state) => state.document);
-  const addLink = useEditorStore((state) => state.requestAddLink);
+  const addLink = useEditorStore((state) => state.addLink);
   const variants = useMemo(
     () => (document ? getEffectiveVariants(document) : []),
     [document]
@@ -268,7 +268,7 @@ function FaceSelect({
 // ==================== سطر بسطر: الدمج المنطقي ====================
 
 function LineLinkEditor({ classic }: { classic: ClassicTashjeer }) {
-  const addLink = useEditorStore((state) => state.requestAddLink);
+  const addLink = useEditorStore((state) => state.addLink);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [relation, setRelation] = useState<TashjeerLinkRelation>('MERGE');
@@ -359,7 +359,7 @@ function SegmentEditor({ classic }: { classic: ClassicTashjeer }) {
   const markedPositions = useEditorStore((state) => state.markedPositions);
   const markedCharacters = useEditorStore((state) => state.markedCharacters);
   const addSegment = useEditorStore((state) => state.addSegment);
-  const addLink = useEditorStore((state) => state.requestAddLink);
+  const addLink = useEditorStore((state) => state.addLink);
 
   const variants = useMemo(
     () => (document ? getEffectiveVariants(document) : []),

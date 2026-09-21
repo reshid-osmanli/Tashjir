@@ -57,8 +57,6 @@ export interface SmartCreateInput {
   baseTitle: string;
   /** أنواع مستقلة تُنشأ دفعة واحدة (الخطوة 2). الترتيب يحدد الرتبة. */
   types: VariantCategory[];
-  /** رتب إنشاء صريحة؛ ترتيب المدخلات احتياطي للتوافق مع المستدعين القدامى. */
-  typeRanks?: Partial<Record<VariantCategory, number>>;
   /** نطاق القراء (الخطوة 4). */
   scope: ReadingScope;
   /** سياق الوقف/الوصل لكل الأنواع (الخطوة 7). */
@@ -82,7 +80,6 @@ export interface SmartCreateResult {
 }
 
 const CATEGORY_LABELS_SMART: Record<VariantCategory, string> = {
-  TAHQIQ: 'تحقيق',
   USUL: 'أصول',
   FARSH: 'فرش',
   MADUD: 'مد',
@@ -169,7 +166,7 @@ function buildGroup(
       context,
       scope: input.scope,
       source: 'editor',
-      rank: input.typeRanks?.[category] ?? index + 1,
+      rank: index + 1,
       version: 1,
       status: 'DRAFT',
       variants: [baseVariant, ...customVariants],

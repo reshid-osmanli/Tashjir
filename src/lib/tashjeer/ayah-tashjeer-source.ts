@@ -10,7 +10,7 @@
 // وأي مستند يُمرَّر إلى خط الرسم نفسه الذي يستعمله المحرر؟
 
 import { getSurahAyahs } from '@/data/quran';
-import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
+import { findGlobalRuleMatchesInAyah } from '@/lib/quran-logic/global-rule-engine';
 import {
   createDocument,
   hasDocument,
@@ -27,7 +27,10 @@ function activePatternRules() {
 
 /** هل تطابق هذه الآية قاعدة عامة نشطة؟ */
 export function ayahMatchesActiveGlobalRule(ayahKey: number): boolean {
-  return getEffectiveVariants({ ...createDocument(ayahKey), variants: [] }).length > 0;
+  for (const rule of activePatternRules()) {
+    if (findGlobalRuleMatchesInAyah(rule, ayahKey).length > 0) return true;
+  }
+  return false;
 }
 
 /**
@@ -70,7 +73,12 @@ export function surahAyahsWithTashjeer(surahNumber: number): Set<number> {
 
   for (const ayah of getSurahAyahs(surahNumber)) {
     if (keys.has(ayah.key)) continue;
-    if (ayahMatchesActiveGlobalRule(ayah.key)) keys.add(ayah.key);
+    for (const rule of rules) {
+      if (findGlobalRuleMatchesInAyah(rule, ayah.key).length > 0) {
+        keys.add(ayah.key);
+        break;
+      }
+    }
   }
 
   return keys;

@@ -52,7 +52,6 @@ import { buildReadingPlan, compareReadingPositions, variantTraversalAnchor } fro
  * النص كان خطأ في الإصدار السابق: يقطع تسلسل القراءة ويزاحم الحركات.
  */
 export const CATEGORY_SIDE: Record<VariantCategory, AnchorSide> = {
-  TAHQIQ: 'BOTTOM',
   USUL: 'BOTTOM',
   MADUD: 'BOTTOM',
   FARSH: 'BOTTOM',
@@ -63,7 +62,6 @@ export const CATEGORY_SIDE: Record<VariantCategory, AnchorSide> = {
 
 /** أسماء الفئات بالعربية. */
 export const CATEGORY_LABELS: Record<VariantCategory, string> = {
-  TAHQIQ: 'تحقيق',
   USUL: 'أصول',
   FARSH: 'فرش',
   MADUD: 'مدود',
@@ -77,7 +75,6 @@ export const CATEGORY_LABELS: Record<VariantCategory, string> = {
  * الأقل رقما يُرسم أقرب إلى النص.
  */
 const CATEGORY_PRIORITY: Record<VariantCategory, number> = {
-  TAHQIQ: 0,
   FARSH: 0,
   HAMZ: 1,
   MADUD: 0,

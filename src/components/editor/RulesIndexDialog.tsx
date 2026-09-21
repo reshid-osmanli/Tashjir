@@ -187,7 +187,7 @@ export function RulesIndexDialog({
 
   const removeRule = async (rule: GlobalRule) => {
     const stats = occurrenceStats(rule.id);
-    const matches = rule.pattern ? findGlobalRuleMatches(rule).length : 0;
+    const matches = rule.pattern ? findGlobalRuleMatches(rule, { limit: 5000 }).length : 0;
     const overrideCount = listOccurrenceOverrides(rule.id).length;
     const ok = await confirmAction({
       title: `حذف القاعدة العامة «${rule.title}»`,
@@ -196,7 +196,6 @@ export function RulesIndexDialog({
       impacts: [
         { label: 'موضع مشتق في المصحف', count: matches },
         { label: 'استثناء موضعي مسجَّل', count: overrideCount },
-        { label: 'تجاوزات محلية قائمة (دون تكرار)', count: stats.local },
         { label: 'منها محذوف موضعيًا', count: stats.deleted },
         { label: 'منها معدَّل محليًا', count: stats.edited },
       ],
@@ -210,7 +209,7 @@ export function RulesIndexDialog({
         targetType: 'RULE',
         targetId: rule.id,
         category: rule.category,
-        summary: `حذف القاعدة العامة «${rule.title}» من المصحف كله مع ${toArabicDigits(overrideCount)} استثناء موضعي`,
+        summary: `حذف القاعدة العامة «${rule.title}» من المصحف كله مع ${overrideCount} استثناء موضعي`,
       },
       () => deleteGlobalRule(rule.id)
     );

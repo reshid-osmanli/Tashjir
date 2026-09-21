@@ -27,7 +27,6 @@ export function editorCategoryToStudioType(category: VariantCategory): string {
   switch (category) {
     case 'MADUD':
       return 'MADD';
-    case 'TAHQIQ':
     case 'USUL':
       return 'TAHQIQ';
     case 'HAMZ':

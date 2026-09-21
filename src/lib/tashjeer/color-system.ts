@@ -11,7 +11,6 @@ import { LineType, ReviewStatus, NodePosition, VariantCategory } from '@/types';
 // ==================== ألوان خطوط التشجير ====================
 
 export const LINE_COLORS: Record<LineType, string> = {
-  TAHQIQ: '#0891b2',
   USUL: '#22c55e',   // أخضر - الأصول
   FARSH: '#3b82f6',  // أزرق - الفرش
   MADUD: '#f97316',  // برتقالي - المدود
@@ -21,7 +20,6 @@ export const LINE_COLORS: Record<LineType, string> = {
 };
 
 export const LINE_COLORS_HEX: Record<LineType, string> = {
-  TAHQIQ: '#0891b2',
   USUL: '#22c55e',
   FARSH: '#3b82f6',
   MADUD: '#f97316',
@@ -31,7 +29,6 @@ export const LINE_COLORS_HEX: Record<LineType, string> = {
 };
 
 export const LINE_COLORS_RGB: Record<LineType, { r: number; g: number; b: number }> = {
-  TAHQIQ: { r: 8, g: 145, b: 178 },
   USUL: { r: 34, g: 197, b: 94 },
   FARSH: { r: 59, g: 130, b: 246 },
   MADUD: { r: 249, g: 115, b: 22 },
@@ -260,7 +257,6 @@ export const OPACITIES = {
  * من نوع VariantCategory لأن نموذج المحرر الجديد يستخدمه.
  */
 export const CATEGORY_COLORS: Record<VariantCategory, string> = {
-  TAHQIQ: '#0e7490',
   USUL: '#16a34a',    // أخضر: الأصول، أحكام عامة مطّردة
   FARSH: '#2563eb',   // أزرق: الفرش، مواضع جزئية
   MADUD: '#ea580c',   // برتقالي: المدود
@@ -271,7 +267,6 @@ export const CATEGORY_COLORS: Record<VariantCategory, string> = {
 
 /** لون خفيف لخلفيات البطاقات والشارات. */
 export const CATEGORY_SOFT_COLORS: Record<VariantCategory, string> = {
-  TAHQIQ: '#cffafe',
   USUL: '#dcfce7',
   FARSH: '#dbeafe',
   MADUD: '#ffedd5',

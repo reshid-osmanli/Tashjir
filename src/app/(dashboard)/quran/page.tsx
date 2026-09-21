@@ -24,13 +24,10 @@ import {
 } from '@/data/quran';
 import { exportAyahDocument, listDocuments } from '@/lib/storage/document-store';
 import { surahAyahsWithTashjeer } from '@/lib/tashjeer/ayah-tashjeer-source';
-import { useGlobalRules } from '@/hooks/useGlobalRules';
-import { useRuleOccurrences } from '@/hooks/useRuleOccurrences';
+import { listGlobalRules } from '@/lib/storage/global-rules-store';
 import { AyahTashjeerView } from '@/components/quran/AyahTashjeerView';
 
 export default function QuranPage() {
-  const { rules, key: rulesKey } = useGlobalRules();
-  const occurrences = useRuleOccurrences();
   const [surahNumber, setSurahNumber] = useState(1);
   const [query, setQuery] = useState('');
   const [savedKeys, setSavedKeys] = useState<Set<number>>(new Set());
@@ -41,14 +38,14 @@ export default function QuranPage() {
     setSavedKeys(new Set(listDocuments().map((entry) => entry.ayahKey)));
     // يشمل المستندات المحفوظة ومواضع القواعد العامة النشطة في هذه السورة.
     setTashjeerKeys(surahAyahsWithTashjeer(surahNumber));
-  }, [surahNumber, rulesKey, occurrences.key]);
+  }, [surahNumber]);
 
   const surah = getSurahOrFirst(surahNumber);
   const ayahs = useMemo(() => getSurahAyahs(surahNumber), [surahNumber]);
   const filteredSurahs = useMemo(() => searchSurahs(query), [query]);
   const savedInSurah = ayahs.filter((ayah) => savedKeys.has(ayah.key)).length;
   const tashjeerInSurah = ayahs.filter((ayah) => tashjeerKeys.has(ayah.key)).length;
-  const globalRulesCount = rules.filter((rule) => rule.isActive && rule.pattern).length;
+  const globalRulesCount = listGlobalRules().filter((rule) => rule.isActive && rule.pattern).length;
 
   const exportAyahJson = (ayahKey: number, surah: number, ayah: number) => {
     const blob = new Blob([exportAyahDocument(ayahKey)], { type: 'application/json;charset=utf-8' });
@@ -185,7 +182,7 @@ export default function QuranPage() {
                       </p>
 
                       {/* التشجير النهائي: المستند المحفوظ أو المشتق من القواعد العامة. */}
-                      {hasTashjeer && showTashjeer && <AyahTashjeerView key={`${ayah.key}:${rulesKey}:${occurrences.key}`} ayahKey={ayah.key} />}
+                      {hasTashjeer && showTashjeer && <AyahTashjeerView ayahKey={ayah.key} />}
                     </div>
 
                     <div className="mt-1.5 flex shrink-0 gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
