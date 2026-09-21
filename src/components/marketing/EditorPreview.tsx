@@ -55,10 +55,10 @@ export function EditorPreview({ model }: { model: ShowcaseAyah }) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-[1fr_12rem]">
-          <div className="viz-canvas viz-grid border-b border-line md:border-b-0 md:border-e">
+          <div className="tashjeer-scroll-area viz-canvas viz-grid overflow-x-auto border-b border-line md:border-b-0 md:border-e">
             <svg
               viewBox={`${model.viewBox.x} ${model.viewBox.y} ${model.viewBox.width} ${model.viewBox.height}`}
-              className="h-[13rem] w-full"
+              className="h-[13rem] w-full min-w-[30rem]"
               role="presentation"
             >
               <PlateText model={model} />

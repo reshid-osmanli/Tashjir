@@ -107,9 +107,10 @@ export function QiraatTree({ imams }: { imams: QiraatImamNode[] }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-8">
       <div className="min-w-0">
+        <div className="tashjeer-scroll-area -mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
         <svg
           viewBox={`0 0 ${G.width} ${geometry.height}`}
-          className="w-full"
+          className="w-full min-w-[34rem]"
           role="img"
           aria-label={`شجرة القراءات: ${toArabicDigits(imams.length)} قراء، ${toArabicDigits(narratorCount)} راويا، ${toArabicDigits(pathCount)} طريقا`}
         >
@@ -284,6 +285,7 @@ export function QiraatTree({ imams }: { imams: QiraatImamNode[] }) {
             );
           })}
         </svg>
+        </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-ink-400">
           <span className="flex items-center gap-1.5">

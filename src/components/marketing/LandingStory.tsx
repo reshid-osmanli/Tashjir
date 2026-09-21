@@ -214,7 +214,7 @@ export function ProblemSection() {
           </div>
 
           {/* مروحة الأعداد: تمثيل البنية نفسها، بأرقام المشروع الحقيقية. */}
-          <div className="self-center">
+          <div className="mx-auto w-full max-w-md self-center">
             <svg viewBox="0 0 420 220" className="w-full" role="img" aria-label="بنية النسبة: قراءات ثم روايات ثم طرق">
               <g fill="none" stroke="var(--color-line-strong)" strokeWidth={1}>
                 {Array.from({ length: READING_IMAMS.length }).map((_, index) => (
@@ -255,13 +255,13 @@ export function ProblemSection() {
                 <circle key={`pp-${index}`} cx={132} cy={9 + index * 7.5} r={1.8} fill="var(--color-ink-300)" />
               ))}
 
-              <text x={392} y={214} textAnchor="middle" fontSize={11} fill="var(--color-ink-500)">
+              <text x={392} y={214} textAnchor="middle" fontSize={12} fill="var(--color-ink-500)">
                 {toArabicDigits(READING_IMAMS.length)} قراءات
               </text>
-              <text x={252} y={214} textAnchor="middle" fontSize={11} fill="var(--color-ink-500)">
+              <text x={252} y={214} textAnchor="middle" fontSize={12} fill="var(--color-ink-500)">
                 {toArabicDigits(NARRATORS.length)} رواية
               </text>
-              <text x={86} y={214} textAnchor="middle" fontSize={11} fill="var(--color-ink-500)">
+              <text x={86} y={214} textAnchor="middle" fontSize={12} fill="var(--color-ink-500)">
                 طرق
               </text>
             </svg>

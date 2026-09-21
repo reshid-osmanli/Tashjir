@@ -68,7 +68,7 @@ export function PublicFooter() {
 
           {COLUMNS.map((column) => (
             <nav key={column.title} aria-label={column.title}>
-              <h2 className="font-ui text-label font-medium text-ink-800">{column.title}</h2>
+              <p className="font-ui text-label font-medium text-ink-800">{column.title}</p>
               <ul className="mt-3 space-y-2">
                 {column.links.map((link) => (
                   <li key={link.href + link.label}>
