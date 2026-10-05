@@ -218,17 +218,159 @@ function matrixKey(a: string, b: string): string {
   return [a, b].sort().join('|');
 }
 
-/** يقرأ مصفوفة الدمج وحدها؛ لا يرث ترتيب JSON كقرار. */
+function normalizeSemanticKey(key: string): string {
+  return key.trim().toLowerCase();
+}
+
+function semanticKeyMatches(entryKey: string, variantKeys: Set<string>): boolean {
+  const entryNorm = normalizeSemanticKey(entryKey);
+  if (variantKeys.has(entryKey) || variantKeys.has(entryNorm)) return true;
+  // Check if any variant key contains entry key as substring (case-insensitive)
+  for (const vk of variantKeys) {
+    const vkNorm = normalizeSemanticKey(vk);
+    if (vkNorm.includes(entryNorm) || entryNorm.includes(vkNorm)) return true;
+  }
+  // Composite with slash: e.g., "MADD/MUTTASIL" => both parts must match
+  if (entryKey.includes('/')) {
+    const parts = entryKey.split('/').map((p) => p.trim()).filter(Boolean);
+    if (parts.length === 0) return false;
+    return parts.every((part) => {
+      const partNorm = normalizeSemanticKey(part);
+      for (const vk of variantKeys) {
+        const vkNorm = normalizeSemanticKey(vk);
+        if (vkNorm.includes(partNorm) || partNorm.includes(vkNorm)) return true;
+      }
+      return variantKeys.has(part) || variantKeys.has(partNorm);
+    });
+  }
+  return false;
+}
+
+function entrySpecificity(entry: MergeMatrixEntry, keysA: Set<string>, keysB: Set<string>): number {
+  // Higher score for more specific matches: option > type > family > category
+  const scoreFor = (entryKey: string, keys: Set<string>): number => {
+    const entryNorm = normalizeSemanticKey(entryKey);
+    // optionId usually contains '_' and numeric or long
+    if (entryKey.includes('_') && /\d/.test(entryKey)) return 4; // option
+    if (entryKey.includes('_')) return 3; // type
+    if (entryKey.length <= 4) return 1; // short like MADD, FARSH
+    // Check if matches type pattern
+    for (const k of keys) {
+      if (k === entryKey) {
+        if (k.includes('_') && /\d/.test(k)) return 4;
+        if (k.includes('_')) return 3;
+        if (k.length <= 6) return 2;
+        return 1;
+      }
+    }
+    return 1;
+  };
+  return scoreFor(entry.a, keysA) + scoreFor(entry.b, keysB);
+}
+
+function findMatchingEntries(
+  keysA: Set<string>,
+  keysB: Set<string>,
+  matrix: MergeMatrixEntry[]
+): MergeMatrixEntry[] {
+  return matrix.filter((entry) => {
+    const aMatchesB =
+      (semanticKeyMatches(entry.a, keysA) && semanticKeyMatches(entry.b, keysB)) ||
+      (semanticKeyMatches(entry.a, keysB) && semanticKeyMatches(entry.b, keysA));
+    if (aMatchesB) return true;
+    // Fallback to exact old behavior
+    return matrixKey(entry.a, entry.b) === matrixKey([...keysA][0] ?? '', [...keysB][0] ?? '');
+  });
+}
+
+export function buildMergeKeys(
+  primaryType: string,
+  ctx?: DecisionContext,
+  side: 'primary' | 'related' = 'primary'
+): Set<string> {
+  const keys = new Set<string>();
+  if (primaryType) {
+    keys.add(primaryType);
+    keys.add(normalizeSemanticKey(primaryType));
+  }
+  if (!ctx) return keys;
+  // Primary side uses ruleFamilyId, ruleTypeId, ruleOptionId, choiceGroupId
+  // Related side uses related* if present, else same fields for fallback
+  const family = side === 'primary'
+    ? (ctx.ruleFamilyId as string | undefined)
+    : ((ctx.relatedRuleFamilyId as string | undefined) ?? (ctx.ruleFamilyId as string | undefined));
+  const type = side === 'primary'
+    ? (ctx.ruleTypeId as string | undefined)
+    : ((ctx.relatedRuleTypeId as string | undefined) ?? (ctx.ruleTypeId as string | undefined));
+  const option = side === 'primary'
+    ? (ctx.ruleOptionId as string | undefined)
+    : ((ctx.relatedRuleOptionId as string | undefined) ?? (ctx.ruleOptionId as string | undefined));
+  const choice = ctx.choiceGroupId as string | undefined;
+  const category = (ctx.category as string | undefined) ?? (ctx.differenceType as string | undefined);
+  const relatedCat = ctx.relatedType as string | undefined;
+
+  if (family) {
+    keys.add(family);
+    keys.add(normalizeSemanticKey(family));
+  }
+  if (type) {
+    keys.add(type);
+    keys.add(normalizeSemanticKey(type));
+    // also add code part: e.g., madd_muttasil -> MUTTASIL
+    const parts = type.split('_');
+    if (parts.length > 1) {
+      keys.add(parts[parts.length - 1].toUpperCase());
+      keys.add(normalizeSemanticKey(parts[parts.length - 1]));
+    }
+  }
+  if (option) {
+    keys.add(option);
+    keys.add(normalizeSemanticKey(option));
+  }
+  if (choice) {
+    keys.add(choice);
+  }
+  if (category && side === 'primary') {
+    keys.add(category);
+  }
+  if (relatedCat && side === 'related') {
+    keys.add(relatedCat);
+  }
+  // Composite keys for flexibility: family/type
+  if (family && type) {
+    keys.add(`${family}/${type}`);
+    keys.add(`${normalizeSemanticKey(family)}/${normalizeSemanticKey(type)}`);
+  }
+  return keys;
+}
+
+/** يقرأ مصفوفة الدمج وحدها؛ لا يرث ترتيب JSON كقرار. يدعم الآن المفاتيح الدلالية. */
 export function resolveMergeDecision(
   a: string,
   b: string,
-  profile: EngineConfig
+  profile: EngineConfig,
+  ctx?: DecisionContext
 ): { merge: boolean; reason: string; priority: number; entry?: MergeMatrixEntry } {
-  const entries = profile.mergeMatrix.filter((entry) => matrixKey(entry.a, entry.b) === matrixKey(a, b));
+  // Build semantic key sets if ctx provided
+  const keysA = ctx ? buildMergeKeys(a, ctx, 'primary') : new Set([a, normalizeSemanticKey(a)]);
+  const keysB = ctx ? buildMergeKeys(b, ctx, 'related') : new Set([b, normalizeSemanticKey(b)]);
+
+  let entries = findMatchingEntries(keysA, keysB, profile.mergeMatrix);
+
+  // Fallback to exact old key matching if no semantic match
+  if (entries.length === 0) {
+    entries = profile.mergeMatrix.filter((entry) => matrixKey(entry.a, entry.b) === matrixKey(a, b));
+  }
+
   if (entries.length === 0) return { merge: false, reason: 'لا مدخل في مصفوفة الدمج — افتراضيًا لا دمج', priority: 0 };
-  const sorted = [...entries].sort(
-    (x, y) => y.priority - x.priority || Number(x.merge) - Number(y.merge) || x.reason.localeCompare(y.reason, 'ar')
-  );
+
+  const sorted = [...entries].sort((x, y) => {
+    if (y.priority !== x.priority) return y.priority - x.priority;
+    const sx = entrySpecificity(x, keysA, keysB);
+    const sy = entrySpecificity(y, keysA, keysB);
+    if (sy !== sx) return sy - sx;
+    return Number(x.merge) - Number(y.merge) || x.reason.localeCompare(y.reason, 'ar');
+  });
   const entry = sorted[0];
   return {
     merge: entry.merge,
@@ -267,7 +409,7 @@ export function decideMerge(
   traceEvaluated(trace, evaluated);
 
   const mergeRules = matched.filter((rule) => rule.category === 'MERGE' || rule.type === 'MERGE');
-  const matrix = resolveMergeDecision(a, b, profile);
+  const matrix = resolveMergeDecision(a, b, profile, context);
   let decision = matrix.merge;
   let reason = matrix.reason;
   trace.push({
