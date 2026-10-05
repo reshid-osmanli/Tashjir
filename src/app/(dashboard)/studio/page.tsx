@@ -29,11 +29,13 @@ import { CandidateRulesPanel } from '@/components/studio/CandidateRulesPanel';
 import { ProfileComparePanel } from '@/components/studio/ProfileComparePanel';
 import { PublishHistoryPanel } from '@/components/studio/PublishHistoryPanel';
 import { EngineSettingsPanel } from '@/components/studio/EngineSettingsPanel';
+import { RecitationRuleCatalogPanel } from '@/components/studio/RecitationRuleCatalogPanel';
 
-type Section = 'dashboard' | 'rules' | 'merge' | 'priority' | 'why' | 'tests' | 'candidates' | 'compare' | 'publish' | 'io' | 'settings';
+type Section = 'dashboard' | 'recitation-catalog' | 'rules' | 'merge' | 'priority' | 'why' | 'tests' | 'candidates' | 'compare' | 'publish' | 'io' | 'settings';
 
 const SECTIONS: Array<{ id: Section; label: string; hint: string }> = [
   { id: 'dashboard', label: 'لوحة المعلومات', hint: 'نظرة عامة' },
+  { id: 'recitation-catalog', label: 'مكتبة القواعد القرائية', hint: 'المدود والفرش...' },
   { id: 'rules', label: 'القواعد ومنشئها', hint: 'FR-ES-02/03/07' },
   { id: 'merge', label: 'مصفوفة الدمج', hint: 'FR-ES-05' },
   { id: 'priority', label: 'الأولويات والأنابيب', hint: 'FR-ES-01/04/06' },
@@ -328,6 +330,8 @@ export default function EngineStudioPage() {
                 }}
               />
             )}
+
+            {section === 'recitation-catalog' && <RecitationRuleCatalogPanel />}
 
             {section === 'why' && <WhyTracePlayground config={config} />}
 

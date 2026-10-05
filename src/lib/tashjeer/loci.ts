@@ -234,6 +234,40 @@ export function exclusiveGroupKeys(variants: Variant[]): Map<string, string> {
   return keys;
 }
 
+/** يولّد معرّف مجموعة اختيار حتمي من موضع الآية — Spec §15 */
+export function generateChoiceGroupId(input: {
+  ayahKey: number;
+  startPosition: number;
+  endPosition: number;
+  characterRange?: CharacterRange;
+  ruleFamilyId?: string;
+  ruleTypeId?: string;
+}): string {
+  const { ayahKey, startPosition, endPosition, characterRange, ruleFamilyId, ruleTypeId } = input;
+  const familyPart = ruleFamilyId ? `:family:${ruleFamilyId}` : '';
+  const typePart = ruleTypeId ? `:type:${ruleTypeId}` : '';
+  if (characterRange) {
+    return `ayah:${ayahKey}:locus:${startPosition}.${characterRange.start.characterIndex}-${endPosition}.${characterRange.end.characterIndex}${familyPart}${typePart}`;
+  }
+  return `ayah:${ayahKey}:locus:${startPosition}-${endPosition}${familyPart}${typePart}`;
+}
+
+export function choiceGroupIdOfVariant(variant: Variant): string {
+  const existing = (variant as any).choiceGroupId as string | undefined;
+  if (existing) return existing;
+  const range = variant.characterRange;
+  const familyId = (variant as any).ruleFamilyId as string | undefined;
+  const typeId = (variant as any).ruleTypeId as string | undefined;
+  return generateChoiceGroupId({
+    ayahKey: variant.ayahKey,
+    startPosition: variant.startPosition,
+    endPosition: variant.endPosition,
+    characterRange: variant.targetKind === 'CHARACTERS' ? range : undefined,
+    ruleFamilyId: familyId,
+    ruleTypeId: typeId,
+  });
+}
+
 /** عنوان مختصر للمواضع: «ك٨ و ك١٠» أو مدى واحد. */
 export function describeLoci(loci: VariantLocus[]): string {
   if (loci.length === 0) return '';

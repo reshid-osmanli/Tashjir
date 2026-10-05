@@ -53,13 +53,23 @@ export const DEFAULT_EXECUTION_ORDER: string[] = [
   'FALLBACK',
 ];
 
-/** مصفوفة الدمج الافتراضية (FR-ES-05، ملحق ب). */
+/** مصفوفة الدمج الافتراضية (FR-ES-05، ملحق ب). محدثة لدعم المستويات الدلالية (Spec §§18,42). */
 export const DEFAULT_MERGE_MATRIX: MergeMatrixEntry[] = [
   { a: 'MADD', b: 'TAHQIQ', merge: true, priority: 80, reason: 'مرتبطان' },
   { a: 'MADD', b: 'WASL', merge: true, priority: 70, reason: 'مرتبطان' },
   { a: 'FARSH', b: 'MADD', merge: false, priority: 100, reason: 'مستقلان' },
   { a: 'FARSH', b: 'TAHQIQ', merge: false, priority: 100, reason: 'مستقلان' },
-  { a: 'MADD', b: 'MADD', merge: false, priority: 90, reason: 'متنافيان (مد ٢ ومد ٤)' },
+  // المدود المختلفة المواضع تجتمع في قراءة واحدة — نفس الموضع يفصل عبر Choice Group
+  { a: 'MADD', b: 'MADD', merge: true, conditional: true, priority: 90, reason: 'مدود مختلفة المواضع تجتمع — نفس الموضع متنافيان عبر Choice Group' },
+  // مستويات أدق: متصل + منفصل => MERGE (Spec §18)
+  { a: 'madd_muttasil', b: 'madd_munfasil', merge: true, priority: 95, reason: 'المد المتصل مع المنفصل يجتمعان في قراءة واحدة' },
+  { a: 'MADD/MUTTASIL', b: 'MADD/MUNFASIL', merge: true, priority: 95, reason: 'المد المتصل مع المنفصل يجتمعان' },
+  { a: 'MUTTASIL', b: 'MUNFASIL', merge: true, priority: 95, reason: 'متصل ومنفصل مرتبطان' },
+  // نفس النوع في مواضع مختلفة => قابل للجمع
+  { a: 'madd_muttasil', b: 'madd_muttasil', merge: true, conditional: true, priority: 85, reason: 'نفس النوع في مواضع مختلفة قابل للجمع' },
+  { a: 'madd_munfasil', b: 'madd_munfasil', merge: true, conditional: true, priority: 85, reason: 'منفصل في مواضع مختلفة قابل للجمع' },
+  { a: 'MUTTASIL', b: 'MUTTASIL', merge: true, conditional: true, priority: 85, reason: 'متصل في مواضع مختلفة' },
+  { a: 'MUNFASIL', b: 'MUNFASIL', merge: true, conditional: true, priority: 85, reason: 'منفصل في مواضع مختلفة' },
 ];
 
 /** علاقات النظام الافتراضية: لا تُنشأ علاقة تلقائيا خارج هذه السياسة. */
@@ -116,7 +126,7 @@ export const DEFAULT_SYSTEM_RULES: EngineRule[] = [
   },
   {
     id: 'er-system-merge-mutually-exclusive-madd',
-    name: 'المدود المتعددة متنافية',
+    name: 'المدود المتعددة متنافية عند نفس الموضع',
     type: 'MERGE',
     category: 'MERGE',
     scope: 'MUSHAF',
@@ -124,10 +134,34 @@ export const DEFAULT_SYSTEM_RULES: EngineRule[] = [
       all: [
         { field: 'differenceType', op: 'equals', value: 'MADD' },
         { field: 'otherType', op: 'equals', value: 'MADD' },
+        { field: 'sameChoiceGroup', op: 'equals', value: true },
       ],
     },
-    actions: [{ type: 'PREVENT_MERGE' }],
+    actions: [{ type: 'PREVENT_MERGE', params: { exclusive: true } }],
     priority: 90,
+    groupId: 'merge',
+    specificity: 'MUSHAF',
+    hardness: 'HARD',
+    status: 'ACTIVE',
+    version: 1,
+    createdAt: 'system',
+    updatedAt: 'system',
+  },
+  {
+    id: 'er-system-merge-madd-same-type-different-option',
+    name: 'نفس نوع المد بقيم مختلفة في نفس الموضع متنافيان',
+    type: 'MERGE',
+    category: 'MERGE',
+    scope: 'MUSHAF',
+    conditions: {
+      all: [
+        { field: 'ruleFamilyId', op: 'equals', value: 'madd' },
+        { field: 'sameType', op: 'equals', value: true },
+        { field: 'sameChoiceGroup', op: 'equals', value: true },
+      ],
+    },
+    actions: [{ type: 'PREVENT_MERGE', params: { exclusive: true } }],
+    priority: 95,
     groupId: 'merge',
     specificity: 'MUSHAF',
     hardness: 'HARD',
@@ -178,6 +212,20 @@ export interface DecisionContext {
   position?: string;
   scope?: string;
   specificityLevel?: SpecificityLevel;
+  // ===== الهوية الدلالية للمدود (Spec §§40-41) =====
+  ruleFamilyId?: string;
+  ruleTypeId?: string;
+  ruleOptionId?: string;
+  choiceGroupId?: string;
+  sameFamily?: boolean;
+  sameType?: boolean;
+  sameOption?: boolean;
+  sameLocus?: boolean;
+  sameChoiceGroup?: boolean;
+  recitationContext?: string;
+  // للسياق المشتق الموحد
+  category?: string;
+  locus?: string;
 }
 
 /** يبني سياق قرار من حقول مسطّحة. */

@@ -114,6 +114,13 @@ export interface VariantAlternative extends CopyProvenance {
    */
   maddHarakat?: number;
   /**
+   * الهوية الدلالية للقاعدة القرائية — لا تعتمد على الاسم العربي.
+   * familyId = madd, ruleTypeId = madd_muttasil, optionId = madd_muttasil_4
+   */
+  ruleFamilyId?: string;
+  ruleTypeId?: string;
+  ruleOptionId?: string;
+  /**
    * قوة الوجه كما في الكتاب المعتمد. الأصغر أقوى، فيأخذ السطر الأعلى تحت
    * الآية عند اعتماد ترتيب «قوة الوجه». يتركه المحقق فارغا إن لم يرجّح.
    *
@@ -487,6 +494,13 @@ export interface Variant extends CopyProvenance {
    * وما لم يرد يأتي بعده بقاعدة المحرك. هذا هو «التحكم في كل موضع».
    */
   alternativeOrder?: string[];
+  // ==================== الهوية الدلالية للقواعد القرائية (Spec §§6-7) ====================
+  /** معرف المجموعة العليا: madd, farsh, usul... */
+  ruleFamilyId?: string;
+  /** معرف نوع القاعدة: madd_muttasil, madd_munfasil... */
+  ruleTypeId?: string;
+  /** معرف مجموعة الاختيار: الموضع نفسه = XOR، مواضع مختلفة = قابل للجمع */
+  choiceGroupId?: string;
 }
 
 // ==================== التخطيط البصري ====================

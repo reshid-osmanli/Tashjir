@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
@@ -23,7 +23,15 @@ import { StrengthDegreePicker } from './StrengthDegreePicker';
 import { OrderRankControl } from './OrderRankControl';
 import type { VariantCategory } from '@/types';
 import { resolveReaderChips } from '@/lib/tashjeer/reader-symbols';
-import { boundsOfLoci, describeLoci, lociOfVariant } from '@/lib/tashjeer/loci';
+import { boundsOfLoci, describeLoci, lociOfVariant, generateChoiceGroupId } from '@/lib/tashjeer/loci';
+import {
+  listFamilies,
+  listTypes,
+  listOptions,
+  getRuleOption,
+  getFamily,
+  getRuleType,
+} from '@/lib/tashjeer/recitation-rule-catalog';
 import type {
   EvidenceSource,
   ReadingScope,
@@ -131,9 +139,31 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
             <Field label="الفئة">
               <select
                 value={variant.category}
-                onChange={(event) =>
-                  updateVariant(variant.id, { category: event.target.value as VariantCategory })
-                }
+                onChange={(event) => {
+                  const newCat = event.target.value as VariantCategory;
+                  if (newCat === 'MADUD') {
+                    const families = listFamilies();
+                    const maddFamily = families.find((f) => f.id === 'madd' || f.code === 'MADD');
+                    const types = listTypes(maddFamily?.id ?? 'madd');
+                    const firstType = types[0];
+                    const choiceId = generateChoiceGroupId({
+                      ayahKey: variant.ayahKey,
+                      startPosition: variant.startPosition,
+                      endPosition: variant.endPosition,
+                      characterRange: variant.characterRange,
+                      ruleFamilyId: maddFamily?.id ?? 'madd',
+                      ruleTypeId: firstType?.id,
+                    });
+                    updateVariant(variant.id, {
+                      category: newCat,
+                      ruleFamilyId: maddFamily?.id ?? 'madd',
+                      ruleTypeId: firstType?.id,
+                      choiceGroupId: choiceId,
+                    } as any);
+                  } else {
+                    updateVariant(variant.id, { category: newCat } as any);
+                  }
+                }}
                 className="input"
               >
                 {(Object.keys(CATEGORY_LABELS) as VariantCategory[]).map((category) => (
@@ -143,6 +173,13 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
                 ))}
               </select>
             </Field>
+
+            {variant.category === 'MADUD' && (
+              <MaddRuleDrivenEditor
+                variant={variant}
+                onUpdate={(patch) => updateVariant(variant.id, patch as any)}
+              />
+            )}
 
             <Field label="من الكلمة">
               <input
@@ -303,6 +340,102 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
  * النقر على خلايا الحروف في اللوحة؛ هي تدقيق دقيق قابل للتصحيح والتوثيق قبل
  * اعتماد المادة العلمية.
  */
+
+// ==================== محرر المدود المدفوع بالقواعد (RULE_DRIVEN) ====================
+// Spec §§11-12, 32, 34-36: لا خيارات ثابتة، كل شيء من Rule Catalog
+
+function MaddRuleDrivenEditor({
+  variant,
+  onUpdate,
+}: {
+  variant: Variant;
+  onUpdate: (patch: Partial<Variant>) => void;
+}) {
+  const families = listFamilies();
+  const maddFamily = families.find((f) => f.id === 'madd' || f.code === 'MADD') ?? families[0];
+  const types = listTypes(maddFamily?.id ?? 'madd');
+  const currentTypeId = (variant as any).ruleTypeId as string | undefined;
+  const currentType = currentTypeId ? getRuleType(currentTypeId) : types[0];
+  const options = currentType ? listOptions(currentType.id) : [];
+
+  // عند تغيير النوع، نحدّث choiceGroupId تلقائيا
+  const handleTypeChange = (newTypeId: string) => {
+    const newType = getRuleType(newTypeId);
+    if (!newType) return;
+    const choiceId = generateChoiceGroupId({
+      ayahKey: variant.ayahKey,
+      startPosition: variant.startPosition,
+      endPosition: variant.endPosition,
+      characterRange: variant.characterRange,
+      ruleFamilyId: newType.familyId,
+      ruleTypeId: newType.id,
+    });
+    onUpdate({
+      ruleFamilyId: newType.familyId,
+      ruleTypeId: newType.id,
+      choiceGroupId: choiceId,
+      title: newType.name,
+    } as any);
+  };
+
+  return (
+    <div className="md:col-span-2 rounded-lg border border-violet-200 bg-violet-50/50 p-3 space-y-3">
+      <h4 className="text-xs font-bold text-violet-900">تعريف قاعدة المد (RULE_DRIVEN)</h4>
+      <div className="grid gap-3 md:grid-cols-2">
+        <Field label="مجموعة القاعدة">
+          <select
+            value={maddFamily?.id ?? 'madd'}
+            onChange={(e) => {
+              const fam = getFamily(e.target.value);
+              if (!fam) return;
+              const tps = listTypes(fam.id);
+              const first = tps[0];
+              const choiceId = generateChoiceGroupId({
+                ayahKey: variant.ayahKey,
+                startPosition: variant.startPosition,
+                endPosition: variant.endPosition,
+                characterRange: variant.characterRange,
+                ruleFamilyId: fam.id,
+                ruleTypeId: first?.id,
+              });
+              onUpdate({
+                ruleFamilyId: fam.id,
+                ruleTypeId: first?.id,
+                choiceGroupId: choiceId,
+              } as any);
+            }}
+            className="input text-sm"
+          >
+            {families.map((fam) => (
+              <option key={fam.id} value={fam.id}>
+                {fam.name} ({fam.code})
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="نوع المد">
+          <select
+            value={currentType?.id ?? ''}
+            onChange={(e) => handleTypeChange(e.target.value)}
+            className="input text-sm"
+          >
+            {types.map((tp) => (
+              <option key={tp.id} value={tp.id}>
+                {tp.name} — {tp.code}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+      <div className="text-[11px] text-violet-800">
+        <p>المعرف الدلالي: familyId=<span className="font-mono">{maddFamily?.id}</span> typeId=<span className="font-mono">{currentType?.id}</span></p>
+        <p>مجموعة الاختيار: <span className="font-mono text-[10px]">{(variant as any).choiceGroupId ?? generateChoiceGroupId({ ayahKey: variant.ayahKey, startPosition: variant.startPosition, endPosition: variant.endPosition, characterRange: variant.characterRange, ruleFamilyId: currentType?.familyId, ruleTypeId: currentType?.id })}</span></p>
+        <p>الخيارات المتاحة من الكتالوج: {options.length} خيارات — تظهر تلقائيا عند إضافة وجه</p>
+      </div>
+    </div>
+  );
+}
+
 function TargetEditor({
   variant,
   onUpdate,
@@ -610,21 +743,7 @@ function AlternativeEditor({
           />
         </Field>
 
-        <Field label="حركات المد (الهامش الأيمن)">
-          <input
-            type="number"
-            min={0}
-            max={6}
-            value={alternative.maddHarakat ?? ''}
-            onChange={(event) =>
-              onUpdate({
-                maddHarakat: event.target.value === '' ? undefined : Number(event.target.value),
-              })
-            }
-            placeholder="٤ أو ٥ أو ٦"
-            className="input"
-          />
-        </Field>
+        <MaddOptionSelector alternative={alternative} onUpdate={onUpdate} />
 
         <div className="md:col-span-3">
           <StrengthDegreePicker
@@ -701,7 +820,132 @@ function AlternativeEditor({
  * النقر على اسم الإمام يختار رواته كلهم أو يلغيهم.
  * الاختيار يُختصر تلقائيا إلى أبسط تعبير عبر normalizeScope.
  */
-export function ScopePicker({
+
+function MaddOptionSelector({
+  alternative,
+  onUpdate,
+}: {
+  alternative: VariantAlternative;
+  onUpdate: (patch: Partial<VariantAlternative>) => void;
+}) {
+  // نحاول استنتاج نوع القاعدة من الوجه نفسه أو من السياق
+  const ruleTypeId = (alternative as any).ruleTypeId as string | undefined;
+  const ruleOptionId = (alternative as any).ruleOptionId as string | undefined;
+  // إذا لم يكن هناك ruleTypeId، نعرض حقل المد القديم كاحتياطي
+  const [catalogTypes, setCatalogTypes] = useState(() => listTypes('madd'));
+  const [availableOptions, setAvailableOptions] = useState(() => {
+    if (ruleTypeId) return listOptions(ruleTypeId);
+    // إذا لا يوجد نوع، اعرض كل خيارات المدود (للتوافق)
+    return listOptions();
+  });
+
+  useEffect(() => {
+    if (ruleTypeId) {
+      setAvailableOptions(listOptions(ruleTypeId));
+    } else {
+      // حاول استنتاج النوع من العنوان أو من ruleLabel
+      setAvailableOptions(listOptions());
+    }
+  }, [ruleTypeId]);
+
+  const handleOptionChange = (optionId: string) => {
+    const opt = getRuleOption(optionId);
+    if (!opt) {
+      onUpdate({ ruleOptionId: undefined, maddHarakat: undefined } as any);
+      return;
+    }
+    onUpdate({
+      ruleOptionId: opt.id,
+      ruleTypeId: opt.ruleTypeId,
+      ruleFamilyId: 'madd',
+      maddHarakat: opt.numericValue,
+      label: opt.label,
+      ruleLabel: getRuleType(opt.ruleTypeId)?.name ?? alternative.ruleLabel,
+    } as any);
+  };
+
+  // إذا كان الوجه ينتمي لمدود، اعرض المحدد الديناميكي
+  const isMadd = (alternative as any).ruleFamilyId === 'madd' || ruleTypeId?.startsWith('madd_') || alternative.maddHarakat !== undefined;
+
+  if (!isMadd && !ruleTypeId) {
+    // احتياطي: الحقل القديم للتوافق
+    return (
+      <Field label="حركات المد (الهامش الأيمن)">
+        <input
+          type="number"
+          min={0}
+          max={6}
+          value={alternative.maddHarakat ?? ''}
+          onChange={(event) =>
+            onUpdate({
+              maddHarakat: event.target.value === '' ? undefined : Number(event.target.value),
+            })
+          }
+          placeholder="٤ أو ٥ أو ٦"
+          className="input"
+        />
+      </Field>
+    );
+  }
+
+  return (
+    <>
+      <Field label="نوع المد (من الكتالوج)">
+        <select
+          value={ruleTypeId ?? ''}
+          onChange={(e) => {
+            const newTypeId = e.target.value;
+            if (!newTypeId) {
+              onUpdate({ ruleTypeId: undefined, ruleOptionId: undefined } as any);
+              setAvailableOptions(listOptions());
+              return;
+            }
+            setAvailableOptions(listOptions(newTypeId));
+            // عند تغيير النوع، نفرغ الخيار
+            onUpdate({ ruleTypeId: newTypeId, ruleFamilyId: 'madd', ruleOptionId: undefined } as any);
+          }}
+          className="input text-sm"
+        >
+          <option value="">— اختر نوع المد —</option>
+          {catalogTypes.map((tp) => (
+            <option key={tp.id} value={tp.id}>
+              {tp.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="مقدار المد (من الكتالوج)">
+        <select
+          value={ruleOptionId ?? ''}
+          onChange={(e) => handleOptionChange(e.target.value)}
+          className="input text-sm"
+        >
+          <option value="">— اختر مقدار المد —</option>
+          {availableOptions.map((opt) => (
+            <option key={opt.id} value={opt.id}>
+              {opt.label} — {opt.numericValue} {opt.unit === 'HARAKAT' ? 'حركات' : opt.unit}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {/* احتياطي للتوافق: حقل رقمي يظهر القيمة المشتقة */}
+      <Field label="حركات المد (مشتقة)">
+        <input
+          type="number"
+          min={1}
+          max={10}
+          value={alternative.maddHarakat ?? getRuleOption(ruleOptionId ?? '')?.numericValue ?? ''}
+          readOnly
+          className="input bg-stone-50 text-stone-600"
+          title="القيمة مشتقة من خيار القاعدة في الكتالوج"
+        />
+      </Field>
+    </>
+  );
+}
+
+export function ScopePicker(
+{
   scope,
   onChange,
 }: {

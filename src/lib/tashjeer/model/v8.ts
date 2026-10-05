@@ -102,6 +102,10 @@ export interface Variant {
   /** طابع زمني للإنشاء/التعديل (DM-14: مستقر عند التصدير). */
   createdAt: string;
   updatedAt: string;
+  // ===== الهوية الدلالية للمدود (Spec §§6-7) =====
+  ruleFamilyId?: string;
+  ruleTypeId?: string;
+  ruleOptionId?: string;
 }
 
 /** دليل مرتبط بوجه. */
@@ -202,6 +206,10 @@ export interface Difference {
   description?: string;
   createdAt: string;
   updatedAt: string;
+  // ===== الهوية الدلالية + Choice Group (Spec §§15-17) =====
+  ruleFamilyId?: string;
+  ruleTypeId?: string;
+  choiceGroupId?: string;
 }
 
 // ==================== علامات الوقف (WaqfMark) ====================

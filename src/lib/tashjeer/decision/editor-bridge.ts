@@ -136,15 +136,26 @@ export function manualRelationByPair(
  * هل الاختلافان وجهان متنافيان لموضع واحد (فلا يُضربان في المحرك) أم بُعدان
  * مستقلان يجتمعان في سطر؟
  *
- * الحسم للـ Resolver على ثلاث درجات:
- *   1) موضعان منفصلان: لا تنافي أبدا (قرار بنائي).
- *   2) الفئة نفسها في الموضع نفسه: وجهان لموضع واحد، متنافيان دائما (DM-09)،
- *      وهو ما تصرّح به قاعدة النظام «المدود المتعددة متنافية» ونظائرها.
- *   3) فئتان مختلفتان في الموضع نفسه: مستقلتان افتراضا (يجتمعان في سطر)، ما
- *      لم تُصرّح قاعدة مطابقة بتنافٍ صريح: إجراء PREVENT_MERGE مع
- *      params.exclusive = true. هكذا يملك الاستوديو رافعة حقيقية دون أن
- *      يخلط بين «لا تدمج في سطر واحد» و«لا تُضرب وجها».
+ * الحسم للـ Resolver على درجات مع الهوية الدلالية (Spec §§15-18, 40-48):
+ *   1) نفس choiceGroupId => متنافيان دائما (XOR) — بدائل في الموضع نفسه
+ *   2) موضعان منفصلان: لا تنافي أبدا (قرار بنائي) — different loci ≠ exclusive
+ *   3) نفس الفئة ونفس النوع ونفس ChoiceGroup => متنافيان (مد 2 ومد 4 لنفس الموضع)
+ *   4) نفس الفئة لكن أنواع مختلفة: يُحسم من مصفوفة الدمج الدلالية (متصل+منفصل => MERGE)
+ *   5) فئتان مختلفتان في الموضع نفسه: مستقلتان افتراضا، ما لم تُصرّح قاعدة بتنافٍ صريح
  */
+
+function getChoiceGroupId(v: Variant): string | undefined {
+  return (v as any).choiceGroupId as string | undefined;
+}
+
+function getRuleFamilyId(v: Variant): string | undefined {
+  return (v as any).ruleFamilyId as string | undefined;
+}
+
+function getRuleTypeId(v: Variant): string | undefined {
+  return (v as any).ruleTypeId as string | undefined;
+}
+
 export function resolveLocusExclusion(
   first: Variant,
   second: Variant,
@@ -153,6 +164,30 @@ export function resolveLocusExclusion(
 ): DecisionResult<LocusExclusionDecision> {
   const trace: DecisionTraceStep[] = [];
   const sharePosition = variantsSharePosition(first, second);
+  const firstChoice = getChoiceGroupId(first);
+  const secondChoice = getChoiceGroupId(second);
+  const sameChoiceGroup = Boolean(firstChoice && secondChoice && firstChoice === secondChoice);
+  const firstFamily = getRuleFamilyId(first);
+  const secondFamily = getRuleFamilyId(second);
+  const firstType = getRuleTypeId(first);
+  const secondType = getRuleTypeId(second);
+  const sameFamily = Boolean(firstFamily && secondFamily && firstFamily === secondFamily);
+  const sameType = Boolean(firstType && secondType && firstType === secondType);
+
+  // 1) نفس مجموعة الاختيار => XOR دائما
+  if (sameChoiceGroup) {
+    trace.push({
+      stage: 'CHOICE_GROUP',
+      message: `نفس مجموعة الاختيار (${firstChoice}): بدائل متنافية لا تُضرب معا`,
+      status: 'blocked',
+    });
+    return {
+      decision: { exclusive: true, reason: `نفس مجموعة الاختيار ${firstChoice}`, sharePosition, status: 'EXCLUSIVE' },
+      appliedRules: [],
+      skippedRules: [],
+      trace,
+    };
+  }
 
   if (!sharePosition) {
     trace.push({
@@ -172,11 +207,67 @@ export function resolveLocusExclusion(
   const b = editorCategoryToStudioType(second.category);
   trace.push({
     stage: 'LOCUS',
-    message: `الموضعان يتقاطعان في كلمة؛ يُحسم التنافي بين ${a} و${b} من سياسات المحرك`,
+    message: `الموضعان يتقاطعان في كلمة؛ يُحسم التنافي بين ${a} و${b} من سياسات المحرك (family=${firstFamily}/${secondFamily} type=${firstType}/${secondType})`,
     status: 'info',
   });
 
+  // Build semantic context for Resolver
+  const semanticCtx: DecisionContext = {
+    ...ctx,
+    ruleFamilyId: firstFamily,
+    ruleTypeId: firstType,
+    choiceGroupId: firstChoice,
+    relatedRuleFamilyId: secondFamily,
+    relatedRuleTypeId: secondType,
+    relatedRuleOptionId: undefined,
+    sameFamily,
+    sameType,
+    sameChoiceGroup,
+    sameLocus: sharePosition,
+    category: first.category,
+    differenceType: a,
+    relatedType: b,
+    otherType: b,
+  } as DecisionContext & { relatedRuleFamilyId?: string; relatedRuleTypeId?: string; relatedRuleOptionId?: string };
+
+  // If same family but different types, check merge matrix at type level
+  if (sameFamily && !sameType && firstType && secondType) {
+    const merge = resolveMerge(firstType, secondType, profile, semanticCtx);
+    trace.push(...merge.trace.filter((step) => step.stage === 'MATCH' || step.stage === 'MERGE' || step.stage === 'CONFLICT'));
+    const explicit = merge.appliedRules.filter((rule) =>
+      rule.actions.some((action) => action.type === 'PREVENT_MERGE' && action.params?.exclusive === true)
+    );
+    const exclusive = explicit.length > 0;
+    const status: LocusRelationStatus = exclusive ? 'EXCLUSIVE' : merge.decision.merge ? 'RELATED' : 'INDEPENDENT';
+    trace.push({
+      stage: 'EXCLUSION',
+      message: exclusive
+        ? `تنافٍ صريح بقاعدة: ${explicit.map((rule) => rule.name).join(' + ')}`
+        : `نوعان مختلفان في نفس العائلة: ${merge.decision.merge ? 'مرتبطان' : 'مستقلتان'} (${merge.decision.reason})`,
+      status: exclusive ? 'blocked' : 'applied',
+    });
+    return {
+      decision: { exclusive, reason: exclusive ? `تنافٍ صريح: ${explicit.map((r) => r.name).join(' + ')}` : merge.decision.reason, sharePosition, status },
+      appliedRules: merge.appliedRules,
+      skippedRules: merge.skippedRules,
+      trace,
+    };
+  }
+
   if (first.category === second.category) {
+    // Same category but check if types differ and merge says MERGE (e.g., MADD MUTTASIL + MADD MUNFASIL shouldn't happen at same pos, but if they do, respect policy)
+    if (firstType && secondType && firstType !== secondType) {
+      const merge = resolveMerge(firstType, secondType, profile, semanticCtx);
+      if (merge.decision.merge) {
+        trace.push(...merge.trace);
+        return {
+          decision: { exclusive: false, reason: `نوعان مختلفان في نفس الفئة لكن السياسة تقول ادمج: ${merge.decision.reason}`, sharePosition, status: 'RELATED' },
+          appliedRules: merge.appliedRules,
+          skippedRules: merge.skippedRules,
+          trace,
+        };
+      }
+    }
     const inner = resolveRelationExclusion(a, b, profile);
     trace.push(...inner.trace);
     return {
@@ -192,7 +283,7 @@ export function resolveLocusExclusion(
     };
   }
 
-  const merge = resolveMerge(a, b, profile, ctx);
+  const merge = resolveMerge(a, b, profile, semanticCtx);
   trace.push(...merge.trace.filter((step) => step.stage === 'MATCH' || step.stage === 'MERGE' || step.stage === 'CONFLICT'));
 
   const explicit = merge.appliedRules.filter((rule) =>
@@ -330,8 +421,12 @@ export function resolveExclusiveGroups(
     for (let j = i + 1; j < variants.length; j += 1) {
       const first = variants[i];
       const second = variants[j];
-      // تحسين: لا نستدعي الـ Resolver لمواضع لا تتقاطع أصلا.
-      if (!variantsSharePosition(first, second)) continue;
+      const firstChoice = (first as any).choiceGroupId as string | undefined;
+      const secondChoice = (second as any).choiceGroupId as string | undefined;
+      const sameChoice = Boolean(firstChoice && secondChoice && firstChoice === secondChoice);
+      // إذا كان نفس choiceGroup فهما متنافيان حتى لو لم يتقاطعا حسب الحساب القديم (حرفي)
+      // أما إذا لم يتقاطعا ولم يكونا نفس المجموعة فلا تنافي
+      if (!sameChoice && !variantsSharePosition(first, second)) continue;
       const manual = manualByPair.get(differencePairKey(first.id, second.id));
       const base = resolveLocusExclusion(first, second, profile);
       let result = base;
