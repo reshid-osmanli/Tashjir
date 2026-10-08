@@ -15,6 +15,9 @@ const eslintConfig = [
   ...compat.extends('next/core-web-vitals', 'next/typescript'),
   {
     rules: {
+      // السماح باستخدام `any` في طبقات المحرر/الوثائق حيث تكون الأوجه ديناميكية ومتنوعة؛
+      // البدائل الدقيقة تتطلب أنواعًا تابعة للكتالوج وتزيد تعقيد الواجهات بلا فائدة على الاستضافة.
+      '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     },
   },
