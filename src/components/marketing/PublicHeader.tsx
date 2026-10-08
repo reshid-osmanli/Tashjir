@@ -36,6 +36,7 @@ export function PublicHeader() {
 
   return (
     <header
+      data-ui-id="A291"
       className={`sticky top-0 z-sticky transition-colors ${
         scrolled
           ? 'border-b border-line bg-panel/94 backdrop-blur-md supports-[backdrop-filter]:bg-panel/86'

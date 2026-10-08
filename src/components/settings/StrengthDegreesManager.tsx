@@ -112,7 +112,7 @@ export function StrengthDegreesManager({ onMessage }: { onMessage?: (message: st
   const duplicateLabels = findDuplicates(degrees.map((degree) => degree.label.trim()));
 
   return (
-    <div>
+    <div data-ui-id="A271">
       <p className="mb-3 rounded bg-stone-50 px-3 py-2 text-[11px] leading-relaxed text-stone-600">
         هذا السلّم يجمع «الوجه المقدَّم» و«قوة الوجه» في مقياس واحد. الرتبة الأولى هي الأقوى ويُرسم سطرها أعلى
         الأسطر تحت الآية. والدرجة تُسنَد لكل راوٍ على حدة عند إنشاء القاعدة أو الوجه، لأن ما يقدَّم عند راوٍ قد

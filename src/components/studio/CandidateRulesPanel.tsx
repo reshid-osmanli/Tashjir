@@ -50,7 +50,7 @@ export function CandidateRulesPanel({ onAdopt, initial }: CandidateRulesPanelPro
   };
 
   return (
-    <div className="space-y-5">
+    <div data-ui-id="A167" className="space-y-5">
       <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <h3 className="font-bold text-gray-900">إنشاء قاعدة من تصحيح</h3>
         <p className="mt-1 text-sm text-gray-500">

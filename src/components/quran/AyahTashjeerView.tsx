@@ -81,7 +81,7 @@ export function AyahTashjeerView({
         : { label: 'مسودة', className: 'bg-stone-100 text-stone-700' };
 
   return (
-    <div className="mt-3 overflow-hidden rounded-xl border border-emerald-200 bg-white">
+    <div data-ui-id="A187" data-ui-instance={ayahKey} className="mt-3 overflow-hidden rounded-xl border border-emerald-200 bg-white">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100 bg-emerald-50/50 px-4 py-2.5">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge.className}`}>
@@ -104,6 +104,8 @@ export function AyahTashjeerView({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
+            data-ui-id="A188"
+            data-ui-instance={ayahKey}
             onClick={() => setOpen((value) => !value)}
             className="rounded-md border border-emerald-300 bg-white px-2.5 py-1 text-[11px] text-emerald-800 hover:bg-emerald-50"
           >
@@ -111,6 +113,8 @@ export function AyahTashjeerView({
           </button>
           <Link
             href={`/editor?ayah=${ayahKey}`}
+            data-ui-id="A189"
+            data-ui-instance={ayahKey}
             className="rounded-md border border-stone-300 bg-white px-2.5 py-1 text-[11px] text-stone-700 hover:bg-stone-50"
           >
             فتح في المحرر

@@ -73,9 +73,9 @@ export function EditorToolbar({
   const engine = useEngineSettings();
 
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-stone-200 bg-white px-3 py-2">
+    <div data-ui-id="A101" className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-stone-200 bg-white px-3 py-2">
       {/* الأدوات */}
-      <Group label="الأدوات">
+      <Group label="الأدوات" data-ui-id="A102">
         {TOOLS.map((tool) => (
           <ToolButton
             key={tool.id}
@@ -113,10 +113,10 @@ export function EditorToolbar({
 
       {/* التراجع */}
       <Group label="التاريخ">
-        <ToolButton title="تراجع (Ctrl+Z)" onClick={undo} disabled={!canUndo()}>
+        <ToolButton data-ui-id="A103" title="تراجع (Ctrl+Z)" onClick={undo} disabled={!canUndo()}>
           تراجع
         </ToolButton>
-        <ToolButton title="إعادة (Ctrl+Shift+Z)" onClick={redo} disabled={!canRedo()}>
+        <ToolButton data-ui-id="A104" title="إعادة (Ctrl+Shift+Z)" onClick={redo} disabled={!canRedo()}>
           إعادة
         </ToolButton>
       </Group>
@@ -132,6 +132,7 @@ export function EditorToolbar({
           −
         </ToolButton>
         <select
+          data-ui-id="A137"
           value={ZOOM_PRESETS.includes(round2(zoom)) ? String(round2(zoom)) : 'custom'}
           onChange={(event) => {
             const next = Number(event.target.value);
@@ -284,7 +285,7 @@ export function EditorToolbar({
         <ToolButton title="إعادة توليد الخطوط من الاختلافات" onClick={regenerateBranches}>
           إعادة التوليد
         </ToolButton>
-        <ToolButton title="تصدير المستند إلى ملف JSON" onClick={onExport}>
+        <ToolButton data-ui-id="A135" title="تصدير المستند إلى ملف JSON" onClick={onExport}>
           تصدير
         </ToolButton>
         <ToolButton title="استيراد مستند من ملف JSON" onClick={onImport}>
@@ -303,6 +304,7 @@ export function EditorToolbar({
 
         <button
           type="button"
+          data-ui-id="A136"
           onClick={save}
           title="حفظ (Ctrl+S)"
           className={`rounded-md px-3 py-1.5 text-sm font-medium text-white transition-colors ${
@@ -323,9 +325,9 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function Group({ label, children }: { label: string; children: React.ReactNode }) {
+function Group({ label, children, ...attributes }: React.HTMLAttributes<HTMLDivElement> & { label: string }) {
   return (
-    <div className="flex items-center gap-1" role="group" aria-label={label}>
+    <div {...attributes} className="flex items-center gap-1" role="group" aria-label={label}>
       {children}
     </div>
   );
@@ -337,28 +339,27 @@ function Divider() {
 
 function ToolButton({
   children,
-  onClick,
   title,
   active = false,
   disabled = false,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
+  className,
+  ...attributes
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   title: string;
   active?: boolean;
-  disabled?: boolean;
+  children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
-      onClick={onClick}
+      {...attributes}
       title={title}
       disabled={disabled}
       className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
         active
           ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
           : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
-      }`}
+      } ${className ?? ''}`}
     >
       {children}
     </button>

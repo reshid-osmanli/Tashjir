@@ -91,6 +91,7 @@ export function SelectionContextMenu({ state, onClose }: SelectionContextMenuPro
   return createPortal(
     <div
       ref={menuRef}
+      data-ui-id="A130"
       role="menu"
       aria-label={`أوامر العنصر المحدد`}
       className="fixed z-[70] min-w-[190px] overflow-hidden rounded-lg border border-stone-200 bg-white py-1 shadow-2xl"

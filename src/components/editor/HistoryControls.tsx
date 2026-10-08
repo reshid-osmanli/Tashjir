@@ -16,7 +16,7 @@ export function HistoryControls() {
     if (index < past.length) for (let i = 0; i < count; i++) useEditorStore.getState().undo();
     else for (let i = 0; i < count; i++) useEditorStore.getState().redo();
   };
-  return <details className="relative text-xs" dir="rtl">
+  return <details data-ui-id="A105" className="relative text-xs" dir="rtl">
     <summary className="cursor-pointer rounded border border-stone-300 px-2 py-1">سجل العمليات ({ar(past.length)})</summary>
     <ol aria-label="حالات سجل العمليات" className="absolute start-0 top-full z-40 mt-1 max-h-72 w-72 overflow-auto rounded border bg-white p-2 shadow-xl">
       {snapshots.map((snapshot, index) => <li key={index}>

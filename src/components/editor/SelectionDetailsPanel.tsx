@@ -222,6 +222,7 @@ export function SelectionDetailsPanel({ classic, onRequestWhy }: SelectionDetail
 
   return (
     <section
+      data-ui-id="A129"
       className={`border-b px-4 py-3 ${dangling ? 'border-stone-200 bg-stone-50' : 'border-emerald-200 bg-emerald-50/40'}`}
       aria-label="تفاصيل العنصر المحدد"
     >

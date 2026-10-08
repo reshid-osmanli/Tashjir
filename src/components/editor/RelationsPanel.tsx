@@ -60,7 +60,7 @@ export function RelationsPanel() {
   if (!document) return null;
 
   return (
-    <section className="border-b border-stone-200 px-4 py-3">
+    <section data-ui-id="A128" className="border-b border-stone-200 px-4 py-3">
       <h3 className="mb-2 flex items-center gap-2 text-xs font-bold text-stone-900">
         العلاقات والتحكم اليدوي
         <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800">

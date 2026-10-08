@@ -21,14 +21,14 @@ export function RuleTestsPanel({ config }: RuleTestsPanelProps) {
 
   if (report.total === 0) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-gray-400 shadow-sm">
+      <div data-ui-id="A166" className="rounded-xl border border-gray-200 bg-white p-6 text-center text-gray-400 shadow-sm">
         لا توجد حالات اختبار مرفقة بعد. أضف حالات إلى قواعدك من المنشئ لاكتشاف الانحدار تلقائيًا.
       </div>
     );
   }
 
   return (
-    <div className="space-y-5">
+    <div data-ui-id="A166" className="space-y-5">
       <div className="grid grid-cols-3 gap-4">
         <SummaryCard label="إجمالي الحالات" value={report.total} tone="gray" />
         <SummaryCard label="ناجحة" value={report.passed} tone="emerald" />

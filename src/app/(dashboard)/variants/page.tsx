@@ -110,7 +110,8 @@ export default function VariantsIndexPage() {
   const globalCount = items.filter((item) => item.type === 'GLOBAL').length;
 
   return (
-    <div className="space-y-5">
+    <div data-ui-id="A024">
+      <div data-ui-id="A220" className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-stone-900">فهرس الاختلافات والقواعد</h1>
@@ -149,7 +150,7 @@ export default function VariantsIndexPage() {
         </div>
       )}
 
-      <section className="rounded-xl border border-stone-200 bg-white p-4">
+      <section data-ui-id="A221" className="rounded-xl border border-stone-200 bg-white p-4">
         <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_150px_150px_150px_190px]">
           <label>
             <span className="mb-1 block text-[11px] font-medium text-stone-600">بحث</span>
@@ -200,7 +201,7 @@ export default function VariantsIndexPage() {
           لا توجد عناصر توافق هذه التصفية. أضف اختلافا من المحرر أو قاعدة عامة للمصحف.
         </div>
       ) : (
-        <ul className="space-y-3">
+        <ul data-ui-id="A222" className="space-y-3">
           {visible.map((item) => (
             <li key={item.key} className="rounded-xl border border-stone-200 bg-white p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -331,6 +332,7 @@ export default function VariantsIndexPage() {
           }}
         />
       )}
+      </div>
     </div>
   );
 }
@@ -475,7 +477,7 @@ function GlobalRuleDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 p-4" role="dialog" aria-modal="true" aria-label="قاعدة عامة للمصحف">
+    <div data-ui-id="A223" className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 p-4" role="dialog" aria-modal="true" aria-label="قاعدة عامة للمصحف">
       <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-xl bg-white p-5 shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-stone-200 pb-3">
           <div>

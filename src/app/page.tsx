@@ -48,7 +48,7 @@ export default function HomePage() {
   if (!model) {
     // لا ينبغي أن يقع: المعرّف ثابت في البيانات. الاحتياط رسالة واضحة لا صفحة فارغة.
     return (
-      <main className="container-reading py-section" dir="rtl">
+      <main data-ui-id="A031" className="container-reading py-section" dir="rtl">
         <h1 className="title-editorial text-h1">تعذّر تجهيز بيانات العرض</h1>
         <p className="mt-3 text-body text-ink-600">
           لم يُعثر على الآية المطلوبة في بيانات المصحف. تحقّق من مصدر البيانات ثم أعد بناء الصفحة.
@@ -58,11 +58,11 @@ export default function HomePage() {
   }
 
   return (
-    <>
+    <div data-ui-id="A031">
       <RevealStyles />
       <PublicHeader />
 
-      <main id="main">
+      <main id="main" data-ui-id="A290">
         <HeroSection model={model} />
         <ExplainerSection model={model} />
         <ProblemSection />
@@ -76,6 +76,6 @@ export default function HomePage() {
       </main>
 
       <PublicFooter />
-    </>
+    </div>
   );
 }

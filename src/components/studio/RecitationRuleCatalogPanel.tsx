@@ -138,7 +138,7 @@ export function RecitationRuleCatalogPanel() {
   };
 
   return (
-    <div className="space-y-6">
+    <div data-ui-id="A157" className="space-y-6">
       {/* شريط أدوات */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div>

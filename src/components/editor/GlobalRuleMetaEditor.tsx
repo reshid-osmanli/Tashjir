@@ -161,6 +161,7 @@ export function GlobalRuleMetaEditor({
 
   return (
     <div
+      data-ui-id="A143"
       className="fixed inset-0 z-[60] flex items-center justify-center bg-stone-900/40 p-4"
       role="dialog"
       aria-modal="true"

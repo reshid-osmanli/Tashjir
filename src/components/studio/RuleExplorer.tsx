@@ -55,16 +55,17 @@ export function RuleExplorer({ rules, selectedRuleId, onSelect, onCreate }: Rule
   }, [rules, query, statusFilter, categoryFilter, sortKey]);
 
   return (
-    <div className="flex h-full flex-col rounded-xl border border-gray-200 bg-white shadow-sm">
+    <div data-ui-id="A158" className="flex h-full flex-col rounded-xl border border-gray-200 bg-white shadow-sm">
       {/* رأس ثابت: بحث وتصفية وفرز */}
       <div className="space-y-3 border-b border-gray-100 p-4">
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-gray-900">القواعد ({filtered.length})</h3>
-          <button type="button" onClick={onCreate} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700">
+          <button type="button" data-ui-id="A160" onClick={onCreate} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700">
             قاعدة جديدة
           </button>
         </div>
         <input
+          data-ui-id="A159"
           type="text"
           value={query}
           onChange={(event) => setQuery(event.target.value)}

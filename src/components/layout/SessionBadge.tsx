@@ -31,12 +31,12 @@ export function SessionBadge() {
   }, []);
 
   if (!ready) {
-    return <span className="h-8 w-24" aria-hidden="true" />;
+    return <span data-ui-id="A326" className="h-8 w-24" aria-hidden="true" />;
   }
 
   if (!session?.email) {
     return (
-      <Link href="/login" className="btn btn-quiet gap-2 text-caption">
+      <Link href="/login" data-ui-id="A326" className="btn btn-quiet gap-2 text-caption">
         <IconAccount size={16} />
         دخول
       </Link>
@@ -44,7 +44,7 @@ export function SessionBadge() {
   }
 
   return (
-    <span className="flex items-center gap-2" title={`جلسة محلية — ${session.signedInAt ?? ''}`}>
+    <span data-ui-id="A326" className="flex items-center gap-2" title={`جلسة محلية — ${session.signedInAt ?? ''}`}>
       <IconAccount size={16} className="text-ink-400" />
       <span className="max-w-[10rem] truncate text-caption text-ink-600" dir="ltr">
         {session.email}

@@ -100,7 +100,7 @@ export default function ReadersPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div data-ui-id="A026" className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">القراء</h1>
@@ -130,7 +130,7 @@ export default function ReadersPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
+          <form data-ui-id="A240" onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
             <TextField
               label="اسم القارئ"
               value={form.name}
@@ -148,6 +148,7 @@ export default function ReadersPage() {
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">الإجازة</label>
               <select
+                data-ui-id="A242"
                 value={form.qiraahId}
                 onChange={(event) => setForm({ ...form, qiraahId: event.target.value })}
                 className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -192,6 +193,7 @@ export default function ReadersPage() {
                 إلغاء
               </button>
               <button
+                data-ui-id="A243"
                 className="rounded-lg bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700"
                 type="submit"
               >
@@ -202,7 +204,7 @@ export default function ReadersPage() {
         </section>
       )}
 
-      <section className="overflow-hidden rounded-xl bg-white shadow-lg">
+      <section data-ui-id="A241" className="overflow-hidden rounded-xl bg-white shadow-lg">
         {readers.length === 0 ? (
           <div className="p-8 text-center text-gray-500">لا يوجد قراء مسجلون حاليا.</div>
         ) : (

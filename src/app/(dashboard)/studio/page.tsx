@@ -167,9 +167,9 @@ export default function EngineStudioPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div data-ui-id="A021" className="space-y-4">
       {/* رأس الصفحة */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div data-ui-id="A151" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div>
           <h1 className="text-xl font-bold text-gray-900">استوديو المحرك</h1>
           <p className="text-sm text-gray-500">
@@ -180,6 +180,7 @@ export default function EngineStudioPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
+            data-ui-id="A152"
             onClick={async () => {
               const ok = await confirmAction({
                 title: 'إعادة إعداد المحرك إلى سياسات النظام',
@@ -199,6 +200,7 @@ export default function EngineStudioPage() {
           </button>
           <button
             type="button"
+            data-ui-id="A153"
             onClick={() => setSection('publish')}
             disabled={!dirty}
             className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
@@ -208,6 +210,7 @@ export default function EngineStudioPage() {
           </button>
           <button
             type="button"
+            data-ui-id="A154"
             onClick={() => persist()}
             disabled={!dirty}
             className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -220,9 +223,9 @@ export default function EngineStudioPage() {
       {!loaded ? (
         <div className="rounded-xl border border-gray-200 bg-white p-10 text-center text-gray-400">جارٍ التحميل...</div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr]">
+        <div data-ui-id="A150" className="grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr]">
           {/* الشريط الجانبي للأقسام */}
-          <nav className="flex gap-2 overflow-x-auto rounded-xl border border-gray-200 bg-white p-2 shadow-sm lg:h-fit lg:flex-col lg:overflow-visible">
+          <nav data-ui-id="A155" className="flex gap-2 overflow-x-auto rounded-xl border border-gray-200 bg-white p-2 shadow-sm lg:h-fit lg:flex-col lg:overflow-visible">
             {SECTIONS.map((item) => (
               <button
                 key={item.id}
@@ -397,7 +400,7 @@ function SelectedRuleActions({
 }) {
   const [shifts, setShifts] = useState<RulePriorityShift[]>([]);
   return (
-    <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+    <div data-ui-id="A162" className="mt-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
       <p className="mb-2 text-sm font-medium text-gray-600">إجراءات سريعة على المحدد</p>
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-xs text-gray-500">الأولوية:</label>

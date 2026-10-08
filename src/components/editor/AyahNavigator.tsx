@@ -84,10 +84,11 @@ export function AyahNavigator({ ayahKey, onNavigate }: AyahNavigatorProps) {
   };
 
   return (
-    <div className="relative flex flex-wrap items-center gap-2 border-b border-stone-200 bg-stone-50 px-3 py-2">
+    <div data-ui-id="A107" className="relative flex flex-wrap items-center gap-2 border-b border-stone-200 bg-stone-50 px-3 py-2">
       <label className="flex items-center gap-1.5 text-xs text-stone-700">
         السورة
         <select
+          data-ui-id="A108"
           value={surahNumber}
           onChange={(event) => onNavigate(makeAyahKey(Number(event.target.value), 1))}
           className="input h-8 w-48 text-xs"
@@ -103,6 +104,7 @@ export function AyahNavigator({ ayahKey, onNavigate }: AyahNavigatorProps) {
       <label className="flex items-center gap-1.5 text-xs text-stone-700">
         الآية
         <select
+          data-ui-id="A109"
           value={ayahNumber}
           onChange={(event) => onNavigate(makeAyahKey(surahNumber, Number(event.target.value)))}
           className="input h-8 w-24 text-xs"
@@ -135,6 +137,7 @@ export function AyahNavigator({ ayahKey, onNavigate }: AyahNavigatorProps) {
       {/* البحث */}
       <div className="relative ms-auto w-full max-w-xs">
         <input
+          data-ui-id="A110"
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}

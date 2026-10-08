@@ -215,7 +215,7 @@ export function PriorityPipeline({
   };
 
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+    <div data-ui-id="A164" className="grid grid-cols-1 gap-5 lg:grid-cols-2">
       {/* مجموعات الأولوية */}
       <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <h3 className="font-bold text-gray-900">مجموعات الأولوية</h3>

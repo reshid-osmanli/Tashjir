@@ -167,6 +167,7 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
   const activeLineIndex = selection?.kind === 'LINE' && selection.lineId ? ids.indexOf(selection.lineId) : -1;
 
   return <div
+    data-ui-id="A123"
     dir="rtl"
     className="rounded-md border border-stone-200 p-2.5"
     onKeyDown={(event) => {
@@ -228,7 +229,7 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
       onClickCapture={(event) => { if (suppressClick.current) { event.preventDefault(); event.stopPropagation(); suppressClick.current = false; } }}>
       {lines.map((line, index) => <li key={line.id}>
         <div data-insert-gap={index} className={`h-1 rounded transition ${drag?.mode === 'ORDER' && drag.gap === index ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : ''}`} />
-        <div data-order-line-id={line.id} data-order-index={index} data-list-index={index} tabIndex={0}
+        <div data-ui-id="A124" data-ui-instance={line.id} data-order-line-id={line.id} data-order-index={index} data-list-index={index} tabIndex={0}
           onPointerDown={(event) => down(event, line.id, 'ORDER')}
           onClick={(event) => {
             if (event.shiftKey || event.ctrlKey || event.metaKey) {
@@ -250,11 +251,11 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
           className={`flex touch-none select-none items-center gap-1 rounded border px-2 py-2 text-xs ${drag?.id === line.id ? 'border-emerald-600 bg-emerald-100 opacity-60' : drag?.mode === 'MERGE' && drag.target === line.id ? 'border-violet-600 bg-violet-100 ring-2 ring-violet-400' : checkedLineIds.has(line.id) ? 'border-emerald-400 bg-emerald-50 ring-2 ring-inset ring-emerald-300' : selection?.id === line.id ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200 bg-white'}`}>
           <span aria-hidden>⠿</span>
           <span className="w-6">{ar(index + 1)}</span>
-          <button type="button" className="touch-none rounded border px-1 text-violet-700" aria-label={`مقبض دمج السطر ${ar(index + 1)}`} onPointerDown={(event) => down(event, line.id, 'MERGE')}>↳</button>
+          <button type="button" data-ui-id="A125" data-ui-instance={line.id} className="touch-none rounded border px-1 text-violet-700" aria-label={`مقبض دمج السطر ${ar(index + 1)}`} onPointerDown={(event) => down(event, line.id, 'MERGE')}>↳</button>
           <span className="min-w-0 flex-1 truncate" title={line.ruleLabel}>{line.label} · {line.ruleLabel}</span>
-          <RankInput rank={index + 1} max={ids.length} onApply={(rank) => void confirmOrder(line.id, moveLineToIndex(ids, line.id, rank))} />
-          <button type="button" disabled={index === 0} aria-label={`نقل السطر ${ar(index + 1)} أعلى`} onClick={() => void confirmOrder(line.id, moveLineToIndex(ids, line.id, index))}>↑</button>
-          <button type="button" disabled={index === ids.length - 1} aria-label={`نقل السطر ${ar(index + 1)} أسفل`} onClick={() => void confirmOrder(line.id, moveLineToIndex(ids, line.id, index + 2))}>↓</button>
+          <RankInput instance={line.id} rank={index + 1} max={ids.length} onApply={(rank) => void confirmOrder(line.id, moveLineToIndex(ids, line.id, rank))} />
+          <button type="button" data-ui-id="A127" data-ui-instance={line.id} disabled={index === 0} aria-label={`نقل السطر ${ar(index + 1)} أعلى`} onClick={() => void confirmOrder(line.id, moveLineToIndex(ids, line.id, index))}>↑</button>
+          <button type="button" data-ui-id="A127" data-ui-instance={line.id} disabled={index === ids.length - 1} aria-label={`نقل السطر ${ar(index + 1)} أسفل`} onClick={() => void confirmOrder(line.id, moveLineToIndex(ids, line.id, index + 2))}>↓</button>
         </div>
       </li>)}
       <li data-insert-gap={ids.length} className={`h-1 rounded ${drag?.mode === 'ORDER' && drag.gap === ids.length ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : ''}`} />
@@ -264,7 +265,7 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
   </div>;
 }
 
-function RankInput({ rank, max, onApply }: { rank: number; max: number; onApply: (rank: number) => void }) {
+function RankInput({ instance, rank, max, onApply }: { instance: string; rank: number; max: number; onApply: (rank: number) => void }) {
   const [value, setValue] = useState(ar(rank));
   useEffect(() => setValue(ar(rank)), [rank]);
   const apply = () => {
@@ -272,5 +273,5 @@ function RankInput({ rank, max, onApply }: { rank: number; max: number; onApply:
     setValue(ar(rank));
     if (value.trim() && Number.isInteger(numeric) && numeric >= 1 && numeric <= max && numeric !== rank) onApply(numeric);
   };
-  return <input aria-label={`رتبة السطر ${ar(rank)}`} inputMode="numeric" value={value} onChange={(event) => setValue(event.target.value)} onBlur={apply} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} className="w-10 rounded border border-stone-300 text-center" />;
+  return <input data-ui-id="A126" data-ui-instance={instance} aria-label={`رتبة السطر ${ar(rank)}`} inputMode="numeric" value={value} onChange={(event) => setValue(event.target.value)} onBlur={apply} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} className="w-10 rounded border border-stone-300 text-center" />;
 }

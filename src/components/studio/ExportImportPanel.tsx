@@ -56,7 +56,7 @@ export function ExportImportPanel({ onExport, onPreviewImport, onImport }: Expor
   };
 
   return (
-    <div className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div data-ui-id="A170" className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div>
         <h3 className="font-bold text-gray-900">تصدير واستيراد إعداد المحرك</h3>
         <p className="mt-1 text-sm text-gray-500">
