@@ -152,7 +152,7 @@ export default function EditorPage() {
   const { surahNumber, ayahNumber } = parseAyahKey(ayahKey);
 
   return (
-    <div className="-m-4 flex h-[calc(100dvh-73px)] flex-col overflow-hidden bg-stone-100 md:-m-6">
+    <div data-ui-id="A020" className="-m-4 flex h-[calc(100dvh-73px)] flex-col overflow-hidden bg-stone-100 md:-m-6">
       {(!focusMode || revealedEdge === 'top') && (
         <div
           className={focusMode ? 'absolute inset-x-0 top-0 z-40 shadow-xl' : ''}
@@ -179,7 +179,7 @@ export default function EditorPage() {
           </div>
         )}
 
-        <main className="flex min-w-0 flex-1 flex-col">
+        <main data-ui-id="A100" className="flex min-w-0 flex-1 flex-col">
           <SelectionBreadcrumb />
           <div className="min-h-0 flex-1">
             <TashjeerCanvas fontSize={fontSize} />
@@ -213,6 +213,7 @@ export default function EditorPage() {
 
       <button
         type="button"
+        data-ui-id="A132"
         onClick={() => {
           setFocusMode((value) => !value);
           setRevealedEdge(null);
@@ -226,6 +227,7 @@ export default function EditorPage() {
       {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
 
       <input
+        data-ui-id="A134"
         ref={fileInputRef}
         type="file"
         accept="application/json"
@@ -270,7 +272,7 @@ function StatusBar({
   };
 
   return (
-    <div className="flex items-center justify-between border-t border-stone-200 bg-white px-3 py-1.5 text-[11px] text-stone-600">
+    <div data-ui-id="A133" className="flex items-center justify-between border-t border-stone-200 bg-white px-3 py-1.5 text-[11px] text-stone-600">
       <div className="flex items-center gap-4">
         <span>
           الموضع: {formatAyahRef(surahNumber, ayahNumber)}

@@ -23,7 +23,7 @@ export function WhyTracePlayground({ config }: WhyTracePlaygroundProps) {
   const result = useMemo(() => resolveMerge(a, b, config), [a, b, config]);
 
   return (
-    <div className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div data-ui-id="A165" className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div>
         <h3 className="font-bold text-gray-900">ساحة الاختبار: لماذا؟</h3>
         <p className="mt-1 text-sm text-gray-500">

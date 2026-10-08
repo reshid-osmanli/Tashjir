@@ -82,7 +82,7 @@ export default function TrackingPage() {
   }, [rows]);
 
   return (
-    <div className="space-y-5">
+    <div data-ui-id="A023" className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-stone-900">التتبع</h1>
@@ -95,7 +95,7 @@ export default function TrackingPage() {
       </header>
 
       {/* بطاقات الملخص */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div data-ui-id="A202" className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <SummaryCard label="كل المواضع" value={summary.total} tone="stone" />
         <SummaryCard label="وجد المحرك" value={summary.engine} tone="cyan" />
         <SummaryCard label="أضاف المحرر" value={summary.editor} tone="emerald" />
@@ -115,7 +115,7 @@ export default function TrackingPage() {
       )}
 
       {/* تصفية الفئة */}
-      <div className="flex flex-wrap gap-2">
+      <div data-ui-id="A200" className="flex flex-wrap gap-2">
         <FilterChip
           active={category === 'ALL'}
           onClick={() => setCategory('ALL')}
@@ -133,7 +133,7 @@ export default function TrackingPage() {
       </div>
 
       {/* تصفية المصدر */}
-      <div className="flex flex-wrap gap-2">
+      <div data-ui-id="A201" className="flex flex-wrap gap-2">
         {SOURCE_FILTERS.map((option) => (
           <FilterChip
             key={option.value}
@@ -159,7 +159,7 @@ export default function TrackingPage() {
           </Link>
         </div>
       ) : (
-        <ul className="space-y-2.5">
+        <ul data-ui-id="A203" className="space-y-2.5">
           {visible.map((row) => (
             <TrackingRowCard
               key={row.id}
@@ -184,7 +184,7 @@ function TrackingRowCard({
   onToggle: () => void;
 }) {
   return (
-    <li className="rounded-xl border border-stone-200 bg-white p-3.5">
+    <li data-ui-id="A204" data-ui-instance={row.id} className="rounded-xl border border-stone-200 bg-white p-3.5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -223,6 +223,8 @@ function TrackingRowCard({
         <div className="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
+            data-ui-id="A205"
+            data-ui-instance={row.id}
             onClick={onToggle}
             className="rounded-md border border-stone-300 bg-white px-2.5 py-1 text-[11px] text-stone-600 hover:bg-stone-50"
           >
@@ -230,6 +232,8 @@ function TrackingRowCard({
           </button>
           <Link
             href={`/editor?ayah=${row.ayahKey}&variant=${row.variantId}`}
+            data-ui-id="A208"
+            data-ui-instance={row.id}
             className="rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-emerald-700"
           >
             فتح في المحرر
@@ -314,6 +318,8 @@ function RowDecisionTrace({ row }: { row: TrackingRow }) {
         </p>
         <button
           type="button"
+          data-ui-id="A206"
+          data-ui-instance={row.id}
           onClick={() => setOpen((current) => !current)}
           className="rounded-md border border-stone-300 bg-white px-2 py-0.5 text-[10.5px] text-stone-700 hover:bg-stone-50"
         >
@@ -360,6 +366,8 @@ function CorrectionTripletView({ row }: { row: TrackingRow }) {
         {candidateHref && (
           <Link
             href={candidateHref}
+            data-ui-id="A207"
+            data-ui-instance={row.id}
             className="rounded-md border border-violet-300 bg-violet-50 px-2 py-0.5 text-[10.5px] font-medium text-violet-800 hover:bg-violet-100"
           >
             اقتراح قاعدة من هذا التصحيح

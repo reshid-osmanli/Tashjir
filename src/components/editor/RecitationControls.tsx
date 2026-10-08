@@ -93,7 +93,7 @@ export function RecitationControls() {
   };
 
   return (
-    <Section title="الوقف والابتداء">
+    <Section title="الوقف والابتداء" data-ui-id="A139">
       <p className="mb-2 text-[11px] leading-relaxed text-stone-500">
         حدِّد الكلمة ثم سجّل الوقف أو الابتداء أو الوصل. يعيد المحرك ترتيب المقاطع من آخرها إلى أولها.
       </p>
@@ -924,9 +924,9 @@ export function TashjeerOrderControls() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, ...attributes }: React.HTMLAttributes<HTMLElement> & { title: string }) {
   return (
-    <section className="border-b border-stone-100 px-4 py-3 last:border-b-0">
+    <section {...attributes} className="border-b border-stone-100 px-4 py-3 last:border-b-0">
       <h3 className="mb-2 text-xs font-bold text-stone-800">{title}</h3>
       {children}
     </section>

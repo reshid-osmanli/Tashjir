@@ -17,6 +17,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
+    "registry:docs": "tsx scripts/sync-ui-registry-docs.ts",
     "data:quran": "node scripts/build-quran-data.mjs"
   },
   "dependencies": {

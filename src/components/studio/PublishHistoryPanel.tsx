@@ -122,7 +122,7 @@ export function PublishHistoryPanel({
   };
 
   return (
-    <div className="space-y-5">
+    <div data-ui-id="A169" className="space-y-5">
       {/* بوابة النشر */}
       <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">

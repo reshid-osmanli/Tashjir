@@ -34,7 +34,7 @@ export default function QiraatPage() {
       .find((row) => row.qiraah.id === selectedQiraah);
 
   return (
-    <div className="space-y-6">
+    <div data-ui-id="A025" className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">القراءات العشر</h1>
@@ -49,6 +49,7 @@ export default function QiraatPage() {
           </Link>
           <div className="w-full md:w-80">
           <input
+            data-ui-id="A230"
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -67,7 +68,7 @@ export default function QiraatPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(360px,0.8fr)]">
-        <section className="overflow-hidden rounded-xl bg-white shadow-lg">
+        <section data-ui-id="A231" className="overflow-hidden rounded-xl bg-white shadow-lg">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
@@ -120,7 +121,7 @@ export default function QiraatPage() {
 
 function QiraahDetails({ qiraah, turuq }: { qiraah: Qiraah; turuq: Turuq[] }) {
   return (
-    <aside className="rounded-xl bg-white p-6 shadow-lg">
+    <aside data-ui-id="A232" className="rounded-xl bg-white p-6 shadow-lg">
       <h2 className="text-lg font-bold text-gray-900">تفاصيل القراءة</h2>
       <div className="mt-4 space-y-4">
         <InfoRow label="القارئ" value={qiraah.name} />

@@ -80,7 +80,7 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="space-y-5">
+    <div data-ui-id="A028" className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs font-semibold text-emerald-700">لوحة التحكم</p>
@@ -104,7 +104,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      <nav className="flex flex-wrap gap-2 border-b border-stone-200" aria-label="أقسام لوحة التحكم">
+      <nav data-ui-id="A260" className="flex flex-wrap gap-2 border-b border-stone-200" aria-label="أقسام لوحة التحكم">
         {TABS.map((item) => (
           <button
             key={item.id}
@@ -297,7 +297,7 @@ function TransmissionManager({
   };
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div data-ui-id="A261" className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
       <main className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-3">
           <Metric label="الأئمة" value={catalog.imams.length} />
@@ -335,7 +335,7 @@ function TransmissionManager({
             {imams.map((imam) => {
               const imamNarrators = narrators.filter((narrator) => narrator.imamId === imam.id);
               return (
-                <section key={imam.id} className={`overflow-hidden rounded-xl border border-stone-200 bg-white ${dropClass(imam.id)}`} {...dragProps('IMAM', imam.id)}>
+                <section key={imam.id} data-ui-id="A263" data-ui-instance={imam.id} className={`overflow-hidden rounded-xl border border-stone-200 bg-white ${dropClass(imam.id)}`} {...dragProps('IMAM', imam.id)}>
                   <header className="flex flex-wrap items-center justify-between gap-2 bg-stone-50 px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span className="cursor-grab select-none text-stone-300 hover:text-stone-500 active:cursor-grabbing" title="اسحب لإعادة ترتيب القراء" aria-hidden>⠿</span>
@@ -365,7 +365,7 @@ function TransmissionManager({
                       {imamNarrators.map((narrator) => {
                         const paths = catalogPathsForNarrator(catalog, narrator.id);
                         return (
-                          <li key={narrator.id} className={`px-4 py-3 ${dropClass(narrator.id)}`} {...dragProps('NARRATOR', narrator.id, imam.id)}>
+                          <li key={narrator.id} data-ui-id="A263" data-ui-instance={narrator.id} className={`px-4 py-3 ${dropClass(narrator.id)}`} {...dragProps('NARRATOR', narrator.id, imam.id)}>
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="flex items-center gap-2">
                                 <span className="cursor-grab select-none text-stone-300 hover:text-stone-500 active:cursor-grabbing" title="اسحب لإعادة ترتيب رواة هذا القارئ" aria-hidden>⠿</span>
@@ -387,7 +387,7 @@ function TransmissionManager({
                             {paths.length > 0 && (
                               <ul className="mt-2 grid gap-1 sm:grid-cols-2">
                                 {paths.map((path) => (
-                                  <li key={path.id} className={`flex items-center justify-between gap-2 rounded border border-stone-100 bg-stone-50 px-2 py-1.5 ${dropClass(path.id)}`} {...dragProps('PATH', path.id, narrator.id)}>
+                                  <li key={path.id} data-ui-id="A263" data-ui-instance={path.id} className={`flex items-center justify-between gap-2 rounded border border-stone-100 bg-stone-50 px-2 py-1.5 ${dropClass(path.id)}`} {...dragProps('PATH', path.id, narrator.id)}>
                                     <span className="cursor-grab select-none text-stone-300 hover:text-stone-500 active:cursor-grabbing" title="اسحب لإعادة ترتيب طرق هذا الراوي" aria-hidden>⠿</span>
                                     <span className="min-w-0 flex-1">
                                       <span className="block truncate text-[11px] font-medium text-stone-800">
@@ -652,7 +652,7 @@ function EntityForm({
   onClose: () => void;
 }) {
   return (
-    <form onSubmit={onSubmit} className="space-y-3">
+    <form data-ui-id="A262" onSubmit={onSubmit} className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-bold text-stone-900">{title}</h2>
         <button type="button" onClick={onClose} className="text-xs text-stone-500 hover:text-stone-900">إغلاق</button>

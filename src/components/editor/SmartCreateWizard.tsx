@@ -790,7 +790,7 @@ export function SmartCreateWizard({
   const patternWords = generalPattern.pattern?.kind === 'CHARACTERS' ? generalPattern.pattern.words : [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 p-4" role="dialog" aria-modal="true" aria-label="المعالج الذكي لإنشاء الاختلافات والأوجه">
+    <div data-ui-id="A421" className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 p-4" role="dialog" aria-modal="true" aria-label="المعالج الذكي لإنشاء الاختلافات والأوجه">
       <div className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
         <header className="flex items-start justify-between gap-4 border-b border-stone-200 px-5 py-4">
           <div>

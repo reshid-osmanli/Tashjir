@@ -70,7 +70,7 @@ export default function ReviewPage() {
   };
 
   return (
-    <div className="space-y-5">
+    <div data-ui-id="A027" className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-stone-900">المراجعة العلمية</h1>
@@ -91,7 +91,8 @@ export default function ReviewPage() {
         </label>
       </header>
 
-      <div className="flex flex-wrap gap-2">
+      <div data-ui-id="A250" className="space-y-5">
+      <div data-ui-id="A251" className="flex flex-wrap gap-2">
         {FILTERS.map((option) => (
           <button
             key={option.value}
@@ -111,7 +112,7 @@ export default function ReviewPage() {
       {visible.length === 0 ? (
         <EmptyState hasAnyItems={items.length > 0} />
       ) : (
-        <ul className="space-y-3">
+        <ul data-ui-id="A252" className="space-y-3">
           {visible.map((item) => (
             <li key={item.key} className="rounded-xl border border-stone-200 bg-white p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -164,6 +165,8 @@ export default function ReviewPage() {
               </div>
 
               <textarea
+                data-ui-id="A253"
+                data-ui-instance={item.key}
                 value={comments[item.key] ?? ''}
                 onChange={(event) =>
                   setComments((previous) => ({ ...previous, [item.key]: event.target.value }))
@@ -174,13 +177,13 @@ export default function ReviewPage() {
               />
 
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <ActionButton tone="emerald" onClick={() => decide(item, 'APPROVED')}>
+                <ActionButton data-ui-id="A254" data-ui-instance={item.key} tone="emerald" onClick={() => decide(item, 'APPROVED')}>
                   اعتماد
                 </ActionButton>
-                <ActionButton tone="amber" onClick={() => decide(item, 'REVIEW')}>
+                <ActionButton data-ui-id="A254" data-ui-instance={item.key} tone="amber" onClick={() => decide(item, 'REVIEW')}>
                   إعادة للمراجعة
                 </ActionButton>
-                <ActionButton tone="red" onClick={() => decide(item, 'REJECTED')}>
+                <ActionButton data-ui-id="A254" data-ui-instance={item.key} tone="red" onClick={() => decide(item, 'REJECTED')}>
                   رفض
                 </ActionButton>
 
@@ -194,6 +197,7 @@ export default function ReviewPage() {
           ))}
         </ul>
       )}
+      </div>
     </div>
   );
 }
@@ -242,10 +246,10 @@ function ActionButton({
   children,
   onClick,
   tone,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
+  ...attributes
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   tone: 'emerald' | 'amber' | 'red';
+  children: React.ReactNode;
 }) {
   const tones = {
     emerald: 'border-emerald-300 text-emerald-800 hover:bg-emerald-50',
@@ -256,6 +260,7 @@ function ActionButton({
   return (
     <button
       type="button"
+      {...attributes}
       onClick={onClick}
       className={`rounded-md border bg-white px-3 py-1.5 text-xs font-medium transition-colors ${tones[tone]}`}
     >

@@ -95,7 +95,8 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-5">
+    <div data-ui-id="A029">
+      <div data-ui-id="A270" className="space-y-5">
       <header>
         <h1 className="text-xl font-bold text-stone-900">الإعدادات</h1>
         <p className="mt-0.5 text-sm text-stone-600">
@@ -179,6 +180,7 @@ export default function SettingsPage() {
         <div className="mt-4 flex justify-end gap-2">
           <button
             type="button"
+            data-ui-id="A272"
             onClick={reset}
             className="rounded-md border border-stone-300 bg-white px-4 py-2 text-xs text-stone-700 hover:bg-stone-50"
           >
@@ -276,6 +278,7 @@ export default function SettingsPage() {
           لا يصح اعتمادها علميا قبل مراجعة مختص مجاز ومقابلتها على النشر وطيبة النشر.
         </p>
       </Card>
+      </div>
     </div>
   );
 }

@@ -456,7 +456,7 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
       : 'default';
 
   return (
-    <div className="relative h-full w-full overflow-auto bg-[#fdfaf2]">
+    <div data-ui-id="A111" className="relative h-full w-full overflow-auto bg-[#fdfaf2]">
       <svg
         ref={svgRef}
         role="img"

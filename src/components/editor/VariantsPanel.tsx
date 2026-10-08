@@ -239,7 +239,7 @@ export function VariantsPanel() {
   };
 
   return (
-    <aside className="flex h-full min-h-0 w-[340px] shrink-0 flex-col overflow-hidden border-s border-stone-200 bg-white">
+    <aside data-ui-id="A114" className="flex h-full min-h-0 w-[340px] shrink-0 flex-col overflow-hidden border-s border-stone-200 bg-white">
       <header className="border-b border-stone-200 px-4 py-3">
         <div className="flex items-start justify-between gap-2">
           <div>
@@ -250,6 +250,7 @@ export function VariantsPanel() {
           </div>
           <button
             type="button"
+            data-ui-id="A115"
             onClick={() => setShowRulesIndex(true)}
             className="shrink-0 rounded border border-violet-200 px-2 py-1 text-[10px] text-violet-800 hover:bg-violet-50"
             title="فهرس القواعد والاختلافات كاملا داخل المحرر: بحث وتتبع وتحرير"
@@ -358,6 +359,7 @@ export function VariantsPanel() {
             </p>
             <button
               type="button"
+              data-ui-id="A116"
               onClick={() => setShowSmartWizard(true)}
               className="w-full rounded-md border border-emerald-600 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-950 hover:bg-emerald-100"
               title="الاختصار N — التحديد البصري متاح داخل المعالج نفسه"
@@ -381,6 +383,7 @@ export function VariantsPanel() {
 
             <button
               type="button"
+              data-ui-id="A116"
               onClick={() => setShowSmartWizard(true)}
               className="w-full rounded-md border border-emerald-600 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-950 hover:bg-emerald-100"
               title="المعالج الموحّد (N): أنواع وأوجه ونطاق قرّاء وعلاقات وسياق وتعميم في خطوات واضحة"
@@ -388,7 +391,7 @@ export function VariantsPanel() {
               🧭 المعالج الذكي الموحّد (٧ خطوات)
             </button>
 
-            <div className="rounded-md border border-cyan-200 bg-white p-2">
+            <div data-ui-id="A145" className="rounded-md border border-cyan-200 bg-white p-2">
               <p className="text-[10px] leading-relaxed text-cyan-950">
                 إنشاء سريع بنقرة: القالب نفسه عبر نواة المعالج — والمواضع المتفرقة تُسند دفعة واحدة.
               </p>
@@ -468,6 +471,7 @@ export function VariantsPanel() {
           <div className="space-y-2 px-4 py-2">
             <input
               type="search"
+              data-ui-id="A117"
               value={listSearch}
               onChange={(event) => setListSearch(event.target.value)}
               placeholder="بحث فوري: نص، فئة، حالة، مصدر…"
@@ -477,6 +481,7 @@ export function VariantsPanel() {
             {multiSelection?.kind === 'DIFFERENCE' && multiSelection.ids.length > 0 && (
               <div
                 role="toolbar"
+                data-ui-id="A119"
                 aria-label="إجراءات التحديد المتعدد"
                 className="flex flex-wrap items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50/80 px-2 py-1.5"
               >
@@ -485,6 +490,7 @@ export function VariantsPanel() {
                 </span>
                 <button
                   type="button"
+                  data-ui-id="A333"
                   className="rounded border border-rose-300 bg-white px-2 py-0.5 text-[11px] font-medium text-rose-700 hover:bg-rose-50"
                   onClick={() => void requestDeleteItems({ kind: 'DIFFERENCE', ids: multiSelection.ids })}
                   title="حذف كل الاختلافات المحددة دفعة واحدة — بتأكيد كمي وقابل للتراجع"
@@ -521,7 +527,7 @@ export function VariantsPanel() {
         }
         activeIndex={visibleVariants.findIndex((variant) => variant.id === selectedVariantId)}
         renderWindow={(range) => (
-          <ul className="divide-y divide-stone-100">
+          <ul data-ui-id="A118" className="divide-y divide-stone-100">
             {visibleVariants.map((variant, index) => {
               // خارج النافذة: لا يُرسم إلا الصف المحدد (ليبقى التمرير إليه ممكنا).
               if (range.active && (index < range.start || index > range.end) && variant.id !== selectedVariantId) {
@@ -869,6 +875,7 @@ function VariantRow({
             </select>
           </label>
           <ul
+            data-ui-id="A121"
             ref={listRef}
             className="mt-2 space-y-1.5 rounded outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
             tabIndex={0}
@@ -901,6 +908,8 @@ function VariantRow({
               >
                 <div className="flex items-baseline justify-between gap-2">
                   <input
+                    data-ui-id="A122"
+                    data-ui-instance={alternative.id}
                     type="checkbox"
                     checked={checkedFaces.has(alternative.id)}
                     onClick={(event) => {

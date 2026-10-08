@@ -37,7 +37,7 @@ export function ProfileComparePanel({ config }: ProfileComparePanelProps) {
   const safe = isSafeToAdopt(report);
 
   return (
-    <div className="space-y-5">
+    <div data-ui-id="A168" className="space-y-5">
       <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <h3 className="font-bold text-gray-900">مقارنة بالملف الافتراضي</h3>
         <p className="mt-1 text-sm text-gray-500">

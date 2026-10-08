@@ -105,7 +105,7 @@ export function PropertiesPanel() {
   if (!document) return null;
 
   return (
-    <aside className="flex h-full w-[320px] shrink-0 flex-col overflow-y-auto border-e border-stone-200 bg-white">
+    <aside data-ui-id="A113" className="flex h-full w-[320px] shrink-0 flex-col overflow-y-auto border-e border-stone-200 bg-white">
       {/* تفاصيل العنصر المحدد: مصدر الحقيقة هو التحديد الموحّد (FR-ED-02.4) */}
       <SelectionDetailsPanel classic={classic} onRequestWhy={() => setShowWhyDialog(true)} />
 

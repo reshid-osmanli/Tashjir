@@ -104,6 +104,7 @@ export function LocalOverrideEditor({
 
   return (
     <div
+      data-ui-id="A144"
       className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/45 p-4"
       role="dialog"
       aria-modal="true"

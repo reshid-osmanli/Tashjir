@@ -11,6 +11,7 @@ import { SHORTCUT_HINTS } from '@/hooks/useKeyboardShortcuts';
 export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   return (
     <div
+      data-ui-id="A131"
       className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 p-4"
       role="dialog"
       aria-modal="true"

@@ -278,7 +278,7 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
   }, [draft, rule, profile]);
 
   return (
-    <div className="space-y-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div data-ui-id="A161" className="space-y-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-bold text-gray-900">{draft.id ? 'تعديل قاعدة' : 'قاعدة جديدة'}</h3>
         <span className="text-xs text-gray-400">{draft.id}</span>

@@ -39,7 +39,7 @@ export function EngineSettingsPanel() {
   };
 
   return (
-    <div className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div data-ui-id="A171" className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <header>
         <p className="text-xs font-semibold text-violet-700">إعدادات التنفيذ المرئي</p>
         <h3 className="mt-1 text-lg font-bold text-gray-900">إعدادات محرك التشجير</h3>

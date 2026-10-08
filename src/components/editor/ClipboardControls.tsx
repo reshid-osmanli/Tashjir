@@ -5,7 +5,7 @@ import { toArabicDigits as ar } from '@/lib/utils/arabic-numbers';
 export function ClipboardControls() {
   const store = useEditorStore();
   const suspended = store.document?.suspendedLinks ?? [];
-  return <div className="flex items-center gap-2"><details className="relative text-xs" dir="rtl">
+  return <div className="flex items-center gap-2"><details data-ui-id="A106" className="relative text-xs" dir="rtl">
     <summary className="cursor-pointer rounded border border-stone-300 px-2 py-1">الحافظة {suspended.length ? `· ${ar(suspended.length)} علاقات معلّقة` : ''}</summary>
     <div className="absolute start-0 top-full z-40 mt-1 w-80 space-y-2 rounded border bg-white p-3 shadow-xl">
       <div className="flex gap-2">

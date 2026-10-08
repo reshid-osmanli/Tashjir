@@ -37,7 +37,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden px-4 py-12">
+    <div data-ui-id="A032" className="relative flex min-h-dvh items-center justify-center overflow-hidden px-4 py-12">
       {/* خلفية مشتقّة من شكل التشجير: فروع شبه غير مرئية. */}
       <svg
         className="pointer-events-none absolute inset-0 h-full w-full text-line"
@@ -56,7 +56,7 @@ export default function LoginPage() {
         </g>
       </svg>
 
-      <div className="relative w-full max-w-sm">
+      <div data-ui-id="A340" className="relative w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
           <TashjirMark size={40} className="text-primary-700" />
           <h1 className="mt-4 font-amiri text-h2 text-ink-900">التشجير</h1>
@@ -69,7 +69,7 @@ export default function LoginPage() {
             الحساب محلي في هذا المتصفح؛ لا يُرسل شيء إلى أي جهة.
           </p>
 
-          <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+          <form data-ui-id="A341" onSubmit={handleSubmit} className="mt-5 space-y-4">
             {error ? (
               <p
                 role="alert"
@@ -85,6 +85,7 @@ export default function LoginPage() {
               </label>
               <input
                 id="login-email"
+                data-ui-id="A342"
                 type="email"
                 dir="ltr"
                 autoComplete="email"
@@ -101,6 +102,7 @@ export default function LoginPage() {
               </label>
               <input
                 id="login-password"
+                data-ui-id="A343"
                 type="password"
                 dir="ltr"
                 autoComplete="current-password"
@@ -111,7 +113,7 @@ export default function LoginPage() {
               />
             </div>
 
-            <button type="submit" className="btn btn-primary w-full gap-2">
+            <button type="submit" data-ui-id="A344" className="btn btn-primary w-full gap-2">
               ادخل إلى مساحة العمل
               <IconArrowForward size={18} />
             </button>

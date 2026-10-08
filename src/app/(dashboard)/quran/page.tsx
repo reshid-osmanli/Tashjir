@@ -61,7 +61,7 @@ export default function QuranPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div data-ui-id="A022" className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-stone-900">المصحف</h1>
@@ -77,6 +77,7 @@ export default function QuranPage() {
         <aside className="rounded-xl border border-stone-200 bg-white">
           <div className="border-b border-stone-200 p-3">
             <input
+              data-ui-id="A180"
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -86,7 +87,7 @@ export default function QuranPage() {
             />
           </div>
 
-          <ul className="max-h-[70vh] overflow-y-auto p-1">
+          <ul data-ui-id="A181" className="max-h-[70vh] overflow-y-auto p-1">
             {filteredSurahs.map((item) => (
               <li key={item.number}>
                 <button
@@ -112,7 +113,7 @@ export default function QuranPage() {
         </aside>
 
         {/* نص السورة */}
-        <section className="rounded-xl border border-stone-200 bg-[#fdfaf2] p-5">
+        <section data-ui-id="A182" className="rounded-xl border border-stone-200 bg-[#fdfaf2] p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 pb-3">
             <div>
               <h2 className="text-lg font-bold text-stone-900">سورة {surah.name}</h2>
@@ -131,6 +132,7 @@ export default function QuranPage() {
               {savedInSurah > 0 && (
                 <button
                   type="button"
+                  data-ui-id="A183"
                   onClick={() => setShowTashjeer((value) => !value)}
                   className={`rounded-md border px-3 py-1.5 text-[11px] transition-colors ${
                     showTashjeer
@@ -154,6 +156,8 @@ export default function QuranPage() {
               return (
                 <li
                   key={ayah.key}
+                  data-ui-id="A184"
+                  data-ui-instance={ayah.key}
                   className="group rounded-lg border border-transparent px-3 py-2 transition-colors hover:border-stone-200 hover:bg-white"
                 >
                   <div className="flex items-start gap-3">
@@ -191,12 +195,16 @@ export default function QuranPage() {
                     <div className="mt-1.5 flex shrink-0 gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
                       <Link
                         href={`/editor?ayah=${ayah.key}`}
+                        data-ui-id="A185"
+                        data-ui-instance={ayah.key}
                         className="rounded-md border border-stone-300 bg-white px-2 py-1 text-[11px] text-stone-600 hover:bg-stone-50"
                       >
                         تشجير
                       </Link>
                       <button
                         type="button"
+                        data-ui-id="A186"
+                        data-ui-instance={ayah.key}
                         onClick={() => exportAyahJson(ayah.key, ayah.surahNumber, ayah.ayahNumber)}
                         className="rounded-md border border-cyan-200 bg-white px-2 py-1 text-[11px] text-cyan-800 hover:bg-cyan-50"
                         title="تصدير ملف JSON لهذه الآية"

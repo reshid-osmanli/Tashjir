@@ -35,7 +35,7 @@ export function Dashboard({ config }: DashboardProps) {
   const audit = useMemo(() => auditProfile(config), [config]);
 
   return (
-    <div className="space-y-6">
+    <div data-ui-id="A156" className="space-y-6">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard label="إجمالي القواعد" value={stats.total} tone="emerald" />
         <StatCard label="قواعد مفعّلة" value={stats.active} tone="emerald" />

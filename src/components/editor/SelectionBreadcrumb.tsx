@@ -46,7 +46,7 @@ export function SelectionBreadcrumb() {
 
   if (!selection) {
     return (
-      <div className="flex items-center gap-2 border-b border-stone-200 bg-stone-50 px-4 py-1.5 text-[11px] text-stone-400">
+      <div data-ui-id="A112" className="flex items-center gap-2 border-b border-stone-200 bg-stone-50 px-4 py-1.5 text-[11px] text-stone-400">
         {dangling ? (
           <span className="flex flex-wrap items-center gap-1 text-stone-500">
             <span className="rounded bg-stone-200 px-1.5 py-0.5">آخر تحديد (محذوف أو مُلغى):</span>
@@ -65,7 +65,7 @@ export function SelectionBreadcrumb() {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1 border-b border-stone-200 bg-stone-50 px-4 py-1.5 text-[11px]">
+    <div data-ui-id="A112" className="flex flex-wrap items-center gap-1 border-b border-stone-200 bg-stone-50 px-4 py-1.5 text-[11px]">
       {crumbs.map((crumb, index) => (
         <span key={`${crumb.kind}-${index}`} className="flex items-center gap-1">
           {index > 0 && <span className="text-stone-300">←</span>}

@@ -6,6 +6,7 @@
 
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { UIRegistryInspector } from '@/components/dev/UIRegistryInspector';
 
 export const metadata: Metadata = {
   title: 'التشجير — نظام القراءات العشر',
@@ -35,6 +36,7 @@ export default function RootLayout({
           تجاوز إلى المحتوى
         </a>
         {children}
+        <UIRegistryInspector />
       </body>
     </html>
   );

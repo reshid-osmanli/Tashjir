@@ -71,7 +71,8 @@ export default function StatisticsPage() {
   const maxCoverage = Math.max(1, ...Object.values(narratorCoverage));
 
   return (
-    <div className="space-y-5">
+    <div data-ui-id="A030">
+      <div data-ui-id="A280" className="space-y-5">
       <header>
         <h1 className="text-xl font-bold text-stone-900">الإحصاءات</h1>
         <p className="mt-0.5 text-sm text-stone-600">
@@ -226,6 +227,7 @@ export default function StatisticsPage() {
         <StatCard label="الرواة" value={NARRATORS.length} tone="stone" />
         <StatCard label="الطرق المدخلة" value={TRANSMISSION_PATH_SEEDS.length} tone="stone" />
       </section>
+      </div>
     </div>
   );
 }
