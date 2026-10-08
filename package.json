@@ -7,6 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "postinstall": "prisma generate || echo \"prisma generate skipped (offline or missing DATABASE_URL)\" ",
     "lint": "next lint",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
