@@ -19,7 +19,7 @@ Feature definitions live in `src/ui/feature-registry.ts`. This document is gener
 | A011 | Statistics | `/statistics` | لوحة قراءة إحصائية للتغطية والمواضع والفئات والرواة والمستندات. | active |
 | A012 | Public Landing | `/` | صفحة تعريف عامة تعرض قيمة المشروع وروابط الوصول إلى مساحات العمل. | active |
 | A013 | Local Sign-in | `/login` | واجهة دخول محلية تحفظ شارة الجلسة في المتصفح ولا ترسل بيانات إلى خادم. | active |
-| A014 | Developer UI Inspector | `development-only` | أداة تطوير فقط تعرض معرفات DOM المسجلة وتفاصيل السجل دون تغيير سلوك التطبيق. | active |
+| A014 | Developer UI Inspector | `shared-dashboard` | أداة فحص تعرض معرفات DOM المسجلة وتفاصيل السجل دون تغيير سلوك التطبيق. تعمل في التطوير AND الإنتاج (Vercel Preview). | active |
 | A015 | Dashboard Workspace Shell | `shared-dashboard` | الغلاف المشترك لمسارات مساحة العمل: التنقل المتجاوب، رابط المصحف، شارة الجلسة، وحاوية التأكيد. | active |
 
 ## Feature details
@@ -298,22 +298,22 @@ Feature definitions live in `src/ui/feature-registry.ts`. This document is gener
 
 ## A014 — Developer UI Inspector
 
-- **Route/surface:** `development-only`
+- **Route/surface:** `shared-dashboard`
 - **Status:** `active`
-- **Purpose:** أداة تطوير فقط تعرض معرفات DOM المسجلة وتفاصيل السجل دون تغيير سلوك التطبيق.
-- **Important child UI IDs:** `A410`, `A730`, `A411`, `A731`, `A412`, `A732`
+- **Purpose:** أداة فحص تعرض معرفات DOM المسجلة وتفاصيل السجل دون تغيير سلوك التطبيق. تعمل في التطوير AND الإنتاج (Vercel Preview).
+- **Important child UI IDs:** `A410`, `A730`, `A411`, `A731`, `A412`, `A732`, `A2126`
 - **Main files:** `src/components/dev/UIRegistryInspector.tsx`, `src/ui/ui-registry.ts`
 - **Main components:** `UIRegistryInspector`
 - **Stores/persistence owners:** —
 - **Engine/data dependencies:** —
-- **Regression tests:** `tests/ui-registry.test.ts`
+- **Regression tests:** `tests/ui-registry.test.ts`, `tests/e2e/ui-inspector-overlay.spec.ts`
 
 ### Change impact map
 
 | Layer | UI IDs | Files / systems | Notes |
 |---|---|---|---|
-| UI | `A410`, `A411`, `A412` | `src/components/dev/UIRegistryInspector.tsx` | Development-only overlay; returns no UI in production. |
-| Tests | `A410`, `A411`, `A412` | `tests/ui-registry.test.ts` | Registry metadata and DOM markers are validated together. |
+| UI | `A410`, `A411`, `A412`, `A2126` | `src/components/dev/UIRegistryInspector.tsx` | Overlay works in development and production (Vercel Preview); disabled by default, enabled via toggle button, ?uiInspector=1, or Alt+Shift+I. |
+| Tests | `A410`, `A411`, `A412`, `A2126` | `tests/ui-registry.test.ts`, `tests/e2e/ui-inspector-overlay.spec.ts` | Registry metadata and DOM markers are validated together. |
 
 ## A015 — Dashboard Workspace Shell
 

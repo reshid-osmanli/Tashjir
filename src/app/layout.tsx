@@ -36,7 +36,9 @@ export default function RootLayout({
           تجاوز إلى المحتوى
         </a>
         {children}
-        {process.env.NODE_ENV === 'development' && <UIRegistryInspector />}
+        {/* UI ID Inspector: works in development AND production (Vercel Preview).
+            Enable it via the floating toggle, ?uiInspector=1, or Alt+Shift+I. */}
+        <UIRegistryInspector />
       </body>
     </html>
   );

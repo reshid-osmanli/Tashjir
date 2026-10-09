@@ -1,40 +1,110 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { getFeatureById } from '@/ui/feature-registry';
-import { getUIEntryById, getUIIdentity } from '@/ui/ui-registry';
+// مفتّش هوية الواجهة — UI ID Inspector
+//
+// طبقة فحص مرئية فوق عناصر `data-ui-id` المسجلة في UI Registry.
+// تعمل في التطوير AND في Production (Vercel Preview): لا توجد أي بوابة
+// NODE_ENV هنا. طرق التفعيل:
+//   1. الزر العائم "UI Inspector" (مرئي دائمًا)
+//   2. معامل URL: ?uiInspector=1
+//   3. الاختصار: Alt+Shift+I
+//
+// عند التفعيل: شارة صغيرة فوق كل عنصر مسجل تحمل معرّفه الحقيقي.
+// عند الضغط على عنصر: بطاقة تُظهر بياناته الفعلية من السجل.
+// عند الإيقاف: تختفي كل الشارات ويعود الموقع لسلوكه الطبيعي.
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+type UIRegistryModule = typeof import('@/ui/ui-registry');
+type FeatureRegistryModule = typeof import('@/ui/feature-registry');
 
 type InspectedTarget = {
   id: string;
   instance: string | null;
   left: number;
   top: number;
-  node: Element;
 };
 
-/** Development-only DOM identity overlay. It never participates in app behavior. */
+const ACTIVATION_PARAM = 'uiInspector';
+const BADGE_MAX_WIDTH = 96;
+const BADGE_HEIGHT = 16;
+
+function isActivationRequested(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  return params.get(ACTIVATION_PARAM) === '1' || params.get('ui-inspector') === '1';
+}
+
+function syncActivationParam(enabled: boolean) {
+  try {
+    const url = new URL(window.location.href);
+    if (enabled) url.searchParams.set(ACTIVATION_PARAM, '1');
+    else url.searchParams.delete(ACTIVATION_PARAM);
+    window.history.replaceState(window.history.state, '', url);
+  } catch {
+    // ignore: failure to reflect the param in the URL must never break the toggle
+  }
+}
+
+/** DOM identity overlay. It never participates in app behavior. */
 export function UIRegistryInspector() {
   const [enabled, setEnabled] = useState(false);
   const [targets, setTargets] = useState<InspectedTarget[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedInstance, setSelectedInstance] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [uiRegistry, setUiRegistry] = useState<UIRegistryModule | null>(null);
+  const [featureRegistry, setFeatureRegistry] = useState<FeatureRegistryModule | null>(null);
   const lastSignature = useRef('');
+  const registryRequested = useRef(false);
 
+  const toggle = useCallback(() => {
+    setEnabled((value) => {
+      const next = !value;
+      syncActivationParam(next);
+      return next;
+    });
+  }, []);
+
+  // ?uiInspector=1 — read once on mount (client only, no hydration mismatch).
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return;
+    if (isActivationRequested()) setEnabled(true);
+  }, []);
+
+  // Alt+Shift+I toggles; Escape closes the details card.
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.altKey && event.shiftKey && event.key.toLowerCase() === 'i') {
         event.preventDefault();
-        setEnabled((value) => !value);
+        toggle();
       }
       if (event.key === 'Escape') setSelectedId(null);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [toggle]);
 
+  // The 1700+ record registry is loaded lazily, only when the inspector is
+  // first enabled, so production pages do not pay for it in the main bundle.
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return;
+    if (!enabled || registryRequested.current) return;
+    registryRequested.current = true;
+    let cancelled = false;
+    void import('@/ui/ui-registry').then((module) => {
+      if (!cancelled) setUiRegistry(module);
+    });
+    void import('@/ui/feature-registry').then((module) => {
+      if (!cancelled) setFeatureRegistry(module);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled]);
+
+  // While enabled: scan registered elements and select on click (capture).
+  // Plain clicks AND Alt+clicks select the nearest [data-ui-id] ancestor and
+  // suppress the app action — the badges themselves are pointer-events:none,
+  // so they can never block interaction. When disabled, nothing is attached.
+  useEffect(() => {
     if (!enabled) {
       setTargets([]);
       setSelectedId(null);
@@ -42,10 +112,8 @@ export function UIRegistryInspector() {
       return;
     }
 
-    // Alt+click selects the actual nested DOM control without activating it.
-    // Ordinary clicks remain unchanged, including portal/context-menu actions.
     const inspectClick = (event: MouseEvent) => {
-      if (!event.altKey || !(event.target instanceof Element)) return;
+      if (!(event.target instanceof Element)) return;
       if (event.target.closest('[data-ui-inspector-root]')) return;
       const target = event.target.closest('[data-ui-id]');
       if (!target) return;
@@ -53,8 +121,10 @@ export function UIRegistryInspector() {
       event.stopImmediatePropagation();
       setSelectedId(target.getAttribute('data-ui-id'));
       setSelectedInstance(target.closest('[data-ui-instance]')?.getAttribute('data-ui-instance') ?? null);
+      setCopied(false);
     };
     window.addEventListener('click', inspectClick, true);
+
     let frame: number | null = null;
     const schedule = () => {
       if (frame !== null) return;
@@ -67,15 +137,15 @@ export function UIRegistryInspector() {
           const rect = node.getBoundingClientRect();
           if (rect.width <= 0 || rect.height <= 0 || rect.bottom < 0 || rect.top > window.innerHeight) return [];
           resizeObserver.observe(node);
+          const above = rect.top >= BADGE_HEIGHT + 4;
           return [{
             id: node.dataset.uiId ?? '',
             instance: node.dataset.uiInstance ?? node.closest('[data-ui-instance]')?.getAttribute('data-ui-instance') ?? null,
-            left: Math.max(0, Math.min(rect.left, window.innerWidth - 58)),
-            top: Math.max(0, Math.min(rect.top, window.innerHeight - 25)),
-            node,
+            left: Math.max(0, Math.min(rect.left, window.innerWidth - BADGE_MAX_WIDTH)),
+            top: above ? rect.top - BADGE_HEIGHT - 2 : Math.max(0, rect.top + 2),
           }];
         });
-        const signature = next.map((target) => `${target.id}:${target.instance ?? ''}:${Math.round(target.left)}:${Math.round(target.top)}:${target.node.getAttribute('data-ui-id')}`).join('|');
+        const signature = next.map((target) => `${target.id}:${target.instance ?? ''}:${Math.round(target.left)}:${Math.round(target.top)}`).join('|');
         if (signature !== lastSignature.current) {
           lastSignature.current = signature;
           setTargets(next);
@@ -114,20 +184,36 @@ export function UIRegistryInspector() {
     };
   }, [enabled]);
 
-  if (process.env.NODE_ENV !== 'development') return null;
+  const copyId = useCallback(async () => {
+    if (!selectedId) return;
+    try {
+      await navigator.clipboard.writeText(selectedId);
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = selectedId;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  }, [selectedId]);
 
-  const selected = selectedId ? getUIEntryById(selectedId) : undefined;
-  const feature = selected ? getFeatureById(selected.featureId) : undefined;
-  const parent = selected?.parentId ? getUIIdentity(selected.parentId) : undefined;
+  const selected = selectedId && uiRegistry ? uiRegistry.getUIEntryById(selectedId) : undefined;
+  const feature = selected && featureRegistry ? featureRegistry.getFeatureById(selected.featureId) : undefined;
+  const parent = selected?.parentId && uiRegistry ? uiRegistry.getUIIdentity(selected.parentId) : undefined;
 
   return (
     <div data-ui-id="A730" className="contents" data-ui-inspector-root>
       <button
         type="button"
         data-ui-id="A410"
-        onClick={() => setEnabled((value) => !value)}
+        onClick={toggle}
         aria-pressed={enabled}
-        title="UI Registry Inspector (Alt+Shift+I)"
+        title="UI ID Inspector — ?uiInspector=1 أو Alt+Shift+I"
         className="fixed bottom-3 start-3 z-[10000] rounded-full border border-slate-700 bg-slate-950 px-3 py-2 text-[11px] font-semibold text-white shadow-xl hover:bg-slate-800"
       >
         UI Inspector {enabled ? 'ON' : 'OFF'}
@@ -145,14 +231,8 @@ export function UIRegistryInspector() {
               type="button"
               tabIndex={-1}
               data-ui-inspector-ignore
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setSelectedId(target.id);
-                setSelectedInstance(target.instance);
-              }}
-              title={`${target.id}${target.instance ? ` · ${target.instance}` : ''} — click for registry details`}
-              className="pointer-events-auto absolute rounded-sm border border-fuchsia-200 bg-fuchsia-700/95 px-1 py-0.5 font-mono text-[10px] font-bold leading-none text-white shadow"
+              title={`${target.id}${target.instance ? ` · ${target.instance}` : ''}`}
+              className="pointer-events-none absolute rounded-sm border border-fuchsia-200 bg-fuchsia-700/95 px-1 py-0.5 font-mono text-[10px] font-bold leading-none text-white shadow"
               style={{ left: target.left, top: target.top }}
             >
               {target.id}
@@ -173,22 +253,37 @@ export function UIRegistryInspector() {
             <div>
               <p className="font-mono text-sm font-bold text-fuchsia-300">{selectedId}</p>
               <p className="mt-1 text-sm font-semibold">{selected?.name ?? 'Unregistered UI ID'}</p>
-              <p className="mt-1 text-[10px] text-slate-400">Alt+click an actual UI control to inspect it.</p>
+              <p className="mt-1 text-[10px] text-slate-400">Click any registered UI control while the inspector is on.</p>
               {selectedInstance && <p className="mt-1 font-mono text-[10px] text-slate-400">Instance: {selectedInstance}</p>}
             </div>
-            <button data-ui-id="A732" type="button" onClick={() => setSelectedId(null)} className="rounded border border-slate-600 px-2 py-1 text-slate-200 hover:bg-slate-800">Close</button>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                data-ui-id="A2126"
+                type="button"
+                onClick={() => void copyId()}
+                className="rounded border border-emerald-500 px-2 py-1 font-semibold text-emerald-300 hover:bg-emerald-950"
+              >
+                {copied ? '✓ Copied' : 'Copy ID'}
+              </button>
+              <button data-ui-id="A732" type="button" onClick={() => setSelectedId(null)} className="rounded border border-slate-600 px-2 py-1 text-slate-200 hover:bg-slate-800">Close</button>
+            </div>
           </div>
-          {selected ? (
+          {!uiRegistry ? (
+            <p className="text-slate-400">Loading registry data…</p>
+          ) : selected ? (
             <dl className="grid grid-cols-[6.5rem_1fr] gap-x-3 gap-y-2 leading-relaxed">
-              <dt className="text-slate-400">Type</dt><dd>{selected.kind}</dd>
-              <dt className="text-slate-400">Feature</dt><dd>{feature ? `${feature.id} — ${feature.name}` : selected.featureId}</dd>
-              <dt className="text-slate-400">Parent</dt><dd>{parent ? `${parent.id} — ${parent.name}` : selected.parentId}</dd>
+              <dt className="text-slate-400">UI ID</dt><dd className="font-mono font-bold text-fuchsia-300">{selected.id}</dd>
+              <dt className="text-slate-400">Name</dt><dd>{selected.name}</dd>
+              <dt className="text-slate-400">Kind</dt><dd>{selected.kind}</dd>
               <dt className="text-slate-400">Route</dt><dd className="font-mono">{selected.route}</dd>
+              <dt className="text-slate-400">Parent ID</dt><dd>{parent ? `${parent.id} — ${parent.name}` : selected.parentId ?? '—'}</dd>
+              <dt className="text-slate-400">Feature ID</dt><dd>{feature ? `${feature.id} — ${feature.name}` : selected.featureId}</dd>
               <dt className="text-slate-400">Component</dt><dd className="font-mono">{selected.component}</dd>
-              <dt className="text-slate-400">Source</dt><dd className="break-all font-mono">{selected.sourceFile}</dd>
+              <dt className="text-slate-400">Source file</dt><dd className="break-all font-mono">{selected.sourceFile}</dd>
+              <dt className="text-slate-400">Actions</dt><dd className="whitespace-pre-wrap break-all font-mono">{selected.actions?.map(action => `${action.event}: ${action.expression}`).join('\n') || '—'}</dd>
+              <dt className="text-slate-400">Related IDs</dt><dd className="font-mono">{selected.relatedIds.join(', ') || '—'}</dd>
               <dt className="text-slate-400">Purpose</dt><dd>{selected.description}</dd>
               <dt className="text-slate-400">Behavior</dt><dd className="whitespace-pre-wrap">{selected.behavior}</dd>
-              <dt className="text-slate-400">Actions</dt><dd className="whitespace-pre-wrap break-all font-mono">{selected.actions?.map(action => `${action.event}: ${action.expression}`).join('\n') || '—'}</dd>
               <dt className="text-slate-400">Stores</dt><dd className="break-all font-mono">{selected.stores?.join(', ') || '—'}</dd>
               <dt className="text-slate-400">Logic</dt><dd className="break-all font-mono">{selected.logicFiles?.join(', ') || '—'}</dd>
               <dt className="text-slate-400">Tests</dt><dd className="break-all font-mono">{selected.testFiles?.join(', ') || '—'}</dd>
@@ -197,7 +292,6 @@ export function UIRegistryInspector() {
               <dt className="text-slate-400">Constraints</dt><dd>{selected.constraints}</dd>
               <dt className="text-slate-400">Status</dt><dd>{selected.status}</dd>
               <dt className="text-slate-400">Dependencies</dt><dd className="font-mono">{selected.dependencies.join(', ') || '—'}</dd>
-              <dt className="text-slate-400">Related IDs</dt><dd className="font-mono">{selected.relatedIds.join(', ') || '—'}</dd>
               <dt className="text-slate-400">Code refs</dt><dd className="break-words font-mono">{selected.codeReferences.join(', ') || '—'}</dd>
             </dl>
           ) : (

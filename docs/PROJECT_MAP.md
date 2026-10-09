@@ -19,7 +19,7 @@ This map is generated from `src/ui/feature-registry.ts`; exact interactive-eleme
 | A011 | Statistics | `/statistics` | `src/app/(dashboard)/statistics/page.tsx` |
 | A012 | Public Landing | `/` | `src/app/page.tsx`, `src/components/marketing/PublicHeader.tsx`, `src/components/marketing/PublicFooter.tsx` |
 | A013 | Local Sign-in | `/login` | `src/app/login/page.tsx`, `src/components/layout/SessionBadge.tsx` |
-| A014 | Developer UI Inspector | `development-only` | `src/components/dev/UIRegistryInspector.tsx`, `src/ui/ui-registry.ts` |
+| A014 | Developer UI Inspector | `shared-dashboard` | `src/components/dev/UIRegistryInspector.tsx`, `src/ui/ui-registry.ts` |
 | A015 | Dashboard Workspace Shell | `shared-dashboard` | `src/app/(dashboard)/layout.tsx`, `src/components/layout/SessionBadge.tsx`, `src/components/ui/ConfirmDialogHost.tsx` |
 
 ## Architecture and ownership
@@ -240,17 +240,17 @@ This map is generated from `src/ui/feature-registry.ts`; exact interactive-eleme
 
 ## A014 — Developer UI Inspector
 
-- **Current route/surface:** `development-only` (active)
+- **Current route/surface:** `shared-dashboard` (active)
 - **Entry and primary files:** `src/components/dev/UIRegistryInspector.tsx`, `src/ui/ui-registry.ts`
 - **Components:** `UIRegistryInspector`
 - **State/persistence owners:** —
 - **Engine and data dependencies:** —
-- **Focused tests:** `tests/ui-registry.test.ts`
+- **Focused tests:** `tests/ui-registry.test.ts`, `tests/e2e/ui-inspector-overlay.spec.ts`
 
 | Layer | UI identities | Owning files/systems |
 |---|---|---|
-| UI | `A410`, `A411`, `A412` | `src/components/dev/UIRegistryInspector.tsx` |
-| Tests | `A410`, `A411`, `A412` | `tests/ui-registry.test.ts` |
+| UI | `A410`, `A411`, `A412`, `A2126` | `src/components/dev/UIRegistryInspector.tsx` |
+| Tests | `A410`, `A411`, `A412`, `A2126` | `tests/ui-registry.test.ts`, `tests/e2e/ui-inspector-overlay.spec.ts` |
 
 ## A015 — Dashboard Workspace Shell
 
