@@ -36,7 +36,9 @@ export default function RootLayout({
           تجاوز إلى المحتوى
         </a>
         {children}
-        {process.env.NODE_ENV === 'development' && <UIRegistryInspector />}
+        {/* فاحص الهويات متاح في كل البيئات — بما فيها Vercel Preview (بناء إنتاجي) —
+            لأن حصره بوضع التطوير كان يمنع ظهوره على النشر المنشور. */}
+        <UIRegistryInspector />
       </body>
     </html>
   );
