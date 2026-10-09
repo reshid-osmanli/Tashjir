@@ -22,7 +22,7 @@ export interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'children'> {
 
 function Icon({ size = 18, title, strokeWidth = 1.5, children, ...rest }: IconProps & { children: ReactNode }) {
   return (
-    <svg
+    <svg data-ui-id="A1999"
       width={size}
       height={size}
       viewBox="0 0 24 24"

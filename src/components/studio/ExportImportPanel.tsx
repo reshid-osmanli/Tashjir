@@ -65,16 +65,16 @@ export function ExportImportPanel({ onExport, onPreviewImport, onImport }: Expor
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={handleExport} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+        <button data-ui-id="A1722" type="button" onClick={handleExport} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
           تصدير (نسخة Git)
         </button>
-        <button type="button" onClick={handleCopy} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+        <button data-ui-id="A1723" type="button" onClick={handleCopy} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
           نسخ النص
         </button>
-        <button type="button" onClick={handlePreview} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        <button data-ui-id="A1724" type="button" onClick={handlePreview} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
           فحص ومعاينة الاستيراد
         </button>
-        {validated && <button type="button" onClick={handleImport} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700">تطبيق الاستيراد</button>}
+        {validated && <button data-ui-id="A1725" type="button" onClick={handleImport} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700">تطبيق الاستيراد</button>}
       </div>
 
       {feedback && (
@@ -83,15 +83,15 @@ export function ExportImportPanel({ onExport, onPreviewImport, onImport }: Expor
             feedback.kind === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
           }`}
         >
-          <ul className="list-disc space-y-0.5 pr-4">
+          <ul data-ui-id="A1726" className="list-disc space-y-0.5 pr-4">
             {feedback.messages.map((message, index) => (
-              <li key={index}>{message}</li>
+              <li data-ui-id="A1727" key={index}>{message}</li>
             ))}
           </ul>
         </div>
       )}
 
-      <textarea
+      <textarea data-ui-id="A1728"
         value={text}
         onChange={(event) => setText(event.target.value)}
         placeholder="الصق هنا إعداد محرك مُصدَّرًا للاستيراد..."

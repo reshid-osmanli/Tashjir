@@ -120,7 +120,7 @@ export function StrengthDegreesManager({ onMessage }: { onMessage?: (message: st
       </p>
 
       <div className="overflow-x-auto rounded-md border border-stone-200">
-        <table className="w-full text-xs">
+        <table data-ui-id="A1665" className="w-full text-xs">
           <thead className="bg-stone-50 text-stone-700">
             <tr>
               <th className="px-2 py-2 text-start font-semibold">الرتبة</th>
@@ -135,7 +135,7 @@ export function StrengthDegreesManager({ onMessage }: { onMessage?: (message: st
           </thead>
           <tbody>
             {degrees.map((degree, index) => (
-              <tr key={degree.id} className="border-t border-stone-100 align-top">
+              <tr data-ui-instance={String(degree.id)} data-ui-id="A1666" key={degree.id} className="border-t border-stone-100 align-top">
                 <td className="px-2 py-2">
                   <span
                     className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold text-white"
@@ -145,7 +145,7 @@ export function StrengthDegreesManager({ onMessage }: { onMessage?: (message: st
                   </span>
                 </td>
                 <td className="px-2 py-2">
-                  <input
+                  <input data-ui-instance={String(degree.id)} data-ui-id="A1667"
                     value={degree.label}
                     onChange={(event) => patch(degree.id, { label: event.target.value })}
                     className="input !py-1 !text-xs"
@@ -153,7 +153,7 @@ export function StrengthDegreesManager({ onMessage }: { onMessage?: (message: st
                   />
                 </td>
                 <td className="px-2 py-2">
-                  <input
+                  <input data-ui-instance={String(degree.id)} data-ui-id="A1668"
                     value={degree.shortLabel ?? ''}
                     onChange={(event) => patch(degree.id, { shortLabel: event.target.value })}
                     className="input !w-24 !py-1 !text-xs"
@@ -161,7 +161,7 @@ export function StrengthDegreesManager({ onMessage }: { onMessage?: (message: st
                   />
                 </td>
                 <td className="px-2 py-2">
-                  <input
+                  <input data-ui-instance={String(degree.id)} data-ui-id="A1669"
                     type="color"
                     value={degree.color}
                     onChange={(event) => patch(degree.id, { color: event.target.value })}
@@ -170,7 +170,7 @@ export function StrengthDegreesManager({ onMessage }: { onMessage?: (message: st
                   />
                 </td>
                 <td className="px-2 py-2">
-                  <input
+                  <input data-ui-instance={String(degree.id)} data-ui-id="A1670"
                     value={degree.description ?? ''}
                     onChange={(event) => patch(degree.id, { description: event.target.value })}
                     className="input !py-1 !text-xs"
@@ -179,7 +179,7 @@ export function StrengthDegreesManager({ onMessage }: { onMessage?: (message: st
                   />
                 </td>
                 <td className="px-2 py-2 text-center">
-                  <input
+                  <input data-ui-instance={String(degree.id)} data-ui-id="A1671"
                     type="radio"
                     name="preferred-degree"
                     checked={Boolean(degree.isPreferred)}
@@ -190,7 +190,7 @@ export function StrengthDegreesManager({ onMessage }: { onMessage?: (message: st
                 </td>
                 <td className="px-2 py-2">
                   <div className="flex items-center justify-center gap-1">
-                    <button
+                    <button data-ui-id="A1672"
                       type="button"
                       onClick={() => move(index, -1)}
                       disabled={index === 0}
@@ -199,7 +199,7 @@ export function StrengthDegreesManager({ onMessage }: { onMessage?: (message: st
                     >
                       ▲
                     </button>
-                    <button
+                    <button data-ui-id="A1673"
                       type="button"
                       onClick={() => move(index, 1)}
                       disabled={index === degrees.length - 1}
@@ -211,7 +211,7 @@ export function StrengthDegreesManager({ onMessage }: { onMessage?: (message: st
                   </div>
                 </td>
                 <td className="px-2 py-2 text-end">
-                  <button
+                  <button data-ui-instance={String(degree.id)} data-ui-id="A1674"
                     type="button"
                     onClick={() => remove(degree.id)}
                     disabled={degrees.length <= 1}
@@ -233,14 +233,14 @@ export function StrengthDegreesManager({ onMessage }: { onMessage?: (message: st
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button
+        <button data-ui-id="A1675"
           type="button"
           onClick={add}
           className="rounded-md border border-stone-300 bg-white px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-50"
         >
           + درجة جديدة
         </button>
-        <button
+        <button data-ui-id="A1676"
           type="button"
           onClick={restoreDefaults}
           className="rounded-md border border-stone-300 bg-white px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-50"
@@ -250,7 +250,7 @@ export function StrengthDegreesManager({ onMessage }: { onMessage?: (message: st
         <span className="ms-auto text-[11px] text-stone-500">
           {dirty ? 'توجد تعديلات غير محفوظة.' : 'السلّم محفوظ.'}
         </span>
-        <button
+        <button data-ui-id="A1677"
           type="button"
           onClick={save}
           disabled={!dirty || degrees.length === 0}

@@ -17,6 +17,19 @@ import { getCategoryColor } from '@/lib/tashjeer/color-system';
 import { resolveScope } from '@/lib/tashjeer/scope';
 import type { VariantCategory } from '@/types';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_StatisticsPage_0 = {
+  "TAHQIQ": "A605",
+  "USUL": "A606",
+  "FARSH": "A607",
+  "MADUD": "A608",
+  "HAMZ": "A609",
+  "WAQF": "A610",
+  "TAJWEED": "A611"
+} as const;
+
+
+
 export default function StatisticsPage() {
   const [documents, setDocuments] = useState<DocumentIndexEntry[]>([]);
   const [items, setItems] = useState<ReviewableItem[]>([]);
@@ -73,7 +86,7 @@ export default function StatisticsPage() {
   return (
     <div data-ui-id="A030">
       <div data-ui-id="A280" className="space-y-5">
-      <header>
+      <header data-ui-id="A598">
         <h1 className="text-xl font-bold text-stone-900">الإحصاءات</h1>
         <p className="mt-0.5 text-sm text-stone-600">
           قياس التقدم وجودة التوثيق في العمل المحفوظ بهذا المتصفح.
@@ -81,7 +94,7 @@ export default function StatisticsPage() {
       </header>
 
       {/* التقدم العام */}
-      <section className="rounded-xl border border-stone-200 bg-white p-5">
+      <section data-ui-id="A599" className="rounded-xl border border-stone-200 bg-white p-5">
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-sm font-bold text-stone-900">تقدم تشجير المصحف</h2>
           <span className="text-xs text-stone-500">
@@ -98,7 +111,7 @@ export default function StatisticsPage() {
       </section>
 
       {/* بطاقات */}
-      <section className="grid gap-3 md:grid-cols-4">
+      <section data-ui-id="A600" className="grid gap-3 md:grid-cols-4">
         <StatCard label="مستندات محفوظة" value={totals.documents} tone="emerald" />
         <StatCard label="اختلافات مسجّلة" value={totals.variants} tone="blue" />
         <StatCard label="أوجه مرسومة" value={totals.alternatives} tone="amber" />
@@ -106,10 +119,10 @@ export default function StatisticsPage() {
       </section>
 
       {/* ثغرات التوثيق */}
-      <section className="grid gap-3 md:grid-cols-2">
+      <section data-ui-id="A601" className="grid gap-3 md:grid-cols-2">
         <div className="rounded-xl border border-stone-200 bg-white p-5">
           <h2 className="mb-3 text-sm font-bold text-stone-900">ثغرات التوثيق</h2>
-          <ul className="space-y-2 text-xs">
+          <ul data-ui-id="A602" className="space-y-2 text-xs">
             <GapRow
               label="أوجه بلا دليل مسجّل"
               value={totals.missingEvidence}
@@ -127,7 +140,7 @@ export default function StatisticsPage() {
             />
           </ul>
           {totals.alternatives > 0 && (
-            <Link
+            <Link data-ui-id="A603"
               href="/review"
               className="mt-3 inline-block rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-50"
             >
@@ -141,13 +154,13 @@ export default function StatisticsPage() {
           {Object.keys(categoryCounts).length === 0 ? (
             <p className="text-xs text-stone-500">لا توجد اختلافات مسجّلة بعد.</p>
           ) : (
-            <ul className="space-y-2">
+            <ul data-ui-id="A604" className="space-y-2">
               {(Object.keys(CATEGORY_LABELS) as VariantCategory[]).map((category) => {
                 const count = categoryCounts[category] ?? 0;
                 const max = Math.max(1, ...Object.values(categoryCounts));
 
                 return (
-                  <li key={category}>
+                  <li data-ui-id={UI_StatisticsPage_0[category as keyof typeof UI_StatisticsPage_0]} key={category}>
                     <div className="mb-1 flex items-center justify-between text-xs">
                       <span className="text-stone-700">{CATEGORY_LABELS[category]}</span>
                       <span className="tabular-nums text-stone-500">{count}</span>
@@ -170,7 +183,7 @@ export default function StatisticsPage() {
       </section>
 
       {/* تغطية الرواة */}
-      <section className="rounded-xl border border-stone-200 bg-white p-5">
+      <section data-ui-id="A612" className="rounded-xl border border-stone-200 bg-white p-5">
         <h2 className="mb-1 text-sm font-bold text-stone-900">تغطية الرواة</h2>
         <p className="mb-3 text-[11px] text-stone-500">
           عدد الأوجه التي يقرأ بها كل راو في العمل المسجّل. التفاوت الشديد مؤشر على نقص التغطية.
@@ -201,14 +214,14 @@ export default function StatisticsPage() {
       </section>
 
       {/* آخر ما عُمل عليه */}
-      <section className="rounded-xl border border-stone-200 bg-white p-5">
+      <section data-ui-id="A613" className="rounded-xl border border-stone-200 bg-white p-5">
         <h2 className="mb-3 text-sm font-bold text-stone-900">آخر المستندات</h2>
         {documents.length === 0 ? (
           <p className="text-xs text-stone-500">لا توجد مستندات بعد.</p>
         ) : (
-          <ul className="divide-y divide-stone-100">
+          <ul data-ui-id="A614" className="divide-y divide-stone-100">
             {documents.slice(0, 10).map((entry) => (
-              <li key={entry.ayahKey} className="flex items-center justify-between gap-3 py-2">
+              <li data-ui-id="A615" key={entry.ayahKey} className="flex items-center justify-between gap-3 py-2">
                 <span className="text-xs text-stone-800">
                   {getSurahOrFirst(entry.surahNumber).name} {entry.ayahNumber}
                 </span>
@@ -222,7 +235,7 @@ export default function StatisticsPage() {
       </section>
 
       {/* مرجعية النموذج */}
-      <section className="grid gap-3 md:grid-cols-3">
+      <section data-ui-id="A616" className="grid gap-3 md:grid-cols-3">
         <StatCard label="أئمة القراءة" value={READING_IMAMS.length} tone="stone" />
         <StatCard label="الرواة" value={NARRATORS.length} tone="stone" />
         <StatCard label="الطرق المدخلة" value={TRANSMISSION_PATH_SEEDS.length} tone="stone" />
@@ -249,7 +262,7 @@ function StatCard({
   };
 
   return (
-    <div className={`rounded-xl border p-4 ${tones[tone]}`}>
+    <div data-ui-id="A617" className={`rounded-xl border p-4 ${tones[tone]}`}>
       <div className="text-2xl font-bold tabular-nums text-stone-900">
         {value.toLocaleString('ar')}
       </div>
@@ -263,7 +276,7 @@ function GapRow({ label, value, total }: { label: string; value: number; total: 
   const tone = value === 0 ? 'text-emerald-700' : percent > 50 ? 'text-red-700' : 'text-amber-700';
 
   return (
-    <li className="flex items-center justify-between gap-3">
+    <li data-ui-id="A618" className="flex items-center justify-between gap-3">
       <span className="text-stone-700">{label}</span>
       <span className={`tabular-nums font-medium ${tone}`}>
         {value} {total > 0 && `(${percent.toFixed(0)}%)`}

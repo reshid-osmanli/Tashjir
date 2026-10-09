@@ -31,6 +31,66 @@ import {
 import { confirmAction } from '@/lib/ui/confirm-store';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_RecitationRuleCatalogPanel_0 = {
+  "DRAFT": "A1823",
+  "TEST": "A1824",
+  "PREVIEW": "A1825",
+  "APPROVED": "A1826",
+  "ACTIVE": "A1827",
+  "DISABLED": "A1828",
+  "DEPRECATED": "A1829",
+  "EXPERIMENTAL": "A1830"
+} as const;
+
+const UI_FamilyEditor_1 = {
+  "DRAFT": "A1842",
+  "TEST": "A1843",
+  "PREVIEW": "A1844",
+  "APPROVED": "A1845",
+  "ACTIVE": "A1846",
+  "DISABLED": "A1847",
+  "DEPRECATED": "A1848",
+  "EXPERIMENTAL": "A1849"
+} as const;
+
+const UI_FamilyEditor_2 = {
+  "MANUAL_TEXT": "A1851",
+  "RULE_DRIVEN": "A1852",
+  "HYBRID": "A1853"
+} as const;
+
+const UI_TypeEditor_3 = {
+  "MANUAL": "A1861",
+  "PATTERN": "A1862",
+  "STRUCTURAL": "A1863",
+  "HYBRID": "A1864"
+} as const;
+
+const UI_TypeEditor_4 = {
+  "DRAFT": "A1866",
+  "TEST": "A1867",
+  "PREVIEW": "A1868",
+  "APPROVED": "A1869",
+  "ACTIVE": "A1870",
+  "DISABLED": "A1871",
+  "DEPRECATED": "A1872",
+  "EXPERIMENTAL": "A1873"
+} as const;
+
+const UI_OptionRow_5 = {
+  "DRAFT": "A1886",
+  "TEST": "A1887",
+  "PREVIEW": "A1888",
+  "APPROVED": "A1889",
+  "ACTIVE": "A1890",
+  "DISABLED": "A1891",
+  "DEPRECATED": "A1892",
+  "EXPERIMENTAL": "A1893"
+} as const;
+
+
+
 const STATUS_OPTIONS: Array<{ value: RecitationRuleStatus; label: string }> = [
   { value: 'DRAFT', label: 'مسودة' },
   { value: 'TEST', label: 'اختبار' },
@@ -146,26 +206,26 @@ export function RecitationRuleCatalogPanel() {
           <p className="text-xs text-gray-500">إدارة المجموعات والأنواع والخيارات — المعرفات الدلالية مستقرة</p>
         </div>
         <div className="flex items-center gap-2">
-          <input
+          <input data-ui-id="A1820"
             type="text"
             placeholder="بحث..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
           />
-          <select
+          <select data-ui-id="A1821"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as any)}
             className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
           >
-            <option value="ALL">كل الحالات</option>
+            <option data-ui-id="A1822" value="ALL">كل الحالات</option>
             {STATUS_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
+              <option data-ui-id={UI_RecitationRuleCatalogPanel_0[o.value as keyof typeof UI_RecitationRuleCatalogPanel_0]} key={o.value} value={o.value}>
                 {o.label}
               </option>
             ))}
           </select>
-          <button
+          <button data-ui-id="A1831"
             type="button"
             onClick={async () => {
               const ok = await confirmAction({
@@ -194,7 +254,7 @@ export function RecitationRuleCatalogPanel() {
         <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-bold text-gray-900">المجموعات ({toArabicDigits(filteredFamilies.length)})</h3>
-            <button
+            <button data-ui-id="A1832"
               type="button"
               onClick={handleCreateFamily}
               className="rounded bg-emerald-600 px-2 py-1 text-xs text-white hover:bg-emerald-700"
@@ -202,10 +262,10 @@ export function RecitationRuleCatalogPanel() {
               + مجموعة
             </button>
           </div>
-          <ul className="space-y-2">
+          <ul data-ui-id="A1833" className="space-y-2">
             {filteredFamilies.map((fam) => (
-              <li key={fam.id}>
-                <button
+              <li data-ui-instance={String(fam.id)} data-ui-id="A1834" key={fam.id}>
+                <button data-ui-instance={String(fam.id)} data-ui-id="A1835"
                   type="button"
                   onClick={() => {
                     setSelectedFamilyId(fam.id);
@@ -266,7 +326,7 @@ export function RecitationRuleCatalogPanel() {
               <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="text-sm font-bold text-gray-900">أنواع القاعدة ({toArabicDigits(types.length)})</h3>
-                  <button
+                  <button data-ui-id="A1836"
                     type="button"
                     onClick={handleCreateType}
                     className="rounded bg-emerald-600 px-2 py-1 text-xs text-white hover:bg-emerald-700"
@@ -279,7 +339,7 @@ export function RecitationRuleCatalogPanel() {
                 ) : (
                   <div className="grid gap-2 md:grid-cols-2">
                     {types.map((tp) => (
-                      <button
+                      <button data-ui-instance={String(tp.id)} data-ui-id="A1837"
                         key={tp.id}
                         type="button"
                         onClick={() => setSelectedTypeId(tp.id)}
@@ -365,12 +425,12 @@ function FamilyEditor({
   useEffect(() => setDraft(family), [family]);
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+    <div data-ui-id="A1838" className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
       <h3 className="mb-3 text-sm font-bold text-gray-900">معلومات المجموعة</h3>
       <div className="grid gap-3 md:grid-cols-2">
         <label className="block text-xs">
           <span className="mb-1 block font-medium text-gray-700">الاسم</span>
-          <input
+          <input data-ui-id="A1839"
             type="text"
             value={draft.name}
             onChange={(e) => setDraft({ ...draft, name: e.target.value })}
@@ -379,7 +439,7 @@ function FamilyEditor({
         </label>
         <label className="block text-xs">
           <span className="mb-1 block font-medium text-gray-700">المعرف الدلالي (code)</span>
-          <input
+          <input data-ui-id="A1840"
             type="text"
             value={draft.code}
             onChange={(e) => setDraft({ ...draft, code: e.target.value.toUpperCase() })}
@@ -388,13 +448,13 @@ function FamilyEditor({
         </label>
         <label className="block text-xs">
           <span className="mb-1 block font-medium text-gray-700">الحالة</span>
-          <select
+          <select data-ui-id="A1841"
             value={draft.status}
             onChange={(e) => setDraft({ ...draft, status: e.target.value as any })}
             className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
           >
             {STATUS_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
+              <option data-ui-id={UI_FamilyEditor_1[o.value as keyof typeof UI_FamilyEditor_1]} key={o.value} value={o.value}>
                 {o.label}
               </option>
             ))}
@@ -402,13 +462,13 @@ function FamilyEditor({
         </label>
         <label className="block text-xs">
           <span className="mb-1 block font-medium text-gray-700">طريقة الإدخال</span>
-          <select
+          <select data-ui-id="A1850"
             value={draft.editorMode}
             onChange={(e) => setDraft({ ...draft, editorMode: e.target.value as any })}
             className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
           >
             {EDITOR_MODES.map((o) => (
-              <option key={o.value} value={o.value}>
+              <option data-ui-id={UI_FamilyEditor_2[o.value as keyof typeof UI_FamilyEditor_2]} key={o.value} value={o.value}>
                 {o.label}
               </option>
             ))}
@@ -416,7 +476,7 @@ function FamilyEditor({
         </label>
         <label className="block text-xs md:col-span-2">
           <span className="mb-1 block font-medium text-gray-700">الوصف</span>
-          <textarea
+          <textarea data-ui-id="A1854"
             value={draft.description ?? ''}
             onChange={(e) => setDraft({ ...draft, description: e.target.value })}
             rows={2}
@@ -425,14 +485,14 @@ function FamilyEditor({
         </label>
       </div>
       <div className="mt-3 flex items-center gap-2">
-        <button
+        <button data-ui-id="A1855"
           type="button"
           onClick={() => onSave(draft)}
           className="rounded bg-emerald-600 px-4 py-1.5 text-sm text-white hover:bg-emerald-700"
         >
           حفظ المجموعة
         </button>
-        <button
+        <button data-ui-id="A1856"
           type="button"
           onClick={onDelete}
           className="rounded bg-red-50 px-3 py-1.5 text-sm text-red-700 hover:bg-red-100"
@@ -466,12 +526,12 @@ function TypeEditor({
   useEffect(() => setDraft(type), [type]);
 
   return (
-    <div className="space-y-4 rounded-xl border border-violet-200 bg-violet-50/30 p-4 shadow-sm">
+    <div data-ui-id="A1857" className="space-y-4 rounded-xl border border-violet-200 bg-violet-50/30 p-4 shadow-sm">
       <h3 className="text-sm font-bold text-violet-900">نوع القاعدة: {type.name}</h3>
       <div className="grid gap-3 md:grid-cols-2">
         <label className="block text-xs">
           <span className="mb-1 block font-medium text-gray-700">الاسم</span>
-          <input
+          <input data-ui-id="A1858"
             type="text"
             value={draft.name}
             onChange={(e) => setDraft({ ...draft, name: e.target.value })}
@@ -480,7 +540,7 @@ function TypeEditor({
         </label>
         <label className="block text-xs">
           <span className="mb-1 block font-medium text-gray-700">المعرف (code)</span>
-          <input
+          <input data-ui-id="A1859"
             type="text"
             value={draft.code}
             onChange={(e) => setDraft({ ...draft, code: e.target.value.toUpperCase() })}
@@ -489,13 +549,13 @@ function TypeEditor({
         </label>
         <label className="block text-xs">
           <span className="mb-1 block font-medium text-gray-700">طريقة الاكتشاف</span>
-          <select
+          <select data-ui-id="A1860"
             value={draft.detectionMode}
             onChange={(e) => setDraft({ ...draft, detectionMode: e.target.value as any })}
             className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
           >
             {DETECTION_MODES.map((o) => (
-              <option key={o.value} value={o.value}>
+              <option data-ui-id={UI_TypeEditor_3[o.value as keyof typeof UI_TypeEditor_3]} key={o.value} value={o.value}>
                 {o.label}
               </option>
             ))}
@@ -503,13 +563,13 @@ function TypeEditor({
         </label>
         <label className="block text-xs">
           <span className="mb-1 block font-medium text-gray-700">الحالة</span>
-          <select
+          <select data-ui-id="A1865"
             value={draft.status}
             onChange={(e) => setDraft({ ...draft, status: e.target.value as any })}
             className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
           >
             {STATUS_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
+              <option data-ui-id={UI_TypeEditor_4[o.value as keyof typeof UI_TypeEditor_4]} key={o.value} value={o.value}>
                 {o.label}
               </option>
             ))}
@@ -517,7 +577,7 @@ function TypeEditor({
         </label>
         <label className="block text-xs md:col-span-2">
           <span className="mb-1 block font-medium text-gray-700">الوصف</span>
-          <textarea
+          <textarea data-ui-id="A1874"
             value={draft.description ?? ''}
             onChange={(e) => setDraft({ ...draft, description: e.target.value })}
             rows={2}
@@ -526,14 +586,14 @@ function TypeEditor({
         </label>
       </div>
       <div className="flex items-center gap-2">
-        <button
+        <button data-ui-id="A1875"
           type="button"
           onClick={() => onSave(draft)}
           className="rounded bg-violet-600 px-4 py-1.5 text-sm text-white hover:bg-violet-700"
         >
           حفظ النوع
         </button>
-        <button
+        <button data-ui-id="A1876"
           type="button"
           onClick={onDelete}
           className="rounded bg-red-50 px-3 py-1.5 text-sm text-red-700 hover:bg-red-100"
@@ -546,7 +606,7 @@ function TypeEditor({
       <div className="rounded-lg border border-gray-200 bg-white p-3">
         <div className="mb-2 flex items-center justify-between">
           <h4 className="text-xs font-bold text-gray-900">خيارات القاعدة / أوجه المد ({toArabicDigits(options.length)})</h4>
-          <button
+          <button data-ui-id="A1877"
             type="button"
             onClick={onCreateOption}
             className="rounded bg-emerald-600 px-2 py-1 text-[11px] text-white hover:bg-emerald-700"
@@ -557,7 +617,7 @@ function TypeEditor({
         {options.length === 0 ? (
           <p className="text-[11px] text-gray-400">لا خيارات بعد. أضف وجهًا مثل 2 حركات، 4 حركات...</p>
         ) : (
-          <ul className="space-y-2">
+          <ul data-ui-id="A1878" className="space-y-2">
             {options.map((opt) => (
               <OptionRow key={opt.id} option={opt} onSave={onSaveOption} onDelete={() => onDeleteOption(opt.id)} />
             ))}
@@ -592,16 +652,16 @@ function OptionRow({
   };
 
   return (
-    <li className="rounded border border-gray-200 p-2">
+    <li data-ui-id="A1879" className="rounded border border-gray-200 p-2">
       <div className="grid gap-2 md:grid-cols-[1fr_100px_100px_80px_auto]">
-        <input
+        <input data-ui-id="A1880"
           type="text"
           value={draft.label}
           onChange={(e) => setDraft({ ...draft, label: e.target.value })}
           placeholder="مثال: 4 حركات"
           className="rounded border border-gray-300 px-2 py-1 text-xs"
         />
-        <input
+        <input data-ui-id="A1881"
           type="number"
           min={1}
           step={1}
@@ -610,34 +670,34 @@ function OptionRow({
           className="rounded border border-gray-300 px-2 py-1 text-xs"
           placeholder="القيمة"
         />
-        <select
+        <select data-ui-id="A1882"
           value={draft.unit}
           onChange={(e) => setDraft({ ...draft, unit: e.target.value })}
           className="rounded border border-gray-300 px-2 py-1 text-xs"
         >
-          <option value="HARAKAT">حركات</option>
-          <option value="OTHER">أخرى</option>
+          <option data-ui-id="A1883" value="HARAKAT">حركات</option>
+          <option data-ui-id="A1884" value="OTHER">أخرى</option>
         </select>
-        <select
+        <select data-ui-id="A1885"
           value={draft.status}
           onChange={(e) => setDraft({ ...draft, status: e.target.value as any })}
           className="rounded border border-gray-300 px-2 py-1 text-xs"
         >
           {STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
+            <option data-ui-id={UI_OptionRow_5[o.value as keyof typeof UI_OptionRow_5]} key={o.value} value={o.value}>
               {o.label}
             </option>
           ))}
         </select>
         <div className="flex items-center gap-1">
-          <button
+          <button data-ui-id="A1894"
             type="button"
             onClick={handleSave}
             className="rounded bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700 hover:bg-emerald-100"
           >
             حفظ
           </button>
-          <button
+          <button data-ui-id="A1895"
             type="button"
             onClick={onDelete}
             className="rounded bg-red-50 px-2 py-1 text-[11px] text-red-700 hover:bg-red-100"

@@ -5,13 +5,13 @@ import { toArabicDigits as ar } from '@/lib/utils/arabic-numbers';
 export function ClipboardControls() {
   const store = useEditorStore();
   const suspended = store.document?.suspendedLinks ?? [];
-  return <div className="flex items-center gap-2"><details data-ui-id="A106" className="relative text-xs" dir="rtl">
-    <summary className="cursor-pointer rounded border border-stone-300 px-2 py-1">الحافظة {suspended.length ? `· ${ar(suspended.length)} علاقات معلّقة` : ''}</summary>
+  return <div data-ui-id="A740" className="flex items-center gap-2"><details data-ui-id="A106" className="relative text-xs" dir="rtl">
+    <summary data-ui-id="A741" className="cursor-pointer rounded border border-stone-300 px-2 py-1">الحافظة {suspended.length ? `· ${ar(suspended.length)} علاقات معلّقة` : ''}</summary>
     <div className="absolute start-0 top-full z-40 mt-1 w-80 space-y-2 rounded border bg-white p-3 shadow-xl">
       <div className="flex gap-2">
-        <button type="button" onClick={store.copySelection} className="rounded border px-2 py-1">نسخ</button>
-        <button type="button" onClick={store.cutSelection} className="rounded border px-2 py-1">قص</button>
-        <button type="button" disabled={!store.clipboard} onClick={() => void store.requestPasteSelection()} className="rounded border px-2 py-1 disabled:opacity-40">لصق</button>
+        <button data-ui-id="A742" type="button" onClick={store.copySelection} className="rounded border px-2 py-1">نسخ</button>
+        <button data-ui-id="A743" type="button" onClick={store.cutSelection} className="rounded border px-2 py-1">قص</button>
+        <button data-ui-id="A744" type="button" disabled={!store.clipboard} onClick={() => void store.requestPasteSelection()} className="rounded border px-2 py-1 disabled:opacity-40">لصق</button>
       </div>
       <p className="text-emerald-900">{store.clipboardNotice || 'حدد وجهًا أو اختلافًا أو جزءًا. Ctrl+C / X / V.'}</p>
       {suspended.length > 0 && <div className="max-h-48 overflow-auto rounded bg-amber-50 p-2">

@@ -97,7 +97,7 @@ export default function SettingsPage() {
   return (
     <div data-ui-id="A029">
       <div data-ui-id="A270" className="space-y-5">
-      <header>
+      <header data-ui-id="A579">
         <h1 className="text-xl font-bold text-stone-900">الإعدادات</h1>
         <p className="mt-0.5 text-sm text-stone-600">
           كل البيانات محفوظة في هذا المتصفح فقط. صدّر نسخة احتياطية قبل تفريغ بيانات المتصفح.
@@ -112,16 +112,16 @@ export default function SettingsPage() {
 
       <Card title="بيانات المحرر">
         <div className="grid gap-3 md:grid-cols-2">
-          <Field label="اسم المحرر" hint="يُسجَّل في بيانات كل مستند تنشئه">
-            <input
+          <Field data-ui-id="A580" label="اسم المحرر" hint="يُسجَّل في بيانات كل مستند تنشئه">
+            <input data-ui-id="A581"
               type="text"
               value={settings.authorName}
               onChange={(event) => update('authorName', event.target.value)}
               className="input"
             />
           </Field>
-          <Field label="اسم التطبيق">
-            <input
+          <Field data-ui-id="A582" label="اسم التطبيق">
+            <input data-ui-id="A583"
               type="text"
               value={settings.appName}
               onChange={(event) => update('appName', event.target.value)}
@@ -133,8 +133,8 @@ export default function SettingsPage() {
 
       <Card title="افتراضيات المحرر">
         <div className="grid gap-3 md:grid-cols-2">
-          <Field label={`حجم خط المصحف: ${settings.fontSize}`}>
-            <input
+          <Field data-ui-id="A584" label={`حجم خط المصحف: ${settings.fontSize}`}>
+            <input data-ui-id="A585"
               type="range"
               min={24}
               max={54}
@@ -145,8 +145,8 @@ export default function SettingsPage() {
             />
           </Field>
 
-          <Field label={`التكبير الافتراضي: ${Math.round(settings.defaultZoom * 100)}%`}>
-            <input
+          <Field data-ui-id="A586" label={`التكبير الافتراضي: ${Math.round(settings.defaultZoom * 100)}%`}>
+            <input data-ui-id="A587"
               type="range"
               min={0.5}
               max={2}
@@ -157,19 +157,19 @@ export default function SettingsPage() {
             />
           </Field>
 
-          <Toggle
+          <Toggle data-ui-id="A2112"
             label="إظهار الشبكة"
             description="شبكة قياس خلف اللوحة تساعد على ضبط المواضع."
             checked={settings.showGrid}
             onChange={(checked) => update('showGrid', checked)}
           />
-          <Toggle
+          <Toggle data-ui-id="A2113"
             label="إظهار المساطر"
             description="خطوط قياس أفقية بأرقام الإحداثيات."
             checked={settings.showRulers}
             onChange={(checked) => update('showRulers', checked)}
           />
-          <Toggle
+          <Toggle data-ui-id="A2114"
             label="إظهار بطاقات الأوجه"
             description="بطاقة بجانب كل خط تبيّن الوجه ومن يقرأ به."
             checked={settings.showLabels}
@@ -186,7 +186,7 @@ export default function SettingsPage() {
           >
             استعادة الافتراضي
           </button>
-          <button
+          <button data-ui-id="A588"
             type="button"
             onClick={save}
             className="rounded-md bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700"
@@ -202,7 +202,7 @@ export default function SettingsPage() {
 
       <Card title="البيانات المحفوظة">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <button
+          <button data-ui-id="A589"
             type="button"
             onClick={exportAll}
             disabled={documents.length === 0}
@@ -210,14 +210,14 @@ export default function SettingsPage() {
           >
             تصدير نسخة احتياطية ({documents.length})
           </button>
-          <button
+          <button data-ui-id="A590"
             type="button"
             onClick={() => fileInputRef.current?.click()}
             className="rounded-md border border-stone-300 bg-white px-4 py-2 text-xs text-stone-700 hover:bg-stone-50"
           >
             استيراد نسخة
           </button>
-          <input
+          <input data-ui-id="A591"
             ref={fileInputRef}
             type="file"
             accept="application/json"
@@ -233,9 +233,9 @@ export default function SettingsPage() {
         {documents.length === 0 ? (
           <p className="text-xs text-stone-500">لا توجد مستندات محفوظة بعد.</p>
         ) : (
-          <ul className="divide-y divide-stone-100 rounded-md border border-stone-200">
+          <ul data-ui-id="A592" className="divide-y divide-stone-100 rounded-md border border-stone-200">
             {documents.map((entry) => (
-              <li key={entry.ayahKey} className="flex items-center justify-between gap-3 px-3 py-2">
+              <li data-ui-id="A593" key={entry.ayahKey} className="flex items-center justify-between gap-3 px-3 py-2">
                 <div>
                   <p className="text-sm text-stone-900">
                     {getSurahOrFirst(entry.surahNumber).name} {entry.ayahNumber}
@@ -245,7 +245,7 @@ export default function SettingsPage() {
                     {formatLocalDate(entry.updatedAt)}
                   </p>
                 </div>
-                <button
+                <button data-ui-id="A594"
                   type="button"
                   onClick={() => removeDocument(entry)}
                   className="rounded border border-red-200 px-2 py-1 text-[11px] text-red-700 hover:bg-red-50"
@@ -287,14 +287,14 @@ export default function SettingsPage() {
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl border border-stone-200 bg-white p-5">
+    <section data-ui-id="A595" className="rounded-xl border border-stone-200 bg-white p-5">
       <h2 className="mb-3 text-sm font-bold text-stone-900">{title}</h2>
       {children}
     </section>
   );
 }
 
-function Field({
+function Field({ 'data-ui-id': uiId,
   label,
   hint,
   children,
@@ -302,9 +302,9 @@ function Field({
   label: string;
   hint?: string;
   children: React.ReactNode;
-}) {
+} & { 'data-ui-id'?: string }) {
   return (
-    <label className="block">
+    <label data-ui-id={uiId} className="block">
       <span className="mb-1 block text-xs font-medium text-stone-700">{label}</span>
       {children}
       {hint && <span className="mt-1 block text-[11px] text-stone-500">{hint}</span>}
@@ -312,7 +312,7 @@ function Field({
   );
 }
 
-function Toggle({
+function Toggle({ 'data-ui-id': uiId,
   label,
   description,
   checked,
@@ -322,14 +322,14 @@ function Toggle({
   description: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
-}) {
+} & { 'data-ui-id'?: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-stone-200 bg-stone-50 p-3">
+    <div data-ui-id="A596" className="flex items-center justify-between gap-3 rounded-md border border-stone-200 bg-stone-50 p-3">
       <div>
         <div className="text-xs font-medium text-stone-800">{label}</div>
         <p className="text-[11px] text-stone-500">{description}</p>
       </div>
-      <button
+      <button data-ui-id={uiId}
         type="button"
         role="switch"
         aria-checked={checked}

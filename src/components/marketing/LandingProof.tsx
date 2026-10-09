@@ -58,7 +58,7 @@ export function QiraatSection() {
   );
 
   return (
-    <section className="border-t border-line py-section" aria-labelledby="qiraat-title">
+    <section data-ui-id="A1617" className="border-t border-line py-section" aria-labelledby="qiraat-title">
       <div className="container-editorial">
         <SectionHeading
           id="qiraat-title"
@@ -99,7 +99,7 @@ const EDITOR_NOTES = [
 
 export function EditorSection({ model }: { model: ShowcaseAyah }) {
   return (
-    <section className="surface-sunken border-y border-line py-section" aria-labelledby="editor-title">
+    <section data-ui-id="A1618" className="surface-sunken border-y border-line py-section" aria-labelledby="editor-title">
       <div className="container-editorial">
         <SectionHeading
           id="editor-title"
@@ -158,7 +158,7 @@ const PRINCIPLES = [
 
 export function AccuracySection() {
   return (
-    <section className="border-t border-line py-section" aria-labelledby="accuracy-title">
+    <section data-ui-id="A1619" className="border-t border-line py-section" aria-labelledby="accuracy-title">
       <div className="container-editorial">
         <SectionHeading
           id="accuracy-title"
@@ -194,7 +194,7 @@ export function EvidenceSection({ model }: { model: ShowcaseAyah }) {
   const evidence = variant.alternatives.flatMap((alt) => alt.evidences)[0] ?? null;
 
   return (
-    <section className="border-t border-line py-section" aria-labelledby="evidence-title">
+    <section data-ui-id="A1620" className="border-t border-line py-section" aria-labelledby="evidence-title">
       <div className="container-editorial">
         <SectionHeading
           id="evidence-title"
@@ -280,7 +280,7 @@ export function EvidenceSection({ model }: { model: ShowcaseAyah }) {
                 نصوص الأدلة هنا إشارات إلى مواضع البحث، وإدخال النص الحرفي مهمة المدقق البشري.
               </p>
 
-              <Link
+              <Link data-ui-id="A1621"
                 href={`/editor?ayah=${model.ayahKey}`}
                 className="btn btn-quiet mt-5 gap-2 text-caption"
               >
@@ -311,7 +311,7 @@ export function DataSection() {
   ];
 
   return (
-    <section className="surface-sunken border-y border-line py-section" aria-labelledby="data-title">
+    <section data-ui-id="A1622" className="surface-sunken border-y border-line py-section" aria-labelledby="data-title">
       <div className="container-editorial">
         <SectionHeading
           id="data-title"
@@ -354,7 +354,7 @@ export function DataSection() {
 
 export function ClosingSection() {
   return (
-    <section className="py-section" aria-labelledby="closing-title">
+    <section data-ui-id="A1623" className="py-section" aria-labelledby="closing-title">
       <div className="container-editorial">
         <div className="flex flex-col items-start gap-8 md:flex-row md:items-end md:justify-between">
           <div>
@@ -366,11 +366,11 @@ export function ClosingSection() {
               إلى أي جهة.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link href="/editor" className="btn btn-primary gap-2">
+              <Link data-ui-id="A1624" href="/editor" className="btn btn-primary gap-2">
                 ادخل إلى المحرر
                 <IconArrowForward size={18} />
               </Link>
-              <Link href="/quran" className="btn btn-quiet">
+              <Link data-ui-id="A1625" href="/quran" className="btn btn-quiet">
                 استعرض المصحف المشجّر
               </Link>
             </div>

@@ -114,7 +114,7 @@ export function PipelineFigure({ stages = PIPELINE_STAGES }: { stages?: Pipeline
   }, [reduced, stages.length]);
 
   return (
-    <div ref={containerRef} className="relative">
+    <div data-ui-id="A2032" ref={containerRef} className="relative">
       {/* المسار: أفقي على سطح المكتب، رأسي على الجوال. */}
       <div className="absolute end-[9px] top-2 bottom-2 w-px bg-line md:hidden" aria-hidden="true">
         <div
@@ -132,11 +132,11 @@ export function PipelineFigure({ stages = PIPELINE_STAGES }: { stages?: Pipeline
         />
       </div>
 
-      <ol className="relative flex flex-col gap-6 md:flex-row md:justify-between md:gap-4">
+      <ol data-ui-id="A2033" className="relative flex flex-col gap-6 md:flex-row md:justify-between md:gap-4">
         {stages.map((stage, index) => {
           const isPassed = index <= passed;
           return (
-            <li key={stage.id} className="flex min-w-0 flex-1 items-start gap-3 md:flex-col md:gap-3">
+            <li data-ui-instance={String(stage.id)} data-ui-id="A2034" key={stage.id} className="flex min-w-0 flex-1 items-start gap-3 md:flex-col md:gap-3">
               <span
                 className={`z-base mt-1 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border transition-colors md:mt-0 ${
                   isPassed

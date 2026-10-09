@@ -31,7 +31,7 @@ export function SectionHeading({
   id?: string;
 }) {
   return (
-    <header className="max-w-3xl">
+    <header data-ui-id="A1626" className="max-w-3xl">
       <div className="flex items-baseline gap-3">
         {typeof index === 'number' ? (
           <span className="numeral text-caption text-ink-300">{toArabicDigits(index)}</span>
@@ -55,7 +55,7 @@ export function HeroSection({ model }: { model: ShowcaseAyah }) {
   ];
 
   return (
-    <section className="relative overflow-hidden pb-14 pt-8 md:pb-20 md:pt-12">
+    <section data-ui-id="A1627" className="relative overflow-hidden pb-14 pt-8 md:pb-20 md:pt-12">
       {/* شبكة المخطوط: علامات رأسية شبه غير مرئية تقود العين. */}
       <div
         className="pointer-events-none absolute inset-0 grid-manuscript opacity-40"
@@ -80,11 +80,11 @@ export function HeroSection({ model }: { model: ShowcaseAyah }) {
           </p>
 
           <div className="mt-7 flex flex-wrap items-center gap-3">
-            <Link href="/editor" className="btn btn-primary gap-2">
+            <Link data-ui-id="A1628" href="/editor" className="btn btn-primary gap-2">
               ادخل إلى المحرر
               <IconArrowForward size={18} />
             </Link>
-            <Link href="/quran" className="btn btn-quiet">
+            <Link data-ui-id="A1629" href="/quran" className="btn btn-quiet">
               استعرض المصحف المشجّر
             </Link>
           </div>
@@ -143,7 +143,7 @@ export function HeroSection({ model }: { model: ShowcaseAyah }) {
 
 export function ExplainerSection({ model }: { model: ShowcaseAyah }) {
   return (
-    <section className="border-t border-line py-section" aria-labelledby="explainer-title">
+    <section data-ui-id="A1630" className="border-t border-line py-section" aria-labelledby="explainer-title">
       <div className="container-editorial">
         <SectionHeading
           id="explainer-title"
@@ -177,7 +177,7 @@ export function ProblemSection() {
   ];
 
   return (
-    <section className="surface-sunken border-y border-line py-section" aria-labelledby="problem-title">
+    <section data-ui-id="A1631" className="surface-sunken border-y border-line py-section" aria-labelledby="problem-title">
       <div className="container-editorial">
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-16">
           <div>
@@ -188,22 +188,22 @@ export function ProblemSection() {
               lead="ليس المطلوب أن تُحفظ كثرة القراءات، بل أن تُنمذج نسبتها: من قرأ؟ وعن من؟ وبأي طريق؟ وفي أي حرف بالضبط؟"
             />
 
-            <ul className="mt-8 space-y-5">
-              <li className="flex gap-3">
+            <ul data-ui-id="A1632" className="mt-8 space-y-5">
+              <li data-ui-id="A1633" className="flex gap-3">
                 <IconLayers size={18} className="mt-1 shrink-0 text-brass-600" />
                 <p className="measure text-body-sm text-ink-600">
                   المواضع موزّعة على المصحف كله، والاختلاف الواحد قد يقع في كلمة واحدة داخل آية
                   طويلة.
                 </p>
               </li>
-              <li className="flex gap-3">
+              <li data-ui-id="A1634" className="flex gap-3">
                 <IconRoute size={18} className="mt-1 shrink-0 text-brass-600" />
                 <p className="measure text-body-sm text-ink-600">
                   النسبة لا تكفي فيها «قراءة فلان»: الرواية والطريق أدقّ مرتبة في النسبة، وقد
                   تختلف أحكام الطريق الواحد عن الآخر.
                 </p>
               </li>
-              <li className="flex gap-3">
+              <li data-ui-id="A1635" className="flex gap-3">
                 <IconSource size={18} className="mt-1 shrink-0 text-brass-600" />
                 <p className="measure text-body-sm text-ink-600">
                   الهامش الورقي يحفظ المعلومة، لكنه لا يُقارَن آليا ولا يُدقَّق، ولا يمكن تتبّع
@@ -288,7 +288,7 @@ export function ProblemSection() {
 
 export function SolutionSection() {
   return (
-    <section className="border-t border-line py-section" aria-labelledby="solution-title">
+    <section data-ui-id="A1636" className="border-t border-line py-section" aria-labelledby="solution-title">
       <div className="container-editorial">
         <SectionHeading
           id="solution-title"

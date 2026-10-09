@@ -36,6 +36,16 @@ import { resolveDifference } from '@/lib/tashjeer/decision/api';
 import { editorCategoryToStudioType } from '@/lib/tashjeer/decision/editor-bridge';
 import { useEngineConfig } from '@/hooks/useEngineConfig';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_TrackingPage_0 = {
+  "ALL": "A639",
+  "ENGINE": "A640",
+  "EDITOR": "A641",
+  "MODIFIED": "A642"
+} as const;
+
+
+
 type SourceFilter = TrackingSource | 'MODIFIED' | 'ALL';
 
 const SOURCE_FILTERS: Array<{ value: SourceFilter; label: string }> = [
@@ -83,7 +93,7 @@ export default function TrackingPage() {
 
   return (
     <div data-ui-id="A023" className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+      <header data-ui-id="A635" className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-stone-900">التتبع</h1>
           <p className="mt-0.5 max-w-3xl text-sm leading-relaxed text-stone-600">
@@ -108,7 +118,7 @@ export default function TrackingPage() {
           محذوف موضعيا {toArabicDigits(overrides.deleted)} · معتمد بعد المراجعة{' '}
           {toArabicDigits(overrides.confirmed)} · عُدّل ترتيبه أو درجته{' '}
           {toArabicDigits(overrides.edited)} —{' '}
-          <Link href="/editor" className="text-emerald-700 underline-offset-2 hover:underline">
+          <Link data-ui-id="A636" href="/editor" className="text-emerald-700 underline-offset-2 hover:underline">
             راجعها من المحرر
           </Link>
         </div>
@@ -116,13 +126,13 @@ export default function TrackingPage() {
 
       {/* تصفية الفئة */}
       <div data-ui-id="A200" className="flex flex-wrap gap-2">
-        <FilterChip
+        <FilterChip data-ui-id="A637"
           active={category === 'ALL'}
           onClick={() => setCategory('ALL')}
           label={`كل الفئات (${toArabicDigits(summary.total)})`}
         />
         {categoriesWithData.map(([value, count]) => (
-          <FilterChip
+          <FilterChip data-ui-id="A638"
             key={value}
             active={category === value}
             onClick={() => setCategory(value)}
@@ -135,7 +145,7 @@ export default function TrackingPage() {
       {/* تصفية المصدر */}
       <div data-ui-id="A201" className="flex flex-wrap gap-2">
         {SOURCE_FILTERS.map((option) => (
-          <FilterChip
+          <FilterChip data-ui-id={UI_TrackingPage_0[option.value as keyof typeof UI_TrackingPage_0]}
             key={option.value}
             active={source === option.value}
             onClick={() => setSource(option.value)}
@@ -151,7 +161,7 @@ export default function TrackingPage() {
               ? 'لا يوجد ما يُتبَّع بعد: احفظ تشجير آية من المحرر ثم عد إلى هنا.'
               : 'لا مواضع تطابق هذا التصنيف.'}
           </p>
-          <Link
+          <Link data-ui-id="A643"
             href="/editor"
             className="mt-3 inline-block rounded-md bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700"
           >
@@ -251,18 +261,18 @@ function TrackingRowCard({
           {row.edits.length === 0 ? (
             <p className="text-[11px] text-stone-500">لا تعديلات يدوية على هذا الموضع.</p>
           ) : (
-            <ol className="space-y-2">
+            <ol data-ui-id="A644" className="space-y-2">
               {row.edits.map((edit, index) => (
-                <li key={index} className="rounded border border-stone-200 bg-white px-2.5 py-2">
+                <li data-ui-id="A645" key={index} className="rounded border border-stone-200 bg-white px-2.5 py-2">
                   <p className="text-[11px] font-medium text-stone-800">
                     {toArabicDigits(index + 1)}. {edit.action}
                     <span className="font-normal text-stone-500"> — {formatDate(edit.at)}</span>
                   </p>
                   <p className="mt-0.5 text-[11px] text-stone-600">{edit.summary}</p>
                   {edit.changes && edit.changes.length > 0 && (
-                    <ul className="mt-1 space-y-0.5">
+                    <ul data-ui-id="A646" className="mt-1 space-y-0.5">
                       {edit.changes.map((change, changeIndex) => (
-                        <li key={changeIndex} className="text-[10.5px] text-stone-500">
+                        <li data-ui-id="A647" key={changeIndex} className="text-[10.5px] text-stone-500">
                           <span className="font-medium text-stone-700">{change.field}:</span>{' '}
                           <span className="text-rose-700">{formatValue(change.before)}</span>
                           {' ← '}
@@ -308,7 +318,7 @@ function RowDecisionTrace({ row }: { row: TrackingRow }) {
   );
   const applied = result.appliedRules.length;
   return (
-    <div className="mb-3 rounded-lg border border-stone-200 bg-white p-2.5">
+    <div data-ui-id="A648" className="mb-3 rounded-lg border border-stone-200 bg-white p-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] font-semibold text-stone-800">
           أثر قرار المحرك
@@ -330,10 +340,10 @@ function RowDecisionTrace({ row }: { row: TrackingRow }) {
         <div className="mt-2">
           <DecisionTraceList trace={result.trace} compact />
           {result.appliedRules.length > 0 && (
-            <ul className="mt-2 flex flex-wrap gap-1.5">
+            <ul data-ui-id="A649" className="mt-2 flex flex-wrap gap-1.5">
               {result.appliedRules.map((rule) => (
-                <li key={rule.id}>
-                  <Link href={`/studio?rule=${encodeURIComponent(rule.id)}`} className="rounded bg-emerald-50 px-2 py-0.5 text-[10.5px] text-emerald-800 hover:bg-emerald-100">
+                <li data-ui-instance={String(rule.id)} data-ui-id="A650" key={rule.id}>
+                  <Link data-ui-instance={String(rule.id)} data-ui-id="A651" href={`/studio?rule=${encodeURIComponent(rule.id)}`} className="rounded bg-emerald-50 px-2 py-0.5 text-[10.5px] text-emerald-800 hover:bg-emerald-100">
                     {rule.name}
                   </Link>
                 </li>
@@ -357,7 +367,7 @@ function CorrectionTripletView({ row }: { row: TrackingRow }) {
     : null;
 
   return (
-    <div className="mb-3 rounded-lg border border-stone-200 bg-white p-2.5">
+    <div data-ui-id="A652" className="mb-3 rounded-lg border border-stone-200 bg-white p-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] font-semibold text-stone-800">
           المحرك (أ) ← المحرر (ب) ← المعتمد
@@ -379,11 +389,11 @@ function CorrectionTripletView({ row }: { row: TrackingRow }) {
         <div className="rounded border border-violet-200 bg-violet-50/60 p-2">
           <p className="text-[10.5px] font-semibold text-violet-900">ب. تغيير المحرر</p>
           {changed ? (
-            <ul className="mt-1 space-y-0.5 text-[10.5px] text-violet-900">
+            <ul data-ui-id="A653" className="mt-1 space-y-0.5 text-[10.5px] text-violet-900">
               {correction.editor?.changedFields.map((field) => (
-                <li key={field}>غُيِّر: {fieldLabels[field] ?? field}</li>
+                <li data-ui-id="A654" key={field}>غُيِّر: {fieldLabels[field] ?? field}</li>
               ))}
-              {correction.editor?.at && <li className="text-violet-700/80">في {formatDate(correction.editor.at)}</li>}
+              {correction.editor?.at && <li data-ui-id="A655" className="text-violet-700/80">في {formatDate(correction.editor.at)}</li>}
             </ul>
           ) : (
             <p className="mt-1 text-[10.5px] text-violet-700/80">لم يغيّر المحرر شيئا؛ المعتمد هو اقتراح المحرك.</p>
@@ -406,17 +416,17 @@ function CorrectionColumn({
 }) {
   const box = tone === 'cyan' ? 'border-cyan-200 bg-cyan-50/60 text-cyan-900' : 'border-emerald-200 bg-emerald-50/60 text-emerald-900';
   return (
-    <div className={`rounded border p-2 ${box}`}>
+    <div data-ui-id="A656" className={`rounded border p-2 ${box}`}>
       <p className="text-[10.5px] font-semibold">{label}</p>
       <p className="mt-1 text-[10.5px]">
         {state.title} <span className="opacity-70">({CATEGORY_LABELS[state.category]})</span>
       </p>
-      <ul className="mt-0.5 space-y-0.5 text-[10.5px]">
+      <ul data-ui-id="A657" className="mt-0.5 space-y-0.5 text-[10.5px]">
         {state.alternatives.length === 0 ? (
-          <li className="opacity-70">لا أوجه</li>
+          <li data-ui-id="A658" className="opacity-70">لا أوجه</li>
         ) : (
           state.alternatives.map((alternative, index) => (
-            <li key={alternative.id}>
+            <li data-ui-instance={String(alternative.id)} data-ui-id="A659" key={alternative.id}>
               {toArabicDigits(index + 1)}. {alternative.label || alternative.text}
             </li>
           ))
@@ -469,14 +479,14 @@ function SummaryCard({
     violet: 'border-violet-200 bg-violet-50 text-violet-900',
   };
   return (
-    <div className={`rounded-xl border px-4 py-3 ${tones[tone]}`}>
+    <div data-ui-id="A662" className={`rounded-xl border px-4 py-3 ${tones[tone]}`}>
       <div className="text-2xl font-bold tabular-nums">{toArabicDigits(value)}</div>
       <div className="mt-0.5 text-[11px] opacity-80">{label}</div>
     </div>
   );
 }
 
-function FilterChip({
+function FilterChip({ 'data-ui-id': uiId,
   active,
   onClick,
   label,
@@ -486,9 +496,9 @@ function FilterChip({
   onClick: () => void;
   label: string;
   color?: string;
-}) {
+} & { 'data-ui-id'?: string }) {
   return (
-    <button
+    <button data-ui-id={uiId}
       type="button"
       onClick={onClick}
       className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${

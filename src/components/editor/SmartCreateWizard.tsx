@@ -84,6 +84,51 @@ import { resolveScope } from '@/lib/tashjeer/scope';
 import { ScopePicker } from './VariantEditor';
 import type { GlobalRuleSeed } from './GlobalRuleBuilder';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_SmartCreateWizard_0 = {
+  "التحديد": "A1327",
+  "الأنواع": "A1328",
+  "الأوجه": "A1329",
+  "القرّاء": "A1330",
+  "العلاقات": "A1331",
+  "النطاق": "A1332",
+  "المراجعة": "A1333"
+} as const;
+
+const UI_SmartCreateWizard_1 = {
+  "madd-tahqiq-sila": "A1345",
+  "madd-munfasil": "A1346",
+  "farsh-usul": "A1347",
+  "waqf-faces": "A1348",
+  "hamz": "A1349"
+} as const;
+
+const UI_SmartCreateWizard_2 = {
+  "EXACT": "A1379",
+  "IGNORE": "A1380",
+  "SAKIN": "A1381",
+  "NONE": "A1382"
+} as const;
+
+const UI_SmartCreateWizard_3 = {
+  "WORDS": "A1384",
+  "INSIDE_WORD": "A1385",
+  "BOTH": "A1386"
+} as const;
+
+const UI_SmartCreateWizard_4 = {
+  "EXACT": "A1388",
+  "IKHFAA": "A1389",
+  "IZHAR": "A1390",
+  "IDGHAM": "A1391",
+  "IQLAB": "A1392",
+  "QALQALAH": "A1393",
+  "GHUNNAH": "A1394",
+  "MAD": "A1395"
+} as const;
+
+
+
 interface SmartCreateWizardProps {
   selectionText: string;
   initialLoci: SmartSelectionLocus[];
@@ -792,7 +837,7 @@ export function SmartCreateWizard({
   return (
     <div data-ui-id="A421" className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 p-4" role="dialog" aria-modal="true" aria-label="المعالج الذكي لإنشاء الاختلافات والأوجه">
       <div className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-        <header className="flex items-start justify-between gap-4 border-b border-stone-200 px-5 py-4">
+        <header data-ui-id="A1324" className="flex items-start justify-between gap-4 border-b border-stone-200 px-5 py-4">
           <div>
             <h2 className="text-base font-bold text-stone-900">المعالج الذكي الموحّد</h2>
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-stone-500">
@@ -801,10 +846,10 @@ export function SmartCreateWizard({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <label className="flex items-center gap-1 text-[11px] text-stone-600" title="يتخطى الخطوات المكتملة الافتراضية: من الأنواع إلى المراجعة مباشرة">
-              <input type="checkbox" checked={advanced} onChange={toggleAdvanced} className="accent-emerald-600" />
+              <input data-ui-id="A1325" type="checkbox" checked={advanced} onChange={toggleAdvanced} className="accent-emerald-600" />
               متقدم
             </label>
-            <button type="button" onClick={onClose} className="rounded border border-stone-200 px-2 py-1 text-xs text-stone-600 hover:bg-stone-100">
+            <button data-ui-id="A1326" type="button" onClick={onClose} className="rounded border border-stone-200 px-2 py-1 text-xs text-stone-600 hover:bg-stone-100">
               إغلاق
             </button>
           </div>
@@ -812,7 +857,7 @@ export function SmartCreateWizard({
 
         <div className="flex items-center gap-1 overflow-x-auto border-b border-stone-100 px-4 py-2">
           {STEP_LABELS.map((label, index) => (
-            <button
+            <button data-ui-id={UI_SmartCreateWizard_0[label as keyof typeof UI_SmartCreateWizard_0]}
               key={label}
               type="button"
               onClick={() => setStep(index)}
@@ -837,7 +882,7 @@ export function SmartCreateWizard({
                   const inRange = word.position >= primaryStart && word.position <= primaryEnd;
                   const inExtra = extraRanges.some((range) => word.position >= range.startPosition && word.position <= range.endPosition);
                   return (
-                    <button
+                    <button data-ui-instance={String(word.position)} data-ui-id="A1334"
                       key={word.position}
                       type="button"
                       onClick={(event) => pickWord(word.position, event)}
@@ -875,9 +920,9 @@ export function SmartCreateWizard({
                     {existingAtPrimary.length === 1 ? 'اختلاف مسجّل' : 'اختلافات مسجّلة'} — الإنشاء هنا يضيف
                     اختلافًا مستقلًا جديدًا بمعرّفه ولا يستبدلها ولا يدمجها:
                   </p>
-                  <ul className="mt-1.5 space-y-1">
+                  <ul data-ui-id="A1335" className="mt-1.5 space-y-1">
                     {existingAtPrimary.map((variant) => (
-                      <li key={variant.id} className="flex flex-wrap items-center gap-1 text-[10.5px] text-stone-700">
+                      <li data-ui-instance={String(variant.id)} data-ui-id="A1336" key={variant.id} className="flex flex-wrap items-center gap-1 text-[10.5px] text-stone-700">
                         <span className="rounded bg-stone-800 px-1 py-0.5 text-[9px] text-white">
                           اختلاف {toArabicDigits(occurrenceIndexOf(variant, existingAtPrimary))}
                         </span>
@@ -908,11 +953,11 @@ export function SmartCreateWizard({
                   <p className="text-xs font-semibold text-stone-700">تحديد الحروف داخل المدى (اختياري)</p>
                   <div className="flex items-center gap-2">
                     {letterAnchors.length > 0 && (
-                      <button type="button" onClick={() => { resetDryRun(); setLetterAnchors([]); }} className="text-[11px] text-red-700 hover:underline">
+                      <button data-ui-id="A1337" type="button" onClick={() => { resetDryRun(); setLetterAnchors([]); }} className="text-[11px] text-red-700 hover:underline">
                         مسح الحروف
                       </button>
                     )}
-                    <button
+                    <button data-ui-id="A1338"
                       type="button"
                       onClick={() => setLetterMode((value) => !value)}
                       className="rounded border border-stone-300 px-2 py-1 text-[11px] text-stone-700 hover:bg-stone-50"
@@ -934,7 +979,7 @@ export function SmartCreateWizard({
                             (anchor) => anchor.position === word.position && anchor.characterIndex === character.index
                           );
                           return (
-                            <button
+                            <button data-ui-id="A1339"
                               key={character.index}
                               type="button"
                               onClick={() => toggleLetterAnchor({ position: word.position, characterIndex: character.index })}
@@ -968,7 +1013,7 @@ export function SmartCreateWizard({
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   {pendingExtraStart === null ? (
-                    <button
+                    <button data-ui-id="A1340"
                       type="button"
                       onClick={() => setPendingExtraStart(-1)}
                       className="rounded border border-emerald-300 bg-white px-2 py-1 text-[11px] text-emerald-800 hover:bg-emerald-50"
@@ -978,7 +1023,7 @@ export function SmartCreateWizard({
                   ) : (
                     <span className="rounded bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
                       {pendingExtraStart === -1 ? 'انقر الكلمة الأولى للهدف الإضافي' : `من ${toArabicDigits(pendingExtraStart)}: انقر الكلمة الأخيرة`}
-                      <button type="button" onClick={() => setPendingExtraStart(null)} className="mr-2 underline">
+                      <button data-ui-id="A1341" type="button" onClick={() => setPendingExtraStart(null)} className="mr-2 underline">
                         إلغاء
                       </button>
                     </span>
@@ -988,7 +1033,7 @@ export function SmartCreateWizard({
                       {range.startPosition === range.endPosition
                         ? `كلمة ${toArabicDigits(range.startPosition)}`
                         : `${toArabicDigits(range.startPosition)} إلى ${toArabicDigits(range.endPosition)}`}
-                      <button
+                      <button data-ui-id="A1342"
                         type="button"
                         onClick={() => { resetDryRun(); setExtraRanges((current) => current.filter((_, idx) => idx !== index)); }}
                         className="text-red-700"
@@ -1002,11 +1047,11 @@ export function SmartCreateWizard({
                 {loci.length > 1 && (
                   <div className="mt-2 space-y-1.5">
                     <label className={`flex items-center gap-2 rounded-lg border p-2 text-xs ${targetMode === 'PER_TARGET' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
-                      <input type="radio" checked={targetMode === 'PER_TARGET'} onChange={() => setTargetMode('PER_TARGET')} className="accent-emerald-600" />
+                      <input data-ui-id="A1343" type="radio" checked={targetMode === 'PER_TARGET'} onChange={() => setTargetMode('PER_TARGET')} className="accent-emerald-600" />
                       تكرار البنية لكل هدف: {toArabicDigits(targets.length)} نسخ مستقلة بعلاقاتها (الإسناد الدفعي)
                     </label>
                     <label className={`flex items-center gap-2 rounded-lg border p-2 text-xs ${targetMode === 'COMPOSITE' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
-                      <input type="radio" checked={targetMode === 'COMPOSITE'} onChange={() => setTargetMode('COMPOSITE')} className="accent-emerald-600" />
+                      <input data-ui-id="A1344" type="radio" checked={targetMode === 'COMPOSITE'} onChange={() => setTargetMode('COMPOSITE')} className="accent-emerald-600" />
                       موضع مركّب واحد يجمع الأهداف (loci)
                     </label>
                   </div>
@@ -1019,7 +1064,7 @@ export function SmartCreateWizard({
                 <p className="text-xs font-semibold text-violet-900">قوالب جاهزة</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {WIZARD_TEMPLATES.map((template) => (
-                    <button
+                    <button data-ui-id={UI_SmartCreateWizard_1[template.id as keyof typeof UI_SmartCreateWizard_1]}
                       key={template.id}
                       type="button"
                       onClick={() => applyTemplateConfig(template.config)}
@@ -1037,7 +1082,7 @@ export function SmartCreateWizard({
                     <div className="mt-2 flex flex-wrap gap-2">
                       {userTemplates.map((template) => (
                         <span key={template.id} className="flex items-center gap-1 rounded-lg border border-violet-300 bg-white px-2 py-1 text-xs text-violet-900">
-                          <button
+                          <button data-ui-instance={String(template.id)} data-ui-id="A1350"
                             type="button"
                             onClick={() => { touchWizardTemplate(template.id); applyTemplateConfig(template.config); }}
                             title={template.hint ?? 'قالب محفوظ'}
@@ -1045,7 +1090,7 @@ export function SmartCreateWizard({
                           >
                             {template.name}
                           </button>
-                          <button
+                          <button data-ui-instance={String(template.id)} data-ui-id="A1351"
                             type="button"
                             onClick={() => { deleteWizardTemplate(template.id); setUserTemplates(listWizardTemplates()); }}
                             className="text-red-700"
@@ -1059,13 +1104,13 @@ export function SmartCreateWizard({
                   </>
                 )}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <input
+                  <input data-ui-id="A1352"
                     value={templateName}
                     onChange={(event) => setTemplateName(event.target.value)}
                     placeholder="اسم القالب الجديد"
                     className="w-44 rounded border border-violet-200 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-violet-400"
                   />
-                  <button
+                  <button data-ui-id="A1353"
                     type="button"
                     onClick={handleSaveTemplate}
                     className="rounded-lg border border-violet-400 bg-violet-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-800"
@@ -1090,7 +1135,7 @@ export function SmartCreateWizard({
               <div className="grid gap-2 sm:grid-cols-3">
                 {CATEGORY_ORDER.map((type) => (
                   <label key={type} className={`flex items-center gap-2 rounded-lg border p-3 text-sm transition ${selectedTypes.includes(type) ? 'border-emerald-500 bg-emerald-50 text-emerald-900' : 'border-stone-200 bg-white text-stone-700'}`}>
-                    <input
+                    <input data-ui-id="A1354"
                       type="checkbox"
                       checked={selectedTypes.includes(type)}
                       onChange={() => toggleType(type)}
@@ -1117,14 +1162,14 @@ export function SmartCreateWizard({
                 {selectedTypes.map((type) => (
                   <div key={type} className="rounded-lg border border-stone-200 bg-stone-50 p-3">
                     <label className="mb-1 block text-xs font-semibold text-stone-700">{CATEGORY_LABELS[type]}</label>
-                    <textarea
+                    <textarea data-ui-id="A1355"
                       value={variantsText[type] ?? ''}
                       onChange={(event) => setVariantsText((current) => ({ ...current, [type]: event.target.value }))}
                       rows={3}
                       className="w-full rounded border border-stone-300 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       placeholder="مثال: بالألف، بالسين، بالأشمام"
                     />
-                    <input
+                    <input data-ui-id="A1356"
                       value={typeText[type] ?? ''}
                       onChange={(event) => setTypeText((current) => ({ ...current, [type]: event.target.value }))}
                       placeholder="نص الوجه المقروء (افتراضي: نص التحديد)"
@@ -1132,14 +1177,14 @@ export function SmartCreateWizard({
                     />
                     <label className="mt-2 block text-[11px] text-stone-500">
                       درجة القوة
-                      <select
+                      <select data-ui-id="A1357"
                         value={typeStrength[type] ?? ''}
                         onChange={(event) => setTypeStrength((current) => ({ ...current, [type]: event.target.value }))}
                         className="mt-1 w-full rounded border border-stone-300 bg-white p-1.5 text-xs"
                       >
-                        <option value="">بلا درجة (تُضبط لاحقًا)</option>
+                        <option data-ui-id="A1358" value="">بلا درجة (تُضبط لاحقًا)</option>
                         {strengthCatalog.degrees.map((degree) => (
-                          <option key={degree.id} value={degree.id}>{degree.label}</option>
+                          <option data-ui-instance={String(degree.id)} data-ui-id="A1359" key={degree.id} value={degree.id}>{degree.label}</option>
                         ))}
                       </select>
                     </label>
@@ -1171,9 +1216,9 @@ export function SmartCreateWizard({
               {relationSuggestions.length > 0 && (
                 <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
                   <p className="text-xs font-semibold text-sky-900">اقتراح السياسة (Resolver) — قابل للتعديل، لا علاقات خفية</p>
-                  <ul className="mt-1 space-y-0.5 text-[11px] text-sky-900">
+                  <ul data-ui-id="A1360" className="mt-1 space-y-0.5 text-[11px] text-sky-900">
                     {relationSuggestions.map((item) => (
-                      <li key={item.type}>
+                      <li data-ui-instance={String(item.type)} data-ui-id="A1361" key={item.type}>
                         {CATEGORY_LABELS[selectedTypes[0]!]} ← {CATEGORY_LABELS[item.type]}:{' '}
                         {item.suggested === 'RELATED' ? 'مرتبط' : 'متنافٍ'} — {item.reason}
                       </li>
@@ -1183,19 +1228,19 @@ export function SmartCreateWizard({
               )}
               <div className="space-y-2">
                 <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${relationMode === 'RELATED_TREE' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
-                  <input type="radio" checked={relationMode === 'RELATED_TREE'} onChange={() => setRelationMode('RELATED_TREE')} className="accent-emerald-600" />
+                  <input data-ui-id="A1362" type="radio" checked={relationMode === 'RELATED_TREE'} onChange={() => setRelationMode('RELATED_TREE')} className="accent-emerald-600" />
                   علاقة «مرتبط» من النوع الأول إلى كل نوع لاحق
                 </label>
                 <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${relationMode === 'MUTUALLY_EXCLUSIVE' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
-                  <input type="radio" checked={relationMode === 'MUTUALLY_EXCLUSIVE'} onChange={() => setRelationMode('MUTUALLY_EXCLUSIVE')} className="accent-emerald-600" />
+                  <input data-ui-id="A1363" type="radio" checked={relationMode === 'MUTUALLY_EXCLUSIVE'} onChange={() => setRelationMode('MUTUALLY_EXCLUSIVE')} className="accent-emerald-600" />
                   تنافٍ (لا يُضربّا معًا) بين النوع الأول وكل نوع لاحق — يُحسم عبر Resolver، وما خالف اقتراح السياسة يُوثَّق تصحيحًا يسبقها
                 </label>
                 <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${relationMode === 'CUSTOM' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
-                  <input type="radio" checked={relationMode === 'CUSTOM'} onChange={() => setRelationMode('CUSTOM')} className="accent-emerald-600" />
+                  <input data-ui-id="A1364" type="radio" checked={relationMode === 'CUSTOM'} onChange={() => setRelationMode('CUSTOM')} className="accent-emerald-600" />
                   علاقة مختلفة لكل هدف (الافتراض: اقتراح السياسة)
                 </label>
                 <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${relationMode === 'NONE' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
-                  <input type="radio" checked={relationMode === 'NONE'} onChange={() => setRelationMode('NONE')} className="accent-emerald-600" />
+                  <input data-ui-id="A1365" type="radio" checked={relationMode === 'NONE'} onChange={() => setRelationMode('NONE')} className="accent-emerald-600" />
                   لا أُنشئ علاقات تلقائية
                 </label>
               </div>
@@ -1205,17 +1250,17 @@ export function SmartCreateWizard({
                   {selectedTypes.slice(1).map((type) => (
                     <div key={type} className="flex flex-wrap items-center justify-between gap-2 rounded bg-white px-3 py-2 text-sm">
                       <span className="font-medium text-stone-800">{CATEGORY_LABELS[type]}</span>
-                      <select
+                      <select data-ui-id="A1366"
                         value={perTargetRelations[type] ?? relationSuggestions.find((item) => item.type === type)?.suggested ?? 'RELATED'}
                         onChange={(event) =>
                           setPerTargetRelations((current) => ({ ...current, [type]: event.target.value as PerTargetRelation }))
                         }
                         className="rounded border border-stone-300 px-2 py-1 text-xs"
                       >
-                        <option value="RELATED">مرتبط</option>
-                        <option value="MUTUALLY_EXCLUSIVE">تنافٍ</option>
-                        <option value="PART_OF">جزء من</option>
-                        <option value="NONE">بلا علاقة</option>
+                        <option data-ui-id="A1367" value="RELATED">مرتبط</option>
+                        <option data-ui-id="A1368" value="MUTUALLY_EXCLUSIVE">تنافٍ</option>
+                        <option data-ui-id="A1369" value="PART_OF">جزء من</option>
+                        <option data-ui-id="A1370" value="NONE">بلا علاقة</option>
                       </select>
                     </div>
                   ))}
@@ -1233,11 +1278,11 @@ export function SmartCreateWizard({
               <h3 className="text-sm font-bold text-stone-800">الخطوة ٦ — النطاق الجغرافي (التعميم)</h3>
               <div className="space-y-2">
                 <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${applicationScope === 'LOCAL' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
-                  <input type="radio" checked={applicationScope === 'LOCAL'} onChange={() => { setApplicationScope('LOCAL'); resetDryRun(); }} className="accent-emerald-600" />
+                  <input data-ui-id="A1371" type="radio" checked={applicationScope === 'LOCAL'} onChange={() => { setApplicationScope('LOCAL'); resetDryRun(); }} className="accent-emerald-600" />
                   هذا الموضع فقط
                 </label>
                 <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${applicationScope === 'AYAH' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
-                  <input
+                  <input data-ui-id="A1372"
                     type="radio"
                     checked={applicationScope === 'AYAH'}
                     onChange={() => { setApplicationScope('AYAH'); resetDryRun(); }}
@@ -1246,7 +1291,7 @@ export function SmartCreateWizard({
                   هذه الآية كلها: كل المواضع المطابقة فيها مباشرةً (بلا قاعدة عامة)
                 </label>
                 <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${applicationScope === 'AYAH_RANGE' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
-                  <input
+                  <input data-ui-id="A1373"
                     type="radio"
                     checked={applicationScope === 'AYAH_RANGE'}
                     onChange={() => { setApplicationScope('AYAH_RANGE'); resetDryRun(); }}
@@ -1257,7 +1302,7 @@ export function SmartCreateWizard({
                 {applicationScope === 'AYAH_RANGE' && document && (
                   <div className="mr-7 flex flex-wrap items-center gap-2 text-xs text-stone-700">
                     <span>من الآية</span>
-                    <input
+                    <input data-ui-id="A1374"
                       type="number"
                       min={1}
                       value={rangeFromAyah}
@@ -1268,7 +1313,7 @@ export function SmartCreateWizard({
                       className="w-20 rounded border border-stone-300 px-2 py-1"
                     />
                     <span>إلى الآية</span>
-                    <input
+                    <input data-ui-id="A1375"
                       type="number"
                       min={1}
                       value={rangeToAyah}
@@ -1282,7 +1327,7 @@ export function SmartCreateWizard({
                   </div>
                 )}
                 <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${applicationScope === 'SURAH' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
-                  <input
+                  <input data-ui-id="A1376"
                     type="radio"
                     checked={applicationScope === 'SURAH'}
                     onChange={() => { setApplicationScope('SURAH'); resetDryRun(); }}
@@ -1291,7 +1336,7 @@ export function SmartCreateWizard({
                   هذه السورة كلها (قاعدة عامة مقيّدة بالسورة)
                 </label>
                 <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${applicationScope === 'MUSHAF' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
-                  <input
+                  <input data-ui-id="A1377"
                     type="radio"
                     checked={applicationScope === 'MUSHAF'}
                     onChange={() => { setApplicationScope('MUSHAF'); resetDryRun(); }}
@@ -1313,25 +1358,25 @@ export function SmartCreateWizard({
                   <div className="grid gap-2 sm:grid-cols-2">
                     <label className="block text-[11px] text-stone-600">
                       سياسة الضبط الابتدائية لكل حرف
-                      <select
+                      <select data-ui-id="A1378"
                         value={harakaDefault}
                         onChange={(event) => { setHarakaDefault(event.target.value as HarakaMatchMode); resetDryRun(); }}
                         className="mt-1 w-full rounded border border-stone-300 bg-white p-1.5 text-xs"
                       >
                         {HARAKA_MODE_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
+                          <option data-ui-id={UI_SmartCreateWizard_2[option.value as keyof typeof UI_SmartCreateWizard_2]} key={option.value} value={option.value}>{option.label}</option>
                         ))}
                       </select>
                     </label>
                     <label className="block text-[11px] text-stone-600">
                       نطاق البحث عن التتابع
-                      <select
+                      <select data-ui-id="A1383"
                         value={matchScope}
                         onChange={(event) => { setMatchScope(event.target.value as CharacterMatchScope); resetDryRun(); }}
                         className="mt-1 w-full rounded border border-stone-300 bg-white p-1.5 text-xs"
                       >
                         {MATCH_SCOPE_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
+                          <option data-ui-id={UI_SmartCreateWizard_3[option.value as keyof typeof UI_SmartCreateWizard_3]} key={option.value} value={option.value}>{option.label}</option>
                         ))}
                       </select>
                     </label>
@@ -1344,7 +1389,7 @@ export function SmartCreateWizard({
                           <div key={word.offset} className="flex flex-wrap items-center gap-1 text-[11px]">
                             <span className="text-stone-400">ك{toArabicDigits(loci[0]!.startPosition + word.offset)}:</span>
                             {word.constraints.map((constraint, constraintIndex) => (
-                              <select
+                              <select data-ui-id="A1387"
                                 key={constraintIndex}
                                 value={letterSetOverrides[`${word.offset}:${constraintIndex}`] ?? 'EXACT'}
                                 onChange={(event) => {
@@ -1357,7 +1402,7 @@ export function SmartCreateWizard({
                                 className="max-w-28 rounded border border-stone-300 bg-white px-1 py-0.5 text-[11px]"
                               >
                                 {(Object.keys(GLOBAL_CHARACTER_SET_LABELS) as GlobalCharacterSet[]).map((set) => (
-                                  <option key={set} value={set}>
+                                  <option data-ui-id={UI_SmartCreateWizard_4[set as keyof typeof UI_SmartCreateWizard_4]} key={set} value={set}>
                                     {set === 'EXACT' ? `«${constraint.baseLetter}» فقط` : GLOBAL_CHARACTER_SET_LABELS[set]}
                                   </option>
                                 ))}
@@ -1380,7 +1425,7 @@ export function SmartCreateWizard({
                     </div>
                   )}
                   {isGeneralizing && dryRun.phase === 'idle' && (
-                    <button
+                    <button data-ui-id="A1396"
                       type="button"
                       onClick={() => void runDryRun()}
                       disabled={!generalPattern.pattern}
@@ -1393,7 +1438,7 @@ export function SmartCreateWizard({
                     <div className="rounded-lg border border-stone-200 bg-white p-3">
                       <div className="flex items-center justify-between text-[11px] text-stone-600">
                         <span>جارٍ فحص المصحف… السورة {toArabicDigits(dryRun.doneSurahs)} من {toArabicDigits(dryRun.totalSurahs)}</span>
-                        <button
+                        <button data-ui-id="A1397"
                           type="button"
                           onClick={() => { dryRunCancel.current = true; }}
                           className="rounded border border-red-300 px-2 py-0.5 text-[11px] text-red-700 hover:bg-red-50"
@@ -1412,28 +1457,28 @@ export function SmartCreateWizard({
                   {isGeneralizing && dryRun.phase === 'cancelled' && (
                     <div className="flex items-center gap-2">
                       <p className="text-xs text-amber-800">أُلغيت المعاينة عند السورة {toArabicDigits(dryRun.doneSurahs)}.</p>
-                      <button type="button" onClick={() => void runDryRun()} className="text-xs text-emerald-700 hover:underline">
+                      <button data-ui-id="A1398" type="button" onClick={() => void runDryRun()} className="text-xs text-emerald-700 hover:underline">
                         إعادة التشغيل
                       </button>
                     </div>
                   )}
                   {isGeneralizing && dryRun.phase === 'done' && (
                     <div className="rounded-lg border border-stone-200 bg-white p-3">
-                      <ul className="space-y-1 text-xs text-stone-700">
+                      <ul data-ui-id="A1399" className="space-y-1 text-xs text-stone-700">
                         {dryRun.counts.map(({ type, count }) => (
-                          <li key={type}>{CATEGORY_LABELS[type]}: {toArabicDigits(count)} موضعًا مطابقًا</li>
+                          <li data-ui-id="A1400" key={type}>{CATEGORY_LABELS[type]}: {toArabicDigits(count)} موضعًا مطابقًا</li>
                         ))}
                       </ul>
                       <p className="mt-1 text-[11px] text-stone-500">
                         ستُتخطى في هذه الآية {toArabicDigits(dryRun.skippedHere)} مواضع مطابقة لوجود اختلاف محلي من نوعها.
                       </p>
-                      <button type="button" onClick={() => void runDryRun()} className="mt-1 text-[11px] text-emerald-700 hover:underline">
+                      <button data-ui-id="A1401" type="button" onClick={() => void runDryRun()} className="mt-1 text-[11px] text-emerald-700 hover:underline">
                         إعادة المعاينة
                       </button>
                     </div>
                   )}
                   {isGeneralizing && onRequestFullBuilder && (
-                    <button
+                    <button data-ui-id="A1402"
                       type="button"
                       onClick={() =>
                         onRequestFullBuilder({
@@ -1460,15 +1505,15 @@ export function SmartCreateWizard({
               <h3 className="text-sm font-bold text-stone-800">الخطوة ٧ — السياق والمراجعة</h3>
               <div className="grid gap-2 sm:grid-cols-3">
                 <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${context === 'ALWAYS' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
-                  <input type="radio" checked={context === 'ALWAYS'} onChange={() => setContext('ALWAYS')} className="accent-emerald-600" />
+                  <input data-ui-id="A1403" type="radio" checked={context === 'ALWAYS'} onChange={() => setContext('ALWAYS')} className="accent-emerald-600" />
                   وقفًا ووصلًا
                 </label>
                 <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${context === 'WAQF_ONLY' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
-                  <input type="radio" checked={context === 'WAQF_ONLY'} onChange={() => setContext('WAQF_ONLY')} className="accent-emerald-600" />
+                  <input data-ui-id="A1404" type="radio" checked={context === 'WAQF_ONLY'} onChange={() => setContext('WAQF_ONLY')} className="accent-emerald-600" />
                   وقفًا فقط
                 </label>
                 <label className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${context === 'WASL_ONLY' ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
-                  <input type="radio" checked={context === 'WASL_ONLY'} onChange={() => setContext('WASL_ONLY')} className="accent-emerald-600" />
+                  <input data-ui-id="A1405" type="radio" checked={context === 'WASL_ONLY'} onChange={() => setContext('WASL_ONLY')} className="accent-emerald-600" />
                   وصلًا فقط
                 </label>
               </div>
@@ -1478,7 +1523,7 @@ export function SmartCreateWizard({
                   {selectedTypes.map((type) => (
                     <div key={type} className="flex items-center justify-between gap-2 rounded bg-white px-3 py-1.5 text-xs">
                       <span className="font-medium text-stone-800">{CATEGORY_LABELS[type]}</span>
-                      <select
+                      <select data-ui-id="A1406"
                         value={contextByType[type] ?? ''}
                         onChange={(event) => {
                           const value = event.target.value as WizardContextMode | '';
@@ -1493,10 +1538,10 @@ export function SmartCreateWizard({
                         }}
                         className="rounded border border-stone-300 px-2 py-1 text-xs"
                       >
-                        <option value="">كالمجموعة</option>
-                        <option value="ALWAYS">وقفًا ووصلًا</option>
-                        <option value="WAQF_ONLY">وقفًا فقط</option>
-                        <option value="WASL_ONLY">وصلًا فقط</option>
+                        <option data-ui-id="A1407" value="">كالمجموعة</option>
+                        <option data-ui-id="A1408" value="ALWAYS">وقفًا ووصلًا</option>
+                        <option data-ui-id="A1409" value="WAQF_ONLY">وقفًا فقط</option>
+                        <option data-ui-id="A1410" value="WASL_ONLY">وصلًا فقط</option>
                       </select>
                     </div>
                   ))}
@@ -1530,12 +1575,12 @@ export function SmartCreateWizard({
           )}
         </div>
 
-        <footer className="flex items-center justify-between border-t border-stone-200 px-5 py-3">
+        <footer data-ui-id="A1411" className="flex items-center justify-between border-t border-stone-200 px-5 py-3">
           <div>
             {error && <p className="text-xs text-red-700">{error}</p>}
           </div>
           <div className="flex gap-2">
-            <button
+            <button data-ui-id="A1412"
               type="button"
               onClick={goPrev}
               disabled={step === 0}
@@ -1544,11 +1589,11 @@ export function SmartCreateWizard({
               السابق
             </button>
             {step < 6 ? (
-              <button type="button" onClick={goNext} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700">
+              <button data-ui-id="A1413" type="button" onClick={goNext} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700">
                 التالي{advanced && step === 1 ? ' (تخطٍّ للمراجعة)' : ''}
               </button>
             ) : (
-              <button
+              <button data-ui-id="A1414"
                 type="button"
                 onClick={create}
                 disabled={!canCreate}

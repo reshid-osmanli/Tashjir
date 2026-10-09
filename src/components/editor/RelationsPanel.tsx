@@ -38,6 +38,16 @@ import type {
 } from '@/types/tashjeer';
 import type { ClassicTashjeer } from '@/lib/tashjeer/classic-tashjeer';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_RelationsPanel_0 = {
+  "FACE": "A1130",
+  "LINE": "A1131",
+  "SEGMENT": "A1132",
+  "ORDER": "A1133"
+} as const;
+
+
+
 type LinkTab = 'FACE' | 'LINE' | 'SEGMENT' | 'ORDER';
 
 const TABS: Array<{ id: LinkTab; label: string; hint: string }> = [
@@ -70,7 +80,7 @@ export function RelationsPanel() {
 
       <div className="mb-2 flex flex-wrap gap-1">
         {TABS.map((item) => (
-          <button
+          <button data-ui-id={UI_RelationsPanel_0[item.id as keyof typeof UI_RelationsPanel_0]}
             key={item.id}
             type="button"
             onClick={() => setTab(item.id)}
@@ -120,12 +130,12 @@ function LinkDecisionNoticeCard() {
     : 'border-red-300 bg-red-50 text-red-900';
 
   return (
-    <div className={`mb-2 rounded-md border px-2.5 py-2 text-[10.5px] leading-relaxed ${tone}`} role="status">
+    <div data-ui-id="A1134" className={`mb-2 rounded-md border px-2.5 py-2 text-[10.5px] leading-relaxed ${tone}`} role="status">
       <div className="flex items-start justify-between gap-2">
         <p className="font-semibold">
           {notice.allowed ? 'سُجّل الرابط بخلاف سياسة المحرك' : 'رفض الرابط بقاعدة من سياسات المحرك'}
         </p>
-        <button type="button" onClick={clear} className="text-[10px] underline opacity-70 hover:opacity-100">
+        <button data-ui-id="A1135" type="button" onClick={clear} className="text-[10px] underline opacity-70 hover:opacity-100">
           إخفاء
         </button>
       </div>
@@ -133,7 +143,7 @@ function LinkDecisionNoticeCard() {
       {notice.appliedRuleNames.length > 0 && (
         <p className="mt-0.5 opacity-80">القواعد المطابقة: {notice.appliedRuleNames.join('، ')}</p>
       )}
-      <button
+      <button data-ui-id="A1136"
         type="button"
         onClick={() => setShowTrace((current) => !current)}
         className="mt-1 text-[10px] underline opacity-80 hover:opacity-100"
@@ -141,9 +151,9 @@ function LinkDecisionNoticeCard() {
         {showTrace ? 'إخفاء الأثر' : 'لماذا؟ (أثر القرار)'}
       </button>
       {showTrace && (
-        <ol className="mt-1 space-y-0.5 border-t border-current/20 pt-1">
+        <ol data-ui-id="A1137" className="mt-1 space-y-0.5 border-t border-current/20 pt-1">
           {notice.trace.map((step, index) => (
-            <li key={index} className="flex gap-2">
+            <li data-ui-id="A1138" key={index} className="flex gap-2">
               <span className="font-mono text-[9px] opacity-60">{step.stage}</span>
               <span>{step.message}</span>
             </li>
@@ -213,12 +223,12 @@ function FaceLinkEditor({ classic }: { classic: ClassicTashjeer }) {
 
   return (
     <div className="space-y-2 rounded-md border border-stone-200 p-2.5">
-      <FaceSelect faces={faces} value={from} onChange={setFrom} label="الوجه الأساسي" />
-      <FaceSelect faces={faces} value={to} onChange={setTo} label="الوجه المرتبط به" />
-      <RelationSelect value={relation} onChange={setRelation} />
-      <NotesInput value={notes} onChange={setNotes} placeholder="مثال: هذان الوجهان يقرآن معا في أداء واحد." />
+      <FaceSelect data-ui-id="A1140" faces={faces} value={from} onChange={setFrom} label="الوجه الأساسي" />
+      <FaceSelect data-ui-id="A1141" faces={faces} value={to} onChange={setTo} label="الوجه المرتبط به" />
+      <RelationSelect data-ui-id="A1142" value={relation} onChange={setRelation} />
+      <NotesInput data-ui-id="A1143" value={notes} onChange={setNotes} placeholder="مثال: هذان الوجهان يقرآن معا في أداء واحد." />
       {error && <p className="text-[10px] text-rose-700">{error}</p>}
-      <button
+      <button data-ui-id="A1144"
         type="button"
         onClick={submit}
         className="w-full rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-emerald-700"
@@ -233,7 +243,7 @@ function FaceLinkEditor({ classic }: { classic: ClassicTashjeer }) {
   );
 }
 
-function FaceSelect({
+function FaceSelect({ 'data-ui-id': uiId,
   faces,
   value,
   onChange,
@@ -243,7 +253,7 @@ function FaceSelect({
   value: string;
   onChange: (value: string) => void;
   label: string;
-}) {
+} & { 'data-ui-id'?: string }) {
   // اختيار وجه من لوحة العلاقات يجعله هو العنصر النشط عالميًا (FR-ED-02).
   const handleChange = (key: string) => {
     onChange(key);
@@ -251,12 +261,12 @@ function FaceSelect({
     if (variantId && alternativeId) selectElement({ kind: 'FACE', id: alternativeId, differenceId: variantId, faceId: alternativeId });
   };
   return (
-    <label className="block">
+    <label data-ui-id="A1145" className="block">
       <span className="mb-0.5 block text-[10px] font-medium text-stone-600">{label}</span>
-      <select value={value} onChange={(event) => handleChange(event.target.value)} className="input h-8 py-0 text-[11px]">
-        <option value="">— اختر وجها —</option>
+      <select data-ui-id={uiId} value={value} onChange={(event) => handleChange(event.target.value)} className="input h-8 py-0 text-[11px]">
+        <option data-ui-id="A1147" value="">— اختر وجها —</option>
         {faces.map((face) => (
-          <option key={face.key} value={face.key}>
+          <option data-ui-instance={String(face.key)} data-ui-id="A1148" key={face.key} value={face.key}>
             [{CATEGORY_LABELS[face.category]}] {face.label}
           </option>
         ))}
@@ -303,12 +313,12 @@ function LineLinkEditor({ classic }: { classic: ClassicTashjeer }) {
 
   return (
     <div className="space-y-2 rounded-md border border-stone-200 p-2.5">
-      <LineSelect lines={classic.lines} value={from} onChange={setFrom} label="السطر الأول" />
-      <LineSelect lines={classic.lines} value={to} onChange={setTo} label="السطر المدمج به" />
-      <RelationSelect value={relation} onChange={setRelation} />
-      <NotesInput value={notes} onChange={setNotes} placeholder="مثال: السطر ١٠ مرتبط بالسطر ٢٥ — تركيب واحد." />
+      <LineSelect data-ui-id="A1150" lines={classic.lines} value={from} onChange={setFrom} label="السطر الأول" />
+      <LineSelect data-ui-id="A1151" lines={classic.lines} value={to} onChange={setTo} label="السطر المدمج به" />
+      <RelationSelect data-ui-id="A1152" value={relation} onChange={setRelation} />
+      <NotesInput data-ui-id="A1153" value={notes} onChange={setNotes} placeholder="مثال: السطر ١٠ مرتبط بالسطر ٢٥ — تركيب واحد." />
       {error && <p className="text-[10px] text-rose-700">{error}</p>}
-      <button
+      <button data-ui-id="A1154"
         type="button"
         onClick={submit}
         className="w-full rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-emerald-700"
@@ -319,7 +329,7 @@ function LineLinkEditor({ classic }: { classic: ClassicTashjeer }) {
   );
 }
 
-function LineSelect({
+function LineSelect({ 'data-ui-id': uiId,
   lines,
   value,
   onChange,
@@ -329,7 +339,7 @@ function LineSelect({
   value: string;
   onChange: (value: string) => void;
   label: string;
-}) {
+} & { 'data-ui-id'?: string }) {
   // اختيار سطر من لوحة العلاقات يجعله هو العنصر النشط عالميًا: تنتقل اللوحة
   // إليه وتميّزه، وتميّزه كل اللوحات المفتوحة (AC-06).
   const handleChange = (lineId: string) => {
@@ -338,12 +348,12 @@ function LineSelect({
     if (line) selectElement({ kind: 'LINE', id: line.id, lineId: line.id, differenceId: line.variantId, position: line.startPosition });
   };
   return (
-    <label className="block">
+    <label data-ui-id="A1155" className="block">
       <span className="mb-0.5 block text-[10px] font-medium text-stone-600">{label}</span>
-      <select value={value} onChange={(event) => handleChange(event.target.value)} className="input h-8 py-0 text-[11px]">
-        <option value="">— اختر سطرا —</option>
+      <select data-ui-id={uiId} value={value} onChange={(event) => handleChange(event.target.value)} className="input h-8 py-0 text-[11px]">
+        <option data-ui-id="A1157" value="">— اختر سطرا —</option>
         {lines.map((line, index) => (
-          <option key={line.id} value={line.id}>
+          <option data-ui-instance={String(line.id)} data-ui-id="A1158" key={line.id} value={line.id}>
             {toArabicDigits(index + 1)}. {line.label} · {line.ruleLabel.slice(0, 40)}
           </option>
         ))}
@@ -430,16 +440,16 @@ function SegmentEditor({ classic }: { classic: ClassicTashjeer }) {
   };
 
   return (
-    <div className="space-y-2 rounded-md border border-stone-200 p-2.5">
+    <div data-ui-id="A1159" className="space-y-2 rounded-md border border-stone-200 p-2.5">
       <label className="block">
         <span className="mb-0.5 block text-[10px] font-medium text-stone-600">عنوان الجزء</span>
-        <input value={title} onChange={(event) => setTitle(event.target.value)} className="input h-8 py-0 text-[11px]" placeholder="مثال: صلة الهاء في «عندهِ»" />
+        <input data-ui-id="A1160" value={title} onChange={(event) => setTitle(event.target.value)} className="input h-8 py-0 text-[11px]" placeholder="مثال: صلة الهاء في «عندهِ»" />
       </label>
 
       <div className="grid grid-cols-2 gap-2">
         <label className="block">
           <span className="mb-0.5 block text-[10px] font-medium text-stone-600">من كلمة رقم</span>
-          <input
+          <input data-ui-id="A1161"
             type="number"
             min={1}
             value={effectiveStart}
@@ -450,7 +460,7 @@ function SegmentEditor({ classic }: { classic: ClassicTashjeer }) {
         </label>
         <label className="block">
           <span className="mb-0.5 block text-[10px] font-medium text-stone-600">إلى كلمة رقم</span>
-          <input
+          <input data-ui-id="A1162"
             type="number"
             min={1}
             value={effectiveEnd}
@@ -478,14 +488,14 @@ function SegmentEditor({ classic }: { classic: ClassicTashjeer }) {
       <div className="rounded border border-stone-200 p-2">
         <p className="mb-1 text-[10px] font-semibold text-stone-700">ربط الجزء (يمكن لاحقا من قائمة العلاقات)</p>
         <div className="mb-1.5 flex gap-1">
-          <button
+          <button data-ui-id="A1163"
             type="button"
             onClick={() => setTargetType('LINE')}
             className={`flex-1 rounded border px-2 py-1 text-[10px] ${targetType === 'LINE' ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-stone-200 text-stone-600'}`}
           >
             بسطر آخر
           </button>
-          <button
+          <button data-ui-id="A1164"
             type="button"
             onClick={() => setTargetType('RULE')}
             className={`flex-1 rounded border px-2 py-1 text-[10px] ${targetType === 'RULE' ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-stone-200 text-stone-600'}`}
@@ -494,7 +504,7 @@ function SegmentEditor({ classic }: { classic: ClassicTashjeer }) {
           </button>
         </div>
         {targetType === 'LINE' ? (
-          <select
+          <select data-ui-id="A1165"
             value={targetId}
             onChange={(event) => {
               setTargetId(event.target.value);
@@ -504,15 +514,15 @@ function SegmentEditor({ classic }: { classic: ClassicTashjeer }) {
             }}
             className="input h-8 py-0 text-[11px]"
           >
-            <option value="">— بلا رابط الآن —</option>
+            <option data-ui-id="A1166" value="">— بلا رابط الآن —</option>
             {classic.lines.map((line, index) => (
-              <option key={line.id} value={line.id}>
+              <option data-ui-instance={String(line.id)} data-ui-id="A1167" key={line.id} value={line.id}>
                 {toArabicDigits(index + 1)}. {line.label} · {line.ruleLabel.slice(0, 30)}
               </option>
             ))}
           </select>
         ) : (
-          <select
+          <select data-ui-id="A1168"
             value={targetId}
             onChange={(event) => {
               setTargetId(event.target.value);
@@ -520,20 +530,20 @@ function SegmentEditor({ classic }: { classic: ClassicTashjeer }) {
             }}
             className="input h-8 py-0 text-[11px]"
           >
-            <option value="">— بلا رابط الآن —</option>
+            <option data-ui-id="A1169" value="">— بلا رابط الآن —</option>
             {variants.map((variant) => (
-              <option key={variant.id} value={variant.id}>
+              <option data-ui-instance={String(variant.id)} data-ui-id="A1170" key={variant.id} value={variant.id}>
                 [{CATEGORY_LABELS[variant.category]}] {variant.title}
               </option>
             ))}
           </select>
         )}
-        {targetId && <div className="mt-1.5"><RelationSelect value={relation} onChange={setRelation} compact /></div>}
+        {targetId && <div className="mt-1.5"><RelationSelect data-ui-id="A1171" value={relation} onChange={setRelation} compact /></div>}
       </div>
 
-      <NotesInput value={notes} onChange={setNotes} placeholder="ملاحظة على الجزء (اختياري)." />
+      <NotesInput data-ui-id="A1172" value={notes} onChange={setNotes} placeholder="ملاحظة على الجزء (اختياري)." />
       {error && <p className="text-[10px] text-rose-700">{error}</p>}
-      <button
+      <button data-ui-id="A1173"
         type="button"
         onClick={create}
         className="w-full rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-emerald-700"
@@ -639,7 +649,7 @@ function LinksList({
     (selection?.kind === 'FACE' && endpoint.type === 'FACE' && selection.faceId !== undefined && endpoint.id.endsWith(`::${selection.faceId}`));
 
   return (
-    <div className="mt-3 rounded-md border border-stone-200 bg-stone-50/60 p-2.5">
+    <div data-ui-id="A1174" className="mt-3 rounded-md border border-stone-200 bg-stone-50/60 p-2.5">
       <p className="mb-1.5 text-[10px] font-semibold text-stone-700">
         العلاقات والأجزاء المسجلة ({toArabicDigits(links.length + segments.length)})
       </p>
@@ -650,13 +660,13 @@ function LinksList({
         estimateHeight={72}
         threshold={999999}
       >
-      <ul className="space-y-1.5">
+      <ul data-ui-id="A1175" className="space-y-1.5">
         {links.map((link) => {
           const active =
             classic.appliedLinkIds.merge.includes(link.id) ||
             classic.appliedLinkIds.reference.includes(link.id);
           return (
-            <li
+            <li data-ui-instance={String(link.id)} data-ui-id="A1176"
               key={link.id}
               className={`rounded border bg-white px-2 py-1.5 ${
                 selection?.kind === 'COMPOSITE_FACE' && selection.id === link.id ? 'selection-row-active' : 'border-stone-200'
@@ -671,7 +681,7 @@ function LinksList({
                       : RELATION_LABELS[link.relation]}
                   </p>
                   <p className="truncate text-[10px] text-stone-600" title={`${describe(link.from)} → ${describe(link.to)}`}>
-                    <button
+                    <button data-ui-id="A1177"
                       type="button"
                       onClick={() => selectEndpoint(link.from)}
                       className={`rounded px-0.5 hover:underline ${endpointIsSelected(link.from) ? 'bg-emerald-100 text-emerald-800' : ''}`}
@@ -680,7 +690,7 @@ function LinksList({
                       {describe(link.from)}
                     </button>
                     {' ← '}
-                    <button
+                    <button data-ui-id="A1178"
                       type="button"
                       onClick={() => selectEndpoint(link.to)}
                       className={`rounded px-0.5 hover:underline ${endpointIsSelected(link.to) ? 'bg-emerald-100 text-emerald-800' : ''}`}
@@ -698,7 +708,7 @@ function LinksList({
                     {active ? 'مفعّلة' : 'معلّقة'}
                   </span>
                   {link.kind === 'DIFFERENCE_TO_DIFFERENCE' && link.differenceRelation ? (
-                    <button
+                    <button data-ui-id="A1179"
                       type="button"
                       onClick={() =>
                         void useEditorStore.getState().setDifferenceRelation({
@@ -715,7 +725,7 @@ function LinksList({
                       {link.differenceRelation === 'MUTUALLY_EXCLUSIVE' ? 'اجعلهما مرتبطين' : 'اجعلهما متنافيين'}
                     </button>
                   ) : link.relation === 'MERGE' ? (
-                    <button
+                    <button data-ui-instance={String(link.id)} data-ui-id="A1180"
                       type="button"
                       onClick={() =>
                         mergeRecords?.some((record) => record.relationId === link.id && !record.restoredAt) ? void unmerge(link.id) : void confirmLegacy(() => updateLink(link.id, { relation: 'REFERENCE' }))
@@ -726,7 +736,7 @@ function LinksList({
                       فك الدمج
                     </button>
                   ) : (
-                    <button
+                    <button data-ui-instance={String(link.id)} data-ui-id="A1181"
                       type="button"
                       onClick={() => void confirmLegacy(() => updateLink(link.id, { relation: 'MERGE' }))}
                       className="rounded border border-stone-200 px-1.5 py-0.5 text-[9px] text-stone-600 hover:bg-stone-50"
@@ -735,7 +745,7 @@ function LinksList({
                       دمج
                     </button>
                   )}
-                  <button
+                  <button data-ui-instance={String(link.id)} data-ui-id="A1182"
                     type="button"
                     onClick={() => mergeRecords?.some((record) => record.relationId === link.id && !record.restoredAt) ? void unmerge(link.id) : void confirmLegacy(() => deleteLink(link.id))}
                     className="rounded border border-rose-200 px-1.5 py-0.5 text-[9px] text-rose-700 hover:bg-rose-50"
@@ -750,7 +760,7 @@ function LinksList({
         })}
 
         {segments.map((segment) => (
-          <li
+          <li data-ui-instance={String(segment.id)} data-ui-id="A1183"
             key={segment.id}
             className={`rounded border bg-white px-2 py-1.5 ${
               selection?.kind === 'SEGMENT' && selection.id === segment.id ? 'selection-row-active' : 'border-stone-200'
@@ -758,7 +768,7 @@ function LinksList({
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <button
+                <button data-ui-instance={String(segment.id)} data-ui-id="A1184"
                   type="button"
                   onClick={() => selectElement({ kind: 'SEGMENT', id: segment.id, position: segment.startPosition })}
                   className="text-start text-[10.5px] font-medium text-stone-800 hover:underline"
@@ -773,7 +783,7 @@ function LinksList({
                     : ''}
                 </p>
               </div>
-              <button
+              <button data-ui-instance={String(segment.id)} data-ui-id="A1185"
                 type="button"
                 onClick={() => void confirmLegacy(() => deleteSegment(segment.id))}
                 className="shrink-0 rounded border border-rose-200 px-1.5 py-0.5 text-[9px] text-rose-700 hover:bg-rose-50"
@@ -795,7 +805,7 @@ function shortId(id: string): string {
 
 // ==================== عناصر مشتركة ====================
 
-function RelationSelect({
+function RelationSelect({ 'data-ui-id': uiId,
   value,
   onChange,
   compact = false,
@@ -803,10 +813,10 @@ function RelationSelect({
   value: TashjeerLinkRelation;
   onChange: (value: TashjeerLinkRelation) => void;
   compact?: boolean;
-}) {
+} & { 'data-ui-id'?: string }) {
   return (
-    <div className={`flex gap-1 ${compact ? '' : 'mt-0.5'}`}>
-      <button
+    <div data-ui-id="A1186" className={`flex gap-1 ${compact ? '' : 'mt-0.5'}`}>
+      <button data-ui-id={uiId}
         type="button"
         onClick={() => onChange('MERGE')}
         className={`flex-1 rounded border px-2 py-1 text-[10px] ${
@@ -815,7 +825,7 @@ function RelationSelect({
       >
         دمج في سطر واحد
       </button>
-      <button
+      <button data-ui-id="A1188"
         type="button"
         onClick={() => onChange('REFERENCE')}
         className={`flex-1 rounded border px-2 py-1 text-[10px] ${
@@ -828,7 +838,7 @@ function RelationSelect({
   );
 }
 
-function NotesInput({
+function NotesInput({ 'data-ui-id': uiId,
   value,
   onChange,
   placeholder,
@@ -836,11 +846,11 @@ function NotesInput({
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-}) {
+} & { 'data-ui-id'?: string }) {
   return (
-    <label className="block">
+    <label data-ui-id="A1189" className="block">
       <span className="mb-0.5 block text-[10px] font-medium text-stone-600">ملاحظة (اختياري)</span>
-      <input value={value} onChange={(event) => onChange(event.target.value)} className="input h-8 py-0 text-[11px]" placeholder={placeholder} />
+      <input data-ui-id={uiId} value={value} onChange={(event) => onChange(event.target.value)} className="input h-8 py-0 text-[11px]" placeholder={placeholder} />
     </label>
   );
 }

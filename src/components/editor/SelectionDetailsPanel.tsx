@@ -43,6 +43,28 @@ import {
 import type { ClassicTashjeer } from '@/lib/tashjeer/classic-tashjeer';
 import type { EditorSelection, TashjeerLink } from '@/types/tashjeer';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_SelectionDetailsPanel_0 = {
+  "MUTUALLY_EXCLUSIVE": "A1273",
+  "RELATED": "A1274"
+} as const;
+
+const UI_SelectionDetailsPanel_1 = {
+  "COPY": "A1283",
+  "CUT": "A1284",
+  "PASTE": "A1285",
+  "DELETE": "A1286",
+  "COPY_ID": "A1287",
+  "LINK": "A1288",
+  "MOVE_UP": "A1289",
+  "MOVE_DOWN": "A1290",
+  "WHY": "A1291",
+  "UNLINK": "A1292",
+  "EDIT": "A1293"
+} as const;
+
+
+
 interface SelectionDetailsPanelProps {
   /** ناتج محرك التشجير لاستخراج ترتيب السطر وأحكامه. */
   classic?: ClassicTashjeer;
@@ -288,19 +310,19 @@ export function SelectionDetailsPanel({ classic, onRequestWhy }: SelectionDetail
       {/* اختلافات الموضع كاملة (حزمة 05/T3): مرتبة بالمصدر ثم الرتبة ثم الفهرس،
           بشارات النوع/المصدر/الحالة/الفهرس، وكل صف قابل للتحديد المستقل. */}
       {coveredDifferences.length > 0 && (
-        <DetailList title={`اختلافات الموضع (${toArabicDigits(coveredDifferences.length)})`}>
+        <DetailList data-ui-id="A1270" title={`اختلافات الموضع (${toArabicDigits(coveredDifferences.length)})`}>
           {coveredDifferences.map((item) => {
             const status = locusStatuses.get(item.id);
             const occurrence = occurrenceIndexOf(item, effectiveVariants);
             const source = differenceSourceOf(item);
             const manualRelation = manualWithSelected.get(item.id);
             return (
-              <li key={item.id} className="rounded px-1 py-1 hover:bg-white/70">
+              <li data-ui-instance={String(item.id)} data-ui-id="A1271" key={item.id} className="rounded px-1 py-1 hover:bg-white/70">
                 <div className="flex flex-wrap items-center gap-1">
                   <span className="rounded bg-stone-800 px-1 py-0.5 text-[9.5px] font-medium text-white">
                     اختلاف {toArabicDigits(occurrence)}
                   </span>
-                  <button
+                  <button data-ui-instance={String(item.id)} data-ui-id="A1272"
                     type="button"
                     onClick={() => useEditorStore.getState().selectVariant(item.id)}
                     className={`selection-row-focus min-w-0 flex-1 truncate rounded px-1.5 py-0.5 text-right text-[11px] hover:bg-white ${
@@ -349,7 +371,7 @@ export function SelectionDetailsPanel({ classic, onRequestWhy }: SelectionDetail
                   <div className="mt-0.5 flex items-center gap-1 text-[9.5px] text-stone-500">
                     <span>مع المحدد:</span>
                     {(['MUTUALLY_EXCLUSIVE', 'RELATED'] as const).map((relation) => (
-                      <button
+                      <button data-ui-id={UI_SelectionDetailsPanel_0[relation as keyof typeof UI_SelectionDetailsPanel_0]}
                         key={relation}
                         type="button"
                         onClick={() =>
@@ -403,17 +425,17 @@ export function SelectionDetailsPanel({ classic, onRequestWhy }: SelectionDetail
 
       {/* القواعد المرتبطة */}
       {variant?.isGlobalDerived && variant.globalRuleId && (
-        <DetailList title="القاعدة المرتبطة">
-          <li className="text-[11px] text-violet-800">{variant.globalRuleId}</li>
+        <DetailList data-ui-id="A1275" title="القاعدة المرتبطة">
+          <li data-ui-id="A1276" className="text-[11px] text-violet-800">{variant.globalRuleId}</li>
         </DetailList>
       )}
 
       {/* الأجزاء المرتبطة بالموضع */}
       {relatedSegments.length > 0 && (
-        <DetailList title={`أجزاء في الموضع (${toArabicDigits(relatedSegments.length)})`}>
+        <DetailList data-ui-id="A1277" title={`أجزاء في الموضع (${toArabicDigits(relatedSegments.length)})`}>
           {relatedSegments.map((segment) => (
-            <li key={segment.id}>
-              <button
+            <li data-ui-instance={String(segment.id)} data-ui-id="A1278" key={segment.id}>
+              <button data-ui-instance={String(segment.id)} data-ui-id="A1279"
                 type="button"
                 onClick={() => useEditorStore.getState().selectSegment(segment.id)}
                 className="selection-row-focus w-full truncate rounded px-1.5 py-0.5 text-right text-[11px] text-stone-700 hover:bg-white"
@@ -427,14 +449,14 @@ export function SelectionDetailsPanel({ classic, onRequestWhy }: SelectionDetail
 
       {/* العلاقات والأوجه المركبة */}
       {relatedLinks.length > 0 && (
-        <DetailList title={`علاقات (${toArabicDigits(relatedLinks.length)})`}>
+        <DetailList data-ui-id="A1280" title={`علاقات (${toArabicDigits(relatedLinks.length)})`}>
           {relatedLinks.map((link) => (
-            <li key={link.id} className="flex items-center justify-between gap-2 text-[11px] text-stone-600">
+            <li data-ui-instance={String(link.id)} data-ui-id="A1281" key={link.id} className="flex items-center justify-between gap-2 text-[11px] text-stone-600">
               <span className="min-w-0 truncate">
                 {linkKindLabel(link.kind)} · {relationLabel(link.relation)}
                 {link.notes ? ` — ${link.notes}` : ''}
               </span>
-              <button
+              <button data-ui-instance={String(link.id)} data-ui-id="A1282"
                 type="button"
                 onClick={() => useEditorStore.getState().setSelection({ kind: 'COMPOSITE_FACE', id: link.id })}
                 className="shrink-0 rounded border border-stone-200 px-1 text-[10px] text-stone-500 hover:bg-white"
@@ -451,7 +473,7 @@ export function SelectionDetailsPanel({ classic, onRequestWhy }: SelectionDetail
       {!dangling && commands.length > 0 && (
         <div className="mt-2.5 flex flex-wrap gap-1 border-t border-emerald-200/70 pt-2">
           {commands.map((command) => (
-            <button
+            <button data-ui-id={UI_SelectionDetailsPanel_1[command.id as keyof typeof UI_SelectionDetailsPanel_1]}
               key={command.id}
               type="button"
               disabled={!command.enabled}
@@ -468,7 +490,7 @@ export function SelectionDetailsPanel({ classic, onRequestWhy }: SelectionDetail
           ))}
           {copiedId && <span className="self-center text-[10px] text-emerald-700">نُسخ المعرف ✓</span>}
           {onRequestWhy && variant && (
-            <button
+            <button data-ui-id="A1294"
               type="button"
               onClick={onRequestWhy}
               className="rounded border border-violet-200 bg-white px-1.5 py-0.5 text-[10.5px] text-violet-800 hover:bg-violet-50"
@@ -491,11 +513,11 @@ function Detail({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function DetailList({ title, children }: { title: string; children: ReactNode }) {
+function DetailList({ 'data-ui-id': uiId, title, children }: { title: string; children: ReactNode } & { 'data-ui-id'?: string }) {
   return (
     <div className="mt-2 border-t border-emerald-200/70 pt-1.5">
       <p className="mb-0.5 text-[10px] font-semibold text-stone-600">{title}</p>
-      <ul className="space-y-0.5">{children}</ul>
+      <ul data-ui-id={uiId} className="space-y-0.5">{children}</ul>
     </div>
   );
 }

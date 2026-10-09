@@ -16,6 +16,18 @@ import { useEngineStudioStore } from '@/stores/engine-config-ui-store';
 import { DEFAULT_SYSTEM_PROFILE } from '@/lib/tashjeer/decision/policy';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_WhyTraceDialog_0 = {
+  "MADD": "A1600",
+  "TAHQIQ": "A1601",
+  "WASL": "A1602",
+  "FARSH": "A1603",
+  "HAMZ": "A1604",
+  "TAJWEED": "A1605"
+} as const;
+
+
+
 /** عنصر على السطر المحدد: اختلاف بفئته، لتفسير «لماذا اجتمعا في سطر واحد؟». */
 export interface WhyLineEntry {
   variantId: string;
@@ -68,16 +80,16 @@ export function WhyTraceDialog({ category, onClose, highlightRuleId, line = null
   }, [line, profile]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 p-4" role="dialog" aria-modal="true" aria-label="لماذا هذا القرار؟">
+    <div data-ui-id="A1593" className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 p-4" role="dialog" aria-modal="true" aria-label="لماذا هذا القرار؟">
       <div className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-        <header className="flex items-start justify-between gap-4 border-b border-stone-200 px-5 py-4">
+        <header data-ui-id="A1594" className="flex items-start justify-between gap-4 border-b border-stone-200 px-5 py-4">
           <div>
             <h2 className="text-base font-bold text-stone-900">لماذا؟ — أثر القرار</h2>
             <p className="mt-1 text-xs leading-relaxed text-stone-500">
               سبب دمج «{CATEGORY_LABELS[category]}» مع نوع آخر، كما يحسمه Decision Resolver من سياسات المحرك المفعّلة.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="rounded border border-stone-200 px-2 py-1 text-xs text-stone-600 hover:bg-stone-100">
+          <button data-ui-id="A1595" type="button" onClick={onClose} className="rounded border border-stone-200 px-2 py-1 text-xs text-stone-600 hover:bg-stone-100">
             إغلاق
           </button>
         </header>
@@ -91,9 +103,9 @@ export function WhyTraceDialog({ category, onClose, highlightRuleId, line = null
                   على هذا السطر اختلاف واحد ({toArabicDigits(line.entries.length)} حكم)؛ لا قرار دمج بين اختلافات مختلفة هنا.
                 </p>
               ) : (
-                <ul className="mt-2 space-y-1.5">
+                <ul data-ui-id="A1596" className="mt-2 space-y-1.5">
                   {linePairs.map((pair) => (
-                    <li key={`${pair.left.variantId}-${pair.right.variantId}`} className="flex flex-wrap items-center gap-2 rounded bg-white px-3 py-1.5 text-xs">
+                    <li data-ui-id="A1597" key={`${pair.left.variantId}-${pair.right.variantId}`} className="flex flex-wrap items-center gap-2 rounded bg-white px-3 py-1.5 text-xs">
                       <span className="font-medium text-stone-800">{pair.left.title}</span>
                       <span className="text-stone-400">مع</span>
                       <span className="font-medium text-stone-800">{pair.right.title}</span>
@@ -101,7 +113,7 @@ export function WhyTraceDialog({ category, onClose, highlightRuleId, line = null
                         {pair.merge ? 'يُدمجان' : 'لا يُدمجان'}
                       </span>
                       <span className="text-stone-500">{pair.reason}</span>
-                      <button
+                      <button data-ui-id="A1598"
                         type="button"
                         onClick={() => setB(editorCategoryToStudioType(pair.left.category === category ? pair.right.category : pair.left.category))}
                         className="mr-auto text-cyan-800 underline-offset-2 hover:underline"
@@ -128,13 +140,13 @@ export function WhyTraceDialog({ category, onClose, highlightRuleId, line = null
             </div>
             <div className="space-y-1">
               <label className="block text-xs text-gray-500">قورن مع</label>
-              <select
+              <select data-ui-id="A1599"
                 value={b}
                 onChange={(event) => setB(event.target.value)}
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
                 {DIFFERENCE_TYPES.filter((type) => type !== a).map((type) => (
-                  <option key={type} value={type}>
+                  <option data-ui-id={UI_WhyTraceDialog_0[type as keyof typeof UI_WhyTraceDialog_0]} key={type} value={type}>
                     {DIFFERENCE_TYPE_LABELS[type]}
                   </option>
                 ))}
@@ -153,9 +165,9 @@ export function WhyTraceDialog({ category, onClose, highlightRuleId, line = null
             {result.trace.length === 0 ? (
               <p className="text-sm text-gray-400">لا خطوات مسجَّلة.</p>
             ) : (
-              <ol className="space-y-1.5">
+              <ol data-ui-id="A1606" className="space-y-1.5">
                 {result.trace.map((step, index) => (
-                  <li
+                  <li data-ui-instance={String(step.ruleId)} data-ui-id="A1607"
                     key={index}
                     className={`flex items-start gap-3 rounded-lg border-r-4 px-3 py-2 text-sm ${TRACE_TONE[step.status]} ${
                       highlightRuleId && step.ruleId === highlightRuleId ? 'ring-2 ring-violet-400' : ''
@@ -175,9 +187,9 @@ export function WhyTraceDialog({ category, onClose, highlightRuleId, line = null
           {result.appliedRules.length > 0 && (
             <div className="mt-5">
               <h3 className="mb-2 font-semibold text-gray-800">قواعد مطابقة فاعلة</h3>
-              <ul className="space-y-1">
+              <ul data-ui-id="A1608" className="space-y-1">
                 {result.appliedRules.map((rule) => (
-                  <li
+                  <li data-ui-instance={String(rule.id)} data-ui-id="A1609"
                     key={rule.id}
                     className={`flex items-center justify-between gap-2 rounded bg-emerald-50 px-3 py-1.5 text-sm text-emerald-800 ${
                       highlightRuleId === rule.id ? 'ring-2 ring-violet-400' : ''
@@ -186,7 +198,7 @@ export function WhyTraceDialog({ category, onClose, highlightRuleId, line = null
                     <span>
                       {rule.name} <span className="text-xs opacity-70">(أولوية {toArabicDigits(rule.priority)})</span>
                     </span>
-                    <a href={`/studio?rule=${encodeURIComponent(rule.id)}`} className="text-xs text-emerald-700 underline-offset-2 hover:underline">
+                    <a data-ui-instance={String(rule.id)} data-ui-id="A1610" href={`/studio?rule=${encodeURIComponent(rule.id)}`} className="text-xs text-emerald-700 underline-offset-2 hover:underline">
                       افتح في الاستوديو
                     </a>
                   </li>
@@ -216,9 +228,9 @@ export function DecisionTraceList({
 }) {
   if (trace.length === 0) return <p className="text-sm text-gray-400">لا خطوات مسجَّلة.</p>;
   return (
-    <ol className={compact ? 'space-y-1' : 'space-y-1.5'}>
+    <ol data-ui-id="A1612" className={compact ? 'space-y-1' : 'space-y-1.5'}>
       {trace.map((step, index) => (
-        <li
+        <li data-ui-instance={String(step.ruleId)} data-ui-id="A1613"
           key={index}
           className={`flex items-start gap-2 rounded-lg border-r-4 px-2.5 py-1.5 ${compact ? 'text-[11px]' : 'text-sm'} ${TRACE_TONE[step.status] ?? TRACE_TONE.info} ${
             highlightRuleId && step.ruleId === highlightRuleId ? 'ring-2 ring-violet-400' : ''

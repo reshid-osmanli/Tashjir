@@ -15,6 +15,25 @@ import { useState } from 'react';
 import type { ShowcaseAyah } from '@/lib/tashjeer/showcase';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_TashjeerAnatomy_0 = {
+  "text": "A2047",
+  "position": "A2048",
+  "face": "A2049",
+  "readers": "A2050",
+  "rule": "A2051"
+} as const;
+
+const UI_TashjeerAnatomy_1 = {
+  "text": "A2052",
+  "position": "A2053",
+  "face": "A2054",
+  "readers": "A2055",
+  "rule": "A2056"
+} as const;
+
+
+
 type LayerId = 'text' | 'position' | 'face' | 'readers' | 'rule';
 
 const LAYERS: Array<{ id: LayerId; title: string; note: string }> = [
@@ -108,7 +127,7 @@ export function TashjeerAnatomy({ model }: { model: ShowcaseAyah }) {
   const textRight = Math.max(...model.words.map((word) => word.x + word.width));
   const ruleY = model.textBottom + fontSize * 0.26;
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-8">
+    <div data-ui-id="A2045" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-8">
       <div className="order-2 mx-auto min-w-0 w-full max-w-[32rem] lg:order-1">
         <svg
           viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
@@ -278,12 +297,12 @@ export function TashjeerAnatomy({ model }: { model: ShowcaseAyah }) {
       </div>
 
       {/* الشرح: قائمة مرقّمة بالأرقام العربية، تقودها في المخطط. */}
-      <ol className="order-1 flex flex-col gap-1 lg:order-2">
+      <ol data-ui-id="A2046" className="order-1 flex flex-col gap-1 lg:order-2">
         {LAYERS.map((layer, index) => {
           const isActive = active === layer.id;
           return (
-            <li key={layer.id}>
-              <button
+            <li data-ui-id={UI_TashjeerAnatomy_0[layer.id as keyof typeof UI_TashjeerAnatomy_0]} key={layer.id}>
+              <button data-ui-id={UI_TashjeerAnatomy_1[layer.id as keyof typeof UI_TashjeerAnatomy_1]}
                 type="button"
                 onMouseEnter={() => setActive(layer.id)}
                 onMouseLeave={() => setActive(null)}

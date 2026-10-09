@@ -124,9 +124,9 @@ export function TashjeerFigure({
 
       <BoundaryMarkers boundaries={boundaries} layout={layout} />
 
-      <g>
+      <g data-ui-id="A1443">
         {classic.lines.map((line) => (
-          <ClassicLineShape
+          <ClassicLineShape data-ui-instance={String(line.id)}
             key={line.id}
             line={line}
             fontSize={fontSize}
@@ -170,7 +170,7 @@ export function TashjeerFigure({
               (box.position >= focusSegment.startPosition && box.position <= focusSegment.endPosition)
           )
           .map((box) => (
-          <WordShape
+          <WordShape data-ui-instance={String(box.position)}
             key={box.wordId}
             box={box}
             fontSize={fontSize}
@@ -239,7 +239,7 @@ function WordShape({
   const hitPadY = 10;
 
   return (
-    <g
+    <g data-ui-id="A1446"
       onClick={characterMarkingActive ? undefined : onClick}
       style={{ cursor: 'pointer' }}
       data-word-id={box.wordId}
@@ -266,7 +266,7 @@ function WordShape({
 
           return (
             <g key={`${box.wordId}-char-${cell.index}`} data-character-index={cell.index}>
-              <rect
+              <rect data-ui-id="A1447"
                 className={characterMarkingActive ? 'char-hit' : undefined}
                 x={cell.x - hitPadX}
                 y={box.topY - hitPadY}
@@ -403,7 +403,7 @@ function ClassicLineShape({
   const entries = line.entries.length > 0 ? line.entries : [];
 
   return (
-    <g
+    <g data-ui-id="A1448"
       onClick={onClick}
       onMouseEnter={onHoverStart}
       onMouseLeave={onHoverEnd}
@@ -599,7 +599,7 @@ function ClassicEntryShape({
         ];
 
   return (
-    <g
+    <g data-ui-id="A1450"
       data-entry-variant={entry.variantId}
       data-entry-alternative={entry.alternativeId}
       data-entry-source={entry.source ?? 'ENGINE'}
@@ -762,9 +762,9 @@ function ReaderSymbols({
   if (chips.length === 0) return null;
 
   return (
-    <g>
+    <g data-ui-id="A1451">
       {chips.map((chip) => (
-        <g
+        <g data-ui-instance={String(chip.key)} data-ui-id="A1452"
           key={chip.key}
           onClick={
             chip.reader && onReaderClick
@@ -1067,7 +1067,7 @@ function AgreementLine({
   const labelCenterX = labelRightX - labelWidth / 2;
 
   return (
-    <g
+    <g data-ui-id="A1455"
       onMouseEnter={onHoverStart}
       onMouseLeave={onHoverEnd}
       data-line-id={agreement.id}

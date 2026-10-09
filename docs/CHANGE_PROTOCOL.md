@@ -57,3 +57,18 @@ npm run typecheck
 npm run lint
 npm run build
 ```
+
+## Exact-ID change contract
+
+Run `npm run registry:lookup -- A333` first. The ledger is `src/ui/ui-registry.records.json`, exposed by `ui-registry.ts`. For replacement of the same conceptual control, retain its ID and update kind/action metadata. For a genuinely new concept, retire the old ID and allocate a never-used number after checking both ledgers. Never rerun a bulk allocation script or renumber records.
+
+Before changing an ID, report:
+
+```text
+Requested: A333
+Directly affected: A333
+Required dependency changes: [files/IDs with concrete reason, or none]
+Unaffected: [neighboring/relevant IDs]
+```
+
+Update event/store/test metadata when implementation changes. A new meaningful control needs its own record and actual DOM attribute in the same patch. Run `npm run registry:validate`, regenerate docs, run targeted tests, typecheck, lint, build and smoke tests. The scanner's wrapper list must be updated when introducing a forwarding control. Retired records remain permanently; do not delete their historical ownership metadata.

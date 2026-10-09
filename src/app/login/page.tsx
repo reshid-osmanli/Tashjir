@@ -120,10 +120,10 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-5 flex items-center justify-between border-t border-line pt-4 text-caption">
-            <Link href="/" className="text-ink-500 hover:text-primary-700">
+            <Link data-ui-id="A726" href="/" className="text-ink-500 hover:text-primary-700">
               العودة إلى الرئيسية
             </Link>
-            <Link href="/editor" className="text-ink-500 hover:text-primary-700">
+            <Link data-ui-id="A727" href="/editor" className="text-ink-500 hover:text-primary-700">
               الدخول بلا حساب
             </Link>
           </div>

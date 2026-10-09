@@ -46,6 +46,16 @@ import { catalogImamsInOrder, catalogNarratorsInOrder } from '@/lib/transmission
 import { useTransmissionCatalog } from '@/hooks/useTransmissionCatalog';
 import { confirmAction } from '@/lib/ui/confirm-store';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_RuleBuilder_0 = {
+  "waqf-end-create": "A1909",
+  "wasl-create": "A1910",
+  "ibtida-create": "A1911",
+  "forbidden-wasl-block": "A1912"
+} as const;
+
+
+
 const RULE_TYPES = Object.keys(RULE_TYPE_LABELS) as EngineRule['type'][];
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as EngineRuleCategory[];
 const SCOPES = Object.keys(SCOPE_LABELS) as EngineRuleScope[];
@@ -286,8 +296,8 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
 
       {/* الحقول الأساسية */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Field label="اسم القاعدة">
-          <input
+        <Field data-ui-id="A1896" label="اسم القاعدة">
+          <input data-ui-id="A1897"
             type="text"
             value={draft.name}
             onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
@@ -295,38 +305,38 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
             className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
         </Field>
-        <Field label="النوع">
-          <Select value={draft.type} onChange={(value) => setDraft((current) => ({ ...current, type: value as EngineRule['type'] }))} options={RULE_TYPES.map((type) => ({ value: type, label: RULE_TYPE_LABELS[type] }))} />
+        <Field data-ui-id="A1898" label="النوع">
+          <Select data-ui-id="A2061" value={draft.type} onChange={(value) => setDraft((current) => ({ ...current, type: value as EngineRule['type'] }))} options={RULE_TYPES.map((type) => ({ value: type, label: RULE_TYPE_LABELS[type] }))} />
         </Field>
-        <Field label="الفئة">
-          <Select value={draft.category} onChange={(value) => setDraft((current) => ({ ...current, category: value as EngineRuleCategory }))} options={CATEGORIES.map((category) => ({ value: category, label: CATEGORY_LABELS[category] }))} />
+        <Field data-ui-id="A1899" label="الفئة">
+          <Select data-ui-id="A2062" value={draft.category} onChange={(value) => setDraft((current) => ({ ...current, category: value as EngineRuleCategory }))} options={CATEGORIES.map((category) => ({ value: category, label: CATEGORY_LABELS[category] }))} />
         </Field>
-        <Field label="النطاق">
-          <Select value={draft.scope} onChange={(value) => setDraft((current) => ({ ...current, scope: value as EngineRuleScope }))} options={SCOPES.map((scope) => ({ value: scope, label: SCOPE_LABELS[scope] }))} />
+        <Field data-ui-id="A1900" label="النطاق">
+          <Select data-ui-id="A2063" value={draft.scope} onChange={(value) => setDraft((current) => ({ ...current, scope: value as EngineRuleScope }))} options={SCOPES.map((scope) => ({ value: scope, label: SCOPE_LABELS[scope] }))} />
         </Field>
-        <Field label="مجموعة الأولوية">
-          <Select value={draft.groupId} onChange={(value) => setDraft((current) => ({ ...current, groupId: value }))} options={groups.map((group) => ({ value: group.id, label: group.label }))} />
+        <Field data-ui-id="A1901" label="مجموعة الأولوية">
+          <Select data-ui-id="A2064" value={draft.groupId} onChange={(value) => setDraft((current) => ({ ...current, groupId: value }))} options={groups.map((group) => ({ value: group.id, label: group.label }))} />
         </Field>
-        <Field label="الخصوصية (FR-ES-06)">
-          <Select value={draft.specificity} onChange={(value) => setDraft((current) => ({ ...current, specificity: value as SpecificityLevel }))} options={SPECIFICITIES.map((specificity) => ({ value: specificity, label: SPECIFICITY_LABELS[specificity] }))} />
+        <Field data-ui-id="A1902" label="الخصوصية (FR-ES-06)">
+          <Select data-ui-id="A2065" value={draft.specificity} onChange={(value) => setDraft((current) => ({ ...current, specificity: value as SpecificityLevel }))} options={SPECIFICITIES.map((specificity) => ({ value: specificity, label: SPECIFICITY_LABELS[specificity] }))} />
         </Field>
-        <Field label="الأولوية (رقم — الأعلى أقوى)">
-          <input
+        <Field data-ui-id="A1903" label="الأولوية (رقم — الأعلى أقوى)">
+          <input data-ui-id="A1904"
             type="number"
             value={draft.priority}
             onChange={(event) => setDraft((current) => ({ ...current, priority: Number(event.target.value) }))}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
         </Field>
-        <Field label="الصلابة">
-          <Select value={draft.hardness} onChange={(value) => setDraft((current) => ({ ...current, hardness: value as RuleHardness }))} options={HARDNESS.map((hardness) => ({ value: hardness, label: HARDNESS_LABELS[hardness] }))} />
+        <Field data-ui-id="A1905" label="الصلابة">
+          <Select data-ui-id="A2066" value={draft.hardness} onChange={(value) => setDraft((current) => ({ ...current, hardness: value as RuleHardness }))} options={HARDNESS.map((hardness) => ({ value: hardness, label: HARDNESS_LABELS[hardness] }))} />
         </Field>
-        <Field label="الحالة">
-          <Select value={draft.status} onChange={(value) => setDraft((current) => ({ ...current, status: value as RuleStatus }))} options={STATUSES.map((status) => ({ value: status, label: STATUS_LABELS[status] }))} />
+        <Field data-ui-id="A1906" label="الحالة">
+          <Select data-ui-id="A2067" value={draft.status} onChange={(value) => setDraft((current) => ({ ...current, status: value as RuleStatus }))} options={STATUSES.map((status) => ({ value: status, label: STATUS_LABELS[status] }))} />
         </Field>
-        <Field label="قاعدة محمية">
+        <Field data-ui-id="A1907" label="قاعدة محمية">
           <label className="flex items-center gap-2 py-2 text-sm text-gray-700">
-            <input
+            <input data-ui-id="A1908"
               type="checkbox"
               checked={draft.protected}
               onChange={(event) => setDraft((current) => ({ ...current, protected: event.target.checked }))}
@@ -345,7 +355,7 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
           <p className="mt-1 text-xs text-gray-500">قوالب الوقف/الوصل/الابتداء/ممنوع الوصل تملأ المسودة بلا كود (FR-ES-16).</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {WAQF_WASL_TEMPLATES.map((template) => (
-              <button
+              <button data-ui-id={UI_RuleBuilder_0[template.id as keyof typeof UI_RuleBuilder_0]}
                 key={template.id}
                 type="button"
                 onClick={() => applyTemplate(template)}
@@ -360,7 +370,7 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
 
         <div className="flex items-center justify-between">
           <h4 className="font-semibold text-gray-800">الشروط</h4>
-          <button type="button" onClick={addCondition} className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100">
+          <button data-ui-id="A1913" type="button" onClick={addCondition} className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100">
             + شرط
           </button>
         </div>
@@ -368,13 +378,13 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
         <div className="space-y-2">
           {draft.conditions.map((condition, index) => (
             <div key={index} className="flex flex-wrap items-center gap-2 rounded-lg bg-gray-50 p-2">
-              <Select
+              <Select data-ui-id="A2068"
                 value={condition.field}
                 onChange={(value) => updateCondition(index, { field: value })}
                 options={CONDITION_FIELDS.map((field) => ({ value: field, label: CONDITION_FIELD_LABELS[field] }))}
                 compact
               />
-              <Select
+              <Select data-ui-id="A2069"
                 value={condition.op}
                 onChange={(value) => updateCondition(index, { op: value as RuleCondition['op'] })}
                 options={CONDITION_OPS.map((op) => ({ value: op, label: CONDITION_OP_LABELS[op] }))}
@@ -383,7 +393,7 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
               {condition.op !== 'exists' && (
                 <ConditionValue condition={condition} onChange={(value) => updateCondition(index, { value })} />
               )}
-              <button
+              <button data-ui-id="A1914"
                 type="button"
                 onClick={() => removeCondition(index)}
                 className="mr-auto rounded px-2 py-1 text-sm text-red-600 hover:bg-red-50"
@@ -422,21 +432,21 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h4 className="font-semibold text-gray-800">الإجراءات</h4>
-          <button type="button" onClick={addAction} className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100">
+          <button data-ui-id="A1915" type="button" onClick={addAction} className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100">
             + إجراء
           </button>
         </div>
         <div className="space-y-2">
           {draft.actions.map((action, index) => (
             <div key={index} className="flex items-center gap-2 rounded-lg bg-gray-50 p-2">
-              <Select
+              <Select data-ui-id="A2070"
                 value={action.type}
                 onChange={(value) => updateAction(index, value as RuleActionType)}
                 options={ACTIONS.map((type) => ({ value: type, label: ACTION_LABELS[type] }))}
               />
               {action.type === 'PREVENT_MERGE' && (
                 <label className="flex items-center gap-1.5 text-xs text-gray-700" title="متنافيان: لا يُضربان وجها في المحرك، لا مجرد فصلهما في سطرين">
-                  <input
+                  <input data-ui-id="A1916"
                     type="checkbox"
                     checked={action.params?.exclusive === true}
                     onChange={(event) => setActionParam(index, 'exclusive', event.target.checked)}
@@ -445,7 +455,7 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
                   تنافٍ (لا يُضربان وجها)
                 </label>
               )}
-              <button
+              <button data-ui-id="A1917"
                 type="button"
                 onClick={() => removeAction(index)}
                 className="mr-auto rounded px-2 py-1 text-sm text-red-600 hover:bg-red-50"
@@ -462,7 +472,7 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h4 className="font-semibold text-gray-800">حالات الاختبار</h4>
-          <button type="button" onClick={addTestCase} className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100">
+          <button data-ui-id="A1918" type="button" onClick={addTestCase} className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100">
             + حالة
           </button>
         </div>
@@ -470,14 +480,14 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
         <div className="space-y-2">
           {draft.testCases.map((testCase, index) => (
             <div key={index} className="flex flex-wrap items-center gap-2 rounded-lg bg-gray-50 p-2">
-              <input
+              <input data-ui-instance={String(testCase.name)} data-ui-id="A1919"
                 type="text"
                 value={testCase.name}
                 onChange={(event) => updateTestCase(index, { name: event.target.value })}
                 placeholder="اسم الحالة"
                 className="w-28 rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
-              <Select
+              <Select data-ui-id="A2071"
                 value={testCase.expected}
                 onChange={(value) => updateTestCase(index, { expected: value })}
                 options={[
@@ -490,7 +500,7 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
                 ]}
                 compact
               />
-              <button type="button" onClick={() => removeTestCase(index)} className="mr-auto rounded px-2 py-1 text-sm text-red-600 hover:bg-red-50" aria-label="حذف الحالة">
+              <button data-ui-id="A1920" type="button" onClick={() => removeTestCase(index)} className="mr-auto rounded px-2 py-1 text-sm text-red-600 hover:bg-red-50" aria-label="حذف الحالة">
                 ✕
               </button>
             </div>
@@ -500,10 +510,10 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
 
       {/* أزرار الحفظ */}
       <div className="flex items-center justify-end gap-3 border-t border-gray-100 pt-4">
-        <button type="button" onClick={onCancel} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100">
+        <button data-ui-id="A1921" type="button" onClick={onCancel} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100">
           إلغاء
         </button>
-        <button type="button" onClick={handleSave} className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+        <button data-ui-id="A1922" type="button" onClick={handleSave} className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
           حفظ القاعدة
         </button>
       </div>
@@ -521,9 +531,9 @@ export function RuleBuilder({ rule, groups, profile, onSave, onCancel }: RuleBui
         >
           <p className="font-medium">معاينة الأثر: {summarizePreview(preview)}</p>
           {preview.flipped.length > 0 && (
-            <ul className="mt-1.5 space-y-0.5 text-xs">
+            <ul data-ui-id="A1923" className="mt-1.5 space-y-0.5 text-xs">
               {preview.flipped.map((flipped) => (
-                <li key={flipped.name}>
+                <li data-ui-instance={String(flipped.name)} data-ui-id="A1924" key={flipped.name}>
                   «{flipped.name}»: {flipped.before} ← {flipped.after}
                 </li>
               ))}
@@ -559,24 +569,24 @@ function RuleDecisionPreview({ rule, profile }: { rule: EngineRule; profile: Eng
   };
 
   return (
-    <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3">
+    <div data-ui-id="A1925" className="space-y-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3">
       <div>
         <h4 className="font-semibold text-blue-950">اختبار على موضع حقيقي — Preview / Test</h4>
         <p className="mt-1 text-xs text-blue-900">اختَر آية وكلمة وشغّل القاعدة عبر Decision API. الاختبار لا يحفظ المسودة ولا يجعلها فاعلة.</p>
       </div>
       <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
-        <label className="text-xs text-gray-600">السورة<select value={surah} onChange={(event) => { setSurah(Number(event.target.value)); setAyah(1); setWord(1); }} className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm">{SURAHS.map((item) => <option key={item.number} value={item.number}>{toArabicDigits(item.number)} — {item.name}</option>)}</select></label>
-        <label className="text-xs text-gray-600">الآية<input type="number" min={1} max={getAyahCount(surah)} value={ayah} onChange={(event) => { setAyah(Math.max(1, Number(event.target.value) || 1)); setWord(1); }} className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm" /></label>
-        <label className="text-xs text-gray-600">الكلمة<select value={word} onChange={(event) => setWord(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm">{words.map((item) => <option key={item.position} value={item.position}>{toArabicDigits(item.position)} — {item.text}</option>)}</select></label>
-        <label className="text-xs text-gray-600">القارئ<select value={readerId} onChange={(event) => setReaderId(event.target.value)} className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"><option value="">أي قارئ</option>{readers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <label className="text-xs text-gray-600">السياق<select value={context} onChange={(event) => setContext(event.target.value as typeof context)} className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"><option value="WAQF_ONLY">وقف</option><option value="WASL_ONLY">وصل</option><option value="IBTIDA">ابتداء</option></select></label>
+        <label className="text-xs text-gray-600">السورة<select data-ui-id="A1926" value={surah} onChange={(event) => { setSurah(Number(event.target.value)); setAyah(1); setWord(1); }} className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm">{SURAHS.map((item) => <option data-ui-instance={String(item.name)} data-ui-id="A1927" key={item.number} value={item.number}>{toArabicDigits(item.number)} — {item.name}</option>)}</select></label>
+        <label className="text-xs text-gray-600">الآية<input data-ui-id="A1928" type="number" min={1} max={getAyahCount(surah)} value={ayah} onChange={(event) => { setAyah(Math.max(1, Number(event.target.value) || 1)); setWord(1); }} className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm" /></label>
+        <label className="text-xs text-gray-600">الكلمة<select data-ui-id="A1929" value={word} onChange={(event) => setWord(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm">{words.map((item) => <option data-ui-instance={String(item.position)} data-ui-id="A1930" key={item.position} value={item.position}>{toArabicDigits(item.position)} — {item.text}</option>)}</select></label>
+        <label className="text-xs text-gray-600">القارئ<select data-ui-id="A1931" value={readerId} onChange={(event) => setReaderId(event.target.value)} className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"><option data-ui-id="A1932" value="">أي قارئ</option>{readers.map((item) => <option data-ui-instance={String(item.id)} data-ui-id="A1933" key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label className="text-xs text-gray-600">السياق<select data-ui-id="A1934" value={context} onChange={(event) => setContext(event.target.value as typeof context)} className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"><option data-ui-id="A1935" value="WAQF_ONLY">وقف</option><option data-ui-id="A1936" value="WASL_ONLY">وصل</option><option data-ui-id="A1937" value="IBTIDA">ابتداء</option></select></label>
       </div>
-      <button type="button" onClick={run} disabled={!ayahData || words.length === 0} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">اختبار الآن</button>
+      <button data-ui-id="A1938" type="button" onClick={run} disabled={!ayahData || words.length === 0} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">اختبار الآن</button>
       {result && (
         <div className="space-y-2 rounded-lg bg-white p-3 text-sm">
           <p className="font-semibold text-gray-900">النتيجة: {'merge' in result.decision ? (result.decision.merge ? 'ادمج' : 'لا تدمج') : result.decision.create ? 'أنشئ اختلافًا' : 'لا تنشئ اختلافًا'}</p>
           <p className="text-xs text-gray-600">{result.decision.reason}</p>
-          <ol className="space-y-1 border-t border-gray-100 pt-2 text-xs text-gray-700">{result.trace.map((step, index) => <li key={index} className="flex gap-2"><span className="font-mono text-gray-400">{step.stage}</span><span>{step.message}</span></li>)}</ol>
+          <ol data-ui-id="A1939" className="space-y-1 border-t border-gray-100 pt-2 text-xs text-gray-700">{result.trace.map((step, index) => <li data-ui-id="A1940" key={index} className="flex gap-2"><span className="font-mono text-gray-400">{step.stage}</span><span>{step.message}</span></li>)}</ol>
         </div>
       )}
     </div>
@@ -588,11 +598,11 @@ function ConditionValue({ condition, onChange }: { condition: RuleCondition; onC
   const catalog = useTransmissionCatalog();
   if (condition.field === 'differenceType' || condition.field === 'relatedType' || condition.field === 'otherType') {
     const options = DIFFERENCE_TYPES.map((type) => ({ value: type, label: DIFFERENCE_TYPE_LABELS[type] }));
-    return <Select value={Array.isArray(condition.value) ? String(condition.value[0] ?? '') : String(condition.value ?? '')} onChange={(value) => onChange(condition.op === 'in' || condition.op === 'not-in' ? value.split(/[,،]/).map((item) => item.trim()).filter(Boolean) : value)} options={options} allowFree compact />;
+    return <Select data-ui-id="A2072" value={Array.isArray(condition.value) ? String(condition.value[0] ?? '') : String(condition.value ?? '')} onChange={(value) => onChange(condition.op === 'in' || condition.op === 'not-in' ? value.split(/[,،]/).map((item) => item.trim()).filter(Boolean) : value)} options={options} allowFree compact />;
   }
   if (condition.field === 'sameReader' || condition.field === 'forbiddenWasl') {
     return (
-      <Select
+      <Select data-ui-id="A2073"
         value={condition.value === true ? 'true' : 'false'}
         onChange={(value) => onChange(value === 'true')}
         options={[
@@ -604,22 +614,22 @@ function ConditionValue({ condition, onChange }: { condition: RuleCondition; onC
     );
   }
   if (condition.field === 'context') {
-    return <Select value={String(condition.value ?? '')} onChange={onChange} options={[{ value: 'WAQF_ONLY', label: 'وقف' }, { value: 'WASL_ONLY', label: 'وصل' }, { value: 'IBTIDA', label: 'ابتداء' }, { value: 'ALWAYS', label: 'دائمًا' }]} allowFree compact />;
+    return <Select data-ui-id="A2074" value={String(condition.value ?? '')} onChange={onChange} options={[{ value: 'WAQF_ONLY', label: 'وقف' }, { value: 'WASL_ONLY', label: 'وصل' }, { value: 'IBTIDA', label: 'ابتداء' }, { value: 'ALWAYS', label: 'دائمًا' }]} allowFree compact />;
   }
   if (condition.field === 'position') {
-    return <Select value={String(condition.value ?? '')} onChange={onChange} options={[{ value: 'START_OF_AYAH', label: 'بداية الآية' }, { value: 'MIDDLE_OF_AYAH', label: 'وسط الآية' }, { value: 'END_OF_AYAH', label: 'نهاية الآية' }, { value: 'WITHIN_WAQF_RANGE', label: 'داخل مدى وقف' }]} allowFree compact />;
+    return <Select data-ui-id="A2075" value={String(condition.value ?? '')} onChange={onChange} options={[{ value: 'START_OF_AYAH', label: 'بداية الآية' }, { value: 'MIDDLE_OF_AYAH', label: 'وسط الآية' }, { value: 'END_OF_AYAH', label: 'نهاية الآية' }, { value: 'WITHIN_WAQF_RANGE', label: 'داخل مدى وقف' }]} allowFree compact />;
   }
   if (condition.field === 'readerId') {
-    return <Select value={String(condition.value ?? '')} onChange={onChange} options={[{ value: '', label: 'أي قارئ' }, ...catalogImamsInOrder(catalog).map((item) => ({ value: item.id, label: item.name }))]} allowFree compact />;
+    return <Select data-ui-id="A2076" value={String(condition.value ?? '')} onChange={onChange} options={[{ value: '', label: 'أي قارئ' }, ...catalogImamsInOrder(catalog).map((item) => ({ value: item.id, label: item.name }))]} allowFree compact />;
   }
   if (condition.field === 'narratorId') {
-    return <Select value={String(condition.value ?? '')} onChange={onChange} options={[{ value: '', label: 'أي راوٍ' }, ...catalogNarratorsInOrder(catalog).map((item) => ({ value: item.id, label: item.name }))]} allowFree compact />;
+    return <Select data-ui-id="A2077" value={String(condition.value ?? '')} onChange={onChange} options={[{ value: '', label: 'أي راوٍ' }, ...catalogNarratorsInOrder(catalog).map((item) => ({ value: item.id, label: item.name }))]} allowFree compact />;
   }
   if (condition.field === 'pathId') {
-    return <input type="text" value={String(condition.value ?? '')} onChange={(event) => onChange(event.target.value)} placeholder="معرّف الطريق من الكتالوج" className="w-44 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />;
+    return <input data-ui-id="A1941" type="text" value={String(condition.value ?? '')} onChange={(event) => onChange(event.target.value)} placeholder="معرّف الطريق من الكتالوج" className="w-44 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />;
   }
   return (
-    <input
+    <input data-ui-id="A1942"
       type="text"
       value={Array.isArray(condition.value) ? condition.value.join('، ') : String(condition.value ?? '')}
       onChange={(event) => onChange(condition.op === 'in' || condition.op === 'not-in' ? event.target.value.split(/[,،]/).map((item) => item.trim()).filter(Boolean) : event.target.value)}
@@ -629,9 +639,9 @@ function ConditionValue({ condition, onChange }: { condition: RuleCondition; onC
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ 'data-ui-id': uiId, label, children }: { label: string; children: React.ReactNode } & { 'data-ui-id'?: string }) {
   return (
-    <label className="block">
+    <label data-ui-id={uiId} className="block">
       <span className="mb-1 block text-sm font-medium text-gray-600">{label}</span>
       {children}
     </label>
@@ -646,11 +656,11 @@ interface SelectProps {
   allowFree?: boolean;
 }
 
-function Select({ value, onChange, options, compact, allowFree }: SelectProps) {
+function Select({ 'data-ui-id': uiId, value, onChange, options, compact, allowFree }: SelectProps & { 'data-ui-id'?: string }) {
   // خيار «قيمة أخرى» حر عند الحاجة (مثل أنواع الاختلاف غير المدرجة).
   const isKnown = allowFree ? options.some((option) => option.value === value) : true;
   return (
-    <select
+    <select data-ui-id={uiId}
       value={isKnown ? value : '__custom__'}
       onChange={(event) => {
         if (event.target.value === '__custom__') return;
@@ -658,9 +668,9 @@ function Select({ value, onChange, options, compact, allowFree }: SelectProps) {
       }}
       className={`${compact ? 'w-32 px-2 py-1.5 text-sm' : 'w-full px-3 py-2'} rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500`}
     >
-      {allowFree && !isKnown && <option value="__custom__">{String(value)}</option>}
+      {allowFree && !isKnown && <option data-ui-id="A1944" value="__custom__">{String(value)}</option>}
       {options.map((option) => (
-        <option key={option.value} value={option.value}>
+        <option data-ui-id="A1945" key={option.value} value={option.value}>
           {option.label}
         </option>
       ))}
@@ -689,10 +699,10 @@ function ConditionBucketEditor({
   const box = tone === 'amber' ? 'border-amber-200 bg-amber-50/40' : 'border-rose-200 bg-rose-50/40';
   const button = tone === 'amber' ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-rose-100 text-rose-800 hover:bg-rose-200';
   return (
-    <div className={`rounded-lg border p-3 ${box}`}>
+    <div data-ui-id="A1946" className={`rounded-lg border p-3 ${box}`}>
       <div className="flex items-center justify-between">
         <h5 className="text-sm font-semibold text-gray-800">{title}</h5>
-        <button type="button" onClick={onAdd} className={`rounded-lg px-3 py-1 text-xs font-medium ${button}`}>
+        <button data-ui-id="A1947" type="button" onClick={onAdd} className={`rounded-lg px-3 py-1 text-xs font-medium ${button}`}>
           + شرط
         </button>
       </div>
@@ -701,20 +711,20 @@ function ConditionBucketEditor({
         <div className="mt-2 space-y-2">
           {conditions.map((condition, index) => (
             <div key={index} className="flex flex-wrap items-center gap-2 rounded-lg bg-white p-2">
-              <Select
+              <Select data-ui-id="A2078"
                 value={condition.field}
                 onChange={(value) => onUpdate(index, { field: value })}
                 options={CONDITION_FIELDS.map((field) => ({ value: field, label: CONDITION_FIELD_LABELS[field] }))}
                 compact
               />
-              <Select
+              <Select data-ui-id="A2079"
                 value={condition.op}
                 onChange={(value) => onUpdate(index, { op: value as RuleCondition['op'] })}
                 options={CONDITION_OPS.map((op) => ({ value: op, label: CONDITION_OP_LABELS[op] }))}
                 compact
               />
               {condition.op !== 'exists' && <ConditionValue condition={condition} onChange={(value) => onUpdate(index, { value })} />}
-              <button
+              <button data-ui-id="A1948"
                 type="button"
                 onClick={() => onRemove(index)}
                 className="mr-auto rounded px-2 py-1 text-sm text-red-600 hover:bg-red-50"

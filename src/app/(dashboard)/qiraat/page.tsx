@@ -41,7 +41,7 @@ export default function QiraatPage() {
           <p className="text-gray-600">ترتيب القراء والرواة والطرق حسب طيبة النشر.</p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
-          <Link
+          <Link data-ui-id="A544"
             href="/admin"
             className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
           >
@@ -70,7 +70,7 @@ export default function QiraatPage() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(360px,0.8fr)]">
         <section data-ui-id="A231" className="overflow-hidden rounded-xl bg-white shadow-lg">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table data-ui-id="A545" className="w-full">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500">#</th>
@@ -82,7 +82,7 @@ export default function QiraatPage() {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {rows.map(({ qiraah, turuq }) => (
-                  <tr
+                  <tr data-ui-id="A546"
                     key={qiraah.id}
                     className={`cursor-pointer hover:bg-gray-50 ${
                       selectedQiraah === qiraah.id ? 'bg-emerald-50' : ''
@@ -99,7 +99,7 @@ export default function QiraatPage() {
                       {turuq.length} طريق
                     </td>
                     <td className="px-6 py-4">
-                      <button
+                      <button data-ui-id="A547"
                         className="text-sm font-medium text-emerald-600 hover:text-emerald-700"
                         type="button"
                       >
@@ -148,7 +148,7 @@ function QiraahDetails({ qiraah, turuq }: { qiraah: Qiraah; turuq: Turuq[] }) {
 
 function SummaryCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-lg">
+    <div data-ui-id="A548" className="rounded-xl border border-gray-200 bg-white p-5 shadow-lg">
       <div className="text-sm text-gray-600">{label}</div>
       <div className="mt-2 text-3xl font-bold text-gray-900">{value}</div>
     </div>
@@ -157,7 +157,7 @@ function SummaryCard({ label, value }: { label: string; value: number }) {
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+    <div data-ui-id="A549" className="flex items-center justify-between border-b border-gray-100 pb-2">
       <span className="text-sm text-gray-600">{label}</span>
       <span className="text-sm font-medium text-gray-900">{value}</span>
     </div>

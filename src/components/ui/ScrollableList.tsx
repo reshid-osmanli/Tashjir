@@ -262,11 +262,11 @@ export function ScrollableList({
   }, [children, emptyState, itemCount, renderWindow, windowed]);
 
   return (
-    <div className={`relative flex min-h-0 flex-1 flex-col overflow-hidden ${className}`}>
+    <div data-ui-id="A1994" className={`relative flex min-h-0 flex-1 flex-col overflow-hidden ${className}`}>
       {header && <div className="sticky top-0 z-10 shrink-0 border-b border-stone-200 bg-white">{header}</div>}
 
       {canScrollUp && (
-        <button
+        <button data-ui-id="A1995"
           type="button"
           onPointerDown={startHold(-1)}
           onPointerUp={stopHold}
@@ -281,7 +281,7 @@ export function ScrollableList({
         </button>
       )}
       {showJumpTop && (
-        <button
+        <button data-ui-id="A1996"
           type="button"
           onClick={() => listRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
           className="tashjeer-scroll-btn absolute start-1 top-20 z-20"
@@ -292,7 +292,7 @@ export function ScrollableList({
         </button>
       )}
 
-      <div
+      <div data-ui-id="A1997"
         ref={listRef}
         tabIndex={0}
         role="region"
@@ -314,7 +314,7 @@ export function ScrollableList({
       </div>
 
       {canScrollDown && (
-        <button
+        <button data-ui-id="A1998"
           type="button"
           onPointerDown={startHold(1)}
           onPointerUp={stopHold}

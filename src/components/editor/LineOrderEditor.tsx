@@ -189,7 +189,7 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
         <div className="px-1 py-1.5">
           <p className="text-[11px] text-stone-600">اضغط مطولًا على السطر ثم اسحب. ↳ للدمج. Alt+↑/↓ للنقل مع التأكيد. Ctrl+نقر لتحديد عدة أسطر. Esc للإلغاء.</p>
           {multiSelection?.kind === 'LINE' && multiSelection.ids.length > 0 && (
-            <div
+            <div data-ui-id="A971"
               role="toolbar"
               aria-label="إجراءات التحديد المتعدد للأسطر"
               className="mt-1 flex flex-wrap items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50/80 px-2 py-1.5"
@@ -197,7 +197,7 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
               <span className="text-[11px] font-medium text-emerald-900">
                 المحدد: {ar(multiSelection.ids.length)} {multiSelection.ids.length === 1 ? 'سطر' : multiSelection.ids.length === 2 ? 'سطران' : 'أسطر'}
               </span>
-              <button
+              <button data-ui-id="A972"
                 type="button"
                 className="rounded border border-rose-300 bg-white px-2 py-0.5 text-[11px] font-medium text-rose-700 hover:bg-rose-50"
                 onClick={() => void bulkDelete()}
@@ -205,7 +205,7 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
               >
                 حذف المحدد
               </button>
-              <button
+              <button data-ui-id="A973"
                 type="button"
                 className="rounded border border-stone-300 bg-white px-2 py-0.5 text-[11px] text-stone-700 hover:bg-stone-50"
                 onClick={() => setMultiSelection(null)}
@@ -215,7 +215,7 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
               <span className="ms-auto text-[10px] text-stone-400">Shift+نقر مدى · Ctrl+A كل المعروض</span>
             </div>
           )}
-          {document?.lineOrder?.length ? <button type="button" className="mt-1 text-xs text-emerald-800" onClick={async () => {
+          {document?.lineOrder?.length ? <button data-ui-id="A974" type="button" className="mt-1 text-xs text-emerald-800" onClick={async () => {
             if (await confirmAction({ title: 'عودة لترتيب المحرك؟', impacts: [{ label: 'أسطر', count: ids.length }], undoable: true })) {
               if (useEditorStore.getState().document === document) useEditorStore.getState().resetLineOrder();
             }
@@ -223,11 +223,11 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
         </div>
       }
     >
-    <ol ref={list} aria-label="ترتيب الأسطر" className="py-1"
+    <ol data-ui-id="A975" ref={list} aria-label="ترتيب الأسطر" className="py-1"
       onPointerMove={move} onPointerUp={up} onPointerCancel={clear}
       onLostPointerCapture={() => { if (press.current) clear(); }}
       onClickCapture={(event) => { if (suppressClick.current) { event.preventDefault(); event.stopPropagation(); suppressClick.current = false; } }}>
-      {lines.map((line, index) => <li key={line.id}>
+      {lines.map((line, index) => <li data-ui-instance={String(line.id)} data-ui-id="A976" key={line.id}>
         <div data-insert-gap={index} className={`h-1 rounded transition ${drag?.mode === 'ORDER' && drag.gap === index ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : ''}`} />
         <div data-ui-id="A124" data-ui-instance={line.id} data-order-line-id={line.id} data-order-index={index} data-list-index={index} tabIndex={0}
           onPointerDown={(event) => down(event, line.id, 'ORDER')}
@@ -253,19 +253,19 @@ export function LineOrderEditor({ classic }: { classic: ClassicTashjeer }) {
           <span className="w-6">{ar(index + 1)}</span>
           <button type="button" data-ui-id="A125" data-ui-instance={line.id} className="touch-none rounded border px-1 text-violet-700" aria-label={`مقبض دمج السطر ${ar(index + 1)}`} onPointerDown={(event) => down(event, line.id, 'MERGE')}>↳</button>
           <span className="min-w-0 flex-1 truncate" title={line.ruleLabel}>{line.label} · {line.ruleLabel}</span>
-          <RankInput instance={line.id} rank={index + 1} max={ids.length} onApply={(rank) => void confirmOrder(line.id, moveLineToIndex(ids, line.id, rank))} />
+          <RankInput data-ui-instance={String(line.id)} data-ui-id="A126" instance={line.id} rank={index + 1} max={ids.length} onApply={(rank) => void confirmOrder(line.id, moveLineToIndex(ids, line.id, rank))} />
           <button type="button" data-ui-id="A127" data-ui-instance={line.id} disabled={index === 0} aria-label={`نقل السطر ${ar(index + 1)} أعلى`} onClick={() => void confirmOrder(line.id, moveLineToIndex(ids, line.id, index))}>↑</button>
-          <button type="button" data-ui-id="A127" data-ui-instance={line.id} disabled={index === ids.length - 1} aria-label={`نقل السطر ${ar(index + 1)} أسفل`} onClick={() => void confirmOrder(line.id, moveLineToIndex(ids, line.id, index + 2))}>↓</button>
+          <button type="button" data-ui-id="A2125" data-ui-instance={line.id} disabled={index === ids.length - 1} aria-label={`نقل السطر ${ar(index + 1)} أسفل`} onClick={() => void confirmOrder(line.id, moveLineToIndex(ids, line.id, index + 2))}>↓</button>
         </div>
       </li>)}
-      <li data-insert-gap={ids.length} className={`h-1 rounded ${drag?.mode === 'ORDER' && drag.gap === ids.length ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : ''}`} />
+      <li data-ui-id="A978" data-insert-gap={ids.length} className={`h-1 rounded ${drag?.mode === 'ORDER' && drag.gap === ids.length ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : ''}`} />
     </ol>
     </ScrollableList>
     <p role="status" className="mt-2 text-xs text-emerald-900">{notice}</p>
   </div>;
 }
 
-function RankInput({ instance, rank, max, onApply }: { instance: string; rank: number; max: number; onApply: (rank: number) => void }) {
+function RankInput({ 'data-ui-id': uiId, instance, rank, max, onApply }: { instance: string; rank: number; max: number; onApply: (rank: number) => void } & { 'data-ui-id'?: string }) {
   const [value, setValue] = useState(ar(rank));
   useEffect(() => setValue(ar(rank)), [rank]);
   const apply = () => {
@@ -273,5 +273,5 @@ function RankInput({ instance, rank, max, onApply }: { instance: string; rank: n
     setValue(ar(rank));
     if (value.trim() && Number.isInteger(numeric) && numeric >= 1 && numeric <= max && numeric !== rank) onApply(numeric);
   };
-  return <input data-ui-id="A126" data-ui-instance={instance} aria-label={`رتبة السطر ${ar(rank)}`} inputMode="numeric" value={value} onChange={(event) => setValue(event.target.value)} onBlur={apply} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} className="w-10 rounded border border-stone-300 text-center" />;
+  return <input data-ui-id={uiId} data-ui-instance={instance} aria-label={`رتبة السطر ${ar(rank)}`} inputMode="numeric" value={value} onChange={(event) => setValue(event.target.value)} onBlur={apply} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} className="w-10 rounded border border-stone-300 text-center" />;
 }

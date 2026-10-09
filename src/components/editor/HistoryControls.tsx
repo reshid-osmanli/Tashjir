@@ -17,10 +17,10 @@ export function HistoryControls() {
     else for (let i = 0; i < count; i++) useEditorStore.getState().redo();
   };
   return <details data-ui-id="A105" className="relative text-xs" dir="rtl">
-    <summary className="cursor-pointer rounded border border-stone-300 px-2 py-1">سجل العمليات ({ar(past.length)})</summary>
-    <ol aria-label="حالات سجل العمليات" className="absolute start-0 top-full z-40 mt-1 max-h-72 w-72 overflow-auto rounded border bg-white p-2 shadow-xl">
-      {snapshots.map((snapshot, index) => <li key={index}>
-        <button type="button" aria-current={index === past.length ? 'step' : undefined} disabled={index === past.length}
+    <summary data-ui-id="A967" className="cursor-pointer rounded border border-stone-300 px-2 py-1">سجل العمليات ({ar(past.length)})</summary>
+    <ol data-ui-id="A968" aria-label="حالات سجل العمليات" className="absolute start-0 top-full z-40 mt-1 max-h-72 w-72 overflow-auto rounded border bg-white p-2 shadow-xl">
+      {snapshots.map((snapshot, index) => <li data-ui-id="A969" key={index}>
+        <button data-ui-id="A970" type="button" aria-current={index === past.length ? 'step' : undefined} disabled={index === past.length}
           onClick={() => void jump(index)} className="w-full rounded px-2 py-1 text-start hover:bg-stone-100 disabled:bg-emerald-50 disabled:text-emerald-800">
           {ar(index)} · {index === 0 ? 'أقدم حالة محفوظة' : snapshot.editLog?.at(-1)?.action ?? 'تعديل المستند'}{index === past.length ? ' — الحالية' : ''}
         </button>

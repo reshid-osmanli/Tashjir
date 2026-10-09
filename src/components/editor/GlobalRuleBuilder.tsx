@@ -55,6 +55,126 @@ import type {
 import { ScopePicker } from './VariantEditor';
 import { StrengthDegreePicker } from './StrengthDegreePicker';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_GlobalRuleBuilder_0 = {
+  "WORDS": "A794",
+  "INSIDE_WORD": "A795",
+  "BOTH": "A796"
+} as const;
+
+const UI_GlobalRuleBuilder_1 = {
+  "TAHQIQ": "A802",
+  "USUL": "A803",
+  "FARSH": "A804",
+  "MADUD": "A805",
+  "HAMZ": "A806",
+  "WAQF": "A807",
+  "TAJWEED": "A808"
+} as const;
+
+const UI_GlobalRuleBuilder_2 = {
+  "DRAFT": "A816",
+  "REVIEW": "A817",
+  "APPROVED": "A818",
+  "REJECTED": "A819"
+} as const;
+
+const UI_CharacterPatternEditor_3 = {
+  "EXACT": "A836",
+  "IKHFAA": "A837",
+  "IZHAR": "A838",
+  "IDGHAM": "A839",
+  "IQLAB": "A840",
+  "QALQALAH": "A841",
+  "GHUNNAH": "A842",
+  "MAD": "A843"
+} as const;
+
+const UI_CharacterPatternEditor_4 = {
+  "EXACT": "A845",
+  "IGNORE": "A846",
+  "SAKIN": "A847",
+  "NONE": "A848"
+} as const;
+
+const UI_MorphologySequenceEditor_5 = {
+  "إخفاء: نون ساكنة + حرف إخفاء": "A851",
+  "إظهار: نون ساكنة + حرف حلقي": "A852",
+  "إدغام: نون ساكنة + حرف يرملون": "A853",
+  "إقلاب: نون ساكنة + باء": "A854",
+  "إخفاء شفوي: ميم ساكنة + باء": "A855",
+  "مد منفصل: واو الجماعة + همزة وصلية أولى": "A856"
+} as const;
+
+const UI_MorphologyPatternEditor_6 = {
+  "كل ما ينتهي بتاء التأنيث": "A859",
+  "وزن «فُعْلَى»": "A860",
+  "جمع المؤنث السالم": "A861",
+  "اسم مجرور بعد حرف جر": "A862",
+  "منوّن بتنوين الفتح": "A863",
+  "المعرّف بأل في آخر الآية": "A864"
+} as const;
+
+const UI_MorphologyPatternEditor_7 = {
+  "EXACT": "A870",
+  "IGNORE": "A871",
+  "SAKIN": "A872",
+  "NONE": "A873"
+} as const;
+
+const UI_MorphologyPatternEditor_8 = {
+  "IKHFAA": "A881",
+  "IZHAR": "A882",
+  "IDGHAM": "A883",
+  "IQLAB": "A884",
+  "QALQALAH": "A885",
+  "GHUNNAH": "A886",
+  "MAD": "A887"
+} as const;
+
+const UI_MorphologyPatternEditor_9 = {
+  "IKHFAA": "A891",
+  "IZHAR": "A892",
+  "IDGHAM": "A893",
+  "IQLAB": "A894",
+  "QALQALAH": "A895",
+  "GHUNNAH": "A896",
+  "MAD": "A897"
+} as const;
+
+const UI_MorphologyPatternEditor_10 = {
+  "DAMMA": "A904",
+  "FATHA": "A905",
+  "KASRA": "A906",
+  "SUKUN": "A907",
+  "TANWEEN_DAMM": "A908",
+  "TANWEEN_FATH": "A909",
+  "TANWEEN_KASR": "A910"
+} as const;
+
+const UI_MorphologyPatternEditor_11 = {
+  "ANY": "A913",
+  "FIRST": "A914",
+  "LAST": "A915",
+  "NOT_LAST": "A916"
+} as const;
+
+const UI_ParticleSelector_12 = {
+  "JARR": "A918",
+  "NASB": "A919",
+  "JAZM": "A920",
+  "INNA": "A921",
+  "KANA": "A922",
+  "NIDA": "A923",
+  "ISTIFHAM": "A924",
+  "SHART": "A925",
+  "ATF": "A926",
+  "NAFY": "A927",
+  "MAWSUL": "A928"
+} as const;
+
+
+
 /** بيانات ابتدائية تُزرع في النموذج عند التعميم من وجه أو اختلاف قائم. */
 export interface GlobalRuleSeed {
   title?: string;
@@ -286,7 +406,7 @@ export function GlobalRuleBuilder({
       aria-label="إنشاء قاعدة عامة من المحرر"
     >
       <div className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-        <header className="flex items-start justify-between gap-4 border-b border-stone-200 px-5 py-4">
+        <header data-ui-id="A789" className="flex items-start justify-between gap-4 border-b border-stone-200 px-5 py-4">
           <div>
             <h2 className="text-base font-bold text-stone-900">قاعدة عامة للمصحف من المحرر</h2>
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-stone-500">
@@ -294,7 +414,7 @@ export function GlobalRuleBuilder({
               المطابقة حرفية وحتمية ولا تعبر حدود الآية.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="rounded border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-50">
+          <button data-ui-id="A790" type="button" onClick={onClose} className="rounded border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-50">
             إغلاق
           </button>
         </header>
@@ -302,7 +422,7 @@ export function GlobalRuleBuilder({
         <div className="flex-1 overflow-y-auto p-5">
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-violet-200 bg-violet-50/60 p-3">
             <span className="text-xs font-semibold text-violet-950">نوع القاعدة</span>
-            <button
+            <button data-ui-id="A791"
               type="button"
               onClick={() => setKind('CHARACTERS')}
               disabled={!characterRange}
@@ -310,7 +430,7 @@ export function GlobalRuleBuilder({
             >
               حروف من التحديد الحالي
             </button>
-            <button
+            <button data-ui-id="A792"
               type="button"
               onClick={() => setKind('MORPHOLOGY')}
               className={`rounded border px-2.5 py-1 text-[11px] ${kind === 'MORPHOLOGY' ? 'border-violet-700 bg-violet-700 text-white' : 'border-violet-200 bg-white text-violet-900'}`}
@@ -324,7 +444,7 @@ export function GlobalRuleBuilder({
 
           {kind === 'CHARACTERS' && characterPattern ? (
             <>
-              <section className="mt-4 rounded-md border border-teal-200 bg-teal-50/50 p-3">
+              <section data-ui-id="A793" className="mt-4 rounded-md border border-teal-200 bg-teal-50/50 p-3">
                 <h3 className="text-xs font-bold text-teal-950">أين يُبحث عن هذا التتابع؟</h3>
                 <p className="mt-0.5 text-[11px] leading-relaxed text-teal-900/75">
                   الحكم الصوتي الواحد قد يجري بين كلمتين («مِنْ ثَمَرَةٍ») ويجري داخل الكلمة الواحدة («أَنتُمْ»).
@@ -332,7 +452,7 @@ export function GlobalRuleBuilder({
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {MATCH_SCOPE_OPTIONS.map((option) => (
-                    <button
+                    <button data-ui-id={UI_GlobalRuleBuilder_0[option.value as keyof typeof UI_GlobalRuleBuilder_0]}
                       key={option.value}
                       type="button"
                       title={option.hint}
@@ -375,20 +495,20 @@ export function GlobalRuleBuilder({
             <MorphologySequenceEditor words={morphologyWords} onChange={setMorphologyWords} />
           )}
 
-          <section className="mt-5 grid gap-3 md:grid-cols-2">
-            <Field label="عنوان القاعدة">
-              <input value={title} onChange={(event) => setTitle(event.target.value)} className="input" autoFocus placeholder="مثال: إخفاء النون الساكنة قبل حروف الإخفاء" />
+          <section data-ui-id="A797" className="mt-5 grid gap-3 md:grid-cols-2">
+            <Field data-ui-id="A798" label="عنوان القاعدة">
+              <input data-ui-id="A799" value={title} onChange={(event) => setTitle(event.target.value)} className="input" autoFocus placeholder="مثال: إخفاء النون الساكنة قبل حروف الإخفاء" />
             </Field>
-            <Field label="الفئة">
-              <select value={category} onChange={(event) => setCategory(event.target.value as VariantCategory)} className="input">
-                {(Object.keys(CATEGORY_LABELS) as VariantCategory[]).map((value) => <option key={value} value={value}>{CATEGORY_LABELS[value]}</option>)}
+            <Field data-ui-id="A800" label="الفئة">
+              <select data-ui-id="A801" value={category} onChange={(event) => setCategory(event.target.value as VariantCategory)} className="input">
+                {(Object.keys(CATEGORY_LABELS) as VariantCategory[]).map((value) => <option data-ui-id={UI_GlobalRuleBuilder_1[value as keyof typeof UI_GlobalRuleBuilder_1]} key={value} value={value}>{CATEGORY_LABELS[value]}</option>)}
               </select>
             </Field>
-            <Field label="اسم الحكم الذي يظهر تحت الكلمة">
-              <input value={ruleLabel} onChange={(event) => setRuleLabel(event.target.value)} className="input" placeholder="مثال: إخفاء" />
+            <Field data-ui-id="A809" label="اسم الحكم الذي يظهر تحت الكلمة">
+              <input data-ui-id="A810" value={ruleLabel} onChange={(event) => setRuleLabel(event.target.value)} className="input" placeholder="مثال: إخفاء" />
             </Field>
-            <Field label="حركات المد (اختياري)">
-              <input type="number" min={0} max={6} value={maddHarakat} onChange={(event) => setMaddHarakat(event.target.value)} className="input" placeholder="٢، ٤، ٥، ٦" />
+            <Field data-ui-id="A811" label="حركات المد (اختياري)">
+              <input data-ui-id="A812" type="number" min={0} max={6} value={maddHarakat} onChange={(event) => setMaddHarakat(event.target.value)} className="input" placeholder="٢، ٤، ٥، ٦" />
             </Field>
             <div className="md:col-span-2 rounded-md border border-emerald-300 bg-emerald-50/70 p-3">
               <p className="text-xs font-semibold text-emerald-950">رقم ترتيب السطر</p>
@@ -396,7 +516,7 @@ export function GlobalRuleBuilder({
                 حدّد رتبة أسطر هذه القاعدة في التشجير عند إنشائها. يمكن تعديل الرقم لاحقا من خصائص
                 القاعدة في المحرر، والقواعد المتأثرة تُزاح تلقائيا.
               </p>
-              <input
+              <input data-ui-id="A813"
                 type="number"
                 min={1}
                 value={orderRank}
@@ -406,24 +526,24 @@ export function GlobalRuleBuilder({
                 aria-label="رقم ترتيب السطر"
               />
             </div>
-            <Field label="حالة التوثيق">
-              <select value={status} onChange={(event) => setStatus(event.target.value as VerificationStatus)} className="input">
-                {STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            <Field data-ui-id="A814" label="حالة التوثيق">
+              <select data-ui-id="A815" value={status} onChange={(event) => setStatus(event.target.value as VerificationStatus)} className="input">
+                {STATUS_OPTIONS.map((option) => <option data-ui-id={UI_GlobalRuleBuilder_2[option.value as keyof typeof UI_GlobalRuleBuilder_2]} key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </Field>
-            <Field label="مرجع القاعدة">
-              <input value={sourceRef} onChange={(event) => setSourceRef(event.target.value)} className="input" placeholder="النشر، طيبة النشر، أو المرجع" />
+            <Field data-ui-id="A820" label="مرجع القاعدة">
+              <input data-ui-id="A821" value={sourceRef} onChange={(event) => setSourceRef(event.target.value)} className="input" placeholder="النشر، طيبة النشر، أو المرجع" />
             </Field>
-            <Field label="شرح وحدود التطبيق" className="md:col-span-2">
-              <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={2} className="input resize-y" placeholder="اكتب ما يراجعه العالم، وما لا تشملُه القاعدة." />
+            <Field data-ui-id="A822" label="شرح وحدود التطبيق" className="md:col-span-2">
+              <textarea data-ui-id="A823" value={description} onChange={(event) => setDescription(event.target.value)} rows={2} className="input resize-y" placeholder="اكتب ما يراجعه العالم، وما لا تشملُه القاعدة." />
             </Field>
           </section>
 
-          <section className="mt-4 rounded-md border border-stone-200 p-3">
+          <section data-ui-id="A824" className="mt-4 rounded-md border border-stone-200 p-3">
             <ScopePicker scope={scope} onChange={setScope} />
           </section>
 
-          <section className="mt-4">
+          <section data-ui-id="A825" className="mt-4">
             <StrengthDegreePicker
               scope={scope}
               degreeId={strengthDegreeId}
@@ -436,7 +556,7 @@ export function GlobalRuleBuilder({
             />
           </section>
 
-          <section className="mt-4 rounded-md border border-emerald-200 bg-emerald-50/50 p-3">
+          <section data-ui-id="A826" className="mt-4 rounded-md border border-emerald-200 bg-emerald-50/50 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-xs font-bold text-emerald-950">المعاينة على المصحف كله</h3>
@@ -451,11 +571,11 @@ export function GlobalRuleBuilder({
               )}
             </div>
             {matches.length > 0 && (
-              <ul className="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+              <ul data-ui-id="A827" className="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
                 {matches.slice(0, 6).map((match, index) => {
                   const ayah = match.ayahKey ? getAyahByKey(match.ayahKey) : undefined;
                   return (
-                    <li key={`${match.ayahKey}-${match.startPosition}-${index}`} className="rounded border border-emerald-100 bg-white px-2 py-1.5 text-[11px] text-stone-700">
+                    <li data-ui-id="A828" key={`${match.ayahKey}-${match.startPosition}-${index}`} className="rounded border border-emerald-100 bg-white px-2 py-1.5 text-[11px] text-stone-700">
                       {ayah ? `${getSurahOrFirst(ayah.surahNumber).name} ${ayah.ayahNumber}` : 'آية'}
                       {' · '}
                       <span className="font-medium" style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }}>{match.matchedText}</span>
@@ -468,15 +588,15 @@ export function GlobalRuleBuilder({
           </section>
 
           <label className="mt-4 flex items-center gap-2 text-xs text-stone-700">
-            <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} className="accent-emerald-600" />
+            <input data-ui-id="A829" type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} className="accent-emerald-600" />
             تفعيل القاعدة في المحرر وفي كل مواضع المصحف
           </label>
           {error && <p className="mt-3 rounded bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
         </div>
 
-        <footer className="flex justify-end gap-2 border-t border-stone-200 px-5 py-3">
-          <button type="button" onClick={onClose} className="rounded border border-stone-300 px-4 py-2 text-xs text-stone-700 hover:bg-stone-50">إلغاء</button>
-          <button type="button" onClick={save} className="rounded bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700">حفظ وتطبيق القاعدة</button>
+        <footer data-ui-id="A830" className="flex justify-end gap-2 border-t border-stone-200 px-5 py-3">
+          <button data-ui-id="A831" type="button" onClick={onClose} className="rounded border border-stone-300 px-4 py-2 text-xs text-stone-700 hover:bg-stone-50">إلغاء</button>
+          <button data-ui-id="A832" type="button" onClick={save} className="rounded bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700">حفظ وتطبيق القاعدة</button>
         </footer>
       </div>
     </div>
@@ -497,7 +617,7 @@ function CharacterPatternEditor({
   onExactLengthChange: (wordOffset: number, checked: boolean) => void;
 }) {
   return (
-    <section className="mt-4 rounded-md border border-cyan-200 bg-cyan-50/50 p-3">
+    <section data-ui-id="A833" className="mt-4 rounded-md border border-cyan-200 bg-cyan-50/50 p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h3 className="text-xs font-bold text-cyan-950">قيود الحروف — بدقة مستقلة لكل حرف</h3>
@@ -520,7 +640,7 @@ function CharacterPatternEditor({
                   الكلمة {wordPattern.offset + 1}{sourceWord ? ` · ${sourceWord.text}` : ''}
                 </p>
                 <label className="flex items-center gap-1.5 text-[11px] text-stone-700">
-                  <input type="checkbox" checked={wordPattern.exactLength !== undefined} onChange={(event) => onExactLengthChange(wordPattern.offset, event.target.checked)} className="accent-cyan-700" />
+                  <input data-ui-id="A834" type="checkbox" checked={wordPattern.exactLength !== undefined} onChange={(event) => onExactLengthChange(wordPattern.offset, event.target.checked)} className="accent-cyan-700" />
                   مطابقة طول الكلمة تماما
                 </label>
               </div>
@@ -535,16 +655,16 @@ function CharacterPatternEditor({
                     </div>
                     <label className="mt-1.5 block text-[10px] text-stone-600">
                       نوع الحرف
-                      <select value={constraint.letterSet ?? 'EXACT'} onChange={(event) => onLetterSetChange(wordPattern.offset, constraintIndex, event.target.value as GlobalCharacterSet)} className="input mt-1 text-[11px]">
+                      <select data-ui-id="A835" value={constraint.letterSet ?? 'EXACT'} onChange={(event) => onLetterSetChange(wordPattern.offset, constraintIndex, event.target.value as GlobalCharacterSet)} className="input mt-1 text-[11px]">
                         {(Object.keys(GLOBAL_CHARACTER_SET_LABELS) as GlobalCharacterSet[]).map((value) => (
-                          <option key={value} value={value}>{GLOBAL_CHARACTER_SET_LABELS[value]}</option>
+                          <option data-ui-id={UI_CharacterPatternEditor_3[value as keyof typeof UI_CharacterPatternEditor_3]} key={value} value={value}>{GLOBAL_CHARACTER_SET_LABELS[value]}</option>
                         ))}
                       </select>
                     </label>
                     <label className="mt-1.5 block text-[10px] text-stone-600">
                       طريقة مطابقة الحركة
-                      <select value={constraint.harakaMode} onChange={(event) => onModeChange(wordPattern.offset, constraintIndex, event.target.value as HarakaMatchMode)} className="input mt-1 text-[11px]">
-                        {MODE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      <select data-ui-id="A844" value={constraint.harakaMode} onChange={(event) => onModeChange(wordPattern.offset, constraintIndex, event.target.value as HarakaMatchMode)} className="input mt-1 text-[11px]">
+                        {MODE_OPTIONS.map((option) => <option data-ui-id={UI_CharacterPatternEditor_4[option.value as keyof typeof UI_CharacterPatternEditor_4]} key={option.value} value={option.value}>{option.label}</option>)}
                       </select>
                     </label>
                   </div>
@@ -753,7 +873,7 @@ function MorphologySequenceEditor({
   };
 
   return (
-    <div className="mt-4 space-y-3">
+    <div data-ui-id="A849" className="mt-4 space-y-3">
       <div className="rounded-md border border-violet-200 bg-violet-50/60 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -763,7 +883,7 @@ function MorphologySequenceEditor({
               «كلمة تنتهي بكذا تليها كلمة تبدأ بكذا».
             </p>
           </div>
-          <button
+          <button data-ui-id="A850"
             type="button"
             onClick={addWord}
             disabled={words.length >= MAX_SEQUENCE_WORDS}
@@ -774,7 +894,7 @@ function MorphologySequenceEditor({
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {SEQUENCE_PRESETS.map((preset) => (
-            <button
+            <button data-ui-id={UI_MorphologySequenceEditor_5[preset.label as keyof typeof UI_MorphologySequenceEditor_5]}
               key={preset.label}
               type="button"
               title={preset.description}
@@ -794,7 +914,7 @@ function MorphologySequenceEditor({
               {words.length === 1 ? 'الكلمة' : `الكلمة ${index + 1}${index === 0 ? ' (الأولى)' : index === words.length - 1 ? ' (الأخيرة)' : ''}`}
             </span>
             {words.length > 1 && (
-              <button
+              <button data-ui-id="A857"
                 type="button"
                 onClick={() => removeWord(index)}
                 className="rounded border border-rose-200 px-2 py-0.5 text-[10px] text-rose-700 hover:bg-rose-50"
@@ -851,7 +971,7 @@ function MorphologyPatternEditor({
   };
 
   return (
-    <section className="mt-4 space-y-3">
+    <section data-ui-id="A858" className="mt-4 space-y-3">
       <div className="rounded-md border border-amber-200 bg-amber-50/60 p-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
@@ -865,7 +985,7 @@ function MorphologyPatternEditor({
 
         <div className="mt-2 flex flex-wrap gap-1.5">
           {MORPHOLOGY_PRESETS.map((preset) => (
-            <button
+            <button data-ui-id={UI_MorphologyPatternEditor_6[preset.label as keyof typeof UI_MorphologyPatternEditor_6]}
               key={preset.label}
               type="button"
               title={preset.description}
@@ -875,7 +995,7 @@ function MorphologyPatternEditor({
               {preset.label}
             </button>
           ))}
-          <button
+          <button data-ui-id="A865"
             type="button"
             onClick={() => onChange({ offset: word.offset, harakaMode: word.harakaMode })}
             className="rounded border border-stone-300 bg-white px-2 py-1 text-[11px] text-stone-600 hover:bg-stone-100"
@@ -889,8 +1009,8 @@ function MorphologyPatternEditor({
       <div className="rounded-md border border-stone-200 p-3">
         <h4 className="text-[11px] font-bold text-stone-800">أولا: بنية الكلمة (صرف)</h4>
         <div className="mt-2 grid gap-3 md:grid-cols-2">
-          <Field label="القالب الصرفي (اختياري)">
-            <input
+          <Field data-ui-id="A866" label="القالب الصرفي (اختياري)">
+            <input data-ui-id="A867"
               value={word.template ?? ''}
               onChange={(event) => patch({ template: event.target.value })}
               className="input"
@@ -902,52 +1022,52 @@ function MorphologyPatternEditor({
               ف وع ول خانات للجذر، وما سواها حرف حرفي يُطابَق كما هو.
             </span>
           </Field>
-          <Field label="سياسة الحركات في القالب والبادئة واللاحقة">
-            <select
+          <Field data-ui-id="A868" label="سياسة الحركات في القالب والبادئة واللاحقة">
+            <select data-ui-id="A869"
               value={word.harakaMode}
               onChange={(event) => patch({ harakaMode: event.target.value as HarakaMatchMode })}
               className="input"
             >
               {MODE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+                <option data-ui-id={UI_MorphologyPatternEditor_7[option.value as keyof typeof UI_MorphologyPatternEditor_7]} key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
           </Field>
-          <Field label="بادئة حرفية (اختياري)">
-            <input value={word.prefix ?? ''} onChange={(event) => patch({ prefix: event.target.value })} className="input" placeholder="ال" dir="rtl" />
+          <Field data-ui-id="A874" label="بادئة حرفية (اختياري)">
+            <input data-ui-id="A875" value={word.prefix ?? ''} onChange={(event) => patch({ prefix: event.target.value })} className="input" placeholder="ال" dir="rtl" />
           </Field>
-          <Field label="لاحقة حرفية (اختياري)">
-            <input value={word.suffix ?? ''} onChange={(event) => patch({ suffix: event.target.value })} className="input" placeholder="ة" dir="rtl" />
+          <Field data-ui-id="A876" label="لاحقة حرفية (اختياري)">
+            <input data-ui-id="A877" value={word.suffix ?? ''} onChange={(event) => patch({ suffix: event.target.value })} className="input" placeholder="ة" dir="rtl" />
           </Field>
-          <Field label="أول حرف من مجموعة تجويدية (اختياري)">
-            <select
+          <Field data-ui-id="A878" label="أول حرف من مجموعة تجويدية (اختياري)">
+            <select data-ui-id="A879"
               value={word.startsWithSet ?? ''}
               onChange={(event) => patch({ startsWithSet: (event.target.value || undefined) as GlobalMorphologyWordPattern['startsWithSet'] })}
               className="input"
             >
-              <option value="">بلا تقييد</option>
+              <option data-ui-id="A880" value="">بلا تقييد</option>
               {LETTER_SET_OPTIONS.map((value) => (
-                <option key={value} value={value}>{GLOBAL_CHARACTER_SET_LABELS[value]}</option>
+                <option data-ui-id={UI_MorphologyPatternEditor_8[value as keyof typeof UI_MorphologyPatternEditor_8]} key={value} value={value}>{GLOBAL_CHARACTER_SET_LABELS[value]}</option>
               ))}
             </select>
             <span className="mt-1 block text-[10px] text-stone-500">
               همزة الوصل ٱ تُتخطى، فالحرف المنطوق بعدها هو المعتبر.
             </span>
           </Field>
-          <Field label="آخر حرف من مجموعة تجويدية (اختياري)">
-            <select
+          <Field data-ui-id="A888" label="آخر حرف من مجموعة تجويدية (اختياري)">
+            <select data-ui-id="A889"
               value={word.endsWithSet ?? ''}
               onChange={(event) => patch({ endsWithSet: (event.target.value || undefined) as GlobalMorphologyWordPattern['endsWithSet'] })}
               className="input"
             >
-              <option value="">بلا تقييد</option>
+              <option data-ui-id="A890" value="">بلا تقييد</option>
               {LETTER_SET_OPTIONS.map((value) => (
-                <option key={value} value={value}>{GLOBAL_CHARACTER_SET_LABELS[value]}</option>
+                <option data-ui-id={UI_MorphologyPatternEditor_9[value as keyof typeof UI_MorphologyPatternEditor_9]} key={value} value={value}>{GLOBAL_CHARACTER_SET_LABELS[value]}</option>
               ))}
             </select>
           </Field>
-          <Field label="أقل عدد حروف (اختياري)">
-            <input
+          <Field data-ui-id="A898" label="أقل عدد حروف (اختياري)">
+            <input data-ui-id="A899"
               type="number"
               min={1}
               max={20}
@@ -956,8 +1076,8 @@ function MorphologyPatternEditor({
               className="input"
             />
           </Field>
-          <Field label="أكثر عدد حروف (اختياري)">
-            <input
+          <Field data-ui-id="A900" label="أكثر عدد حروف (اختياري)">
+            <input data-ui-id="A901"
               type="number"
               min={1}
               max={20}
@@ -987,7 +1107,7 @@ function MorphologyPatternEditor({
                   const excluded = word.excludedMorphologyFeatures?.includes(feature) ?? false;
                   return (
                     <span key={feature} className="inline-flex overflow-hidden rounded border border-stone-300">
-                      <button
+                      <button data-ui-id="A902"
                         type="button"
                         title={MORPHOLOGY_FEATURE_HINTS[feature]}
                         onClick={() => toggleFeature(feature, false)}
@@ -995,7 +1115,7 @@ function MorphologyPatternEditor({
                       >
                         {MORPHOLOGY_FEATURE_LABELS[feature]}
                       </button>
-                      <button
+                      <button data-ui-id="A903"
                         type="button"
                         title={`استثناء: ${MORPHOLOGY_FEATURE_HINTS[feature]}`}
                         onClick={() => toggleFeature(feature, true)}
@@ -1027,7 +1147,7 @@ function MorphologyPatternEditor({
             {(Object.keys(WORD_ENDING_HARAKA_LABELS) as WordEndingHaraka[]).map((haraka) => {
               const active = word.endingHaraka?.includes(haraka) ?? false;
               return (
-                <button
+                <button data-ui-id={UI_MorphologyPatternEditor_10[haraka as keyof typeof UI_MorphologyPatternEditor_10]}
                   key={haraka}
                   type="button"
                   onClick={() => patch({ endingHaraka: toggleInList(word.endingHaraka, haraka) })}
@@ -1054,14 +1174,14 @@ function MorphologyPatternEditor({
         </div>
 
         <div className="mt-3 max-w-sm">
-          <Field label="موقع الكلمة من الآية">
-            <select
+          <Field data-ui-id="A911" label="موقع الكلمة من الآية">
+            <select data-ui-id="A912"
               value={word.ayahPosition ?? 'ANY'}
               onChange={(event) => patch({ ayahPosition: event.target.value as AyahWordPosition })}
               className="input"
             >
               {AYAH_POSITION_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+                <option data-ui-id={UI_MorphologyPatternEditor_11[option.value as keyof typeof UI_MorphologyPatternEditor_11]} key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
           </Field>
@@ -1081,13 +1201,13 @@ function ParticleSelector({
   onToggle: (value: ParticleClass) => void;
 }) {
   return (
-    <div>
+    <div data-ui-id="A917">
       <p className="text-[10px] font-semibold text-stone-500">{title} (يكفي واحدة)</p>
       <div className="mt-1 flex flex-wrap gap-1.5">
         {(Object.keys(PARTICLE_CLASS_LABELS) as ParticleClass[]).map((particleClass) => {
           const active = selected?.includes(particleClass) ?? false;
           return (
-            <button
+            <button data-ui-id={UI_ParticleSelector_12[particleClass as keyof typeof UI_ParticleSelector_12]}
               key={particleClass}
               type="button"
               onClick={() => onToggle(particleClass)}
@@ -1108,9 +1228,9 @@ function anchorLabel(anchor: GlobalWordCharacterPattern['constraints'][number]['
   return `الحرف رقم ${value}`;
 }
 
-function Field({ label, className = '', children }: { label: string; className?: string; children: React.ReactNode }) {
+function Field({ 'data-ui-id': uiId, label, className = '', children }: { label: string; className?: string; children: React.ReactNode } & { 'data-ui-id'?: string }) {
   return (
-    <label className={`block ${className}`}>
+    <label data-ui-id={uiId} className={`block ${className}`}>
       <span className="mb-1 block text-xs font-medium text-stone-700">{label}</span>
       {children}
     </label>

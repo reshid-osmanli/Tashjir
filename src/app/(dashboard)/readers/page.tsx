@@ -106,7 +106,7 @@ export default function ReadersPage() {
           <h1 className="text-2xl font-bold text-gray-900">القراء</h1>
           <p className="text-gray-600">إدارة القراء والإجازات المرتبطة بالقراءات والطرق.</p>
         </div>
-        <button
+        <button data-ui-id="A555"
           onClick={() => setShowAddForm((value) => !value)}
           className="rounded-lg bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700"
           type="button"
@@ -122,7 +122,7 @@ export default function ReadersPage() {
       </div>
 
       {showAddForm && (
-        <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-lg">
+        <section data-ui-id="A556" className="rounded-xl border border-gray-200 bg-white p-6 shadow-lg">
           <h2 className="mb-4 text-lg font-bold text-gray-900">بيانات القارئ</h2>
           {error && (
             <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -131,13 +131,13 @@ export default function ReadersPage() {
           )}
 
           <form data-ui-id="A240" onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
-            <TextField
+            <TextField data-ui-id="A2107"
               label="اسم القارئ"
               value={form.name}
               onChange={(value) => setForm({ ...form, name: value })}
               required
             />
-            <TextField
+            <TextField data-ui-id="A2108"
               label="البريد الإلكتروني"
               value={form.email}
               onChange={(value) => setForm({ ...form, email: value })}
@@ -153,27 +153,27 @@ export default function ReadersPage() {
                 onChange={(event) => setForm({ ...form, qiraahId: event.target.value })}
                 className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
-                <option value="">بدون إجازة مضافة</option>
+                <option data-ui-id="A557" value="">بدون إجازة مضافة</option>
                 {QIRAAT_ORDER_TAYYIBAH.map((qiraah) => (
-                  <option key={qiraah.id} value={qiraah.id}>
+                  <option data-ui-instance={String(qiraah.id)} data-ui-id="A558" key={qiraah.id} value={qiraah.id}>
                     {qiraah.narrator} عن {qiraah.name}
                   </option>
                 ))}
               </select>
             </div>
 
-            <TextField
+            <TextField data-ui-id="A2109"
               label="المجيز"
               value={form.granter}
               onChange={(value) => setForm({ ...form, granter: value })}
             />
-            <TextField
+            <TextField data-ui-id="A2110"
               label="تاريخ الإجازة"
               value={form.grantedAt}
               onChange={(value) => setForm({ ...form, grantedAt: value })}
               type="date"
             />
-            <TextField
+            <TextField data-ui-id="A2111"
               label="الطرق"
               value={form.paths}
               onChange={(value) => setForm({ ...form, paths: value })}
@@ -181,7 +181,7 @@ export default function ReadersPage() {
             />
 
             <div className="flex items-end justify-end gap-3 md:col-span-2">
-              <button
+              <button data-ui-id="A559"
                 onClick={() => {
                   setForm(initialForm);
                   setShowAddForm(false);
@@ -209,7 +209,7 @@ export default function ReadersPage() {
           <div className="p-8 text-center text-gray-500">لا يوجد قراء مسجلون حاليا.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table data-ui-id="A560" className="w-full">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500">القارئ</th>
@@ -221,7 +221,7 @@ export default function ReadersPage() {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {readers.map((reader) => (
-                  <tr key={reader.id}>
+                  <tr data-ui-instance={String(reader.id)} data-ui-id="A561" key={reader.id}>
                     <td className="px-6 py-4">
                       <div className="font-medium text-gray-900">{reader.name}</div>
                       <div className="text-sm text-gray-500">{reader.email}</div>
@@ -255,7 +255,7 @@ export default function ReadersPage() {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">{formatLocalDate(reader.createdAt)}</td>
                     <td className="px-6 py-4">
-                      <button
+                      <button data-ui-instance={String(reader.id)} data-ui-id="A562"
                         onClick={() => toggleReaderStatus(reader.id)}
                         className="text-sm font-medium text-emerald-600 hover:text-emerald-700"
                         type="button"
@@ -276,14 +276,14 @@ export default function ReadersPage() {
 
 function SummaryCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-lg">
+    <div data-ui-id="A563" className="rounded-xl border border-gray-200 bg-white p-5 shadow-lg">
       <div className="text-sm text-gray-600">{label}</div>
       <div className="mt-2 text-3xl font-bold text-gray-900">{value}</div>
     </div>
   );
 }
 
-function TextField({
+function TextField({ 'data-ui-id': uiId,
   label,
   value,
   onChange,
@@ -297,11 +297,11 @@ function TextField({
   type?: string;
   placeholder?: string;
   required?: boolean;
-}) {
+} & { 'data-ui-id'?: string }) {
   return (
-    <div>
+    <div data-ui-id="A564">
       <label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
-      <input
+      <input data-ui-id={uiId}
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}

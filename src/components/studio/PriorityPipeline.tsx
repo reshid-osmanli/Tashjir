@@ -16,6 +16,18 @@ import type { RulePriorityShift } from '@/lib/tashjeer/engine-config-store';
 import { CONFLICT_POLICY_LABELS, PIPELINE_STAGE_LABELS } from './labels';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_PriorityPipeline_0 = {
+  "MOST_SPECIFIC": "A1798",
+  "HIGHEST_PRIORITY": "A1799",
+  "EXPLICIT": "A1800",
+  "LOCAL": "A1801",
+  "READER": "A1802",
+  "MANUAL": "A1803"
+} as const;
+
+
+
 interface PriorityPipelineProps {
   config: EngineConfig;
   onConflictPolicyChange: (policy: ConflictPolicyStep[]) => void;
@@ -99,9 +111,9 @@ function ReorderableList<T>({
   const border = tone === 'violet' ? 'border-violet-400' : tone === 'gray' ? 'border-gray-400' : 'border-emerald-500';
 
   return (
-    <ol className={direction === 'column' ? 'space-y-2' : 'flex flex-wrap items-center gap-2'}>
+    <ol data-ui-id="A1790" className={direction === 'column' ? 'space-y-2' : 'flex flex-wrap items-center gap-2'}>
       {items.map((item, index) => (
-        <li
+        <li data-ui-id="A1791"
           key={keyOf(item)}
           draggable={canReorder}
           onDragStart={(event) => {
@@ -128,7 +140,7 @@ function ReorderableList<T>({
           {render(item, index)}
           {canReorder && (
             <span className="flex flex-col text-[10px] leading-none text-gray-400">
-              <button
+              <button data-ui-id="A1792"
                 type="button"
                 onClick={() => onReorder?.(reorderStages(items, index, -1))}
                 disabled={index === 0}
@@ -138,7 +150,7 @@ function ReorderableList<T>({
               >
                 ▲
               </button>
-              <button
+              <button data-ui-id="A1793"
                 type="button"
                 onClick={() => onReorder?.(reorderStages(items, index, 1))}
                 disabled={index === items.length - 1}
@@ -240,7 +252,7 @@ export function PriorityPipeline({
               return (
                 <div className="flex-1 rounded-lg bg-gray-50 px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
-                    <button
+                    <button data-ui-id="A1794"
                       type="button"
                       onClick={() => setOpenGroupId(open ? null : group.id)}
                       className="flex items-center gap-2 text-right font-medium text-gray-800 hover:text-emerald-700"
@@ -266,7 +278,7 @@ export function PriorityPipeline({
                           tone="gray"
                           render={(rule) => (
                             <div className="flex flex-1 items-center justify-between gap-2 rounded bg-white px-2 py-1.5 text-sm">
-                              <button
+                              <button data-ui-id="A1795"
                                 type="button"
                                 onClick={() => onOpenRule?.(rule.id)}
                                 className="truncate text-right text-gray-800 hover:text-emerald-700"
@@ -289,7 +301,7 @@ export function PriorityPipeline({
                               </span>
                               <span className="flex items-center gap-1 text-xs text-gray-500">
                                 <span>أولوية</span>
-                                <input
+                                <input data-ui-id="A1796"
                                   type="number"
                                   value={rule.priority}
                                   onChange={(event) => notePriorityChange(rule.id, Number(event.target.value))}
@@ -327,7 +339,7 @@ export function PriorityPipeline({
             direction="row"
             onReorder={(next) => onConflictPolicyChange(next)}
             render={(step, index) => (
-              <button
+              <button data-ui-id="A1797"
                 type="button"
                 onClick={() => togglePolicyStep(step)}
                 className="rounded-full bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white"
@@ -341,7 +353,7 @@ export function PriorityPipeline({
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           {ALL_POLICY_STEPS.filter((step) => !config.conflictPolicy.includes(step)).map((step) => (
-            <button
+            <button data-ui-id={UI_PriorityPipeline_0[step as keyof typeof UI_PriorityPipeline_0]}
               key={step}
               type="button"
               onClick={() => togglePolicyStep(step)}

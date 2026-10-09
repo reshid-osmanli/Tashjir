@@ -31,7 +31,7 @@ export function SessionBadge() {
   }, []);
 
   if (!ready) {
-    return <span data-ui-id="A326" className="h-8 w-24" aria-hidden="true" />;
+    return <span className="h-8 w-24" aria-hidden="true" />;
   }
 
   if (!session?.email) {
@@ -49,7 +49,7 @@ export function SessionBadge() {
       <span className="max-w-[10rem] truncate text-caption text-ink-600" dir="ltr">
         {session.email}
       </span>
-      <button
+      <button data-ui-id="A1614"
         type="button"
         className="text-caption text-ink-400 hover:text-danger"
         onClick={() => {

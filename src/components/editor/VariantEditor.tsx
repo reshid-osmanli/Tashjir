@@ -41,6 +41,33 @@ import type {
   VerificationStatus,
 } from '@/types/tashjeer';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_VariantEditor_0 = {
+  "TAHQIQ": "A1468",
+  "USUL": "A1469",
+  "FARSH": "A1470",
+  "MADUD": "A1471",
+  "HAMZ": "A1472",
+  "WAQF": "A1473",
+  "TAJWEED": "A1474"
+} as const;
+
+const UI_VariantEditor_1 = {
+  "DRAFT": "A1481",
+  "REVIEW": "A1482",
+  "APPROVED": "A1483",
+  "REJECTED": "A1484"
+} as const;
+
+const UI_EvidenceList_2 = {
+  "TAYYIBAH": "A1555",
+  "NASHR": "A1556",
+  "JANNAH": "A1557",
+  "OTHER": "A1558"
+} as const;
+
+
+
 interface VariantEditorProps {
   variant: Variant;
   onClose: () => void;
@@ -89,14 +116,14 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
   };
 
   return (
-    <div
+    <div data-ui-id="A1459"
       className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 p-4"
       role="dialog"
       aria-modal="true"
       aria-label={`تحرير الاختلاف ${variant.title}`}
     >
       <div className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-        <header className="flex items-center justify-between border-b border-stone-200 px-5 py-3">
+        <header data-ui-id="A1460" className="flex items-center justify-between border-b border-stone-200 px-5 py-3">
           <div>
             <h2 className="text-base font-bold text-stone-900">تحرير الاختلاف</h2>
             <p className="text-xs text-stone-500">
@@ -105,7 +132,7 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
           </div>
           <div className="flex items-center gap-2">
             {onGeneralize && variant.targetKind === 'CHARACTERS' && variant.characterRange && (
-              <button
+              <button data-ui-id="A1461"
                 type="button"
                 onClick={onGeneralize}
                 className="rounded-md border border-violet-300 bg-violet-50 px-3 py-1.5 text-sm text-violet-900 hover:bg-violet-100"
@@ -114,7 +141,7 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
                 تعميم على المصحف
               </button>
             )}
-            <button
+            <button data-ui-id="A1462"
               type="button"
               onClick={onClose}
               className="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-100"
@@ -126,9 +153,9 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
 
         <div className="tashjeer-scroll-area flex-1 overflow-y-auto p-5">
           {/* بيانات الاختلاف */}
-          <section className="grid gap-3 md:grid-cols-2">
-            <Field label="العنوان">
-              <input
+          <section data-ui-id="A1463" className="grid gap-3 md:grid-cols-2">
+            <Field data-ui-id="A1464" label="العنوان">
+              <input data-ui-id="A1465"
                 type="text"
                 value={variant.title}
                 onChange={(event) => updateVariant(variant.id, { title: event.target.value })}
@@ -136,8 +163,8 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
               />
             </Field>
 
-            <Field label="الفئة">
-              <select
+            <Field data-ui-id="A1466" label="الفئة">
+              <select data-ui-id="A1467"
                 value={variant.category}
                 onChange={(event) => {
                   const newCat = event.target.value as VariantCategory;
@@ -167,7 +194,7 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
                 className="input"
               >
                 {(Object.keys(CATEGORY_LABELS) as VariantCategory[]).map((category) => (
-                  <option key={category} value={category}>
+                  <option data-ui-id={UI_VariantEditor_0[category as keyof typeof UI_VariantEditor_0]} key={category} value={category}>
                     {CATEGORY_LABELS[category]}
                   </option>
                 ))}
@@ -181,8 +208,8 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
               />
             )}
 
-            <Field label="من الكلمة">
-              <input
+            <Field data-ui-id="A1475" label="من الكلمة">
+              <input data-ui-id="A1476"
                 type="number"
                 min={1}
                 value={variant.startPosition}
@@ -197,8 +224,8 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
               />
             </Field>
 
-            <Field label="إلى الكلمة">
-              <input
+            <Field data-ui-id="A1477" label="إلى الكلمة">
+              <input data-ui-id="A1478"
                 type="number"
                 min={variant.startPosition}
                 value={variant.endPosition}
@@ -219,8 +246,8 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
               />
             </div>
 
-            <Field label="الحالة">
-              <select
+            <Field data-ui-id="A1479" label="الحالة">
+              <select data-ui-id="A1480"
                 value={variant.status}
                 onChange={(event) =>
                   updateVariant(variant.id, { status: event.target.value as VerificationStatus })
@@ -228,15 +255,15 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
                 className="input"
               >
                 {STATUS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
+                  <option data-ui-id={UI_VariantEditor_1[option.value as keyof typeof UI_VariantEditor_1]} key={option.value} value={option.value}>
                     {option.label}
                   </option>
                 ))}
               </select>
             </Field>
 
-            <Field label="مرجع الاستقاء">
-              <input
+            <Field data-ui-id="A1485" label="مرجع الاستقاء">
+              <input data-ui-id="A1486"
                 type="text"
                 value={variant.sourceRef ?? ''}
                 onChange={(event) => updateVariant(variant.id, { sourceRef: event.target.value })}
@@ -245,8 +272,8 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
               />
             </Field>
 
-            <Field label="الشرح" className="md:col-span-2">
-              <textarea
+            <Field data-ui-id="A1487" label="الشرح" className="md:col-span-2">
+              <textarea data-ui-id="A1488"
                 value={variant.description ?? ''}
                 onChange={(event) => updateVariant(variant.id, { description: event.target.value })}
                 rows={2}
@@ -260,10 +287,10 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
           <LociEditor variant={variant} onUpdate={(patch) => updateVariant(variant.id, patch)} />
 
           {/* الأوجه */}
-          <section className="mt-6">
+          <section data-ui-id="A1489" className="mt-6">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-bold text-stone-900">الأوجه</h3>
-              <button
+              <button data-ui-id="A1490"
                 type="button"
                 onClick={handleAddAlternative}
                 className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
@@ -273,14 +300,14 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
             </div>
 
             <div className="grid gap-4 md:grid-cols-[220px_1fr]">
-              <ul className="space-y-1.5">
+              <ul data-ui-id="A1491" className="space-y-1.5">
                 {variant.alternatives.map((alternative) => {
                   const count = resolveScope(alternative.scope, catalog).length;
                   const active = alternative.id === activeAlternativeId;
 
                   return (
-                    <li key={alternative.id}>
-                      <button
+                    <li data-ui-instance={String(alternative.id)} data-ui-id="A1492" key={alternative.id}>
+                      <button data-ui-instance={String(alternative.id)} data-ui-id="A1493"
                         type="button"
                         onClick={() => setActiveAlternativeId(alternative.id)}
                         className={`w-full rounded-md border px-2.5 py-2 text-start transition-colors ${
@@ -379,11 +406,11 @@ function MaddRuleDrivenEditor({
   };
 
   return (
-    <div className="md:col-span-2 rounded-lg border border-violet-200 bg-violet-50/50 p-3 space-y-3">
+    <div data-ui-id="A1494" className="md:col-span-2 rounded-lg border border-violet-200 bg-violet-50/50 p-3 space-y-3">
       <h4 className="text-xs font-bold text-violet-900">تعريف قاعدة المد (RULE_DRIVEN)</h4>
       <div className="grid gap-3 md:grid-cols-2">
-        <Field label="مجموعة القاعدة">
-          <select
+        <Field data-ui-id="A1495" label="مجموعة القاعدة">
+          <select data-ui-id="A1496"
             value={maddFamily?.id ?? 'madd'}
             onChange={(e) => {
               const fam = getFamily(e.target.value);
@@ -407,20 +434,20 @@ function MaddRuleDrivenEditor({
             className="input text-sm"
           >
             {families.map((fam) => (
-              <option key={fam.id} value={fam.id}>
+              <option data-ui-instance={String(fam.id)} data-ui-id="A1497" key={fam.id} value={fam.id}>
                 {fam.name} ({fam.code})
               </option>
             ))}
           </select>
         </Field>
-        <Field label="نوع المد">
-          <select
+        <Field data-ui-id="A1498" label="نوع المد">
+          <select data-ui-id="A1499"
             value={currentType?.id ?? ''}
             onChange={(e) => handleTypeChange(e.target.value)}
             className="input text-sm"
           >
             {types.map((tp) => (
-              <option key={tp.id} value={tp.id}>
+              <option data-ui-instance={String(tp.id)} data-ui-id="A1500" key={tp.id} value={tp.id}>
                 {tp.name} — {tp.code}
               </option>
             ))}
@@ -489,7 +516,7 @@ function TargetEditor({
   };
 
   return (
-    <section className="mt-4 rounded-md border border-cyan-200 bg-cyan-50/40 p-3">
+    <section data-ui-id="A1501" className="mt-4 rounded-md border border-cyan-200 bg-cyan-50/40 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-xs font-bold text-cyan-950">دقة موضع الاختلاف</h3>
@@ -498,14 +525,14 @@ function TargetEditor({
           </p>
         </div>
         <div className="flex rounded-md border border-cyan-200 bg-white p-0.5 text-[11px]">
-          <button
+          <button data-ui-id="A1502"
             type="button"
             onClick={() => onUpdate({ targetKind: 'WORDS', characterRange: undefined })}
             className={`rounded px-2 py-1 ${!isCharacters ? 'bg-cyan-700 text-white' : 'text-stone-600 hover:bg-cyan-50'}`}
           >
             كلمات
           </button>
-          <button
+          <button data-ui-id="A1503"
             type="button"
             onClick={() => setCharacterRange({})}
             className={`rounded px-2 py-1 ${isCharacters ? 'bg-cyan-700 text-white' : 'text-stone-600 hover:bg-cyan-50'}`}
@@ -517,9 +544,9 @@ function TargetEditor({
 
       {isCharacters && range && (
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          <Field label={`بداية الحرف${startWord ? ` في «${startWord.text}»` : ''}`}>
+          <Field data-ui-id="A1504" label={`بداية الحرف${startWord ? ` في «${startWord.text}»` : ''}`}>
             <div className="grid grid-cols-2 gap-2">
-              <input
+              <input data-ui-id="A1505"
                 type="number"
                 min={1}
                 max={words.length}
@@ -528,7 +555,7 @@ function TargetEditor({
                 className="input"
                 aria-label="كلمة بداية نطاق الحروف"
               />
-              <input
+              <input data-ui-id="A1506"
                 type="number"
                 min={1}
                 max={characterCount(startWord?.text ?? '') || 1}
@@ -539,9 +566,9 @@ function TargetEditor({
               />
             </div>
           </Field>
-          <Field label={`نهاية الحرف${endWord ? ` في «${endWord.text}»` : ''}`}>
+          <Field data-ui-id="A1507" label={`نهاية الحرف${endWord ? ` في «${endWord.text}»` : ''}`}>
             <div className="grid grid-cols-2 gap-2">
-              <input
+              <input data-ui-id="A1508"
                 type="number"
                 min={1}
                 max={words.length}
@@ -550,7 +577,7 @@ function TargetEditor({
                 className="input"
                 aria-label="كلمة نهاية نطاق الحروف"
               />
-              <input
+              <input data-ui-id="A1509"
                 type="number"
                 min={1}
                 max={characterCount(endWord?.text ?? '') || 1}
@@ -607,7 +634,7 @@ function LociEditor({
   };
 
   return (
-    <section className="mt-4 rounded-md border border-amber-200 bg-amber-50/40 p-3">
+    <section data-ui-id="A1510" className="mt-4 rounded-md border border-amber-200 bg-amber-50/40 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-xs font-bold text-amber-950">مواضع منفصلة على السطر نفسه</h3>
@@ -616,14 +643,14 @@ function LociEditor({
           </p>
         </div>
         <div className="flex gap-1">
-          <button
+          <button data-ui-id="A1511"
             type="button"
             onClick={splitIntoWords}
             className="rounded border border-amber-300 bg-white px-2 py-1 text-[10px] text-amber-900 hover:bg-amber-100"
           >
             فصل الكلمات
           </button>
-          <button
+          <button data-ui-id="A1512"
             type="button"
             onClick={() =>
               commit([
@@ -641,12 +668,12 @@ function LociEditor({
         </div>
       </div>
 
-      <ul className="mt-2 space-y-1.5">
+      <ul data-ui-id="A1513" className="mt-2 space-y-1.5">
         {loci.map((locus, index) => (
-          <li key={`${locus.startPosition}-${locus.endPosition}-${index}`} className="grid grid-cols-[1fr_1fr_auto] gap-1.5">
+          <li data-ui-id="A1514" key={`${locus.startPosition}-${locus.endPosition}-${index}`} className="grid grid-cols-[1fr_1fr_auto] gap-1.5">
             <label className="text-[10px] text-stone-600">
               من
-              <input
+              <input data-ui-id="A1515"
                 type="number"
                 min={1}
                 value={locus.startPosition}
@@ -665,7 +692,7 @@ function LociEditor({
             </label>
             <label className="text-[10px] text-stone-600">
               إلى
-              <input
+              <input data-ui-id="A1516"
                 type="number"
                 min={locus.startPosition}
                 value={locus.endPosition}
@@ -676,7 +703,7 @@ function LociEditor({
                 className="input mt-0.5 h-7 text-xs"
               />
             </label>
-            <button
+            <button data-ui-id="A1517"
               type="button"
               disabled={loci.length <= 1}
               onClick={() => commit(loci.filter((_, itemIndex) => itemIndex !== index))}
@@ -706,10 +733,10 @@ function AlternativeEditor({
   const catalog = useTransmissionCatalog();
 
   return (
-    <div className="space-y-4 rounded-md border border-stone-200 p-4">
+    <div data-ui-id="A1518" className="space-y-4 rounded-md border border-stone-200 p-4">
       <div className="grid gap-3 md:grid-cols-2">
-        <Field label="نص الوجه">
-          <input
+        <Field data-ui-id="A1519" label="نص الوجه">
+          <input data-ui-id="A1520"
             type="text"
             value={alternative.text}
             onChange={(event) => onUpdate({ text: event.target.value })}
@@ -718,8 +745,8 @@ function AlternativeEditor({
           />
         </Field>
 
-        <Field label="وصف الوجه">
-          <input
+        <Field data-ui-id="A1521" label="وصف الوجه">
+          <input data-ui-id="A1522"
             type="text"
             value={alternative.label}
             onChange={(event) => onUpdate({ label: event.target.value })}
@@ -732,8 +759,8 @@ function AlternativeEditor({
       {/* البيانات التي تُطبع في الشجرة: اسم الحكم تحت الكلمة، وحركات المد
           في الهامش، وقوة الوجه التي يُرتَّب بها السطر. */}
       <div className="grid gap-3 rounded-md border border-emerald-100 bg-emerald-50/40 p-3 md:grid-cols-3">
-        <Field label="اسم الحكم (يُطبع تحت الكلمة)">
-          <input
+        <Field data-ui-id="A1523" label="اسم الحكم (يُطبع تحت الكلمة)">
+          <input data-ui-id="A1524"
             type="text"
             value={alternative.ruleLabel ?? ''}
             onChange={(event) => onUpdate({ ruleLabel: event.target.value || undefined })}
@@ -762,7 +789,7 @@ function AlternativeEditor({
       </div>
 
       <label className="flex items-center gap-2 text-xs text-stone-700">
-        <input
+        <input data-ui-id="A1525"
           type="checkbox"
           checked={alternative.isBase ?? false}
           onChange={(event) => onUpdate({ isBase: event.target.checked })}
@@ -785,8 +812,8 @@ function AlternativeEditor({
         }
       />
 
-      <Field label="ملاحظات المحرر">
-        <textarea
+      <Field data-ui-id="A1526" label="ملاحظات المحرر">
+        <textarea data-ui-id="A1527"
           value={alternative.notes ?? ''}
           onChange={(event) => onUpdate({ notes: event.target.value })}
           rows={2}
@@ -801,7 +828,7 @@ function AlternativeEditor({
       />
 
       {!alternative.isBase && (
-        <button
+        <button data-ui-id="A1528"
           type="button"
           onClick={onDelete}
           className="rounded border border-red-200 px-2.5 py-1.5 text-xs text-red-700 hover:bg-red-50"
@@ -870,8 +897,8 @@ function MaddOptionSelector({
   if (!isMadd && !ruleTypeId) {
     // احتياطي: الحقل القديم للتوافق
     return (
-      <Field label="حركات المد (الهامش الأيمن)">
-        <input
+      <Field data-ui-id="A1529" label="حركات المد (الهامش الأيمن)">
+        <input data-ui-id="A1530"
           type="number"
           min={0}
           max={6}
@@ -890,8 +917,8 @@ function MaddOptionSelector({
 
   return (
     <>
-      <Field label="نوع المد (من الكتالوج)">
-        <select
+      <Field data-ui-id="A1531" label="نوع المد (من الكتالوج)">
+        <select data-ui-id="A1532"
           value={ruleTypeId ?? ''}
           onChange={(e) => {
             const newTypeId = e.target.value;
@@ -906,31 +933,31 @@ function MaddOptionSelector({
           }}
           className="input text-sm"
         >
-          <option value="">— اختر نوع المد —</option>
+          <option data-ui-id="A1533" value="">— اختر نوع المد —</option>
           {catalogTypes.map((tp) => (
-            <option key={tp.id} value={tp.id}>
+            <option data-ui-instance={String(tp.id)} data-ui-id="A1534" key={tp.id} value={tp.id}>
               {tp.name}
             </option>
           ))}
         </select>
       </Field>
-      <Field label="مقدار المد (من الكتالوج)">
-        <select
+      <Field data-ui-id="A1535" label="مقدار المد (من الكتالوج)">
+        <select data-ui-id="A1536"
           value={ruleOptionId ?? ''}
           onChange={(e) => handleOptionChange(e.target.value)}
           className="input text-sm"
         >
-          <option value="">— اختر مقدار المد —</option>
+          <option data-ui-id="A1537" value="">— اختر مقدار المد —</option>
           {availableOptions.map((opt) => (
-            <option key={opt.id} value={opt.id}>
+            <option data-ui-instance={String(opt.id)} data-ui-id="A1538" key={opt.id} value={opt.id}>
               {opt.label} — {opt.numericValue} {opt.unit === 'HARAKAT' ? 'حركات' : opt.unit}
             </option>
           ))}
         </select>
       </Field>
       {/* احتياطي للتوافق: حقل رقمي يظهر القيمة المشتقة */}
-      <Field label="حركات المد (مشتقة)">
-        <input
+      <Field data-ui-id="A1539" label="حركات المد (مشتقة)">
+        <input data-ui-id="A1540"
           type="number"
           min={1}
           max={10}
@@ -1006,12 +1033,12 @@ export function ScopePicker(
   };
 
   return (
-    <div>
+    <div data-ui-id="A1541">
       {/* طريقة التحديد */}
       <div className="mb-3 flex items-center justify-between border-b border-stone-100 pb-2">
         <span className="text-xs font-semibold text-stone-700">طريقة التحديد</span>
         <div className="flex gap-1">
-          <button
+          <button data-ui-id="A1542"
             type="button"
             onClick={() => {
               setPickerMode('narrators');
@@ -1027,7 +1054,7 @@ export function ScopePicker(
           >
             القراء والرواة
           </button>
-          <button
+          <button data-ui-id="A1543"
             type="button"
             onClick={() => {
               setPickerMode('paths');
@@ -1055,7 +1082,7 @@ export function ScopePicker(
           {pickerMode === 'narrators' ? 'اختر الأئمة أو الرواة:' : 'اختر الطرق الفرعية:'}
         </span>
         <div className="flex gap-1.5">
-          <button
+          <button data-ui-id="A1544"
             type="button"
             onClick={() => {
               if (pickerMode === 'paths') {
@@ -1068,7 +1095,7 @@ export function ScopePicker(
           >
             الجميع
           </button>
-          <button
+          <button data-ui-id="A1545"
             type="button"
             onClick={() => {
               if (pickerMode === 'paths') {
@@ -1094,7 +1121,7 @@ export function ScopePicker(
 
             return (
               <div key={imam.id} className="space-y-1">
-                <button
+                <button data-ui-instance={String(imam.id)} data-ui-id="A1546"
                   type="button"
                   onClick={() => toggleImam(imam.id)}
                   className={`w-full rounded px-1.5 py-1 text-[11px] font-medium transition-colors ${
@@ -1115,7 +1142,7 @@ export function ScopePicker(
                   const isSelected = selected.has(narrator.id);
                   const symbol = getNarratorSymbol(narrator.id, catalog);
                   return (
-                    <button
+                    <button data-ui-instance={String(narrator.id)} data-ui-id="A1547"
                       key={narrator.id}
                       type="button"
                       onClick={() => toggleNarrator(narrator.id)}
@@ -1164,7 +1191,7 @@ export function ScopePicker(
                           const isPathSelected = selectedPathIds.has(path.id);
                           const cleanPathName = path.shortName.split(' / ')[1] || path.shortName;
                           return (
-                            <button
+                            <button data-ui-instance={String(path.id)} data-ui-id="A1548"
                               key={path.id}
                               type="button"
                               onClick={() => togglePath(path.id)}
@@ -1272,10 +1299,10 @@ function EvidenceList({
   };
 
   return (
-    <div>
+    <div data-ui-id="A1550">
       <div className="mb-1.5 flex items-center justify-between">
         <span className="text-xs font-semibold text-stone-700">الأدلة</span>
-        <button
+        <button data-ui-id="A1551"
           type="button"
           onClick={addEvidence}
           className="rounded border border-stone-300 px-2 py-0.5 text-[11px] text-stone-700 hover:bg-stone-100"
@@ -1289,11 +1316,11 @@ function EvidenceList({
           لا يوجد دليل مسجّل. الوجه بلا دليل يبقى مسودة ولا يصح اعتماده.
         </p>
       ) : (
-        <ul className="space-y-2">
+        <ul data-ui-id="A1552" className="space-y-2">
           {evidences.map((evidence, index) => (
-            <li key={evidence.id} className="rounded border border-stone-200 p-2">
+            <li data-ui-instance={String(evidence.id)} data-ui-id="A1553" key={evidence.id} className="rounded border border-stone-200 p-2">
               <div className="grid gap-2 md:grid-cols-[130px_1fr_auto]">
-                <select
+                <select data-ui-id="A1554"
                   value={evidence.source}
                   onChange={(event) =>
                     onChange(
@@ -1307,13 +1334,13 @@ function EvidenceList({
                   className="input text-xs"
                 >
                   {SOURCE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
+                    <option data-ui-id={UI_EvidenceList_2[option.value as keyof typeof UI_EvidenceList_2]} key={option.value} value={option.value}>
                       {option.label}
                     </option>
                   ))}
                 </select>
 
-                <input
+                <input data-ui-id="A1559"
                   type="text"
                   value={evidence.reference ?? ''}
                   onChange={(event) =>
@@ -1327,7 +1354,7 @@ function EvidenceList({
                   className="input text-xs"
                 />
 
-                <button
+                <button data-ui-id="A1560"
                   type="button"
                   onClick={() =>
                     onChange(evidences.filter((_, itemIndex) => itemIndex !== index))
@@ -1338,7 +1365,7 @@ function EvidenceList({
                 </button>
               </div>
 
-              <textarea
+              <textarea data-ui-instance={String(evidence.id)} data-ui-id="A1561"
                 value={evidence.text}
                 onChange={(event) =>
                   onChange(
@@ -1361,7 +1388,7 @@ function EvidenceList({
 
 // ==================== عناصر مشتركة ====================
 
-function Field({
+function Field({ 'data-ui-id': uiId,
   label,
   children,
   className = '',
@@ -1369,9 +1396,9 @@ function Field({
   label: string;
   children: React.ReactNode;
   className?: string;
-}) {
+} & { 'data-ui-id'?: string }) {
   return (
-    <label className={`block ${className}`}>
+    <label data-ui-id={uiId} className={`block ${className}`}>
       <span className="mb-1 block text-xs font-medium text-stone-700">{label}</span>
       {children}
     </label>

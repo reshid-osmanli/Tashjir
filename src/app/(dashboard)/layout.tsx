@@ -71,7 +71,7 @@ export default function DashboardLayout({
 }) {
   return (
     <div data-ui-id="A310" className="min-h-dvh bg-page">
-      <aside className="fixed inset-y-0 start-0 z-sticky hidden w-60 border-e border-line bg-panel lg:block">
+      <aside data-ui-id="A537" className="fixed inset-y-0 start-0 z-sticky hidden w-60 border-e border-line bg-panel lg:block">
         <div className="flex h-[var(--layout-header)] items-center border-b border-line px-4">
           <Link href="/" data-ui-id="A328" data-ui-instance="desktop-brand" className="flex items-center gap-2.5 rounded-md" aria-label="التشجير — الرئيسية">
             <TashjirMark size={22} className="text-primary-700" />
@@ -93,9 +93,9 @@ export default function DashboardLayout({
           {NAV_GROUPS.map((group) => (
             <div key={group.title} className="mt-4">
               <p className="px-2.5 pb-1 text-micro font-medium text-ink-400">{group.title}</p>
-              <ul>
+              <ul data-ui-id="A538">
                 {group.items.map((item) => (
-                  <li key={item.href}>
+                  <li data-ui-id="A539" key={item.href}>
                     <Link
                       href={item.href}
                       data-ui-id={item.uiId}
@@ -114,7 +114,7 @@ export default function DashboardLayout({
       </aside>
 
       <div className="lg:ms-60">
-        <header className="sticky top-0 z-sticky border-b border-line bg-panel/92 backdrop-blur-sm">
+        <header data-ui-id="A540" className="sticky top-0 z-sticky border-b border-line bg-panel/92 backdrop-blur-sm">
           <div className="flex h-[var(--layout-header)] items-center justify-between gap-3 px-4 md:px-6">
             <Link href="/" data-ui-id="A328" data-ui-instance="mobile-brand" className="flex items-center gap-2 lg:hidden" aria-label="التشجير — الرئيسية">
               <TashjirMark size={20} className="text-primary-700" />
@@ -136,9 +136,9 @@ export default function DashboardLayout({
 
           {/* تنقّل الجوال: شريط أفقي مختصر بدل أعمدة مضغوطة (SPEC §99-100). */}
           <nav data-ui-id="A313" aria-label="التنقل" className="lg:hidden">
-            <ul className="tashjeer-scroll-area flex gap-1.5 overflow-x-auto border-t border-line px-3 py-2">
+            <ul data-ui-id="A541" className="tashjeer-scroll-area flex gap-1.5 overflow-x-auto border-t border-line px-3 py-2">
               {NAV_GROUPS.flatMap((group) => group.items).map((item) => (
-                <li key={item.href} className="shrink-0">
+                <li data-ui-id="A542" key={item.href} className="shrink-0">
                   <Link
                     href={item.href}
                     data-ui-id={item.uiId}
@@ -153,7 +153,7 @@ export default function DashboardLayout({
           </nav>
         </header>
 
-        <main id="main" className="p-4 md:p-6">
+        <main data-ui-id="A543" id="main" className="p-4 md:p-6">
           {children}
         </main>
       </div>
