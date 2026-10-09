@@ -7378,19 +7378,19 @@
 - **Route:** `all routes via ?uiInspector=1`
 - **Component:** `UIRegistryInspector`
 - **Source:** `src/components/dev/UIRegistryInspector.tsx`
-- **Purpose:** طبقة شارات مرئية تربط كل شارة بقيمة data-ui-id على عنصر DOM الفعلي.
-- **Behavior:** تراقب العناصر المسجلة المرئية والتغييرات الديناميكية، وتعرض المعرف الفعلي دون توليد معرّفات بديلة.
-- **Constraints:** الشارات pointer-events:none، ولا تحجب التحكمات؛ Alt+click يحدد العنصر دون تشغيل إجراء التطبيق.
+- **Purpose:** طبقة تمييز مؤقتة تعرض إطارًا للعنصر المشار إليه وشارة معرّفه عند الطلب فقط.
+- **Behavior:** تتابع حركة المؤشر وتعرض إطارًا أزرق للعنصر المسجّل الأقرب إليه مع شارة واحدة بمعرّفه الحقيقي، وإطارًا أحمر للعنصر المثبّت؛ لا تعرض شارات كل العناصر في وقت واحد.
+- **Constraints:** الطبقة pointer-events:none خارج الشارة نفسها، ولا تغيّر التخطيط أو الأبعاد أو المسافات؛ الشارة وحدها قابلة للضغط لتثبيت عنصر واحد دون تنفيذ إجراء التطبيق.
 - **Actions:** []
 - **Stores:** —
 - **Logic files:** —
-- **Tests (regression boundary):** `tests/ui-registry.test.ts`, `tests/e2e/ui-registry.spec.ts`
+- **Tests (regression boundary):** `tests/ui-registry.test.ts`, `tests/e2e/ui-registry.spec.ts`, `tests/e2e/ui-inspector-interactive.spec.ts`
 - **Shortcuts:** —
 - **Identity mode:** static
 - **Status:** `active`
 - **Dependencies:** `A410`
 - **Related UI IDs:** `A412`
-- **Code references (not UI IDs):** `document.querySelectorAll([data-ui-id])`, `data-ui-badge-for`, `MutationObserver`
+- **Code references (not UI IDs):** `document.elementFromPoint`, `data-ui-inspector-hover-outline`, `data-ui-inspector-pin-outline`, `requestAnimationFrame`
 
 </details>
 
@@ -7403,19 +7403,19 @@
 - **Route:** `all routes via ?uiInspector=1`
 - **Component:** `UIRegistryInspector`
 - **Source:** `src/components/dev/UIRegistryInspector.tsx`
-- **Purpose:** لوحة تفاصيل سجل العنصر المحدد من DOM.
-- **Behavior:** تقرأ ID وName وKind وRoute وParent وFeature وComponent وSource file وActions وRelated IDs من السجل الحالي.
-- **Constraints:** مصدر البيانات هو سجل TypeScript/JSON الحالي؛ لا تعرض قيما افتراضية عند فشل المطابقة.
+- **Purpose:** لوحة تفاصيل سجل العنصر المثبّت من DOM.
+- **Behavior:** تفتح بعد الضغط على شارة المعرّف، وتقرأ ID وName وType وPage وParent ID وFeature ID وComponent وSource file وAction أو Handler وRelated IDs من السجل الحالي.
+- **Constraints:** مصدر البيانات هو سجل TypeScript/JSON الحالي؛ لا تعرض قيمًا افتراضية عند عدم التحقق بل «Not available».
 - **Actions:** []
 - **Stores:** —
 - **Logic files:** —
-- **Tests (regression boundary):** `tests/ui-registry.test.ts`, `tests/e2e/ui-registry.spec.ts`
+- **Tests (regression boundary):** `tests/ui-registry.test.ts`, `tests/e2e/ui-registry.spec.ts`, `tests/e2e/ui-inspector-interactive.spec.ts`
 - **Shortcuts:** —
 - **Identity mode:** static
 - **Status:** `active`
 - **Dependencies:** `A410`
 - **Related UI IDs:** `A411`
-- **Code references (not UI IDs):** `UI_REGISTRY`, `FEATURE_REGISTRY`
+- **Code references (not UI IDs):** `UI_REGISTRY`, `FEATURE_REGISTRY`, `data-ui-inspector-badge`
 
 </details>
 
@@ -13203,19 +13203,19 @@
 - **Route:** `all routes via ?uiInspector=1`
 - **Component:** `UIRegistryInspector`
 - **Source:** `src/components/dev/UIRegistryInspector.tsx`
-- **Purpose:** شارة مرئية تعرض معرّف العنصر الحقيقي الذي تشير إليه data-ui-badge-for.
-- **Behavior:** نص الشارة نسخة مباشرة من data-ui-id على عنصر DOM المسجل المقابل.
-- **Constraints:** وسم بصري غير تفاعلي وشفاف للأحداث؛ لا يستبدل هوية العنصر الأصلي.
+- **Purpose:** شارة قابلة للضغط تعرض معرّف العنصر الحقيقي الذي تشير إليه data-ui-badge-for.
+- **Behavior:** تظهر عند تمرير المؤشر على عنصر مسجّل أو عند تثبيته؛ الضغط عليها يثبّت تحديد العنصر ويفتح لوحة تفاصيله.
+- **Constraints:** نص الشارة نسخة مباشرة من data-ui-id على عنصر DOM المسجّل المقابل؛ الضغط عليها لا ينفّذ إجراء العنصر الأصلي، ولا تظهر أكثر من شارتين في الوقت نفسه (مرور + تثبيت).
 - **Actions:** []
 - **Stores:** —
 - **Logic files:** —
-- **Tests (regression boundary):** `tests/ui-registry.test.ts`, `tests/e2e/ui-registry.spec.ts`
+- **Tests (regression boundary):** `tests/ui-registry.test.ts`, `tests/e2e/ui-registry.spec.ts`, `tests/e2e/ui-inspector-interactive.spec.ts`
 - **Shortcuts:** —
 - **Identity mode:** template
 - **Status:** `active`
 - **Dependencies:** —
 - **Related UI IDs:** —
-- **Code references (not UI IDs):** `data-ui-badge-for`, `data-ui-id`
+- **Code references (not UI IDs):** `data-ui-badge-for`, `data-ui-inspector-badge`, `data-ui-id`
 
 </details>
 
