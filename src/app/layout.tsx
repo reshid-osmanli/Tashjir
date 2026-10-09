@@ -36,7 +36,7 @@ export default function RootLayout({
           تجاوز إلى المحتوى
         </a>
         {children}
-        {process.env.NODE_ENV === 'development' && <UIRegistryInspector />}
+        <UIRegistryInspector />
       </body>
     </html>
   );
