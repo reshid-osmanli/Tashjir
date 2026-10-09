@@ -16,6 +16,8 @@ Counts are active conceptual records, not rendered data instances. Static covera
 | Registered UI Elements | 1702 |
 | Mapped UI Elements | 1702 |
 | Retired records retained | 77 |
+| Active records with generic auto-generated behavior text | 788 (of 1702) |
+| `/editor` active records with generic behavior text | 382 (of 905) |
 | Missing IDs | 0 |
 | Duplicate IDs | 0 |
 | Orphan IDs | 0 |
@@ -25,13 +27,18 @@ Counts are active conceptual records, not rendered data instances. Static covera
 
 - Registry Validation: **PASS** (`npm run registry:validate`).
 - Registry tests: **PASS**, 21 tests across two files.
-- General tests: **FAIL**, 763 passed, 1 failed, 2 skipped. The failing assertion is `tests/engine-studio-package02.test.ts:376`: expected one export diff line, received two. Reproduced in isolation. The engine/store implementation and this test were not modified; do not claim the entire suite passes.
+- General tests: **PASS**, 765 passed, 0 failed, 2 skipped. The former failure in `tests/engine-studio-package02.test.ts` (AC-5) was a stale expectation: `docs/ENGINE_STUDIO.md` specifies that a priority collision shifts the collided chain by one and reports one diff line per shifted rule. The test now checks a free-priority change (one line) and a collision chain (two lines). The engine was not changed.
 - Typecheck: **PASS**.
 - Lint: **PASS**, zero errors, 23 warnings. Fixed the obsolete `next lint` command to run ESLint directly, ignored generated Next files, and resolved validator escaping errors.
 - Production Build: **PASS** (all routes generated).
 - HTTP smoke: **PASS** for all 13 routes (200 and identity markers in HTML).
-- Browser smoke and Inspector interaction: **BLOCKED**, browser could not launch because `libnspr4.so` is absent. The 14 Playwright attempts failed before rendering pages; these are not successful browser verification. Tests are checked in for an environment with Chromium dependencies.
+- Browser smoke and Inspector interaction: **PASS** in this pass. Playwright `tests/e2e/ui-registry.spec.ts` runs 14/14 with a Chromium binary (`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`) that bundles its own libraries; the official Playwright browser download is not reachable from the sandbox.
 - Prisma postinstall: engine download blocked by restricted network; installation continued using the existing offline fallback. Build succeeded nevertheless.
+
+## Known gaps (not hidden)
+
+- Behavior text: the scanner generated many records with boilerplate behavior ("لا يضيف السجل سلوكًا جديدًا" / "يعرض المحتوى/القيمة"). The 17 `EditorToolbar` records were rewritten from source; 382 `/editor` records and 788 records overall remain generic. Some generated names are expression fragments (e.g. A730) or option labels built from code expressions (e.g. `formatPercent(...)`) rather than user-facing names.
+- Browser verification (this pass): Chromium via `@sparticuz/chromium` with bundled libraries. All 13 production routes return 200 with no page errors, every visible interactive control on load carries `data-ui-id`, Playwright `tests/e2e/ui-registry.spec.ts` passes 14/14, and the development UI Inspector toggles and shows details. `tashjir.vercel.app` was not reachable from the sandbox, so production DOM was not inspected directly.
 
 ## Scope and limitations
 
