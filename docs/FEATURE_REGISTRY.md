@@ -19,7 +19,7 @@ Feature definitions live in `src/ui/feature-registry.ts`. This document is gener
 | A011 | Statistics | `/statistics` | لوحة قراءة إحصائية للتغطية والمواضع والفئات والرواة والمستندات. | active |
 | A012 | Public Landing | `/` | صفحة تعريف عامة تعرض قيمة المشروع وروابط الوصول إلى مساحات العمل. | active |
 | A013 | Local Sign-in | `/login` | واجهة دخول محلية تحفظ شارة الجلسة في المتصفح ولا ترسل بيانات إلى خادم. | active |
-| A014 | Developer UI Inspector | `development-only` | أداة تطوير فقط تعرض معرفات DOM المسجلة وتفاصيل السجل دون تغيير سلوك التطبيق. | active |
+| A014 | UI ID Inspector | `any page (opt-in: ?uiInspector=1 or Alt+Shift+I)` | فاحص معرفات الواجهة: يعرض معرّف كل عنصر مسجّل فوقه ويفتح تفاصيله من السجل. يعمل في كل بناء بما فيها الإنتاج، ولا يظهر إلا عند تفعيله؛ وعند تعطيله لا يبقى أي أثر في الصفحة. | active |
 | A015 | Dashboard Workspace Shell | `shared-dashboard` | الغلاف المشترك لمسارات مساحة العمل: التنقل المتجاوب، رابط المصحف، شارة الجلسة، وحاوية التأكيد. | active |
 
 ## Feature details
@@ -296,24 +296,24 @@ Feature definitions live in `src/ui/feature-registry.ts`. This document is gener
 | UI | `A032`, `A340`, `A341`, `A342` | `src/app/login/page.tsx` | Local-only sign-in form and navigation. |
 | Persistence | `A344` | `src/app/login/page.tsx` | The submit action writes the local tashjeer-session value only. |
 
-## A014 — Developer UI Inspector
+## A014 — UI ID Inspector
 
-- **Route/surface:** `development-only`
+- **Route/surface:** `any page (opt-in: ?uiInspector=1 or Alt+Shift+I)`
 - **Status:** `active`
-- **Purpose:** أداة تطوير فقط تعرض معرفات DOM المسجلة وتفاصيل السجل دون تغيير سلوك التطبيق.
-- **Important child UI IDs:** `A410`, `A730`, `A411`, `A731`, `A412`, `A732`
-- **Main files:** `src/components/dev/UIRegistryInspector.tsx`, `src/ui/ui-registry.ts`
-- **Main components:** `UIRegistryInspector`
+- **Purpose:** فاحص معرفات الواجهة: يعرض معرّف كل عنصر مسجّل فوقه ويفتح تفاصيله من السجل. يعمل في كل بناء بما فيها الإنتاج، ولا يظهر إلا عند تفعيله؛ وعند تعطيله لا يبقى أي أثر في الصفحة.
+- **Important child UI IDs:** `A730`, `A410`, `A411`, `A731`, `A412`, `A732`, `A2126`, `A2127`
+- **Main files:** `src/components/dev/UIRegistryInspector.tsx`, `src/components/dev/UIRegistryInspectorPanel.tsx`, `src/components/dev/ui-inspector-activation.ts`, `src/components/dev/ui-inspector-model.ts`, `src/ui/ui-registry.ts`
+- **Main components:** `UIRegistryInspector`, `UIRegistryInspectorPanel`
 - **Stores/persistence owners:** —
 - **Engine/data dependencies:** —
-- **Regression tests:** `tests/ui-registry.test.ts`
+- **Regression tests:** `tests/ui-registry.test.ts`, `tests/ui-inspector.test.ts`, `tests/e2e/ui-inspector.spec.ts`
 
 ### Change impact map
 
 | Layer | UI IDs | Files / systems | Notes |
 |---|---|---|---|
-| UI | `A410`, `A411`, `A412` | `src/components/dev/UIRegistryInspector.tsx` | Development-only overlay; returns no UI in production. |
-| Tests | `A410`, `A411`, `A412` | `tests/ui-registry.test.ts` | Registry metadata and DOM markers are validated together. |
+| UI | `A410`, `A411`, `A412`, `A730`, `A731`, `A732`, `A2126`, `A2127` | `src/components/dev/UIRegistryInspector.tsx`, `src/components/dev/UIRegistryInspectorPanel.tsx` | Opt-in overlay: renders nothing until activated; registry data loads lazily on activation. |
+| Tests | `A410`, `A411`, `A412`, `A730`, `A731`, `A732`, `A2126`, `A2127` | `tests/ui-registry.test.ts`, `tests/ui-inspector.test.ts`, `tests/e2e/ui-inspector.spec.ts` | Registry metadata, activation rules, badge placement and browser behaviour are checked. |
 
 ## A015 — Dashboard Workspace Shell
 

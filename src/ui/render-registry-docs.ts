@@ -86,7 +86,7 @@ export function renderUIRegistryDoc(): string {
     `## التحقق\n\n` +
     `- \`npm test -- tests/ui-registry.test.ts\` يفحص uniqueness/format/hierarchy/references/DOM markers/unknown IDs/retired IDs وتطابق الوثائق.\n` +
     `- عناصر الـ UI ذات الحالة \`active\` أو \`deprecated\` يجب أن تحمل \`data-ui-id="Axxx"\` في الملف المسجل. فحص جميع ملفات المصدر يكشف أي علامة بلا تعريف.\n` +
-    `- وضع Inspector: Development فقط، زر عائم أو الاختصار \`Alt+Shift+I\`. لا يعرض السجل للمستخدم النهائي في الإنتاج.\n`;
+    `- وضع UI ID Inspector: يعمل في كل بناء بما فيها الإنتاج، ويُفعَّل بـ \`?uiInspector=1\` أو الاختصار \`Alt+Shift+I\`. عند التعطيل لا يظهر شيء ولا تُحمَّل بيانات السجل؛ عند التفعيل تظهر الشارات وتُحمَّل بيانات السجل عند الطلب.\n`;
 }
 
 export function renderProjectMapDoc(): string {

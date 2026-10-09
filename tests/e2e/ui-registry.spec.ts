@@ -12,10 +12,4 @@ for (const route of UI_REGISTRY.filter(e=>e.kind==='route')) {
     expect(errors).toEqual([]);
   });
 }
-test('Inspector Alt-click reads exact ID without invoking the button', async ({page})=>{
- await page.goto('/editor');
- await page.locator('[data-ui-id="A410"]').click();
- await page.locator('[data-ui-id="A116"]').click({modifiers:['Alt']});
- await expect(page.locator('[data-ui-id="A412"]')).toContainText('A116');
- await expect(page.locator('[data-ui-id="A421"]')).toHaveCount(0);
-});
+// The UI ID Inspector has its own browser suite: tests/e2e/ui-inspector.spec.ts.
