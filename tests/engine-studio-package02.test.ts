@@ -361,7 +361,26 @@ describe('AC-5: تصدير/استيراد حتمي وdiff دقيق', () => {
     expect(serializeEngineConfig(config)).toBe(first);
   });
 
-  it('تغيير أولوية عبر العملية الفعلية (setRulePriority) = سطر واحد في diff', () => {
+  it('تغيير أولوية إلى رقم حر عبر العملية الفعلية (setRulePriority) = سطر واحد في diff', () => {
+    let cfg = createDefaultEngineConfig('default');
+    const before = serializeEngineConfig(cfg);
+    const free = 99;
+    expect(cfg.rules.some((rule) => rule.priority === free)).toBe(false);
+    cfg = setRulePriority(cfg, 'er-system-merge-madd-tahqiq', free);
+    const after = serializeEngineConfig(cfg);
+
+    const b = before.split('\n');
+    const a = after.split('\n');
+    expect(a.length).toBe(b.length);
+    const diffs = b
+      .map((line, index) => ({ line, other: a[index] }))
+      .filter((entry) => entry.line !== entry.other);
+    expect(diffs).toHaveLength(1);
+    expect(diffs[0].line).toContain('80');
+    expect(diffs[0].other).toContain(String(free));
+  });
+
+  it('تصادم الأولوية يزيح السلسلة وفق ENGINE_STUDIO.md: سطر لكل قاعدة أُزيحت', () => {
     let cfg = createDefaultEngineConfig('default');
     const before = serializeEngineConfig(cfg);
     cfg = setRulePriority(cfg, 'er-system-merge-madd-tahqiq', 95);
@@ -373,9 +392,11 @@ describe('AC-5: تصدير/استيراد حتمي وdiff دقيق', () => {
     const diffs = b
       .map((line, index) => ({ line, other: a[index] }))
       .filter((entry) => entry.line !== entry.other);
-    expect(diffs).toHaveLength(1);
-    expect(diffs[0].line).toContain('80');
-    expect(diffs[0].other).toContain('95');
+    // القاعدة المستهدفة 80→95، والقاعدة التي كانت على 95 تُزاح إلى 96 (مقدار ١ فقط).
+    // الترتيب هنا حسب موضع السطر في الملف المصدَّر، لا حسب الترتيب الدلالي.
+    expect(diffs).toHaveLength(2);
+    const pairs = diffs.map((d) => [d.line.match(/\d+/)?.[0], d.other.match(/\d+/)?.[0]]);
+    expect(pairs).toEqual(expect.arrayContaining([['95', '96'], ['80', '95']]));
   });
 
   it('الاستيراد يرفض العبث: إصدار غير متوافق، معرّف مكرر، نص غير صالح', () => {

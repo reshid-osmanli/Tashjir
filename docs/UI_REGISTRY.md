@@ -13628,8 +13628,8 @@
 - **Route:** `/editor`
 - **Component:** `EditorToolbar`
 - **Source:** `src/components/editor/EditorToolbar.tsx`
-- **Purpose:** toolbar في EditorToolbar: نمط التعليم.
-- **Behavior:** يعرض المحتوى/القيمة أو ينظم العناصر التابعة؛ لا يضيف السجل سلوكًا جديدًا.
+- **Purpose:** تجمع زرّي وضع التعليم (A749، A750).
+- **Behavior:** مجموعة نمط التعليم: زرّان يختاران تعليم الكلمات كاملة أو تعليم الحروف مع تشكيلها.
 - **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
 - **Actions:** []
 - **Stores:** `src/stores/editor-store.ts`
@@ -13703,8 +13703,8 @@
 - **Route:** `/editor`
 - **Component:** `EditorToolbar`
 - **Source:** `src/components/editor/EditorToolbar.tsx`
-- **Purpose:** toolbar في EditorToolbar: التاريخ.
-- **Behavior:** يعرض المحتوى/القيمة أو ينظم العناصر التابعة؛ لا يضيف السجل سلوكًا جديدًا.
+- **Purpose:** تجمع أزرار التراجع والإعادة في شريط الأدوات.
+- **Behavior:** مجموعة التراجع والإعادة (A103، A104).
 - **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
 - **Actions:** []
 - **Stores:** `src/stores/editor-store.ts`
@@ -13728,8 +13728,8 @@
 - **Route:** `/editor`
 - **Component:** `EditorToolbar`
 - **Source:** `src/components/editor/EditorToolbar.tsx`
-- **Purpose:** toolbar في EditorToolbar: العرض.
-- **Behavior:** يعرض المحتوى/القيمة أو ينظم العناصر التابعة؛ لا يضيف السجل سلوكًا جديدًا.
+- **Purpose:** تجمع أدوات العرض في شريط الأدوات.
+- **Behavior:** مجموعة التكبير والتصغير وملء العرض وحجم خط المصحف.
 - **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
 - **Actions:** []
 - **Stores:** `src/stores/editor-store.ts`
@@ -13778,8 +13778,8 @@
 - **Route:** `/editor`
 - **Component:** `EditorToolbar`
 - **Source:** `src/components/editor/EditorToolbar.tsx`
-- **Purpose:** option في EditorToolbar: formatPercent(zoom).
-- **Behavior:** يعرض المحتوى/القيمة أو ينظم العناصر التابعة؛ لا يضيف السجل سلوكًا جديدًا.
+- **Purpose:** يظهر فقط عند زوم مخصص.
+- **Behavior:** خيار يعرض النسبة الحالية عندما لا تطابق مستوى تكبير ثابتًا؛ قيمته custom وليست مستوى يمكن اختياره.
 - **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
 - **Actions:** []
 - **Stores:** `src/stores/editor-store.ts`
@@ -13803,8 +13803,8 @@
 - **Route:** `/editor`
 - **Component:** `EditorToolbar`
 - **Source:** `src/components/editor/EditorToolbar.tsx`
-- **Purpose:** option في EditorToolbar: formatPercent(preset) — 0.25.
-- **Behavior:** يعرض المحتوى/القيمة أو ينظم العناصر التابعة؛ لا يضيف السجل سلوكًا جديدًا.
+- **Purpose:** مستوى تكبير ثابت 25٪.
+- **Behavior:** خيار مستوى تكبير ثابت 25٪؛ اختياره يعيّن zoom إلى هذه النسبة.
 - **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
 - **Actions:** []
 - **Stores:** `src/stores/editor-store.ts`
@@ -13828,8 +13828,8 @@
 - **Route:** `/editor`
 - **Component:** `EditorToolbar`
 - **Source:** `src/components/editor/EditorToolbar.tsx`
-- **Purpose:** option في EditorToolbar: formatPercent(preset) — 0.5.
-- **Behavior:** يعرض المحتوى/القيمة أو ينظم العناصر التابعة؛ لا يضيف السجل سلوكًا جديدًا.
+- **Purpose:** مستوى تكبير ثابت 50٪.
+- **Behavior:** خيار مستوى تكبير ثابت 50٪؛ اختياره يعيّن zoom إلى هذه النسبة.
 - **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
 - **Actions:** []
 - **Stores:** `src/stores/editor-store.ts`
@@ -13853,8 +13853,8 @@
 - **Route:** `/editor`
 - **Component:** `EditorToolbar`
 - **Source:** `src/components/editor/EditorToolbar.tsx`
-- **Purpose:** option في EditorToolbar: formatPercent(preset) — 0.75.
-- **Behavior:** يعرض المحتوى/القيمة أو ينظم العناصر التابعة؛ لا يضيف السجل سلوكًا جديدًا.
+- **Purpose:** مستوى تكبير ثابت 75٪.
+- **Behavior:** خيار مستوى تكبير ثابت 75٪؛ اختياره يعيّن zoom إلى هذه النسبة.
 - **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
 - **Actions:** []
 - **Stores:** `src/stores/editor-store.ts`
@@ -13878,8 +13878,8 @@
 - **Route:** `/editor`
 - **Component:** `EditorToolbar`
 - **Source:** `src/components/editor/EditorToolbar.tsx`
-- **Purpose:** option في EditorToolbar: formatPercent(preset) — 1.
-- **Behavior:** يعرض المحتوى/القيمة أو ينظم العناصر التابعة؛ لا يضيف السجل سلوكًا جديدًا.
+- **Purpose:** مستوى تكبير ثابت 100٪.
+- **Behavior:** خيار مستوى تكبير ثابت 100٪؛ اختياره يعيّن zoom إلى هذه النسبة.
 - **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
 - **Actions:** []
 - **Stores:** `src/stores/editor-store.ts`
@@ -13903,8 +13903,8 @@
 - **Route:** `/editor`
 - **Component:** `EditorToolbar`
 - **Source:** `src/components/editor/EditorToolbar.tsx`
-- **Purpose:** option في EditorToolbar: formatPercent(preset) — 1.25.
-- **Behavior:** يعرض المحتوى/القيمة أو ينظم العناصر التابعة؛ لا يضيف السجل سلوكًا جديدًا.
+- **Purpose:** مستوى تكبير ثابت 125٪.
+- **Behavior:** خيار مستوى تكبير ثابت 125٪؛ اختياره يعيّن zoom إلى هذه النسبة.
 - **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
 - **Actions:** []
 - **Stores:** `src/stores/editor-store.ts`
@@ -13928,8 +13928,8 @@
 - **Route:** `/editor`
 - **Component:** `EditorToolbar`
 - **Source:** `src/components/editor/EditorToolbar.tsx`
-- **Purpose:** option في EditorToolbar: formatPercent(preset) — 1.5.
-- **Behavior:** يعرض المحتوى/القيمة أو ينظم العناصر التابعة؛ لا يضيف السجل سلوكًا جديدًا.
+- **Purpose:** مستوى تكبير ثابت 150٪.
+- **Behavior:** خيار مستوى تكبير ثابت 150٪؛ اختياره يعيّن zoom إلى هذه النسبة.
 - **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
 - **Actions:** []
 - **Stores:** `src/stores/editor-store.ts`
@@ -13953,8 +13953,8 @@
 - **Route:** `/editor`
 - **Component:** `EditorToolbar`
 - **Source:** `src/components/editor/EditorToolbar.tsx`
-- **Purpose:** option في EditorToolbar: formatPercent(preset) — 2.
-- **Behavior:** يعرض المحتوى/القيمة أو ينظم العناصر التابعة؛ لا يضيف السجل سلوكًا جديدًا.
+- **Purpose:** مستوى تكبير ثابت 200٪.
+- **Behavior:** خيار مستوى تكبير ثابت 200٪؛ اختياره يعيّن zoom إلى هذه النسبة.
 - **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
 - **Actions:** []
 - **Stores:** `src/stores/editor-store.ts`
@@ -13978,8 +13978,8 @@
 - **Route:** `/editor`
 - **Component:** `EditorToolbar`
 - **Source:** `src/components/editor/EditorToolbar.tsx`
-- **Purpose:** option في EditorToolbar: formatPercent(preset) — 3.
-- **Behavior:** يعرض المحتوى/القيمة أو ينظم العناصر التابعة؛ لا يضيف السجل سلوكًا جديدًا.
+- **Purpose:** مستوى تكبير ثابت 300٪.
+- **Behavior:** خيار مستوى تكبير ثابت 300٪؛ اختياره يعيّن zoom إلى هذه النسبة.
 - **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
 - **Actions:** []
 - **Stores:** `src/stores/editor-store.ts`
@@ -14003,8 +14003,8 @@
 - **Route:** `/editor`
 - **Component:** `EditorToolbar`
 - **Source:** `src/components/editor/EditorToolbar.tsx`
-- **Purpose:** option في EditorToolbar: formatPercent(preset) — 4.
-- **Behavior:** يعرض المحتوى/القيمة أو ينظم العناصر التابعة؛ لا يضيف السجل سلوكًا جديدًا.
+- **Purpose:** مستوى تكبير ثابت 400٪.
+- **Behavior:** خيار مستوى تكبير ثابت 400٪؛ اختياره يعيّن zoom إلى هذه النسبة.
 - **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
 - **Actions:** []
 - **Stores:** `src/stores/editor-store.ts`
@@ -14103,8 +14103,8 @@
 - **Route:** `/editor`
 - **Component:** `EditorToolbar`
 - **Source:** `src/components/editor/EditorToolbar.tsx`
-- **Purpose:** toolbar في EditorToolbar: تكوين الشجرة.
-- **Behavior:** يعرض المحتوى/القيمة أو ينظم العناصر التابعة؛ لا يضيف السجل سلوكًا جديدًا.
+- **Purpose:** تجمع خيارات تخطيط الأسطر في شريط الأدوات.
+- **Behavior:** مجموعة خيارات تكوين الشجرة، وأهمها زر «سطر لكل تركيب قراءة» (A768) وزر نص الآية في سطر واحد (A769).
 - **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
 - **Actions:** []
 - **Stores:** `src/stores/editor-store.ts`
@@ -14178,8 +14178,8 @@
 - **Route:** `/editor`
 - **Component:** `EditorToolbar`
 - **Source:** `src/components/editor/EditorToolbar.tsx`
-- **Purpose:** toolbar في EditorToolbar: الرسم.
-- **Behavior:** يعرض المحتوى/القيمة أو ينظم العناصر التابعة؛ لا يضيف السجل سلوكًا جديدًا.
+- **Purpose:** تجمع مفاتيح إظهار طبقات الرسم في شريط الأدوات.
+- **Behavior:** مجموعة خيارات الرسم: بطاقات الأوجه والشبكة والمساطر ونقاط الارتباط (A771–A774).
 - **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
 - **Actions:** []
 - **Stores:** `src/stores/editor-store.ts`
@@ -14303,8 +14303,8 @@
 - **Route:** `/editor`
 - **Component:** `EditorToolbar`
 - **Source:** `src/components/editor/EditorToolbar.tsx`
-- **Purpose:** toolbar في EditorToolbar: الفئات.
-- **Behavior:** يعرض المحتوى/القيمة أو ينظم العناصر التابعة؛ لا يضيف السجل سلوكًا جديدًا.
+- **Purpose:** تجمع مفاتيح الفئات في شريط الأدوات.
+- **Behavior:** مجموعة أزرار إظهار أو إخفاء كل فئة من فئات الاختلافات (A776–A782).
 - **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
 - **Actions:** []
 - **Stores:** `src/stores/editor-store.ts`
@@ -14603,8 +14603,8 @@
 - **Route:** `/editor`
 - **Component:** `EditorToolbar`
 - **Source:** `src/components/editor/EditorToolbar.tsx`
-- **Purpose:** navigation في EditorToolbar: ماذا وجد المحرك وماذا صحّحت؟ — صفحة التتبع.
-- **Behavior:** يعرض المحتوى/القيمة أو ينظم العناصر التابعة؛ لا يضيف السجل سلوكًا جديدًا.
+- **Purpose:** رابط تنقل إلى /tracking، ولا يغيّر حالة المحرر.
+- **Behavior:** رابط يفتح صفحة التتبع /tracking لعرض ما وجده المحرك وما صحّحه المستخدم.
 - **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
 - **Actions:** []
 - **Stores:** `src/stores/editor-store.ts`
