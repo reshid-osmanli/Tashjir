@@ -213,6 +213,33 @@ test.describe('UI ID Inspector', () => {
     expect(errors).toEqual([]);
   });
 
+  test('a context menu opened before the inspector is on gets badges, and they go when it closes', async ({ page }) => {
+    test.setTimeout(120_000);
+    const errors = trackErrors(page);
+    await page.goto('/editor');
+    await expect(visibleTarget(page, 'A116')).toBeVisible();
+
+    // Ordinary use: right-click a word on the canvas to open the selection menu (a portal).
+    await page.locator('[data-word-id]').first().click({ button: 'right' });
+    const menu = page.locator('[data-ui-id="A130"]');
+    await expect(menu).toBeVisible();
+
+    // Turn the inspector on while the menu is open: the menu and its first command get badges.
+    await page.keyboard.press('Alt+Shift+KeyI');
+    await expect(toggle(page)).toBeVisible();
+    await expect(badge(page, 'A130').first()).toBeVisible();
+    const command = await menu.locator('[data-ui-id]').first().getAttribute('data-ui-id');
+    expect(command, 'menu command carries a registry ID').toMatch(/^A\d+$/);
+    await expect(badge(page, command!).first()).toBeVisible();
+    expect(await badgesIntercepting(page)).toBe(0);
+
+    // Escape closes the menu, and its badges go with it.
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveCount(0);
+    await expect(badge(page, 'A130')).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
   test('every main route: badges for every registered element, none intercepting, no page errors', async ({ page }) => {
     test.setTimeout(300_000);
     const errors = trackErrors(page);

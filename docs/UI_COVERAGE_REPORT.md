@@ -65,8 +65,8 @@ Verification in this pass (sandbox; Chromium 153 through `@sparticuz/chromium`):
 - `npx tsc --noEmit`: PASS.
 - `npm run lint`: 0 errors, 23 warnings. None of the warnings are in the changed files.
 - `npm run build`: PASS, 17 routes generated. The registry JSON is in its own lazy chunk and is not in any editor or shared chunk.
-- Playwright on the production build (`next start`): `tests/e2e/ui-inspector.spec.ts` 4/4 PASS, `tests/e2e/ui-registry.spec.ts` 13/13 PASS.
-- Full Playwright suite on the production build: 19 passed, 5 failed. The 5 failures are in `tests/e2e/editor-ph3.spec.ts` (drag, touch and bulk-delete gestures). The same 5 fail on the pre-change commit `7f44096`, so they predate this work. They were not touched here and are not claimed as fixed.
+- Playwright on the production build (`next start`): `tests/e2e/ui-inspector.spec.ts` 5/5 PASS (keyboard activation, badge geometry and hit-testing, inspect and copy, use mode, the switch across reloads, a context menu portal, every main route), `tests/e2e/ui-registry.spec.ts` 13/13 PASS.
+- Full Playwright suite on the production build: 20 passed, 5 failed (25 tests). The 5 failures are in `tests/e2e/editor-ph3.spec.ts` (drag, touch and bulk-delete gestures). The same 5 fail on the pre-change commit `7f44096`, so they predate this work. They were not touched here and are not claimed as fixed.
 - Inspector off: against a build of the pre-change commit `7f44096`, with the clock frozen, the DOM is identical on all 13 routes. Screenshots match on repeated samples. Isolated frames differ only where the unmodified build also varies between runs.
 
 Vercel: the SSO-protected preview cannot be opened from the sandbox, so no visual check on Vercel is claimed here. The pull request and the commit status hold the preview deployment reference.
