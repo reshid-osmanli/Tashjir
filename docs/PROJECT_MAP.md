@@ -245,12 +245,12 @@ This map is generated from `src/ui/feature-registry.ts`; exact interactive-eleme
 - **Components:** `UIRegistryInspector`
 - **State/persistence owners:** —
 - **Engine and data dependencies:** —
-- **Focused tests:** `tests/ui-registry.test.ts`, `tests/e2e/ui-registry.spec.ts`
+- **Focused tests:** `tests/ui-registry.test.ts`, `tests/ui-inspector-geometry.test.ts`, `tests/e2e/ui-registry.spec.ts`, `tests/e2e/ui-inspector.spec.ts`
 
 | Layer | UI identities | Owning files/systems |
 |---|---|---|
-| UI | `A410`, `A411`, `A412` | `src/components/dev/UIRegistryInspector.tsx`, `src/app/layout.tsx` |
-| Tests | `A410`, `A411`, `A412` | `tests/ui-registry.test.ts`, `tests/e2e/ui-registry.spec.ts` |
+| UI | `A410`, `A411`, `A412`, `A730`, `A731`, `A732`, `A2126` | `src/components/dev/UIRegistryInspector.tsx`, `src/components/dev/inspector-geometry.ts`, `src/app/layout.tsx` |
+| Tests | `A410`, `A411`, `A412`, `A731`, `A732`, `A2126` | `tests/ui-registry.test.ts`, `tests/ui-inspector-geometry.test.ts`, `tests/e2e/ui-registry.spec.ts`, `tests/e2e/ui-inspector.spec.ts` |
 
 ## A015 — Dashboard Workspace Shell
 

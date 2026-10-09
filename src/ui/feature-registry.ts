@@ -320,10 +320,10 @@ export const FEATURE_REGISTRY = [
     mainComponents: ['UIRegistryInspector'],
     stores: [],
     engineDependencies: [],
-    testFiles: ['tests/ui-registry.test.ts', 'tests/e2e/ui-registry.spec.ts'],
+    testFiles: ['tests/ui-registry.test.ts', 'tests/ui-inspector-geometry.test.ts', 'tests/e2e/ui-registry.spec.ts', 'tests/e2e/ui-inspector.spec.ts'],
     impactMap: [
-      { layer: 'UI', files: ['src/components/dev/UIRegistryInspector.tsx', 'src/app/layout.tsx'], uiIds: ['A410', 'A411', 'A412'], notes: 'The explicit query flag activates a production-safe overlay; pointer-transparent badges bind to real data-ui-id values, and ordinary clicks remain unchanged.' },
-      { layer: 'Tests', files: ['tests/ui-registry.test.ts', 'tests/e2e/ui-registry.spec.ts'], uiIds: ['A410', 'A411', 'A412'], notes: 'Registry metadata and visible production DOM badges are validated together.' },
+      { layer: 'UI', files: ['src/components/dev/UIRegistryInspector.tsx', 'src/components/dev/inspector-geometry.ts', 'src/app/layout.tsx'], uiIds: ['A410', 'A411', 'A412', 'A730', 'A731', 'A732', 'A2126'], notes: 'Off by default. When on, only the hovered element and the pinned element get a badge; badges pin on click and never run the element action. Highlights are a temporary fixed layer that never changes application DOM or styles.' },
+      { layer: 'Tests', files: ['tests/ui-registry.test.ts', 'tests/ui-inspector-geometry.test.ts', 'tests/e2e/ui-registry.spec.ts', 'tests/e2e/ui-inspector.spec.ts'], uiIds: ['A410', 'A411', 'A412', 'A731', 'A732', 'A2126'], notes: 'Registry metadata, Inspector geometry, and production browser behavior (hover, pin, red marker, no action on badge click, Escape, teardown, navigation, data immutability) are validated.' },
     ],
   },
   {

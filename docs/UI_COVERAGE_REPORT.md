@@ -48,6 +48,27 @@ The Registry was not regenerated. Its record count remains 1779 total: 1702 acti
 - The branch preview URL used for the direct attempt is [the editor with Inspector enabled](https://tashjir-git-arena-cd26d510-tashjir-reshid-osmanlis-projects.vercel.app/editor?uiInspector=1). In this sandbox, the Vercel page fetch redirected to Vercel sign-in and Playwright's direct request ended with `net::ERR_CONNECTION_CLOSED`; the Vercel connector is not available in this session. Therefore the deployed DOM could not be inspected and a screenshot of the deployed build could not be captured.
 - `test-results/ui-inspector-local-production.png` is a real browser screenshot from the local **production build**, not from Vercel. This distinction is intentional; remote visual verification is still outstanding.
 
+## Interactive Inspector revision (pin-and-inspect)
+
+The earlier Inspector drew a badge on every visible registered element at once, which made the page unreadable. It now works on demand:
+
+- Only the element under the pointer or keyboard focus shows a badge and a temporary outline. Only the pinned element keeps one.
+- Clicking a badge pins the exact element. The pinned element is marked red with a temporary overlay (no change to application DOM or styles), and details open.
+- The badge click is consumed before the element sees it, so a delete button's badge pins it without deleting anything.
+- Escape clears the pin. Toggling off, or navigating to another page, removes all Inspector layers.
+- The details card is pointer-transparent except its own Copy and Clear buttons, so it never blocks hovering other elements.
+
+Registry changes (documented, append-only): the new control `A2126` "Clear Inspector Selection Button" was added under `A412`. The behavior text of `A411`, `A412`, and `A731` was updated because the old text described all-at-once badges. Docs were regenerated with `npm run registry:docs`. No existing ID number was changed or reused.
+
+Verification at this revision:
+
+- Vitest: **PASS**, 774 passed, 2 skipped (9 new geometry tests).
+- TypeScript: **PASS**. ESLint: **PASS**, zero errors (23 pre-existing warnings).
+- Production build: **PASS**.
+- Production Playwright: `tests/e2e/ui-inspector.spec.ts` **20/20** and `tests/e2e/ui-registry.spec.ts` **13/13**, against `next start`. They cover the 14 required behaviors, keyboard use, the delete-badge case (variant data byte-identical, no confirmation opened), and a control run showing the uninspected delete button does open the confirmation.
+- Pre-existing, unrelated: `tests/e2e/editor-ph3.spec.ts` has 5 failing drag/pointer assertions before and after this change. This change does not touch those paths.
+- Browser: Chromium 153 binary from the `@sparticuz/chromium` npm package, because Playwright's CDN is not reachable from this sandbox.
+
 ## Remaining coverage limitations
 
 - The scanner generated generic behavior text for 788 active records overall (including 382 of 905 `/editor` records); some generated names elsewhere may remain code-expression fragments. This fix did not rebuild or renumber those records.

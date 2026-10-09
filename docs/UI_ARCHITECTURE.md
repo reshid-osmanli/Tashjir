@@ -18,7 +18,16 @@ Dynamic data rows use one template identity; domain keys go in `data-ui-instance
 
 ## Inspector
 
-Development only: floating **UI Inspector**, or **Alt+Shift+I**. Click a badge to view metadata. **Alt+click the actual control** to inspect nested HTML/SVG controls without running their action. Normal clicks retain their original behavior. Escape closes details; toggle disables inspection. Portals and conditional dialogs are discovered when opened. The root layout does not mount Inspector in production.
+Off by default: no badges, overlay, listeners, or Registry JSON. Turn on with **Alt+Shift+I** or `?uiInspector=1`, in any build.
+
+- **Hover** a registered element: only its badge (`A333 · name`) and a temporary blue outline appear. Other elements get nothing.
+- **Click the badge** (or **Alt+click** the element) to pin it. The pinned element gets a red marker chosen by type (fill for buttons, ring for fields, bottom bar for tabs, dashed outline for panels), and a details card shows its ID, name, type, page, parent, feature, component, source file, action/handler, and related IDs. Missing data shows as unavailable, never as an invented value.
+- The badge click never runs the element's action. A badge event is consumed in the capture phase.
+- **Alt+Shift+Enter** pins the hovered or keyboard-focused element. **Escape** clears the pin only; the editor's own Escape still runs.
+- Badges and markers are a fixed, pointer-transparent overlay outside the layout. The Inspector never changes application DOM, styles, or data.
+- Navigating to another page, or turning the Inspector off, removes every badge, outline, and marker.
+
+Placement and hover-bridging rules live in `src/components/dev/inspector-geometry.ts` and are unit-tested in `tests/ui-inspector-geometry.test.ts`. Browser behavior is tested in `tests/e2e/ui-inspector.spec.ts` against the production build.
 
 ## Verification
 

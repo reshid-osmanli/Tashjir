@@ -1736,6 +1736,7 @@
     - **A731** — UI ID Overlay Badge (inspector, active)
   - **A412** — UI ID Registry Details Panel (inspector, active)
     - **A732** — Copy Selected UI ID Button (button, active)
+    - **A2126** — Clear Inspector Selection Button (button, active)
 - **A015** — Dashboard Workspace Shell (feature, active) — `shared-dashboard`
   - **A310** — Dashboard Layout Shell (shell, active)
     - **A311** — Desktop Sidebar Navigation (navigation, active)
@@ -2198,6 +2199,7 @@
 | A730 | control | UIRegistryInspector Root Container | A410 | `all routes via ?uiInspector=1` | `UIRegistryInspector` | `src/components/dev/UIRegistryInspector.tsx` | active |
 | A731 | inspector | UI ID Overlay Badge | A411 | `all routes via ?uiInspector=1` | `UIRegistryInspector` | `src/components/dev/UIRegistryInspector.tsx` | active |
 | A732 | button | Copy Selected UI ID Button | A412 | `all routes via ?uiInspector=1` | `UIRegistryInspector` | `src/components/dev/UIRegistryInspector.tsx` | active |
+| A2126 | button | Clear Inspector Selection Button | A412 | `all routes via ?uiInspector=1` | `UIRegistryInspector` | `src/components/dev/UIRegistryInspector.tsx` | active |
 | A733 | option | AyahNavigator — . (option) | A108 | `/editor` | `AyahNavigator` | `src/components/editor/AyahNavigator.tsx` | active |
 | A734 | option | AyahNavigator — toArabicDigits(number) (option) | A109 | `/editor` | `AyahNavigator` | `src/components/editor/AyahNavigator.tsx` | active |
 | A735 | button | AyahNavigator — السابقة (button) | A107 | `/editor` | `AyahNavigator` | `src/components/editor/AyahNavigator.tsx` | active |
@@ -7378,9 +7380,9 @@
 - **Route:** `all routes via ?uiInspector=1`
 - **Component:** `UIRegistryInspector`
 - **Source:** `src/components/dev/UIRegistryInspector.tsx`
-- **Purpose:** طبقة شارات مرئية تربط كل شارة بقيمة data-ui-id على عنصر DOM الفعلي.
-- **Behavior:** تراقب العناصر المسجلة المرئية والتغييرات الديناميكية، وتعرض المعرف الفعلي دون توليد معرّفات بديلة.
-- **Constraints:** الشارات pointer-events:none، ولا تحجب التحكمات؛ Alt+click يحدد العنصر دون تشغيل إجراء التطبيق.
+- **Purpose:** طبقة شارات تفاعلية: شارة للعنصر تحت المؤشر أو التركيز، وشارة ثانية للعنصر المثبت فقط.
+- **Behavior:** تحدد العنصر الفعلي تحت المؤشر (أو التركيز بلوحة المفاتيح) وتعرض شارته مع إطار أزرق مؤقت. النقر على الشارة يثبّت التحديد ويميّزه بالأحمر ويفتح التفاصيل، ولا تعرض كل المعرفات دفعة واحدة.
+- **Constraints:** الطبقة خارج تدفق التخطيط وتُقاس العناصر المطلوبة فقط؛ لا تغيّر DOM التطبيق أو أنماطه أو بياناته، وتُزال كل طبقاتها عند الإيقاف أو تغيّر الصفحة. Escape يلغي التثبيت فقط.
 - **Actions:** []
 - **Stores:** —
 - **Logic files:** —
@@ -7390,7 +7392,7 @@
 - **Status:** `active`
 - **Dependencies:** `A410`
 - **Related UI IDs:** `A412`
-- **Code references (not UI IDs):** `document.querySelectorAll([data-ui-id])`, `data-ui-badge-for`, `MutationObserver`
+- **Code references (not UI IDs):** `pointermove`, `elementFromPoint`, `data-ui-badge-for`, `MutationObserver`
 
 </details>
 
@@ -7404,7 +7406,7 @@
 - **Component:** `UIRegistryInspector`
 - **Source:** `src/components/dev/UIRegistryInspector.tsx`
 - **Purpose:** لوحة تفاصيل سجل العنصر المحدد من DOM.
-- **Behavior:** تقرأ ID وName وKind وRoute وParent وFeature وComponent وSource file وActions وRelated IDs من السجل الحالي.
+- **Behavior:** تقرأ ID وName وType وPage وParent وFeature وComponent وSource file وAction/Handler وRelated IDs من السجل الحالي، وتعرض Live DOM من العنصر الفعلي؛ البيانات غير المسجلة تُعرض كغير متاح.
 - **Constraints:** مصدر البيانات هو سجل TypeScript/JSON الحالي؛ لا تعرض قيما افتراضية عند فشل المطابقة.
 - **Actions:** []
 - **Stores:** —
@@ -13203,9 +13205,9 @@
 - **Route:** `all routes via ?uiInspector=1`
 - **Component:** `UIRegistryInspector`
 - **Source:** `src/components/dev/UIRegistryInspector.tsx`
-- **Purpose:** شارة مرئية تعرض معرّف العنصر الحقيقي الذي تشير إليه data-ui-badge-for.
-- **Behavior:** نص الشارة نسخة مباشرة من data-ui-id على عنصر DOM المسجل المقابل.
-- **Constraints:** وسم بصري غير تفاعلي وشفاف للأحداث؛ لا يستبدل هوية العنصر الأصلي.
+- **Purpose:** شارة قابلة للنقر تعرض معرّف العنصر الحقيقي (data-ui-id) واسمه من السجل، وتثبّت التحديد عند الضغط عليها.
+- **Behavior:** نص الشارة نسخة مباشرة من data-ui-id على عنصر DOM المسجل المقابل؛ الضغط عليها يثبّت هذا العنصر ويمنع وصول النقرة إلى إجراء العنصر الأصلي.
+- **Constraints:** خارج تدفق التخطيط، وتُموضع فوق العنصر أو تحته أو داخل حافته عند ضيق المساحة، وتبقى داخل منطقة العرض؛ لا تستبدل هوية العنصر الأصلي.
 - **Actions:** []
 - **Stores:** —
 - **Logic files:** —
@@ -13215,7 +13217,7 @@
 - **Status:** `active`
 - **Dependencies:** —
 - **Related UI IDs:** —
-- **Code references (not UI IDs):** `data-ui-badge-for`, `data-ui-id`
+- **Code references (not UI IDs):** `data-ui-badge-for`, `data-ui-badge-layer`, `data-ui-id`
 
 </details>
 
@@ -13241,6 +13243,31 @@
 - **Dependencies:** —
 - **Related UI IDs:** `A410`, `A412`
 - **Code references (not UI IDs):** `navigator.clipboard.writeText`, `selectedId`
+
+</details>
+
+<details>
+<summary><strong>A2126 — Clear Inspector Selection Button</strong></summary>
+
+- **Type:** `button`
+- **Feature:** A014 — UI ID Inspector
+- **Parent:** A412
+- **Route:** `all routes via ?uiInspector=1`
+- **Component:** `UIRegistryInspector`
+- **Source:** `src/components/dev/UIRegistryInspector.tsx`
+- **Purpose:** يلغي التحديد المثبت في UI ID Inspector ويزيل التمييز الأحمر.
+- **Behavior:** onClick يستدعي clearPinned فقط، ولا ينفذ أي إجراء في التطبيق.
+- **Constraints:** لا يغيّر بيانات المشروع أو تحديد المحرر؛ يزيل طبقات Inspector المؤقتة فقط.
+- **Actions:** [{"event":"onClick","expression":"clearPinned"}]
+- **Stores:** —
+- **Logic files:** —
+- **Tests (regression boundary):** `tests/ui-registry.test.ts`, `tests/e2e/ui-inspector.spec.ts`
+- **Shortcuts:** `Escape`
+- **Identity mode:** static
+- **Status:** `active`
+- **Dependencies:** —
+- **Related UI IDs:** `A412`, `A732`
+- **Code references (not UI IDs):** `clearPinned`
 
 </details>
 

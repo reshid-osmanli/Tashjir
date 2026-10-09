@@ -301,19 +301,19 @@ Feature definitions live in `src/ui/feature-registry.ts`. This document is gener
 - **Route/surface:** `all routes via ?uiInspector=1`
 - **Status:** `active`
 - **Purpose:** واجهة فحص صريحة تعرض معرفات DOM المسجلة وبيانات السجل الفعلية عند طلب المستخدم، وتبقى مخفية عن المظهر المعتاد.
-- **Important child UI IDs:** `A410`, `A730`, `A411`, `A731`, `A412`, `A732`
+- **Important child UI IDs:** `A410`, `A730`, `A411`, `A731`, `A412`, `A732`, `A2126`
 - **Main files:** `src/components/dev/UIRegistryInspector.tsx`, `src/ui/ui-registry.ts`, `src/ui/feature-registry.ts`
 - **Main components:** `UIRegistryInspector`
 - **Stores/persistence owners:** —
 - **Engine/data dependencies:** —
-- **Regression tests:** `tests/ui-registry.test.ts`, `tests/e2e/ui-registry.spec.ts`
+- **Regression tests:** `tests/ui-registry.test.ts`, `tests/ui-inspector-geometry.test.ts`, `tests/e2e/ui-registry.spec.ts`, `tests/e2e/ui-inspector.spec.ts`
 
 ### Change impact map
 
 | Layer | UI IDs | Files / systems | Notes |
 |---|---|---|---|
-| UI | `A410`, `A411`, `A412` | `src/components/dev/UIRegistryInspector.tsx`, `src/app/layout.tsx` | The explicit query flag activates a production-safe overlay; pointer-transparent badges bind to real data-ui-id values, and ordinary clicks remain unchanged. |
-| Tests | `A410`, `A411`, `A412` | `tests/ui-registry.test.ts`, `tests/e2e/ui-registry.spec.ts` | Registry metadata and visible production DOM badges are validated together. |
+| UI | `A410`, `A411`, `A412`, `A730`, `A731`, `A732`, `A2126` | `src/components/dev/UIRegistryInspector.tsx`, `src/components/dev/inspector-geometry.ts`, `src/app/layout.tsx` | Off by default. When on, only the hovered element and the pinned element get a badge; badges pin on click and never run the element action. Highlights are a temporary fixed layer that never changes application DOM or styles. |
+| Tests | `A410`, `A411`, `A412`, `A731`, `A732`, `A2126` | `tests/ui-registry.test.ts`, `tests/ui-inspector-geometry.test.ts`, `tests/e2e/ui-registry.spec.ts`, `tests/e2e/ui-inspector.spec.ts` | Registry metadata, Inspector geometry, and production browser behavior (hover, pin, red marker, no action on badge click, Escape, teardown, navigation, data immutability) are validated. |
 
 ## A015 — Dashboard Workspace Shell
 
