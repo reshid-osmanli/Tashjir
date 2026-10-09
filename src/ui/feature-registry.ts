@@ -312,9 +312,9 @@ export const FEATURE_REGISTRY = [
   {
     id: 'A014',
     kind: 'feature',
-    name: 'Developer UI Inspector',
-    route: 'development-only',
-    purpose: 'أداة تطوير فقط تعرض معرفات DOM المسجلة وتفاصيل السجل دون تغيير سلوك التطبيق.',
+    name: 'UI ID Inspector',
+    route: 'global',
+    purpose: 'أداة فحص تعرض معرفات عناصر الواجهة المسجلة وتفاصيل سجلها، متاحة في كل البيئات بما فيها النشر الإنتاجي (Vercel Preview)، دون تغيير سلوك التطبيق.',
     status: 'active',
     mainFiles: ['src/components/dev/UIRegistryInspector.tsx', 'src/ui/ui-registry.ts'],
     mainComponents: ['UIRegistryInspector'],
@@ -322,7 +322,7 @@ export const FEATURE_REGISTRY = [
     engineDependencies: [],
     testFiles: ['tests/ui-registry.test.ts'],
     impactMap: [
-      { layer: 'UI', files: ['src/components/dev/UIRegistryInspector.tsx'], uiIds: ['A410', 'A411', 'A412'], notes: 'Development-only overlay; returns no UI in production.' },
+      { layer: 'UI', files: ['src/components/dev/UIRegistryInspector.tsx'], uiIds: ['A410', 'A411', 'A412', 'A2126'], notes: 'Available in every environment including production previews; opt-in via visible toggle, ?uiInspector=1, or Alt+Shift+I; fully removable at runtime.' },
       { layer: 'Tests', files: ['tests/ui-registry.test.ts'], uiIds: ['A410', 'A411', 'A412'], notes: 'Registry metadata and DOM markers are validated together.' },
     ],
   },

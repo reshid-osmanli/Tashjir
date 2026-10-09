@@ -19,7 +19,7 @@ Feature definitions live in `src/ui/feature-registry.ts`. This document is gener
 | A011 | Statistics | `/statistics` | لوحة قراءة إحصائية للتغطية والمواضع والفئات والرواة والمستندات. | active |
 | A012 | Public Landing | `/` | صفحة تعريف عامة تعرض قيمة المشروع وروابط الوصول إلى مساحات العمل. | active |
 | A013 | Local Sign-in | `/login` | واجهة دخول محلية تحفظ شارة الجلسة في المتصفح ولا ترسل بيانات إلى خادم. | active |
-| A014 | Developer UI Inspector | `development-only` | أداة تطوير فقط تعرض معرفات DOM المسجلة وتفاصيل السجل دون تغيير سلوك التطبيق. | active |
+| A014 | UI ID Inspector | `global` | أداة فحص تعرض معرفات عناصر الواجهة المسجلة وتفاصيل سجلها، متاحة في كل البيئات بما فيها النشر الإنتاجي (Vercel Preview)، دون تغيير سلوك التطبيق. | active |
 | A015 | Dashboard Workspace Shell | `shared-dashboard` | الغلاف المشترك لمسارات مساحة العمل: التنقل المتجاوب، رابط المصحف، شارة الجلسة، وحاوية التأكيد. | active |
 
 ## Feature details
@@ -296,12 +296,12 @@ Feature definitions live in `src/ui/feature-registry.ts`. This document is gener
 | UI | `A032`, `A340`, `A341`, `A342` | `src/app/login/page.tsx` | Local-only sign-in form and navigation. |
 | Persistence | `A344` | `src/app/login/page.tsx` | The submit action writes the local tashjeer-session value only. |
 
-## A014 — Developer UI Inspector
+## A014 — UI ID Inspector
 
-- **Route/surface:** `development-only`
+- **Route/surface:** `global`
 - **Status:** `active`
-- **Purpose:** أداة تطوير فقط تعرض معرفات DOM المسجلة وتفاصيل السجل دون تغيير سلوك التطبيق.
-- **Important child UI IDs:** `A410`, `A730`, `A411`, `A731`, `A412`, `A732`
+- **Purpose:** أداة فحص تعرض معرفات عناصر الواجهة المسجلة وتفاصيل سجلها، متاحة في كل البيئات بما فيها النشر الإنتاجي (Vercel Preview)، دون تغيير سلوك التطبيق.
+- **Important child UI IDs:** `A410`, `A730`, `A411`, `A731`, `A412`, `A732`, `A2126`
 - **Main files:** `src/components/dev/UIRegistryInspector.tsx`, `src/ui/ui-registry.ts`
 - **Main components:** `UIRegistryInspector`
 - **Stores/persistence owners:** —
@@ -312,7 +312,7 @@ Feature definitions live in `src/ui/feature-registry.ts`. This document is gener
 
 | Layer | UI IDs | Files / systems | Notes |
 |---|---|---|---|
-| UI | `A410`, `A411`, `A412` | `src/components/dev/UIRegistryInspector.tsx` | Development-only overlay; returns no UI in production. |
+| UI | `A410`, `A411`, `A412`, `A2126` | `src/components/dev/UIRegistryInspector.tsx` | Available in every environment including production previews; opt-in via visible toggle, ?uiInspector=1, or Alt+Shift+I; fully removable at runtime. |
 | Tests | `A410`, `A411`, `A412` | `tests/ui-registry.test.ts` | Registry metadata and DOM markers are validated together. |
 
 ## A015 — Dashboard Workspace Shell

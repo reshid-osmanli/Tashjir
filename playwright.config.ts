@@ -13,10 +13,12 @@ export default defineConfig({
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--no-zygote', '--use-gl=angle', '--use-angle=swiftshader'],
     } : {},
   },
+  // بناء إنتاجي لا وضع تطوير: فاحص الهويات (وكل ما يختبره e2e) يجب أن
+  // يعمل كما يعمل على Vercel Preview — NODE_ENV=production — لا في dev فقط.
   webServer: {
-    command: 'npm run dev -- --hostname 0.0.0.0',
+    command: 'npm run build && npm run start -- --hostname 0.0.0.0 --port 3000',
     url: 'http://127.0.0.1:3000/editor',
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: 420_000,
   },
 });
