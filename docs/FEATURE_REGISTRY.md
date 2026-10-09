@@ -19,7 +19,7 @@ Feature definitions live in `src/ui/feature-registry.ts`. This document is gener
 | A011 | Statistics | `/statistics` | لوحة قراءة إحصائية للتغطية والمواضع والفئات والرواة والمستندات. | active |
 | A012 | Public Landing | `/` | صفحة تعريف عامة تعرض قيمة المشروع وروابط الوصول إلى مساحات العمل. | active |
 | A013 | Local Sign-in | `/login` | واجهة دخول محلية تحفظ شارة الجلسة في المتصفح ولا ترسل بيانات إلى خادم. | active |
-| A014 | UI ID Inspector | `all routes via ?uiInspector=1` | واجهة فحص صريحة تعرض معرفات DOM المسجلة وبيانات السجل الفعلية عند طلب المستخدم، وتبقى مخفية عن المظهر المعتاد. | active |
+| A014 | UI ID Inspector | `all routes via ?uiInspector=1` | أداة فحص تفاعلية تُظهر معرّف عنصر واحد عند الإشارة إليه، وتثبّت تحديده بالأحمر مع بيانات السجل الفعلية عند طلب المستخدم، وتبقى مخفية عن المظهر المعتاد. | active |
 | A015 | Dashboard Workspace Shell | `shared-dashboard` | الغلاف المشترك لمسارات مساحة العمل: التنقل المتجاوب، رابط المصحف، شارة الجلسة، وحاوية التأكيد. | active |
 
 ## Feature details
@@ -300,20 +300,20 @@ Feature definitions live in `src/ui/feature-registry.ts`. This document is gener
 
 - **Route/surface:** `all routes via ?uiInspector=1`
 - **Status:** `active`
-- **Purpose:** واجهة فحص صريحة تعرض معرفات DOM المسجلة وبيانات السجل الفعلية عند طلب المستخدم، وتبقى مخفية عن المظهر المعتاد.
+- **Purpose:** أداة فحص تفاعلية تُظهر معرّف عنصر واحد عند الإشارة إليه، وتثبّت تحديده بالأحمر مع بيانات السجل الفعلية عند طلب المستخدم، وتبقى مخفية عن المظهر المعتاد.
 - **Important child UI IDs:** `A410`, `A730`, `A411`, `A731`, `A412`, `A732`
 - **Main files:** `src/components/dev/UIRegistryInspector.tsx`, `src/ui/ui-registry.ts`, `src/ui/feature-registry.ts`
 - **Main components:** `UIRegistryInspector`
 - **Stores/persistence owners:** —
 - **Engine/data dependencies:** —
-- **Regression tests:** `tests/ui-registry.test.ts`, `tests/e2e/ui-registry.spec.ts`
+- **Regression tests:** `tests/ui-registry.test.ts`, `tests/e2e/ui-registry.spec.ts`, `tests/e2e/ui-inspector-interactive.spec.ts`
 
 ### Change impact map
 
 | Layer | UI IDs | Files / systems | Notes |
 |---|---|---|---|
-| UI | `A410`, `A411`, `A412` | `src/components/dev/UIRegistryInspector.tsx`, `src/app/layout.tsx` | The explicit query flag activates a production-safe overlay; pointer-transparent badges bind to real data-ui-id values, and ordinary clicks remain unchanged. |
-| Tests | `A410`, `A411`, `A412` | `tests/ui-registry.test.ts`, `tests/e2e/ui-registry.spec.ts` | Registry metadata and visible production DOM badges are validated together. |
+| UI | `A410`, `A411`, `A412` | `src/components/dev/UIRegistryInspector.tsx`, `src/app/layout.tsx` | The explicit query flag activates a production-safe overlay: one hover badge at a time binds to the real data-ui-id under the pointer, clicking that badge pins a single element in red and opens A412 without running the element action, and ordinary clicks remain unchanged. |
+| Tests | `A410`, `A411`, `A412` | `tests/ui-registry.test.ts`, `tests/e2e/ui-registry.spec.ts`, `tests/e2e/ui-inspector-interactive.spec.ts` | Registry metadata, absence of permanent badges, pin/clear behaviour and production DOM identity mapping are validated together. |
 
 ## A015 — Dashboard Workspace Shell
 
