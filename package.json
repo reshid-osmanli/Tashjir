@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:production": "npm run build && PLAYWRIGHT_PRODUCTION=1 playwright test tests/e2e/ui-registry.spec.ts",
     "typecheck": "tsc --noEmit",
     "registry:docs": "tsx scripts/sync-ui-registry-docs.ts",
     "data:quran": "node scripts/build-quran-data.mjs",

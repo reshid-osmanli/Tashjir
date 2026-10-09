@@ -1729,13 +1729,13 @@
         - **A344** — Local Sign-in Submit Button (button, active)
       - **A726** — LoginPage — العودة إلى الرئيسية (navigation) (navigation, active)
       - **A727** — LoginPage — الدخول بلا حساب (navigation) (navigation, active)
-- **A014** — Developer UI Inspector (feature, active) — `development-only`
-  - **A410** — Developer Registry Inspector Toggle (inspector, active)
-    - **A730** — UIRegistryInspector — enabled && ( <div data-ui-id="A411" className="pointer-events-none fixed inset-0 z-[9998]" aria-hidden="true" > {targets.map((target, index) => ( <button key={` (control) (control, active)
-  - **A411** — Developer UI ID Overlay (inspector, active)
-    - **A731** — UIRegistryInspector — `${target.id}${target.instance ? ` · ${target.instance}` : ''} — click for registry details` (button) (button, active)
-  - **A412** — Developer Registry Details Card (inspector, active)
-    - **A732** — UIRegistryInspector — Close (button) (button, active)
+- **A014** — UI ID Inspector (feature, active) — `all routes via ?uiInspector=1`
+  - **A410** — UI ID Inspector Toggle (inspector, active)
+    - **A730** — UIRegistryInspector Root Container (control, active)
+  - **A411** — UI ID Overlay (inspector, active)
+    - **A731** — UI ID Overlay Badge (inspector, active)
+  - **A412** — UI ID Registry Details Panel (inspector, active)
+    - **A732** — Copy Selected UI ID Button (button, active)
 - **A015** — Dashboard Workspace Shell (feature, active) — `shared-dashboard`
   - **A310** — Dashboard Layout Shell (shell, active)
     - **A311** — Desktop Sidebar Navigation (navigation, active)
@@ -1962,9 +1962,9 @@
 | A326 | control | Local Session Badge | A310 | `shared-dashboard` | `SessionBadge` | `src/components/layout/SessionBadge.tsx` | active |
 | A327 | dialog | Shared Confirmation Dialog Host | A310 | `shared-dashboard` | `ConfirmDialogHost` | `src/components/ui/ConfirmDialogHost.tsx` | active |
 | A328 | navigation | Workspace Brand Home Link | A310 | `shared-dashboard` | `DashboardLayout` | `src/app/(dashboard)/layout.tsx` | active |
-| A410 | inspector | Developer Registry Inspector Toggle | A014 | `development-only` | `UIRegistryInspector` | `src/components/dev/UIRegistryInspector.tsx` | active |
-| A411 | inspector | Developer UI ID Overlay | A014 | `development-only` | `UIRegistryInspector` | `src/components/dev/UIRegistryInspector.tsx` | active |
-| A412 | inspector | Developer Registry Details Card | A014 | `development-only` | `UIRegistryInspector` | `src/components/dev/UIRegistryInspector.tsx` | active |
+| A410 | inspector | UI ID Inspector Toggle | A014 | `all routes via ?uiInspector=1` | `UIRegistryInspector` | `src/components/dev/UIRegistryInspector.tsx` | active |
+| A411 | inspector | UI ID Overlay | A014 | `all routes via ?uiInspector=1` | `UIRegistryInspector` | `src/components/dev/UIRegistryInspector.tsx` | active |
+| A412 | inspector | UI ID Registry Details Panel | A014 | `all routes via ?uiInspector=1` | `UIRegistryInspector` | `src/components/dev/UIRegistryInspector.tsx` | active |
 | A500 | section | AdminPage — AdminPage (section) | A028 | `/admin` | `AdminPage` | `src/app/(dashboard)/admin/page.tsx` | active |
 | A501 | button | AdminPage — إخفاء (button) | A028 | `/admin` | `AdminPage` | `src/app/(dashboard)/admin/page.tsx` | active |
 | A502 | tab | AdminPage — item.label — القراء والرواة والطرق (tab) | A260 | `/admin` | `AdminPage` | `src/app/(dashboard)/admin/page.tsx` | active |
@@ -2195,9 +2195,9 @@
 | A727 | navigation | LoginPage — الدخول بلا حساب (navigation) | A340 | `/login` | `LoginPage` | `src/app/login/page.tsx` | active |
 | A728 | control | TashjirMark — title ? <title>{title}</title> : null (control) | A031 | `/` | `TashjirMark` | `src/components/brand/TashjirMark.tsx` | active |
 | A729 | control | TashjirWordmark — TashjirWordmark (control) | A031 | `/` | `TashjirWordmark` | `src/components/brand/TashjirMark.tsx` | retired |
-| A730 | control | UIRegistryInspector — enabled && ( <div data-ui-id="A411" className="pointer-events-none fixed inset-0 z-[9998]" aria-hidden="true" > {targets.map((target, index) => ( <button key={` (control) | A410 | `development-only` | `UIRegistryInspector` | `src/components/dev/UIRegistryInspector.tsx` | active |
-| A731 | button | UIRegistryInspector — `${target.id}${target.instance ? ` · ${target.instance}` : ''} — click for registry details` (button) | A411 | `development-only` | `UIRegistryInspector` | `src/components/dev/UIRegistryInspector.tsx` | active |
-| A732 | button | UIRegistryInspector — Close (button) | A412 | `development-only` | `UIRegistryInspector` | `src/components/dev/UIRegistryInspector.tsx` | active |
+| A730 | control | UIRegistryInspector Root Container | A410 | `all routes via ?uiInspector=1` | `UIRegistryInspector` | `src/components/dev/UIRegistryInspector.tsx` | active |
+| A731 | inspector | UI ID Overlay Badge | A411 | `all routes via ?uiInspector=1` | `UIRegistryInspector` | `src/components/dev/UIRegistryInspector.tsx` | active |
+| A732 | button | Copy Selected UI ID Button | A412 | `all routes via ?uiInspector=1` | `UIRegistryInspector` | `src/components/dev/UIRegistryInspector.tsx` | active |
 | A733 | option | AyahNavigator — . (option) | A108 | `/editor` | `AyahNavigator` | `src/components/editor/AyahNavigator.tsx` | active |
 | A734 | option | AyahNavigator — toArabicDigits(number) (option) | A109 | `/editor` | `AyahNavigator` | `src/components/editor/AyahNavigator.tsx` | active |
 | A735 | button | AyahNavigator — السابقة (button) | A107 | `/editor` | `AyahNavigator` | `src/components/editor/AyahNavigator.tsx` | active |
@@ -7345,77 +7345,77 @@
 </details>
 
 <details>
-<summary><strong>A410 — Developer Registry Inspector Toggle</strong></summary>
+<summary><strong>A410 — UI ID Inspector Toggle</strong></summary>
 
 - **Type:** `inspector`
-- **Feature:** A014 — Developer UI Inspector
+- **Feature:** A014 — UI ID Inspector
 - **Parent:** A014
-- **Route:** `development-only`
+- **Route:** `all routes via ?uiInspector=1`
 - **Component:** `UIRegistryInspector`
 - **Source:** `src/components/dev/UIRegistryInspector.tsx`
-- **Purpose:** زر تفعيل/إيقاف واجهة الفحص.
-- **Behavior:** يفتح طبقة إظهار معرفات DOM ويمكن تفعيله باختصار Alt+Shift+I.
-- **Constraints:** لا يظهر إلا عند NODE_ENV=development ولا يغيّر حالة التطبيق.
+- **Purpose:** زر عائم لتشغيل وإيقاف فحص هويات عناصر الواجهة.
+- **Behavior:** يظهر عند تفعيل ?uiInspector=1، ويمكن إيقافه من الزر أو تبديل حالته باختصار Alt+Shift+I.
+- **Constraints:** يبقى مخفيا في الواجهة الاعتيادية؛ لا يعتمد توفره على NODE_ENV، ويزيل عناصر الفحص عند الإيقاف.
 - **Actions:** []
 - **Stores:** —
 - **Logic files:** —
-- **Tests (regression boundary):** `tests/ui-registry.test.ts`, `tests/ui-source-coverage.test.ts`
+- **Tests (regression boundary):** `tests/ui-registry.test.ts`, `tests/e2e/ui-registry.spec.ts`
 - **Shortcuts:** `Alt+Shift+I`
 - **Identity mode:** static
 - **Status:** `active`
 - **Dependencies:** `A411`, `A412`
 - **Related UI IDs:** `A014`
-- **Code references (not UI IDs):** `process.env.NODE_ENV`, `Alt+Shift+I`
+- **Code references (not UI IDs):** `uiInspector=1`, `Alt+Shift+I`
 
 </details>
 
 <details>
-<summary><strong>A411 — Developer UI ID Overlay</strong></summary>
+<summary><strong>A411 — UI ID Overlay</strong></summary>
 
 - **Type:** `inspector`
-- **Feature:** A014 — Developer UI Inspector
+- **Feature:** A014 — UI ID Inspector
 - **Parent:** A014
-- **Route:** `development-only`
+- **Route:** `all routes via ?uiInspector=1`
 - **Component:** `UIRegistryInspector`
 - **Source:** `src/components/dev/UIRegistryInspector.tsx`
-- **Purpose:** طبقة شارات مواضع عناصر data-ui-id.
-- **Behavior:** تحدد عناصر DOM المسجلة وتعرض معرف كل منها فوق مكانها.
-- **Constraints:** تستثني عناصر inspector نفسها ولا تعترض أحداث عنصر التطبيق الأصلي.
+- **Purpose:** طبقة شارات مرئية تربط كل شارة بقيمة data-ui-id على عنصر DOM الفعلي.
+- **Behavior:** تراقب العناصر المسجلة المرئية والتغييرات الديناميكية، وتعرض المعرف الفعلي دون توليد معرّفات بديلة.
+- **Constraints:** الشارات pointer-events:none، ولا تحجب التحكمات؛ Alt+click يحدد العنصر دون تشغيل إجراء التطبيق.
 - **Actions:** []
 - **Stores:** —
 - **Logic files:** —
-- **Tests (regression boundary):** `tests/ui-registry.test.ts`, `tests/ui-source-coverage.test.ts`
+- **Tests (regression boundary):** `tests/ui-registry.test.ts`, `tests/e2e/ui-registry.spec.ts`
 - **Shortcuts:** —
 - **Identity mode:** static
 - **Status:** `active`
 - **Dependencies:** `A410`
 - **Related UI IDs:** `A412`
-- **Code references (not UI IDs):** `document.querySelectorAll([data-ui-id])`
+- **Code references (not UI IDs):** `document.querySelectorAll([data-ui-id])`, `data-ui-badge-for`, `MutationObserver`
 
 </details>
 
 <details>
-<summary><strong>A412 — Developer Registry Details Card</strong></summary>
+<summary><strong>A412 — UI ID Registry Details Panel</strong></summary>
 
 - **Type:** `inspector`
-- **Feature:** A014 — Developer UI Inspector
+- **Feature:** A014 — UI ID Inspector
 - **Parent:** A014
-- **Route:** `development-only`
+- **Route:** `all routes via ?uiInspector=1`
 - **Component:** `UIRegistryInspector`
 - **Source:** `src/components/dev/UIRegistryInspector.tsx`
-- **Purpose:** بطاقة تفاصيل عنصر Registry المحدد.
-- **Behavior:** تعرض النوع والميزة والأب والمسار والمكون والملف والغرض والسلوك والقيود والاعتماديات.
-- **Constraints:** مصدر التفاصيل هو سجل TypeScript؛ لا يقرأ أو يغير business state.
+- **Purpose:** لوحة تفاصيل سجل العنصر المحدد من DOM.
+- **Behavior:** تقرأ ID وName وKind وRoute وParent وFeature وComponent وSource file وActions وRelated IDs من السجل الحالي.
+- **Constraints:** مصدر البيانات هو سجل TypeScript/JSON الحالي؛ لا تعرض قيما افتراضية عند فشل المطابقة.
 - **Actions:** []
 - **Stores:** —
 - **Logic files:** —
-- **Tests (regression boundary):** `tests/ui-registry.test.ts`, `tests/ui-source-coverage.test.ts`
+- **Tests (regression boundary):** `tests/ui-registry.test.ts`, `tests/e2e/ui-registry.spec.ts`
 - **Shortcuts:** —
 - **Identity mode:** static
 - **Status:** `active`
 - **Dependencies:** `A410`
 - **Related UI IDs:** `A411`
-- **Code references (not UI IDs):** `getUIIdentity`, `getFeatureById`
+- **Code references (not UI IDs):** `UI_REGISTRY`, `FEATURE_REGISTRY`
 
 </details>
 
@@ -13170,17 +13170,17 @@
 </details>
 
 <details>
-<summary><strong>A730 — UIRegistryInspector — enabled && ( <div data-ui-id="A411" className="pointer-events-none fixed inset-0 z-[9998]" aria-hidden="true" > {targets.map((target, index) => ( <button key={` (control)</strong></summary>
+<summary><strong>A730 — UIRegistryInspector Root Container</strong></summary>
 
 - **Type:** `control`
-- **Feature:** A014 — Developer UI Inspector
+- **Feature:** A014 — UI ID Inspector
 - **Parent:** A410
-- **Route:** `development-only`
+- **Route:** `all routes via ?uiInspector=1`
 - **Component:** `UIRegistryInspector`
 - **Source:** `src/components/dev/UIRegistryInspector.tsx`
-- **Purpose:** control في UIRegistryInspector: enabled && ( <div data-ui-id="A411" className="pointer-events-none fixed inset-0 z-[9998]" aria-hidden="true" > {targets.map((target, index) => ( <button key={`${target.id}:${target.instance ?? index}:${index}`} type="button" tabIndex={-1} .
-- **Behavior:** يعرض المحتوى/القيمة أو ينظم العناصر التابعة؛ لا يضيف السجل سلوكًا جديدًا.
-- **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
+- **Purpose:** حاوية جذر عناصر UI ID Inspector.
+- **Behavior:** تحتوي زر التبديل والشارات ولوحة البيانات، ولا تظهر إلا أثناء تفعيل الأداة.
+- **Constraints:** مستثناة من مسح عناصر التطبيق حتى لا تنشئ شارات لنفسها.
 - **Actions:** []
 - **Stores:** —
 - **Logic files:** —
@@ -13195,52 +13195,52 @@
 </details>
 
 <details>
-<summary><strong>A731 — UIRegistryInspector — `${target.id}${target.instance ? ` · ${target.instance}` : ''} — click for registry details` (button)</strong></summary>
+<summary><strong>A731 — UI ID Overlay Badge</strong></summary>
 
-- **Type:** `button`
-- **Feature:** A014 — Developer UI Inspector
+- **Type:** `inspector`
+- **Feature:** A014 — UI ID Inspector
 - **Parent:** A411
-- **Route:** `development-only`
+- **Route:** `all routes via ?uiInspector=1`
 - **Component:** `UIRegistryInspector`
 - **Source:** `src/components/dev/UIRegistryInspector.tsx`
-- **Purpose:** button في UIRegistryInspector: `${target.id}${target.instance ? ` · ${target.instance}` : ''} — click for registry details`.
-- **Behavior:** onClick: (event) => {<br>                event.preventDefault();<br>                event.stopPropagation();<br>                setSelectedId(target.id);<br>                setSelectedInstance(target.instance);<br>              }
-- **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
-- **Actions:** [{"event":"onClick","expression":"(event) => {\n                event.preventDefault();\n                event.stopPropagation();\n                setSelectedId(target.id);\n                setSelectedInstance(target.instance);\n              }"}]
+- **Purpose:** شارة مرئية تعرض معرّف العنصر الحقيقي الذي تشير إليه data-ui-badge-for.
+- **Behavior:** نص الشارة نسخة مباشرة من data-ui-id على عنصر DOM المسجل المقابل.
+- **Constraints:** وسم بصري غير تفاعلي وشفاف للأحداث؛ لا يستبدل هوية العنصر الأصلي.
+- **Actions:** []
 - **Stores:** —
 - **Logic files:** —
-- **Tests (regression boundary):** `tests/ui-registry.test.ts`, `tests/ui-source-coverage.test.ts`
+- **Tests (regression boundary):** `tests/ui-registry.test.ts`, `tests/e2e/ui-registry.spec.ts`
 - **Shortcuts:** —
 - **Identity mode:** template
 - **Status:** `active`
 - **Dependencies:** —
 - **Related UI IDs:** —
-- **Code references (not UI IDs):** `(event) => {<br>                event.preventDefault();<br>                event.stopPropagation();<br>                setSelectedId(target.id);<br>                setSelectedInstance(target.instance);<br>              }`
+- **Code references (not UI IDs):** `data-ui-badge-for`, `data-ui-id`
 
 </details>
 
 <details>
-<summary><strong>A732 — UIRegistryInspector — Close (button)</strong></summary>
+<summary><strong>A732 — Copy Selected UI ID Button</strong></summary>
 
 - **Type:** `button`
-- **Feature:** A014 — Developer UI Inspector
+- **Feature:** A014 — UI ID Inspector
 - **Parent:** A412
-- **Route:** `development-only`
+- **Route:** `all routes via ?uiInspector=1`
 - **Component:** `UIRegistryInspector`
 - **Source:** `src/components/dev/UIRegistryInspector.tsx`
-- **Purpose:** button في UIRegistryInspector: Close.
-- **Behavior:** onClick: () => setSelectedId(null)
-- **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
-- **Actions:** [{"event":"onClick","expression":"() => setSelectedId(null)"}]
+- **Purpose:** ينسخ معرف العنصر المحدد من سجل UI إلى الحافظة.
+- **Behavior:** ينسخ selectedId الحالي عبر Clipboard API مع بديل عند عدم توفره.
+- **Constraints:** ينسخ الهوية المرتبطة بعنصر DOM المحدد؛ لا يولّد أو يغيّر أي معرف.
+- **Actions:** [{"event":"onClick","expression":"() => void copySelectedId()"}]
 - **Stores:** —
 - **Logic files:** —
-- **Tests (regression boundary):** `tests/ui-registry.test.ts`, `tests/ui-source-coverage.test.ts`
+- **Tests (regression boundary):** `tests/ui-registry.test.ts`, `tests/e2e/ui-registry.spec.ts`
 - **Shortcuts:** —
 - **Identity mode:** static
 - **Status:** `active`
 - **Dependencies:** —
-- **Related UI IDs:** —
-- **Code references (not UI IDs):** `() => setSelectedId(null)`
+- **Related UI IDs:** `A410`, `A412`
+- **Code references (not UI IDs):** `navigator.clipboard.writeText`, `selectedId`
 
 </details>
 
@@ -48153,4 +48153,4 @@
 
 - `npm test -- tests/ui-registry.test.ts` يفحص uniqueness/format/hierarchy/references/DOM markers/unknown IDs/retired IDs وتطابق الوثائق.
 - عناصر الـ UI ذات الحالة `active` أو `deprecated` يجب أن تحمل `data-ui-id="Axxx"` في الملف المسجل. فحص جميع ملفات المصدر يكشف أي علامة بلا تعريف.
-- وضع Inspector: Development فقط، زر عائم أو الاختصار `Alt+Shift+I`. لا يعرض السجل للمستخدم النهائي في الإنتاج.
+- وضع UI ID Inspector: يظهر عند الطلب عبر `?uiInspector=1` في التطوير وProduction/Preview، أو باختصار `Alt+Shift+I`. يبقى مخفيا افتراضيا، والشارات شفافة للنقر العادي؛ Alt+click يحدد العنصر دون تشغيل إجراء التطبيق.

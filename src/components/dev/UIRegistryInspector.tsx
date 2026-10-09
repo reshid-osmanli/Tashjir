@@ -1,40 +1,108 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { getFeatureById } from '@/ui/feature-registry';
-import { getUIEntryById, getUIIdentity } from '@/ui/ui-registry';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { FeatureRegistryEntry } from '@/ui/feature-registry';
+import type { UIRegistryEntry } from '@/ui/ui-registry';
 
 type InspectedTarget = {
   id: string;
   instance: string | null;
   left: number;
   top: number;
-  node: Element;
 };
 
-/** Development-only DOM identity overlay. It never participates in app behavior. */
+type RegistrySnapshot = {
+  entries: readonly UIRegistryEntry[];
+  features: readonly FeatureRegistryEntry[];
+};
+
+function writeInspectorQuery(enabled: boolean) {
+  const url = new URL(window.location.href);
+  if (enabled) url.searchParams.set('uiInspector', '1');
+  else url.searchParams.delete('uiInspector');
+  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
+/**
+ * Optional, production-safe inspector. It renders nothing unless explicitly
+ * enabled by ?uiInspector=1 or Alt+Shift+I. Registry JSON is loaded on demand.
+ */
 export function UIRegistryInspector() {
   const [enabled, setEnabled] = useState(false);
   const [targets, setTargets] = useState<InspectedTarget[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedInstance, setSelectedInstance] = useState<string | null>(null);
+  const [registry, setRegistry] = useState<RegistrySnapshot | null>(null);
+  const [registryLoadFailed, setRegistryLoadFailed] = useState(false);
+  const [copyStatus, setCopyStatus] = useState('');
   const lastSignature = useRef('');
 
+  const setInspectorEnabled = useCallback((next: boolean) => {
+    setEnabled(next);
+    writeInspectorQuery(next);
+    if (!next) {
+      setTargets([]);
+      setSelectedId(null);
+      setSelectedInstance(null);
+      setCopyStatus('');
+    }
+  }, []);
+
+  // A query parameter deliberately works in production builds and on Vercel
+  // Preview. The keyboard shortcut is also available when the overlay is off.
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.altKey && event.shiftKey && event.key.toLowerCase() === 'i') {
-        event.preventDefault();
-        setEnabled((value) => !value);
-      }
-      if (event.key === 'Escape') setSelectedId(null);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    if (new URLSearchParams(window.location.search).get('uiInspector') === '1') {
+      setEnabled(true);
+    }
   }, []);
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.altKey && event.shiftKey && event.key.toLowerCase() === 'i') {
+        event.preventDefault();
+        setInspectorEnabled(!enabled);
+      }
+      if (event.key === 'Escape') {
+        setSelectedId(null);
+        setSelectedInstance(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [enabled, setInspectorEnabled]);
+
+  // Keep the multi-megabyte registry out of normal page loads. It is fetched
+  // only when a user explicitly turns the Inspector on.
+  useEffect(() => {
+    if (!enabled) {
+      setRegistry(null);
+      setRegistryLoadFailed(false);
+      return;
+    }
+
+    let cancelled = false;
+    void Promise.all([import('@/ui/ui-registry'), import('@/ui/feature-registry')])
+      .then(([uiRegistry, featureRegistry]) => {
+        if (cancelled) return;
+        setRegistry({
+          entries: uiRegistry.UI_REGISTRY,
+          features: featureRegistry.FEATURE_REGISTRY,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setRegistryLoadFailed(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled]);
+
+  useEffect(() => {
+    setCopyStatus('');
+  }, [selectedId]);
+
+  useEffect(() => {
     if (!enabled) {
       setTargets([]);
       setSelectedId(null);
@@ -42,47 +110,77 @@ export function UIRegistryInspector() {
       return;
     }
 
-    // Alt+click selects the actual nested DOM control without activating it.
-    // Ordinary clicks remain unchanged, including portal/context-menu actions.
+    // Alt+click inspects the exact registered control without invoking its
+    // action. Ordinary clicks remain completely unchanged.
     const inspectClick = (event: MouseEvent) => {
       if (!event.altKey || !(event.target instanceof Element)) return;
       if (event.target.closest('[data-ui-inspector-root]')) return;
       const target = event.target.closest('[data-ui-id]');
-      if (!target) return;
+      const id = target?.getAttribute('data-ui-id');
+      if (!target || !id) return;
+
       event.preventDefault();
       event.stopImmediatePropagation();
-      setSelectedId(target.getAttribute('data-ui-id'));
-      setSelectedInstance(target.closest('[data-ui-instance]')?.getAttribute('data-ui-instance') ?? null);
+      setSelectedId(id);
+      setSelectedInstance(
+        target.getAttribute('data-ui-instance') ??
+          target.closest('[data-ui-instance]')?.getAttribute('data-ui-instance') ??
+          null
+      );
     };
     window.addEventListener('click', inspectClick, true);
+
     let frame: number | null = null;
-    const schedule = () => {
+    const resizeObserver = new ResizeObserver(schedule);
+
+    function schedule() {
       if (frame !== null) return;
       frame = window.requestAnimationFrame(() => {
         frame = null;
-        const nodes = Array.from(document.querySelectorAll<HTMLElement | SVGElement>('[data-ui-id]'))
+        const nodes = Array.from(document.querySelectorAll<Element>('[data-ui-id]'))
           .filter((node) => !node.closest('[data-ui-inspector-root]'));
         resizeObserver.disconnect();
-        const next = nodes.flatMap((node): InspectedTarget[] => {
+
+        const next = nodes.flatMap((node, index): Array<InspectedTarget & { keyIndex: number }> => {
           const rect = node.getBoundingClientRect();
-          if (rect.width <= 0 || rect.height <= 0 || rect.bottom < 0 || rect.top > window.innerHeight) return [];
+          if (
+            rect.width <= 0 || rect.height <= 0 ||
+            rect.bottom < 0 || rect.top > window.innerHeight ||
+            rect.right < 0 || rect.left > window.innerWidth
+          ) return [];
+
+          const id = node.getAttribute('data-ui-id');
+          if (!id) return [];
           resizeObserver.observe(node);
+
+          const badgeHeight = 16;
+          const top = rect.top >= badgeHeight + 3
+            ? rect.top - badgeHeight - 2
+            : rect.bottom + badgeHeight + 2 <= window.innerHeight
+              ? rect.bottom + 2
+              : Math.max(0, Math.min(rect.top, window.innerHeight - badgeHeight));
+          const left = Math.max(0, Math.min(rect.left, Math.max(0, window.innerWidth - 58)));
+
           return [{
-            id: node.dataset.uiId ?? '',
-            instance: node.dataset.uiInstance ?? node.closest('[data-ui-instance]')?.getAttribute('data-ui-instance') ?? null,
-            left: Math.max(0, Math.min(rect.left, window.innerWidth - 58)),
-            top: Math.max(0, Math.min(rect.top, window.innerHeight - 25)),
-            node,
+            id,
+            instance: node.getAttribute('data-ui-instance') ??
+              node.closest('[data-ui-instance]')?.getAttribute('data-ui-instance') ??
+              null,
+            left,
+            top,
+            keyIndex: index,
           }];
         });
-        const signature = next.map((target) => `${target.id}:${target.instance ?? ''}:${Math.round(target.left)}:${Math.round(target.top)}:${target.node.getAttribute('data-ui-id')}`).join('|');
+
+        const signature = next
+          .map((target) => `${target.id}:${target.instance ?? ''}:${Math.round(target.left)}:${Math.round(target.top)}:${target.keyIndex}`)
+          .join('|');
         if (signature !== lastSignature.current) {
           lastSignature.current = signature;
-          setTargets(next);
+          setTargets(next.map(({ keyIndex: _keyIndex, ...target }) => target));
         }
       });
-    };
-    const resizeObserver = new ResizeObserver(schedule);
+    }
 
     const observer = new MutationObserver((records) => {
       const appMutation = records.some((record) => {
@@ -94,12 +192,14 @@ export function UIRegistryInspector() {
       if (appMutation) schedule();
     });
 
-    if (document.body) observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['data-ui-id', 'data-ui-instance', 'class', 'style', 'hidden'],
-    });
+    if (document.body) {
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['data-ui-id', 'data-ui-instance', 'class', 'style', 'hidden'],
+      });
+    }
     window.addEventListener('resize', schedule);
     window.addEventListener('scroll', schedule, true);
     schedule();
@@ -114,94 +214,145 @@ export function UIRegistryInspector() {
     };
   }, [enabled]);
 
-  if (process.env.NODE_ENV !== 'development') return null;
+  if (!enabled) return null;
 
-  const selected = selectedId ? getUIEntryById(selectedId) : undefined;
-  const feature = selected ? getFeatureById(selected.featureId) : undefined;
-  const parent = selected?.parentId ? getUIIdentity(selected.parentId) : undefined;
+  const selected = selectedId
+    ? registry?.entries.find((entry) => entry.id === selectedId)
+    : undefined;
+  const feature = selected
+    ? registry?.features.find((entry) => entry.id === selected.featureId)
+    : undefined;
+  const parent = selected?.parentId
+    ? registry?.entries.find((entry) => entry.id === selected.parentId) ??
+      registry?.features.find((entry) => entry.id === selected.parentId)
+    : undefined;
+
+  const copySelectedId = async () => {
+    if (!selectedId) return;
+    let copied = false;
+
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
+      await navigator.clipboard.writeText(selectedId);
+      copied = true;
+    } catch {
+      try {
+        const temporaryInput = document.createElement('textarea');
+        temporaryInput.value = selectedId;
+        temporaryInput.setAttribute('readonly', '');
+        temporaryInput.setAttribute('aria-hidden', 'true');
+        temporaryInput.style.position = 'fixed';
+        temporaryInput.style.opacity = '0';
+        document.body.appendChild(temporaryInput);
+        try {
+          temporaryInput.select();
+          copied = document.execCommand('copy');
+        } finally {
+          temporaryInput.remove();
+        }
+      } catch {
+        copied = false;
+      }
+    }
+
+    setCopyStatus(copied ? 'Copied' : 'Copy failed');
+  };
 
   return (
     <div data-ui-id="A730" className="contents" data-ui-inspector-root>
       <button
         type="button"
         data-ui-id="A410"
-        onClick={() => setEnabled((value) => !value)}
+        data-ui-inspector-toggle
+        onClick={() => setInspectorEnabled(false)}
         aria-pressed={enabled}
-        title="UI Registry Inspector (Alt+Shift+I)"
+        title="Turn off the UI ID Inspector (Alt+Shift+I)"
         className="fixed bottom-3 start-3 z-[10000] rounded-full border border-slate-700 bg-slate-950 px-3 py-2 text-[11px] font-semibold text-white shadow-xl hover:bg-slate-800"
       >
-        UI Inspector {enabled ? 'ON' : 'OFF'}
+        UI ID Inspector · ON
       </button>
 
-      {enabled && (
-        <div
-          data-ui-id="A411"
-          className="pointer-events-none fixed inset-0 z-[9998]"
-          aria-hidden="true"
-        >
-          {targets.map((target, index) => (
-            <button data-ui-instance={String(target.id)} data-ui-id="A731"
-              key={`${target.id}:${target.instance ?? index}:${index}`}
-              type="button"
-              tabIndex={-1}
-              data-ui-inspector-ignore
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setSelectedId(target.id);
-                setSelectedInstance(target.instance);
-              }}
-              title={`${target.id}${target.instance ? ` · ${target.instance}` : ''} — click for registry details`}
-              className="pointer-events-auto absolute rounded-sm border border-fuchsia-200 bg-fuchsia-700/95 px-1 py-0.5 font-mono text-[10px] font-bold leading-none text-white shadow"
-              style={{ left: target.left, top: target.top }}
-            >
-              {target.id}
-            </button>
-          ))}
-        </div>
-      )}
+      <div
+        data-ui-id="A411"
+        data-ui-inspector-overlay
+        className="pointer-events-none fixed inset-0 z-[9998]"
+        aria-hidden="true"
+      >
+        {targets.map((target, index) => (
+          <span
+            data-ui-instance={target.instance ?? undefined}
+            data-ui-id="A731"
+            data-ui-badge-for={target.id}
+            key={`${target.id}:${target.instance ?? index}:${index}`}
+            title={`${target.id}${target.instance ? ` · ${target.instance}` : ''} — Alt+click the actual control for Registry details`}
+            className="pointer-events-none absolute rounded-sm border border-fuchsia-200 bg-fuchsia-700/95 px-1 py-0.5 font-mono text-[10px] font-bold leading-none text-white shadow"
+            style={{ left: target.left, top: target.top }}
+          >
+            {target.id}
+          </span>
+        ))}
+      </div>
 
-      {enabled && selectedId && (
+      {selectedId && (
         <aside
           data-ui-id="A412"
+          data-ui-inspector-details
           role="dialog"
-          aria-label="UI Registry identity details"
-          className="fixed bottom-14 start-3 z-[10001] max-h-[70vh] w-[min(30rem,calc(100vw-1.5rem))] overflow-y-auto rounded-xl border border-slate-700 bg-slate-950 p-4 text-left text-xs text-slate-100 shadow-2xl"
+          aria-label="UI ID Inspector details"
+          aria-keyshortcuts="Escape"
+          className="fixed bottom-14 start-3 z-[10001] max-h-[70vh] w-[min(32rem,calc(100vw-1.5rem))] overflow-y-auto rounded-xl border border-slate-700 bg-slate-950 p-4 text-left text-xs text-slate-100 shadow-2xl"
           dir="ltr"
         >
           <div className="mb-3 flex items-start justify-between gap-3 border-b border-slate-700 pb-2">
             <div>
-              <p className="font-mono text-sm font-bold text-fuchsia-300">{selectedId}</p>
-              <p className="mt-1 text-sm font-semibold">{selected?.name ?? 'Unregistered UI ID'}</p>
-              <p className="mt-1 text-[10px] text-slate-400">Alt+click an actual UI control to inspect it.</p>
-              {selectedInstance && <p className="mt-1 font-mono text-[10px] text-slate-400">Instance: {selectedInstance}</p>}
+              <p className="text-sm font-semibold text-slate-100">UI ID Inspector</p>
+              <p className="mt-1 text-[10px] text-slate-400">
+                Alt+click an app control to inspect it. Ordinary clicks still work. Press Escape to close details.
+              </p>
+              {selectedInstance && (
+                <p className="mt-1 font-mono text-[10px] text-slate-400">Instance: {selectedInstance}</p>
+              )}
             </div>
-            <button data-ui-id="A732" type="button" onClick={() => setSelectedId(null)} className="rounded border border-slate-600 px-2 py-1 text-slate-200 hover:bg-slate-800">Close</button>
+            <button
+              data-ui-id="A732"
+              type="button"
+              onClick={() => void copySelectedId()}
+              disabled={!selected}
+              className="shrink-0 rounded border border-fuchsia-400 px-2 py-1 font-semibold text-fuchsia-200 hover:bg-fuchsia-950 disabled:opacity-50"
+              title="Copy the selected DOM element's real UI ID"
+            >
+              {copyStatus || 'Copy ID'}
+            </button>
           </div>
+
           {selected ? (
-            <dl className="grid grid-cols-[6.5rem_1fr] gap-x-3 gap-y-2 leading-relaxed">
-              <dt className="text-slate-400">Type</dt><dd>{selected.kind}</dd>
-              <dt className="text-slate-400">Feature</dt><dd>{feature ? `${feature.id} — ${feature.name}` : selected.featureId}</dd>
-              <dt className="text-slate-400">Parent</dt><dd>{parent ? `${parent.id} — ${parent.name}` : selected.parentId}</dd>
-              <dt className="text-slate-400">Route</dt><dd className="font-mono">{selected.route}</dd>
-              <dt className="text-slate-400">Component</dt><dd className="font-mono">{selected.component}</dd>
-              <dt className="text-slate-400">Source</dt><dd className="break-all font-mono">{selected.sourceFile}</dd>
-              <dt className="text-slate-400">Purpose</dt><dd>{selected.description}</dd>
-              <dt className="text-slate-400">Behavior</dt><dd className="whitespace-pre-wrap">{selected.behavior}</dd>
-              <dt className="text-slate-400">Actions</dt><dd className="whitespace-pre-wrap break-all font-mono">{selected.actions?.map(action => `${action.event}: ${action.expression}`).join('\n') || '—'}</dd>
-              <dt className="text-slate-400">Stores</dt><dd className="break-all font-mono">{selected.stores?.join(', ') || '—'}</dd>
-              <dt className="text-slate-400">Logic</dt><dd className="break-all font-mono">{selected.logicFiles?.join(', ') || '—'}</dd>
-              <dt className="text-slate-400">Tests</dt><dd className="break-all font-mono">{selected.testFiles?.join(', ') || '—'}</dd>
-              <dt className="text-slate-400">Shortcut</dt><dd>{selected.shortcuts?.join(', ') || '—'}</dd>
-              <dt className="text-slate-400">Identity</dt><dd>{selected.identity}</dd>
-              <dt className="text-slate-400">Constraints</dt><dd>{selected.constraints}</dd>
-              <dt className="text-slate-400">Status</dt><dd>{selected.status}</dd>
-              <dt className="text-slate-400">Dependencies</dt><dd className="font-mono">{selected.dependencies.join(', ') || '—'}</dd>
-              <dt className="text-slate-400">Related IDs</dt><dd className="font-mono">{selected.relatedIds.join(', ') || '—'}</dd>
-              <dt className="text-slate-400">Code refs</dt><dd className="break-words font-mono">{selected.codeReferences.join(', ') || '—'}</dd>
-            </dl>
+            <>
+              <p className="mb-3 font-mono text-base font-bold text-fuchsia-300" data-ui-inspector-selected-id>
+                {selected.id}
+              </p>
+              <dl className="grid grid-cols-[7.5rem_1fr] gap-x-3 gap-y-2 leading-relaxed">
+                <dt className="text-slate-400">Name</dt><dd>{selected.name}</dd>
+                <dt className="text-slate-400">Kind</dt><dd>{selected.kind}</dd>
+                <dt className="text-slate-400">Route</dt><dd className="font-mono">{selected.route}</dd>
+                <dt className="text-slate-400">Parent ID</dt>
+                <dd className="font-mono">{selected.parentId ?? '—'}{parent?.name ? ` — ${parent.name}` : ''}</dd>
+                <dt className="text-slate-400">Feature ID</dt>
+                <dd className="font-mono">{selected.featureId}{feature?.name ? ` — ${feature.name}` : ''}</dd>
+                <dt className="text-slate-400">Component</dt><dd className="font-mono">{selected.component}</dd>
+                <dt className="text-slate-400">Source file</dt><dd className="break-all font-mono">{selected.sourceFile}</dd>
+                <dt className="text-slate-400">Action / handler</dt>
+                <dd className="whitespace-pre-wrap break-all font-mono">
+                  {selected.actions?.map((action) => `${action.event}: ${action.expression}`).join('\n') || 'No handler recorded in the Registry'}
+                </dd>
+                <dt className="text-slate-400">Related IDs</dt>
+                <dd className="break-all font-mono">{selected.relatedIds.join(', ') || '—'}</dd>
+                <dt className="text-slate-400">Description</dt><dd>{selected.description}</dd>
+              </dl>
+            </>
+          ) : registryLoadFailed ? (
+            <p className="text-rose-300">Registry metadata could not be loaded; no fallback identity was invented.</p>
           ) : (
-            <p className="text-rose-300">This DOM marker is not present in the registry.</p>
+            <p className="text-slate-300">Loading the checked-in Registry entry for {selectedId}…</p>
           )}
         </aside>
       )}
