@@ -22,6 +22,17 @@ import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor, getCategorySoftColor } from '@/lib/tashjeer/color-system';
 import type { VerificationStatus } from '@/types/tashjeer';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_ReviewPage_0 = {
+  "ALL": "A568",
+  "DRAFT": "A569",
+  "REVIEW": "A570",
+  "APPROVED": "A571",
+  "REJECTED": "A572"
+} as const;
+
+
+
 const FILTERS: Array<{ value: VerificationStatus | 'ALL'; label: string }> = [
   { value: 'ALL', label: 'الكل' },
   { value: 'DRAFT', label: 'مسودة' },
@@ -71,7 +82,7 @@ export default function ReviewPage() {
 
   return (
     <div data-ui-id="A027" className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+      <header data-ui-id="A566" className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-stone-900">المراجعة العلمية</h1>
           <p className="mt-0.5 text-sm text-stone-600">
@@ -81,7 +92,7 @@ export default function ReviewPage() {
 
         <label className="text-xs text-stone-700">
           <span className="mb-1 block font-medium">اسم المراجع</span>
-          <input
+          <input data-ui-id="A567"
             type="text"
             value={reviewer}
             onChange={(event) => setReviewer(event.target.value)}
@@ -94,7 +105,7 @@ export default function ReviewPage() {
       <div data-ui-id="A250" className="space-y-5">
       <div data-ui-id="A251" className="flex flex-wrap gap-2">
         {FILTERS.map((option) => (
-          <button
+          <button data-ui-id={UI_ReviewPage_0[option.value as keyof typeof UI_ReviewPage_0]}
             key={option.value}
             type="button"
             onClick={() => setFilter(option.value)}
@@ -114,7 +125,7 @@ export default function ReviewPage() {
       ) : (
         <ul data-ui-id="A252" className="space-y-3">
           {visible.map((item) => (
-            <li key={item.key} className="rounded-xl border border-stone-200 bg-white p-4">
+            <li data-ui-instance={String(item.key)} data-ui-id="A573" key={item.key} className="rounded-xl border border-stone-200 bg-white p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -127,7 +138,7 @@ export default function ReviewPage() {
                     >
                       {CATEGORY_LABELS[item.category]}
                     </span>
-                    <Link
+                    <Link data-ui-id="A574"
                       href="/editor"
                       className="text-xs text-emerald-700 underline-offset-2 hover:underline"
                     >
@@ -180,10 +191,10 @@ export default function ReviewPage() {
                 <ActionButton data-ui-id="A254" data-ui-instance={item.key} tone="emerald" onClick={() => decide(item, 'APPROVED')}>
                   اعتماد
                 </ActionButton>
-                <ActionButton data-ui-id="A254" data-ui-instance={item.key} tone="amber" onClick={() => decide(item, 'REVIEW')}>
+                <ActionButton data-ui-id="A2123" data-ui-instance={item.key} tone="amber" onClick={() => decide(item, 'REVIEW')}>
                   إعادة للمراجعة
                 </ActionButton>
-                <ActionButton data-ui-id="A254" data-ui-instance={item.key} tone="red" onClick={() => decide(item, 'REJECTED')}>
+                <ActionButton data-ui-id="A2124" data-ui-instance={item.key} tone="red" onClick={() => decide(item, 'REJECTED')}>
                   رفض
                 </ActionButton>
 
@@ -204,13 +215,13 @@ export default function ReviewPage() {
 
 function EmptyState({ hasAnyItems }: { hasAnyItems: boolean }) {
   return (
-    <div className="rounded-xl border border-dashed border-stone-300 bg-white p-10 text-center">
+    <div data-ui-id="A575" className="rounded-xl border border-dashed border-stone-300 bg-white p-10 text-center">
       <p className="text-sm text-stone-600">
         {hasAnyItems
           ? 'لا توجد عناصر في هذه الحالة.'
           : 'لا توجد أوجه للمراجعة بعد. افتح المحرر وسجّل اختلافا ثم احفظه.'}
       </p>
-      <Link
+      <Link data-ui-id="A576"
         href="/editor"
         className="mt-3 inline-block rounded-md bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700"
       >
@@ -242,7 +253,7 @@ function Warning({ text, tone = 'warn' }: { text: string; tone?: 'warn' | 'info'
   return <span className={`rounded px-2 py-1 text-[11px] ${className}`}>{text}</span>;
 }
 
-function ActionButton({
+function ActionButton({ 'data-ui-id': uiId,
   children,
   onClick,
   tone,
@@ -250,7 +261,7 @@ function ActionButton({
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   tone: 'emerald' | 'amber' | 'red';
   children: React.ReactNode;
-}) {
+} & { 'data-ui-id'?: string }) {
   const tones = {
     emerald: 'border-emerald-300 text-emerald-800 hover:bg-emerald-50',
     amber: 'border-amber-300 text-amber-800 hover:bg-amber-50',
@@ -258,7 +269,7 @@ function ActionButton({
   };
 
   return (
-    <button
+    <button data-ui-id={uiId}
       type="button"
       {...attributes}
       onClick={onClick}

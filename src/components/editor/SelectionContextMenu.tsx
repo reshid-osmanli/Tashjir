@@ -14,6 +14,23 @@ import { createPortal } from 'react-dom';
 import { useEditorStore } from '@/stores/editor-store';
 import { selectionCommands, type SelectionCommand } from '@/lib/tashjeer/selection-commands';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_SelectionContextMenu_0 = {
+  "COPY": "A1259",
+  "CUT": "A1260",
+  "PASTE": "A1261",
+  "DELETE": "A1262",
+  "COPY_ID": "A1263",
+  "LINK": "A1264",
+  "MOVE_UP": "A1265",
+  "MOVE_DOWN": "A1266",
+  "WHY": "A1267",
+  "UNLINK": "A1268",
+  "EDIT": "A1269"
+} as const;
+
+
+
 export interface ContextMenuState {
   x: number;
   y: number;
@@ -98,7 +115,7 @@ export function SelectionContextMenu({ state, onClose }: SelectionContextMenuPro
       style={{ left: x, top: y }}
     >
       {commands.map((command) => (
-        <button
+        <button data-ui-id={UI_SelectionContextMenu_0[command.id as keyof typeof UI_SelectionContextMenu_0]}
           key={command.id}
           type="button"
           role="menuitem"

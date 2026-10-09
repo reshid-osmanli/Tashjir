@@ -40,6 +40,16 @@ import type { VariantCategory } from '@/types';
 import type { TashjeerLinkRelation, VerificationStatus } from '@/types/tashjeer';
 import type { ClassicLine, ClassicTashjeer } from '@/lib/tashjeer/classic-tashjeer';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_PropertiesPanel_0 = {
+  "DRAFT": "A1007",
+  "REVIEW": "A1008",
+  "APPROVED": "A1009",
+  "REJECTED": "A1010"
+} as const;
+
+
+
 const STATUS_OPTIONS: Array<{ value: VerificationStatus; label: string }> = [
   { value: 'DRAFT', label: 'مسودة' },
   { value: 'REVIEW', label: 'قيد المراجعة' },
@@ -110,18 +120,18 @@ export function PropertiesPanel() {
       <SelectionDetailsPanel classic={classic} onRequestWhy={() => setShowWhyDialog(true)} />
 
       {/* حالة المستند */}
-      <Section title="المستند">
+      <Section data-ui-id="A1005" title="المستند">
         <Row label="الموضع" value={`${document.surahNumber}:${document.ayahNumber}`} />
         <Row label="آخر تعديل" value={formatDate(document.meta.updatedAt)} />
         <label className="mt-2 block">
           <span className="mb-1 block text-[11px] font-medium text-stone-600">حالة المستند</span>
-          <select
+          <select data-ui-id="A1006"
             value={document.meta.status}
             onChange={(event) => setDocumentStatus(event.target.value as VerificationStatus)}
             className="input text-xs"
           >
             {STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
+              <option data-ui-id={UI_PropertiesPanel_0[option.value as keyof typeof UI_PropertiesPanel_0]} key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
@@ -130,7 +140,7 @@ export function PropertiesPanel() {
       </Section>
 
       {/* الإحصاءات */}
-      <Section title="إحصاءات الآية">
+      <Section data-ui-id="A1011" title="إحصاءات الآية">
         <div className="grid grid-cols-2 gap-2">
           <Stat label="الاختلافات" value={stats.variantsCount} />
           <Stat label="الأوجه" value={stats.alternativesCount} />
@@ -161,7 +171,7 @@ export function PropertiesPanel() {
 
       {/* الكلمة المحددة */}
       {selectedWord && (
-        <Section title="الكلمة المحددة">
+        <Section data-ui-id="A1012" title="الكلمة المحددة">
           <p
             className="text-xl leading-loose text-stone-900"
             style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }}
@@ -176,7 +186,7 @@ export function PropertiesPanel() {
 
       {/* خصائص القاعدة: رقم ترتيب السطر قابل للتحرير دائما، بما فيه المشتق من قاعدة عامة */}
       {selectedVariant && (
-        <Section title="خصائص القاعدة">
+        <Section data-ui-id="A1013" title="خصائص القاعدة">
           <div className="flex items-start justify-between gap-2">
             <span className="text-sm font-medium text-stone-900">{selectedVariant.title}</span>
             <StatusBadge status={selectedVariant.status} />
@@ -241,7 +251,7 @@ export function PropertiesPanel() {
             }
           />
           <div className="mt-2 grid grid-cols-2 gap-2">
-            <button
+            <button data-ui-id="A1014"
               type="button"
               onClick={() => setShowWhyDialog(true)}
               className="w-full rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-900 hover:bg-violet-100"
@@ -249,7 +259,7 @@ export function PropertiesPanel() {
             >
               لماذا؟
             </button>
-            <button
+            <button data-ui-id="A1015"
               type="button"
               onClick={() => window.location.assign('/studio')}
               className="w-full rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-100"
@@ -263,12 +273,12 @@ export function PropertiesPanel() {
 
       {/* السطر المحدد: رقم ترتيبه قابل للتغيير مباشرة دون إعادة تشغيل المحرك */}
       {selectedLine && (
-        <Section title="السطر المحدد">
+        <Section data-ui-id="A1016" title="السطر المحدد">
           <Row label="البطاقة" value={selectedLine.label} />
           <Row label="الحكم" value={selectedLine.ruleLabel} />
           <Row label="الفئة" value={CATEGORY_LABELS[selectedLine.category]} />
           <Row label="الأحكام على السطر" value={toArabicDigits(selectedLine.entries.length)} />
-          <button
+          <button data-ui-id="A1017"
             type="button"
             onClick={() => {
               const variantIds = [...new Set(selectedLine.entries.map((entry) => entry.variantId))].filter((id) =>
@@ -315,7 +325,7 @@ export function PropertiesPanel() {
 
       {/* الخط المحدد وأدلته (مسار المحرك القديم إن وُجد) */}
       {selectedBranch && (
-        <Section title="موضع الخط الهندسي">
+        <Section data-ui-id="A1018" title="موضع الخط الهندسي">
           <Row label="الفئة" value={CATEGORY_LABELS[selectedBranch.category]} />
           <Row label="المسار" value={selectedBranch.lane + 1} />
           <Row label="الجهة" value={selectedBranch.side === 'TOP' ? 'أعلى النص' : 'أسفل النص'} />
@@ -340,7 +350,7 @@ export function PropertiesPanel() {
       )}
 
       {/* تصفية الرواة */}
-      <Section title="تصفية الرواة">
+      <Section data-ui-id="A1019" title="تصفية الرواة">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-[11px] text-stone-500">
             {filter.narratorIds.length === 0
@@ -348,7 +358,7 @@ export function PropertiesPanel() {
               : `${filter.narratorIds.length} راويا مختارا`}
           </span>
           {filter.narratorIds.length > 0 && (
-            <button
+            <button data-ui-id="A1020"
               type="button"
               onClick={() => setFilter({ narratorIds: [] })}
               className="rounded border border-stone-300 px-2 py-0.5 text-[11px] text-stone-700 hover:bg-stone-100"
@@ -368,7 +378,7 @@ export function PropertiesPanel() {
                 {catalog.narrators.filter((narrator) => narrator.imamId === imam.id).map((narrator) => {
                   const active = filter.narratorIds.includes(narrator.id);
                   return (
-                    <button
+                    <button data-ui-instance={String(narrator.id)} data-ui-id="A1021"
                       key={narrator.id}
                       type="button"
                       onClick={() => toggleNarrator(narrator.id)}
@@ -446,7 +456,7 @@ function EvidenceView({
   const evidences = alternative.evidences ?? [];
 
   return (
-    <div className="mt-3 border-t border-stone-100 pt-2">
+    <div data-ui-id="A1022" className="mt-3 border-t border-stone-100 pt-2">
       <p className="mb-1 text-[11px] font-semibold text-stone-700">النطاق</p>
       <p className="text-[11px] text-stone-600">
         {describeScope(alternative.scope, { catalog })} ({resolveScope(alternative.scope, catalog).length} راويا)
@@ -458,9 +468,9 @@ function EvidenceView({
           لا يوجد دليل مسجّل لهذا الوجه. لا يصح اعتماده قبل توثيقه.
         </p>
       ) : (
-        <ul className="space-y-1.5">
+        <ul data-ui-id="A1023" className="space-y-1.5">
           {evidences.map((evidence) => (
-            <li key={evidence.id} className="rounded bg-stone-50 px-2 py-1.5">
+            <li data-ui-instance={String(evidence.id)} data-ui-id="A1024" key={evidence.id} className="rounded bg-stone-50 px-2 py-1.5">
               <p className="text-[11px] font-medium text-stone-700">
                 {sourceLabel(evidence.source)}
                 {evidence.reference ? ` — ${evidence.reference}` : ''}
@@ -517,17 +527,17 @@ function SelectedLineOrder({
   const current = Math.max(1, base.indexOf(line.id) + 1 || classic.lines.findIndex((item) => item.id === line.id) + 1);
 
   return (
-    <div className="mt-2 rounded-md border border-cyan-200 bg-cyan-50/50 p-2">
+    <div data-ui-id="A1025" className="mt-2 rounded-md border border-cyan-200 bg-cyan-50/50 p-2">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] font-semibold text-cyan-950">رقم ترتيب الصف</p>
         {hasManual && (
-          <button type="button" onClick={onReset} className="text-[10px] text-cyan-800 hover:underline">
+          <button data-ui-id="A1026" type="button" onClick={onReset} className="text-[10px] text-cyan-800 hover:underline">
             عودة لترتيب المحرك
           </button>
         )}
       </div>
       <div className="mt-1.5 flex items-center gap-1.5">
-        <input
+        <input data-ui-id="A1027"
           type="number"
           min={1}
           max={classic.lines.length}
@@ -540,7 +550,7 @@ function SelectedLineOrder({
           className="h-7 w-14 rounded border border-cyan-300 bg-white px-1 text-center text-[11px] tabular-nums"
           aria-label="رقم ترتيب الصف"
         />
-        <button
+        <button data-ui-id="A1028"
           type="button"
           onClick={() => onShift(base, line.id, -1)}
           className="rounded border border-cyan-300 bg-white px-2 py-0.5 text-xs text-cyan-800"
@@ -548,7 +558,7 @@ function SelectedLineOrder({
         >
           ↑
         </button>
-        <button
+        <button data-ui-id="A1029"
           type="button"
           onClick={() => onShift(base, line.id, 1)}
           className="rounded border border-cyan-300 bg-white px-2 py-0.5 text-xs text-cyan-800"
@@ -590,34 +600,34 @@ function FaceComposeQuick({
   const from = faceEndpointKey(selectedVariant.id, own[0].id);
 
   return (
-    <div className="mt-3 rounded-md border border-violet-200 bg-violet-50/40 p-2">
+    <div data-ui-id="A1030" className="mt-3 rounded-md border border-violet-200 bg-violet-50/40 p-2">
       <p className="text-[11px] font-semibold text-violet-950">وجه مركّب يدويا</p>
       <p className="mt-0.5 text-[10px] leading-relaxed text-violet-900/75">
         اربط هذا الوجه بوجه آخر — ولو كان من قارئ مختلف. القرار قرار المحقق لا افتراض المحرك.
       </p>
-      <select
+      <select data-ui-id="A1031"
         value={target}
         onChange={(event) => setTarget(event.target.value)}
         className="input mt-1.5 h-7 py-0 text-[11px]"
       >
-        <option value="">— الوجه المرتبط به —</option>
+        <option data-ui-id="A1032" value="">— الوجه المرتبط به —</option>
         {faces
           .filter((face) => face.key !== from)
           .map((face) => (
-            <option key={face.key} value={face.key}>
+            <option data-ui-instance={String(face.key)} data-ui-id="A1033" key={face.key} value={face.key}>
               {face.label}
             </option>
           ))}
       </select>
       <div className="mt-1.5 flex gap-1">
-        <button
+        <button data-ui-id="A1034"
           type="button"
           onClick={() => setRelation('MERGE')}
           className={`flex-1 rounded border px-2 py-1 text-[10px] ${relation === 'MERGE' ? 'border-violet-600 bg-violet-600 text-white' : 'border-violet-200 text-violet-800'}`}
         >
           دمج في سطر
         </button>
-        <button
+        <button data-ui-id="A1035"
           type="button"
           onClick={() => setRelation('REFERENCE')}
           className={`flex-1 rounded border px-2 py-1 text-[10px] ${relation === 'REFERENCE' ? 'border-violet-600 bg-violet-600 text-white' : 'border-violet-200 text-violet-800'}`}
@@ -625,7 +635,7 @@ function FaceComposeQuick({
           ربط مرجعي
         </button>
       </div>
-      <button
+      <button data-ui-id="A1036"
         type="button"
         disabled={!target}
         onClick={() => {
@@ -655,31 +665,31 @@ function LineComposeQuick({
   if (lines.length < 2) return null;
 
   return (
-    <div className="mt-2 rounded-md border border-violet-200 bg-violet-50/40 p-2">
+    <div data-ui-id="A1037" className="mt-2 rounded-md border border-violet-200 bg-violet-50/40 p-2">
       <p className="text-[11px] font-semibold text-violet-950">ربط هذا السطر بسطر آخر</p>
-      <select
+      <select data-ui-id="A1038"
         value={target}
         onChange={(event) => setTarget(event.target.value)}
         className="input mt-1.5 h-7 py-0 text-[11px]"
       >
-        <option value="">— السطر المدمج به —</option>
+        <option data-ui-id="A1039" value="">— السطر المدمج به —</option>
         {lines
           .filter((item) => item.id !== line.id)
           .map((item, index) => (
-            <option key={item.id} value={item.id}>
+            <option data-ui-instance={String(item.id)} data-ui-id="A1040" key={item.id} value={item.id}>
               {toArabicDigits(index + 1)}. {item.label} · {item.ruleLabel.slice(0, 28)}
             </option>
           ))}
       </select>
       <div className="mt-1.5 flex gap-1">
-        <button
+        <button data-ui-id="A1041"
           type="button"
           onClick={() => setRelation('MERGE')}
           className={`flex-1 rounded border px-2 py-1 text-[10px] ${relation === 'MERGE' ? 'border-violet-600 bg-violet-600 text-white' : 'border-violet-200 text-violet-800'}`}
         >
           دمج
         </button>
-        <button
+        <button data-ui-id="A1042"
           type="button"
           onClick={() => setRelation('REFERENCE')}
           className={`flex-1 rounded border px-2 py-1 text-[10px] ${relation === 'REFERENCE' ? 'border-violet-600 bg-violet-600 text-white' : 'border-violet-200 text-violet-800'}`}
@@ -687,7 +697,7 @@ function LineComposeQuick({
           مرجعي
         </button>
       </div>
-      <button
+      <button data-ui-id="A1043"
         type="button"
         disabled={!target}
         onClick={() => {
@@ -723,22 +733,22 @@ function LinePlacementControls({
   onReset: () => void;
 }) {
   return (
-    <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50/40 p-2">
+    <div data-ui-id="A1044" className="mt-3 rounded-md border border-emerald-200 bg-emerald-50/40 p-2">
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-semibold text-emerald-900">موضع السطر</p>
         {isManual && (
-          <button type="button" onClick={onReset} className="text-[10px] text-emerald-800 hover:underline">
+          <button data-ui-id="A1045" type="button" onClick={onReset} className="text-[10px] text-emerald-800 hover:underline">
             عودة للتلقائي
           </button>
         )}
       </div>
       <div className="mt-1.5 flex items-center gap-1.5">
-        <button type="button" onClick={() => onMove(-1)} className="rounded border border-emerald-300 bg-white px-2 py-0.5 text-xs text-emerald-800">
+        <button data-ui-id="A1046" type="button" onClick={() => onMove(-1)} className="rounded border border-emerald-300 bg-white px-2 py-0.5 text-xs text-emerald-800">
           ↑
         </button>
         <label className="flex flex-1 items-center gap-1 text-[10px] text-stone-600">
           المسار
-          <input
+          <input data-ui-id="A1047"
             type="number"
             min={0}
             value={lane}
@@ -746,13 +756,13 @@ function LinePlacementControls({
             className="h-6 w-12 rounded border border-stone-300 bg-white px-1 text-center text-[11px]"
           />
         </label>
-        <button type="button" onClick={() => onMove(1)} className="rounded border border-emerald-300 bg-white px-2 py-0.5 text-xs text-emerald-800">
+        <button data-ui-id="A1048" type="button" onClick={() => onMove(1)} className="rounded border border-emerald-300 bg-white px-2 py-0.5 text-xs text-emerald-800">
           ↓
         </button>
       </div>
       <label className="mt-2 block text-[10px] text-stone-600">
         الإزاحة الدقيقة: {rowOffset}
-        <input
+        <input data-ui-id="A1049"
           type="range"
           min={-80}
           max={80}
@@ -768,9 +778,9 @@ function LinePlacementControls({
 
 // ==================== عناصر مشتركة ====================
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ 'data-ui-id': uiId, title, children }: { title: string; children: React.ReactNode } & { 'data-ui-id'?: string }) {
   return (
-    <section className="border-b border-stone-200 px-4 py-3">
+    <section data-ui-id={uiId} className="border-b border-stone-200 px-4 py-3">
       <h3 className="mb-2 text-xs font-bold text-stone-900">{title}</h3>
       {children}
     </section>

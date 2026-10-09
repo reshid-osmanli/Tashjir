@@ -31,6 +31,24 @@ import { PublishHistoryPanel } from '@/components/studio/PublishHistoryPanel';
 import { EngineSettingsPanel } from '@/components/studio/EngineSettingsPanel';
 import { RecitationRuleCatalogPanel } from '@/components/studio/RecitationRuleCatalogPanel';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_EngineStudioPage_0 = {
+  "dashboard": "A619",
+  "recitation-catalog": "A620",
+  "rules": "A621",
+  "merge": "A622",
+  "priority": "A623",
+  "why": "A624",
+  "tests": "A625",
+  "candidates": "A626",
+  "compare": "A627",
+  "publish": "A628",
+  "io": "A629",
+  "settings": "A630"
+} as const;
+
+
+
 type Section = 'dashboard' | 'recitation-catalog' | 'rules' | 'merge' | 'priority' | 'why' | 'tests' | 'candidates' | 'compare' | 'publish' | 'io' | 'settings';
 
 const SECTIONS: Array<{ id: Section; label: string; hint: string }> = [
@@ -227,7 +245,7 @@ export default function EngineStudioPage() {
           {/* الشريط الجانبي للأقسام */}
           <nav data-ui-id="A155" className="flex gap-2 overflow-x-auto rounded-xl border border-gray-200 bg-white p-2 shadow-sm lg:h-fit lg:flex-col lg:overflow-visible">
             {SECTIONS.map((item) => (
-              <button
+              <button data-ui-id={UI_EngineStudioPage_0[item.id as keyof typeof UI_EngineStudioPage_0]}
                 key={item.id}
                 type="button"
                 onClick={() => {
@@ -381,7 +399,7 @@ export default function EngineStudioPage() {
 
 function EmptyRuleState() {
   return (
-    <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center text-gray-400">
+    <div data-ui-id="A631" className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center text-gray-400">
       اختر قاعدة من القائمة لتعديلها، أو أنشئ قاعدة جديدة.
     </div>
   );
@@ -404,20 +422,20 @@ function SelectedRuleActions({
       <p className="mb-2 text-sm font-medium text-gray-600">إجراءات سريعة على المحدد</p>
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-xs text-gray-500">الأولوية:</label>
-        <input
+        <input data-ui-id="A632"
           type="number"
           value={rule.priority}
           onChange={(event) => setShifts(onPriority(rule.id, Number(event.target.value)))}
           className="w-20 rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
         />
-        <button
+        <button data-ui-id="A633"
           type="button"
           onClick={() => onStatus(rule.id, rule.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE')}
           className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
         >
           {rule.status === 'ACTIVE' ? 'تعطيل' : 'تفعيل'}
         </button>
-        <button
+        <button data-ui-id="A634"
           type="button"
           onClick={() => onRemove(rule.id)}
           className="mr-auto rounded-lg bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"

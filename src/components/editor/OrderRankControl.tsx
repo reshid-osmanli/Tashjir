@@ -42,7 +42,7 @@ export function OrderRankControl({
   };
 
   return (
-    <div
+    <div data-ui-id="A1001"
       className={
         compact
           ? 'rounded-md border border-emerald-200 bg-emerald-50/50 p-2'
@@ -60,7 +60,7 @@ export function OrderRankControl({
         </p>
       </div>
       <div className="mt-1.5 flex items-center gap-1.5">
-        <input
+        <input data-ui-id="A1002"
           type="text"
           inputMode="numeric"
           value={draft}
@@ -73,7 +73,7 @@ export function OrderRankControl({
           placeholder="تلقائي"
           aria-label="رقم ترتيب السطر"
         />
-        <button
+        <button data-ui-id="A1003"
           type="button"
           onClick={() => apply(draft)}
           className="rounded border border-emerald-400 bg-white px-2.5 py-1.5 text-[10px] font-medium text-emerald-800 hover:bg-emerald-100"
@@ -81,7 +81,7 @@ export function OrderRankControl({
           تثبيت
         </button>
         {(typeof value === 'number' || draft !== '') && (
-          <button
+          <button data-ui-id="A1004"
             type="button"
             onClick={() => {
               setDraft('');

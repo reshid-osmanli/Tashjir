@@ -12,6 +12,18 @@ import { CATEGORY_LABELS, STATUS_LABELS, STATUS_BADGE_CLASSES } from './labels';
 import { ScrollableList } from '@/components/ui/ScrollableList';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_RuleExplorer_0 = {
+  "DRAFT": "A1951",
+  "ACTIVE": "A1952",
+  "DISABLED": "A1953",
+  "DEPRECATED": "A1954",
+  "CONFLICTED": "A1955",
+  "EXPERIMENTAL": "A1956"
+} as const;
+
+
+
 type SortKey = 'priority' | 'name' | 'status';
 
 interface RuleExplorerProps {
@@ -73,37 +85,37 @@ export function RuleExplorer({ rules, selectedRuleId, onSelect, onCreate }: Rule
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
         />
         <div className="flex flex-wrap gap-2">
-          <select
+          <select data-ui-id="A1949"
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value as RuleStatus | 'ALL')}
             className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
-            <option value="ALL">كل الحالات</option>
+            <option data-ui-id="A1950" value="ALL">كل الحالات</option>
             {(Object.keys(STATUS_LABELS) as RuleStatus[]).map((status) => (
-              <option key={status} value={status}>
+              <option data-ui-id={UI_RuleExplorer_0[status as keyof typeof UI_RuleExplorer_0]} key={status} value={status}>
                 {STATUS_LABELS[status]}
               </option>
             ))}
           </select>
-          <select
+          <select data-ui-id="A1957"
             value={categoryFilter}
             onChange={(event) => setCategoryFilter(event.target.value)}
             className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
             {categories.map((category) => (
-              <option key={category} value={category}>
+              <option data-ui-id="A1958" key={category} value={category}>
                 {category === 'ALL' ? 'كل الفئات' : CATEGORY_LABELS[category as keyof typeof CATEGORY_LABELS] ?? category}
               </option>
             ))}
           </select>
-          <select
+          <select data-ui-id="A1959"
             value={sortKey}
             onChange={(event) => setSortKey(event.target.value as SortKey)}
             className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
-            <option value="priority">الأولوية</option>
-            <option value="name">الاسم</option>
-            <option value="status">الحالة</option>
+            <option data-ui-id="A1960" value="priority">الأولوية</option>
+            <option data-ui-id="A1961" value="name">الاسم</option>
+            <option data-ui-id="A1962" value="status">الحالة</option>
           </select>
         </div>
       </div>
@@ -121,10 +133,10 @@ export function RuleExplorer({ rules, selectedRuleId, onSelect, onCreate }: Rule
           <p className="p-6 text-center text-sm text-gray-400">لا قواعد مطابقة.</p>
         ) : (
           <>
-          <ul className="divide-y divide-gray-100">
+          <ul data-ui-id="A1963" className="divide-y divide-gray-100">
             {filtered.slice(0, renderLimit).map((rule) => (
-              <li key={rule.id}>
-                <button
+              <li data-ui-instance={String(rule.id)} data-ui-id="A1964" key={rule.id}>
+                <button data-ui-instance={String(rule.id)} data-ui-id="A1965"
                   type="button"
                   onClick={() => onSelect(rule.id)}
                   className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-right transition-colors hover:bg-emerald-50 ${
@@ -150,7 +162,7 @@ export function RuleExplorer({ rules, selectedRuleId, onSelect, onCreate }: Rule
             ))}
           </ul>
           {renderLimit < filtered.length && (
-            <button
+            <button data-ui-id="A1966"
               type="button"
               onClick={() => setRenderLimit((limit) => limit + 80)}
               className="w-full border-t border-gray-100 py-2.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50"

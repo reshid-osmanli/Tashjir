@@ -41,6 +41,15 @@ import {
   type WizardTemplateConfig,
 } from '@/lib/tashjeer/wizard-templates';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_VariantsPanel_0 = {
+  "quick-farsh": "A1570",
+  "quick-madd-group": "A1571",
+  "quick-farsh-usul": "A1572"
+} as const;
+
+
+
 export function VariantsPanel() {
   const {
     document,
@@ -240,7 +249,7 @@ export function VariantsPanel() {
 
   return (
     <aside data-ui-id="A114" className="flex h-full min-h-0 w-[340px] shrink-0 flex-col overflow-hidden border-s border-stone-200 bg-white">
-      <header className="border-b border-stone-200 px-4 py-3">
+      <header data-ui-id="A1562" className="border-b border-stone-200 px-4 py-3">
         <div className="flex items-start justify-between gap-2">
           <div>
             <h2 className="text-sm font-bold text-stone-900">اختلافات الآية</h2>
@@ -274,7 +283,7 @@ export function VariantsPanel() {
           className="flex items-start justify-between gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2"
         >
           <p className="text-[11px] leading-relaxed text-amber-950">{multiDifferenceNotice}</p>
-          <button
+          <button data-ui-id="A1563"
             type="button"
             onClick={clearMultiDifferenceNotice}
             className="shrink-0 rounded border border-amber-300 px-1.5 py-0.5 text-[10px] text-amber-900 hover:bg-amber-100"
@@ -286,7 +295,7 @@ export function VariantsPanel() {
       )}
 
       {/* القواعد العامة المطبقة على هذه الآية، مع بقائها محفوظة مرة واحدة فقط. */}
-      <section className="border-b border-stone-200 bg-violet-50/50 px-4 py-3">
+      <section data-ui-id="A1564" className="border-b border-stone-200 bg-violet-50/50 px-4 py-3">
         <div className="flex items-start justify-between gap-2">
           <div>
             <h3 className="text-xs font-semibold text-violet-950">قواعد عامة في هذا الموضع</h3>
@@ -294,7 +303,7 @@ export function VariantsPanel() {
               تظهر هنا النتائج المشتقة من قواعد المصحف، ولا تُنسخ إلى قائمة اختلافات الآية.
             </p>
           </div>
-          <button
+          <button data-ui-id="A1565"
             type="button"
             onClick={() => {
               setGlobalBuilderKind('MORPHOLOGY');
@@ -314,9 +323,9 @@ export function VariantsPanel() {
         {activeGlobalRules.length === 0 ? (
           <p className="mt-2 text-[11px] text-violet-900/65">لا توجد قاعدة نمطية نشطة مطابقة لهذه الآية.</p>
         ) : (
-          <ul className="mt-2 space-y-1.5">
+          <ul data-ui-id="A1566" className="mt-2 space-y-1.5">
             {activeGlobalRules.map(({ rule, matches, removedHere }) => (
-              <li key={rule.id} className="rounded border border-violet-100 bg-white px-2 py-1.5 text-[11px]">
+              <li data-ui-id="A1567" key={rule.id} className="rounded border border-violet-100 bg-white px-2 py-1.5 text-[11px]">
                 <div className="flex items-center justify-between gap-2">
                   <span className="min-w-0 truncate font-medium text-stone-800">{rule.ruleLabel || rule.title}</span>
                   <span className="shrink-0 text-violet-800">
@@ -331,7 +340,7 @@ export function VariantsPanel() {
                   ) : (
                     <span className="text-[10px] text-stone-400">مطبَّقة في هذه الآية</span>
                   )}
-                  <button
+                  <button data-ui-id="A1568"
                     type="button"
                     onClick={() => setReviewingRule(rule)}
                     className="shrink-0 rounded border border-violet-300 px-1.5 py-0.5 text-[10px] text-violet-900 hover:bg-violet-50"
@@ -347,7 +356,7 @@ export function VariantsPanel() {
       </section>
 
       {/* الإنشاء عبر باب واحد: المعالج الذكي + الإنشاء السريع بالقوالب (T3). */}
-      <section className="border-b border-stone-200 bg-stone-50 px-4 py-3">
+      <section data-ui-id="A1569" className="border-b border-stone-200 bg-stone-50 px-4 py-3">
         <h3 className="text-xs font-semibold text-stone-700">اختلاف جديد</h3>
 
         {!hasMarks ? (
@@ -397,7 +406,7 @@ export function VariantsPanel() {
               </p>
               <div className="mt-1.5 flex flex-wrap gap-1">
                 {QUICK_CREATE_TEMPLATES.map((template) => (
-                  <button
+                  <button data-ui-id={UI_VariantsPanel_0[template.id as keyof typeof UI_VariantsPanel_0]}
                     key={template.id}
                     type="button"
                     onClick={() => handleQuickCreate(template.config)}
@@ -408,7 +417,7 @@ export function VariantsPanel() {
                   </button>
                 ))}
                 {quickTemplates.map((template) => (
-                  <button
+                  <button data-ui-instance={String(template.id)} data-ui-id="A1573"
                     key={template.id}
                     type="button"
                     onClick={() => handleQuickCreate(template.config, template.id)}
@@ -423,7 +432,7 @@ export function VariantsPanel() {
 
             <div className="grid gap-2 sm:grid-cols-2">
               {markingMode === 'CHARACTERS' && markedCharacterRange && (
-                <button
+                <button data-ui-id="A1574"
                   type="button"
                   onClick={() => {
                     setGlobalBuilderKind('CHARACTERS');
@@ -437,7 +446,7 @@ export function VariantsPanel() {
                   حفظ كقاعدة في كل المصحف
                 </button>
               )}
-              <button
+              <button data-ui-id="A1575"
                 type="button"
                 onClick={clearMarks}
                 className="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100 sm:col-span-2"
@@ -449,7 +458,7 @@ export function VariantsPanel() {
         )}
       </section>
 
-      <div
+      <div data-ui-id="A1576"
         onKeyDown={(event) => {
           // Ctrl+A داخل القائمة يحدد كل المعروض/المصفّى (FR-ED-07) — لا
           // يلزم تركيز صف بعينه: أي تركيز داخل اللوحة (الرأس أو منطقة
@@ -497,7 +506,7 @@ export function VariantsPanel() {
                 >
                   حذف المحدد
                 </button>
-                <button
+                <button data-ui-id="A1577"
                   type="button"
                   className="rounded border border-stone-300 bg-white px-2 py-0.5 text-[11px] text-stone-700 hover:bg-stone-50"
                   onClick={() => useEditorStore.getState().copySelection()}
@@ -505,7 +514,7 @@ export function VariantsPanel() {
                 >
                   نسخ
                 </button>
-                <button
+                <button data-ui-id="A1578"
                   type="button"
                   className="rounded border border-stone-300 bg-white px-2 py-0.5 text-[11px] text-stone-700 hover:bg-stone-50"
                   onClick={() => setMultiSelection(null)}
@@ -806,7 +815,7 @@ function VariantRow({
   };
 
   return (
-    <li
+    <li data-ui-id="A1579"
       ref={(element) => {
         if (rowRef) rowRef.current = element;
         onMeasure?.(element);
@@ -822,7 +831,7 @@ function VariantRow({
       }
     >
       <div className="px-4 py-3">
-        <button type="button" onClick={onSelect} className="w-full text-start">
+        <button data-ui-id="A1580" type="button" onClick={onSelect} className="w-full text-start">
           <div className="flex items-start justify-between gap-2">
             <span className="flex flex-wrap items-center gap-1">
               <span
@@ -858,7 +867,7 @@ function VariantRow({
           <>
           <label className="mt-2 flex items-center justify-between gap-2 rounded border border-cyan-200 bg-cyan-50 px-2 py-1 text-[10px] text-cyan-950">
             <span>سياق الأداء</span>
-            <select
+            <select data-ui-id="A1581"
               value={variant.recitationMode ?? 'ALWAYS'}
               onChange={(event) =>
                 onRecitationModeChange(
@@ -869,9 +878,9 @@ function VariantRow({
               }
               className="h-6 rounded border border-cyan-300 bg-white px-1 text-[10px]"
             >
-              <option value="ALWAYS">وقفا ووصلا</option>
-              <option value="WAQF_ONLY">وقفا فقط</option>
-              <option value="WASL_ONLY">وصلا فقط</option>
+              <option data-ui-id="A1582" value="ALWAYS">وقفا ووصلا</option>
+              <option data-ui-id="A1583" value="WAQF_ONLY">وقفا فقط</option>
+              <option data-ui-id="A1584" value="WASL_ONLY">وصلا فقط</option>
             </select>
           </label>
           <ul
@@ -883,7 +892,7 @@ function VariantRow({
             aria-label="أوجه الموضع: Shift للمدى، Ctrl+A للكل، Ctrl+C للنسخ"
           >
             {variant.alternatives.map((alternative) => (
-              <li
+              <li data-ui-instance={String(alternative.id)} data-ui-id="A1585"
                 key={alternative.id}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -949,7 +958,7 @@ function VariantRow({
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded border border-rose-200 bg-rose-50 px-2 py-1.5 text-[11px] text-rose-800">
               <span>محدَّد {toArabicDigits(checkedFaces.size)} من {toArabicDigits(variant.alternatives.length)} وجها</span>
               <div className="flex flex-wrap gap-1.5">
-                <button
+                <button data-ui-id="A1586"
                   type="button"
                   onClick={() => setCheckedFaces(new Set(variant.alternatives.map((alternative) => alternative.id)))}
                   className="rounded border border-rose-300 bg-white px-2 py-0.5 text-rose-700 hover:bg-rose-100"
@@ -957,7 +966,7 @@ function VariantRow({
                 >
                   تحديد الكل
                 </button>
-                <button
+                <button data-ui-id="A1587"
                   type="button"
                   onClick={() => copyFaces(variant.id, [...checkedFaces])}
                   className="rounded border border-cyan-300 bg-white px-2 py-0.5 text-cyan-800 hover:bg-cyan-50"
@@ -965,14 +974,14 @@ function VariantRow({
                 >
                   نسخ المحدد
                 </button>
-                <button
+                <button data-ui-id="A1588"
                   type="button"
                   onClick={() => setCheckedFaces(new Set())}
                   className="rounded border border-rose-300 bg-white px-2 py-0.5 text-rose-700 hover:bg-rose-100"
                 >
                   إلغاء التحديد
                 </button>
-                <button
+                <button data-ui-id="A1589"
                   type="button"
                   onClick={async () => {
                     if (await onBulkDeleteFaces([...checkedFaces])) setCheckedFaces(new Set());
@@ -988,7 +997,7 @@ function VariantRow({
         )}
 
         <div className="mt-2 flex flex-wrap gap-2">
-          <button
+          <button data-ui-id="A1590"
             type="button"
             onClick={onEdit}
             className="rounded border border-stone-300 px-2 py-1 text-[11px] text-stone-700 hover:bg-stone-100"
@@ -996,7 +1005,7 @@ function VariantRow({
             تحرير
           </button>
           {onGeneralize && (
-            <button
+            <button data-ui-id="A1591"
               type="button"
               onClick={onGeneralize}
               className="rounded border border-violet-300 px-2 py-1 text-[11px] text-violet-800 hover:bg-violet-50"
@@ -1005,7 +1014,7 @@ function VariantRow({
               تعميم على المصحف
             </button>
           )}
-          <button
+          <button data-ui-id="A1592"
             type="button"
             onClick={onDelete}
             className="rounded border border-red-200 px-2 py-1 text-[11px] text-red-700 hover:bg-red-50"

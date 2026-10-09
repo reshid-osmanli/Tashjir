@@ -47,7 +47,7 @@ export function SelectionFocusCard({
   if (!summary) return null;
 
   return (
-    <div
+    <div data-ui-id="A1295"
       role="status"
       className="tashjeer-focus-card pointer-events-auto absolute end-3 top-3 z-20 max-w-[300px] rounded-lg border border-emerald-300 bg-white/95 px-3 py-2 shadow-xl backdrop-blur"
     >
@@ -68,7 +68,7 @@ export function SelectionFocusCard({
             </p>
           )}
         </div>
-        <button
+        <button data-ui-id="A1296"
           type="button"
           onClick={onClose}
           className="shrink-0 rounded px-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700"

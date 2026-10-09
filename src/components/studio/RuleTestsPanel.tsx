@@ -50,9 +50,9 @@ export function RuleTestsPanel({ config }: RuleTestsPanelProps) {
                 {ruleReport.passed}/{ruleReport.total}
               </span>
             </div>
-            <ul className="mt-3 space-y-1.5">
+            <ul data-ui-id="A1967" className="mt-3 space-y-1.5">
               {ruleReport.results.map((result, index) => (
-                <li key={index} className="flex items-center gap-3 rounded-lg bg-gray-50 px-3 py-1.5 text-sm">
+                <li data-ui-id="A1968" key={index} className="flex items-center gap-3 rounded-lg bg-gray-50 px-3 py-1.5 text-sm">
                   <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${result.passed ? 'bg-emerald-500' : 'bg-red-500'}`}>
                     {result.passed ? '✓' : '✕'}
                   </span>
@@ -75,7 +75,7 @@ function SummaryCard({ label, value, tone }: { label: string; value: number; ton
     gray: 'border-gray-200 bg-gray-50 text-gray-700',
   }[tone];
   return (
-    <div className={`rounded-xl border p-4 ${toneClasses}`}>
+    <div data-ui-id="A1969" className={`rounded-xl border p-4 ${toneClasses}`}>
       <p className="text-3xl font-bold">{value}</p>
       <p className="mt-1 text-sm font-medium opacity-80">{label}</p>
     </div>

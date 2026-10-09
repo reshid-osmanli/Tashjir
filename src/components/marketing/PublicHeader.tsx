@@ -16,6 +16,30 @@ import { useEffect, useState } from 'react';
 import { TashjirWordmark } from '@/components/brand/TashjirMark';
 import { IconAccount, IconClose, IconMenu } from '@/components/ui/icons';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_PublicHeader_0 = {
+  "المحرر": "A1644",
+  "المصحف": "A1645",
+  "التتبع": "A1646",
+  "القراءات": "A1647"
+} as const;
+
+const UI_PublicHeader_1 = {
+  "المحرر": "A1653",
+  "المصحف": "A1654",
+  "التتبع": "A1655",
+  "القراءات": "A1656"
+} as const;
+
+const UI_PublicHeader_2 = {
+  "المحرر": "A1657",
+  "المصحف": "A1658",
+  "التتبع": "A1659",
+  "القراءات": "A1660"
+} as const;
+
+
+
 const NAV_ITEMS = [
   { href: '/editor', label: 'المحرر' },
   { href: '/quran', label: 'المصحف' },
@@ -45,13 +69,13 @@ export function PublicHeader() {
       style={{ transitionDuration: 'var(--motion-fast)' }}
     >
       <div className="container-editorial flex h-[var(--layout-header)] items-center justify-between gap-4">
-        <Link href="/" className="rounded-md py-1" aria-label="مشروع التشجير — الصفحة الرئيسية">
+        <Link data-ui-id="A1642" href="/" className="rounded-md py-1" aria-label="مشروع التشجير — الصفحة الرئيسية">
           <TashjirWordmark size={26} />
         </Link>
 
-        <nav aria-label="التنقل الرئيسي" className="hidden items-center gap-1 md:flex">
+        <nav data-ui-id="A1643" aria-label="التنقل الرئيسي" className="hidden items-center gap-1 md:flex">
           {NAV_ITEMS.map((item) => (
-            <Link
+            <Link data-ui-id={UI_PublicHeader_0[item.label as keyof typeof UI_PublicHeader_0]}
               key={item.href}
               href={item.href}
               className="rounded-md px-3 py-1.5 text-label text-ink-600 transition-colors hover:bg-hover hover:text-ink-900"
@@ -63,14 +87,14 @@ export function PublicHeader() {
         </nav>
 
         <div className="flex items-center gap-1.5">
-          <Link href="/login" className="btn btn-ghost hidden gap-2 md:inline-flex" title="الحساب">
+          <Link data-ui-id="A1648" href="/login" className="btn btn-ghost hidden gap-2 md:inline-flex" title="الحساب">
             <IconAccount size={18} />
             <span>الحساب</span>
           </Link>
-          <Link href="/editor" className="btn btn-primary">
+          <Link data-ui-id="A1649" href="/editor" className="btn btn-primary">
             ادخل المحرر
           </Link>
-          <button
+          <button data-ui-id="A1650"
             type="button"
             className="btn btn-ghost px-2 md:hidden"
             aria-expanded={menuOpen}
@@ -84,15 +108,15 @@ export function PublicHeader() {
       </div>
 
       {menuOpen ? (
-        <nav
+        <nav data-ui-id="A1651"
           id="public-nav-mobile"
           aria-label="التنقل الرئيسي"
           className="border-t border-line bg-panel px-4 pb-4 pt-2 md:hidden"
         >
-          <ul className="flex flex-col">
+          <ul data-ui-id="A1652" className="flex flex-col">
             {NAV_ITEMS.map((item) => (
-              <li key={item.href}>
-                <Link
+              <li data-ui-id={UI_PublicHeader_1[item.label as keyof typeof UI_PublicHeader_1]} key={item.href}>
+                <Link data-ui-id={UI_PublicHeader_2[item.label as keyof typeof UI_PublicHeader_2]}
                   href={item.href}
                   className="block rounded-md px-3 py-2.5 text-body-sm text-ink-700 hover:bg-hover"
                   onClick={() => setMenuOpen(false)}
@@ -101,8 +125,8 @@ export function PublicHeader() {
                 </Link>
               </li>
             ))}
-            <li>
-              <Link
+            <li data-ui-id="A1661">
+              <Link data-ui-id="A1662"
                 href="/login"
                 className="block rounded-md px-3 py-2.5 text-body-sm text-ink-700 hover:bg-hover"
                 onClick={() => setMenuOpen(false)}

@@ -457,7 +457,7 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
 
   return (
     <div data-ui-id="A111" className="relative h-full w-full overflow-auto bg-[#fdfaf2]">
-      <svg
+      <svg data-ui-id="A1431"
         ref={svgRef}
         role="img"
         aria-label={`تشجير الآية ${ayah.ayahNumber} من السورة ${ayah.surahNumber}`}
@@ -545,7 +545,7 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
 
       <SelectionContextMenu state={contextMenu} onClose={() => setContextMenu(null)} />
 
-      <button
+      <button data-ui-id="A1432"
         type="button"
         onClick={() => setShowSymbols((value) => !value)}
         className="absolute bottom-3 right-3 z-10 rounded-lg border border-stone-200 bg-white/90 px-3 py-2 text-xs font-medium text-stone-700 shadow-sm backdrop-blur hover:bg-white"
@@ -587,14 +587,14 @@ function ReaderCard({
   const profile = getNarratorProfile(reader.narratorId);
 
   return (
-    <div
+    <div data-ui-id="A1433"
       role="dialog"
       aria-modal="true"
       aria-label={`تعريف الراوي ${reader.name}`}
       className="absolute inset-0 z-20 flex items-center justify-center bg-stone-900/30 p-4"
       onClick={onClose}
     >
-      <div
+      <div data-ui-id="A1434"
         className="w-full max-w-sm rounded-xl border border-stone-200 bg-white p-4 shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
@@ -616,7 +616,7 @@ function ReaderCard({
               </p>
             </div>
           </div>
-          <button
+          <button data-ui-id="A1435"
             type="button"
             onClick={onClose}
             className="rounded px-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
@@ -666,7 +666,7 @@ function ReaderCard({
 function CanvasLegend({ characterMarkingActive = false }: { characterMarkingActive?: boolean }) {
   const categories = Object.keys(CATEGORY_LABELS) as Array<VariantCategory>;
   return (
-    <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg border border-stone-200 bg-white/90 px-3 py-2 text-xs text-stone-600 shadow-sm backdrop-blur">
+    <div data-ui-id="A1436" className="pointer-events-none absolute bottom-3 left-3 rounded-lg border border-stone-200 bg-white/90 px-3 py-2 text-xs text-stone-600 shadow-sm backdrop-blur">
       {characterMarkingActive && (
         <p className="mb-1.5 font-medium text-amber-800">وضع الحروف: انقر الحرف نفسه — كل خلية حرف واحد فقط.</p>
       )}
@@ -707,10 +707,10 @@ function SymbolsLegend({
   onClose: () => void;
 }) {
   return (
-    <div className="absolute bottom-14 right-3 z-10 max-h-[70vh] w-72 overflow-auto rounded-xl border border-stone-200 bg-white/95 p-3 shadow-lg backdrop-blur">
+    <div data-ui-id="A1437" className="absolute bottom-14 right-3 z-10 max-h-[70vh] w-72 overflow-auto rounded-xl border border-stone-200 bg-white/95 p-3 shadow-lg backdrop-blur">
       <div className="mb-2 flex items-center justify-between">
         <h4 className="text-xs font-bold text-stone-800">دليل الرموز</h4>
-        <button
+        <button data-ui-id="A1438"
           type="button"
           onClick={onClose}
           className="rounded px-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
@@ -721,9 +721,9 @@ function SymbolsLegend({
       </div>
 
       <h5 className="mb-1 text-[11px] font-semibold text-stone-700">رموز الأئمة</h5>
-      <ul className="grid grid-cols-2 gap-x-3 gap-y-1">
+      <ul data-ui-id="A1439" className="grid grid-cols-2 gap-x-3 gap-y-1">
         {getImamsWithSymbols(catalog).map((imam) => (
-          <li key={imam.id} className="flex items-center gap-1.5 text-[11px] text-stone-700">
+          <li data-ui-instance={String(imam.id)} data-ui-id="A1440" key={imam.id} className="flex items-center gap-1.5 text-[11px] text-stone-700">
             <span
               className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded bg-stone-800 px-0.5 text-[10px] font-bold text-white"
               style={{ fontFamily: "'Amiri Quran', serif" }}
@@ -736,9 +736,9 @@ function SymbolsLegend({
       </ul>
 
       <h5 className="mb-1 mt-3 text-[11px] font-semibold text-stone-700">رموز الرواة</h5>
-      <ul className="grid grid-cols-2 gap-x-3 gap-y-1">
+      <ul data-ui-id="A1441" className="grid grid-cols-2 gap-x-3 gap-y-1">
         {getNarratorsByTayyibah(catalog).map((narrator) => (
-          <li key={narrator.id} className="flex items-center gap-1.5 text-[11px] text-stone-700">
+          <li data-ui-instance={String(narrator.id)} data-ui-id="A1442" key={narrator.id} className="flex items-center gap-1.5 text-[11px] text-stone-700">
             <span
               className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded bg-emerald-600 px-0.5 text-[10px] font-bold text-white"
               style={{ fontFamily: "'Amiri Quran', serif" }}

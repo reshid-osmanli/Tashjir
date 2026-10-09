@@ -46,17 +46,17 @@ export function Dashboard({ config }: DashboardProps) {
       {audit.issueCount > 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
           <h3 className="font-bold text-amber-900">فحص الملف</h3>
-          <ul className="mt-2 space-y-1.5 text-sm text-amber-800">
+          <ul data-ui-id="A1695" className="mt-2 space-y-1.5 text-sm text-amber-800">
             {audit.priorityCollisions.length > 0 && (
-              <li>
+              <li data-ui-id="A1696">
                 تصادم أولويات: {audit.priorityCollisions.length} مجموعة فيها قواعد تتساوى بالأولوية داخل المجموعة.
               </li>
             )}
             {audit.catchAllRules.length > 0 && (
-              <li>قواعد شاملة بلا شروط: {audit.catchAllRules.length} (تطابق كل سياق).</li>
+              <li data-ui-id="A1697">قواعد شاملة بلا شروط: {audit.catchAllRules.length} (تطابق كل سياق).</li>
             )}
             {audit.mergeConflicts.length > 0 && (
-              <li>
+              <li data-ui-id="A1698">
                 تعارض أفعال دمج: {audit.mergeConflicts.length} (قاعدة تسمح وأخرى تمنع على نفس النوع) — راجعها في سلم
                 حل التعارض.
               </li>
@@ -97,7 +97,7 @@ function StatCard({ label, value, tone }: { label: string; value: number; tone: 
     amber: 'border-amber-200 bg-amber-50 text-amber-700',
   }[tone];
   return (
-    <div className={`rounded-xl border p-4 ${toneClasses}`}>
+    <div data-ui-id="A1699" className={`rounded-xl border p-4 ${toneClasses}`}>
       <p className="text-3xl font-bold">{value}</p>
       <p className="mt-1 text-sm font-medium opacity-80">{label}</p>
     </div>

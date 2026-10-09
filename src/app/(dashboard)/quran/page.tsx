@@ -62,7 +62,7 @@ export default function QuranPage() {
 
   return (
     <div data-ui-id="A022" className="space-y-4">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+      <header data-ui-id="A550" className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-stone-900">المصحف</h1>
           <p className="mt-0.5 text-sm text-stone-600">
@@ -74,7 +74,7 @@ export default function QuranPage() {
 
       <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
         {/* فهرس السور */}
-        <aside className="rounded-xl border border-stone-200 bg-white">
+        <aside data-ui-id="A551" className="rounded-xl border border-stone-200 bg-white">
           <div className="border-b border-stone-200 p-3">
             <input
               data-ui-id="A180"
@@ -89,8 +89,8 @@ export default function QuranPage() {
 
           <ul data-ui-id="A181" className="max-h-[70vh] overflow-y-auto p-1">
             {filteredSurahs.map((item) => (
-              <li key={item.number}>
-                <button
+              <li data-ui-instance={String(item.name)} data-ui-id="A552" key={item.number}>
+                <button data-ui-instance={String(item.name)} data-ui-id="A553"
                   type="button"
                   onClick={() => setSurahNumber(item.number)}
                   className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-start transition-colors ${
@@ -148,7 +148,7 @@ export default function QuranPage() {
             </div>
           </div>
 
-          <ol className="space-y-3">
+          <ol data-ui-id="A554" className="space-y-3">
             {ayahs.map((ayah) => {
               const isSaved = savedKeys.has(ayah.key);
               const hasTashjeer = tashjeerKeys.has(ayah.key);

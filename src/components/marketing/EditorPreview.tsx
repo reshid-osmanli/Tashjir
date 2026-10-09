@@ -33,7 +33,7 @@ export function EditorPreview({ model }: { model: ShowcaseAyah }) {
   const branch = model.variant?.alternatives.find((alt) => !alt.isBase) ?? null;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-line-strong bg-ink-900/95 p-1.5 shadow-[var(--shadow-overlay)]">
+    <div data-ui-id="A1615" className="overflow-hidden rounded-xl border border-line-strong bg-ink-900/95 p-1.5 shadow-[var(--shadow-overlay)]">
       {/* إطار مساحة العمل — عرض فقط. */}
       <div className="overflow-hidden rounded-lg bg-page" aria-hidden="true">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line bg-panel px-3 py-2">
@@ -114,7 +114,7 @@ export function EditorPreview({ model }: { model: ShowcaseAyah }) {
           معاينة إطار العمل — اللوحة مبنية بمخرجات المحرك على الآية {toArabicDigits(model.ayahNumber)} من
           سورة {model.surahName}.
         </p>
-        <Link
+        <Link data-ui-id="A1616"
           href="/editor"
           className="btn gap-2 border border-parchment-500/40 bg-transparent text-parchment-100 hover:bg-white/10"
         >

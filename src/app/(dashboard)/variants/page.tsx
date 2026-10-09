@@ -34,6 +34,45 @@ import { listOccurrenceOverrides, occurrenceStats } from '@/lib/storage/rule-occ
 import type { VariantCategory } from '@/types';
 import type { ReaderStrengthMap, ReadingScope, Variant, VerificationStatus } from '@/types/tashjeer';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_VariantsIndexPage_0 = {
+  "TAHQIQ": "A671",
+  "USUL": "A672",
+  "FARSH": "A673",
+  "MADUD": "A674",
+  "HAMZ": "A675",
+  "WAQF": "A676",
+  "TAJWEED": "A677"
+} as const;
+
+const UI_VariantsIndexPage_1 = {
+  "ALL": "A678",
+  "DRAFT": "A679",
+  "REVIEW": "A680",
+  "APPROVED": "A681",
+  "REJECTED": "A682"
+} as const;
+
+const UI_GlobalRuleDialog_2 = {
+  "TAHQIQ": "A696",
+  "USUL": "A697",
+  "FARSH": "A698",
+  "MADUD": "A699",
+  "HAMZ": "A700",
+  "WAQF": "A701",
+  "TAJWEED": "A702"
+} as const;
+
+const UI_GlobalRuleDialog_3 = {
+  "ALL": "A709",
+  "DRAFT": "A710",
+  "REVIEW": "A711",
+  "APPROVED": "A712",
+  "REJECTED": "A713"
+} as const;
+
+
+
 const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS) as VariantCategory[];
 const STATUS_OPTIONS: Array<{ value: VerificationStatus | 'ALL'; label: string }> = [
   { value: 'ALL', label: 'كل الحالات' },
@@ -112,14 +151,14 @@ export default function VariantsIndexPage() {
   return (
     <div data-ui-id="A024">
       <div data-ui-id="A220" className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+      <header data-ui-id="A663" className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-stone-900">فهرس الاختلافات والقواعد</h1>
           <p className="mt-0.5 text-sm text-stone-600">
             ابحث وصفِّ كل ما أُضيف إلى الآيات أو ما يسري على المصحف كله من موضع واحد.
           </p>
         </div>
-        <button
+        <button data-ui-id="A664"
           type="button"
           onClick={() => {
             setEditingRule(null);
@@ -136,7 +175,7 @@ export default function VariantsIndexPage() {
           <p className="text-xs text-amber-900">
             حُذفت القاعدة «{lastDeleted.rule.title}» مع ما سُجِّل على مواضعها.
           </p>
-          <button
+          <button data-ui-id="A665"
             type="button"
             onClick={() => {
               restoreGlobalRuleDeletion(lastDeleted);
@@ -154,7 +193,7 @@ export default function VariantsIndexPage() {
         <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_150px_150px_150px_190px]">
           <label>
             <span className="mb-1 block text-[11px] font-medium text-stone-600">بحث</span>
-            <input
+            <input data-ui-id="A666"
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -162,30 +201,30 @@ export default function VariantsIndexPage() {
               className="input"
             />
           </label>
-          <FilterSelect label="النوع" value={type} onChange={(value) => setType(value as typeof type)}>
-            <option value="ALL">المحلي والعام</option>
-            <option value="LOCAL">اختلافات الآيات</option>
-            <option value="GLOBAL">قواعد عامة</option>
+          <FilterSelect data-ui-id="A2115" label="النوع" value={type} onChange={(value) => setType(value as typeof type)}>
+            <option data-ui-id="A667" value="ALL">المحلي والعام</option>
+            <option data-ui-id="A668" value="LOCAL">اختلافات الآيات</option>
+            <option data-ui-id="A669" value="GLOBAL">قواعد عامة</option>
           </FilterSelect>
-          <FilterSelect label="الفئة" value={category} onChange={(value) => setCategory(value as typeof category)}>
-            <option value="ALL">كل الفئات</option>
+          <FilterSelect data-ui-id="A2116" label="الفئة" value={category} onChange={(value) => setCategory(value as typeof category)}>
+            <option data-ui-id="A670" value="ALL">كل الفئات</option>
             {ALL_CATEGORIES.map((value) => (
-              <option key={value} value={value}>{CATEGORY_LABELS[value]}</option>
+              <option data-ui-id={UI_VariantsIndexPage_0[value as keyof typeof UI_VariantsIndexPage_0]} key={value} value={value}>{CATEGORY_LABELS[value]}</option>
             ))}
           </FilterSelect>
-          <FilterSelect label="الحالة" value={status} onChange={(value) => setStatus(value as typeof status)}>
+          <FilterSelect data-ui-id="A2117" label="الحالة" value={status} onChange={(value) => setStatus(value as typeof status)}>
             {STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
+              <option data-ui-id={UI_VariantsIndexPage_1[option.value as keyof typeof UI_VariantsIndexPage_1]} key={option.value} value={option.value}>{option.label}</option>
             ))}
           </FilterSelect>
-          <FilterSelect label="القارئ / الراوي" value={readerId} onChange={setReaderId}>
-            <option value="">كل القراء</option>
+          <FilterSelect data-ui-id="A2118" label="القارئ / الراوي" value={readerId} onChange={setReaderId}>
+            <option data-ui-id="A683" value="">كل القراء</option>
             {catalog.imams.map((imam) => (
               <optgroup key={imam.id} label={imam.name}>
                 {catalog.narrators
                   .filter((narrator) => narrator.imamId === imam.id)
                   .map((narrator) => (
-                    <option key={narrator.id} value={narrator.id}>{narrator.name}</option>
+                    <option data-ui-instance={String(narrator.id)} data-ui-id="A684" key={narrator.id} value={narrator.id}>{narrator.name}</option>
                   ))}
               </optgroup>
             ))}
@@ -203,7 +242,7 @@ export default function VariantsIndexPage() {
       ) : (
         <ul data-ui-id="A222" className="space-y-3">
           {visible.map((item) => (
-            <li key={item.key} className="rounded-xl border border-stone-200 bg-white p-4">
+            <li data-ui-instance={String(item.key)} data-ui-id="A685" key={item.key} className="rounded-xl border border-stone-200 bg-white p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -238,7 +277,7 @@ export default function VariantsIndexPage() {
                 </div>
                 <div className="flex shrink-0 gap-2">
                   {item.type === 'LOCAL' && item.ayahKey && item.variantId ? (
-                    <Link
+                    <Link data-ui-id="A686"
                       href={`/editor?ayah=${item.ayahKey}&variant=${encodeURIComponent(item.variantId)}`}
                       className="rounded border border-emerald-200 px-2.5 py-1.5 text-xs text-emerald-800 hover:bg-emerald-50"
                     >
@@ -248,7 +287,7 @@ export default function VariantsIndexPage() {
                   {item.globalRule && (
                     <>
                       {item.globalRule.pattern && (
-                        <button
+                        <button data-ui-id="A687"
                           type="button"
                           onClick={() => setReviewingRule(item.globalRule ?? null)}
                           className="rounded border border-violet-200 px-2.5 py-1.5 text-xs text-violet-800 hover:bg-violet-50"
@@ -257,14 +296,14 @@ export default function VariantsIndexPage() {
                           تتبّع المواضع
                         </button>
                       )}
-                      <button
+                      <button data-ui-id="A688"
                         type="button"
                         onClick={() => setEditingRule(item.globalRule ?? null)}
                         className="rounded border border-stone-300 px-2.5 py-1.5 text-xs text-stone-700 hover:bg-stone-50"
                       >
                         تحرير
                       </button>
-                      <button
+                      <button data-ui-id="A689"
                         type="button"
                         onClick={async () => {
                           const rule = item.globalRule!;
@@ -486,34 +525,34 @@ function GlobalRuleDialog({
               تحفظ مرة واحدة وتظهر في فهرس المصحف وفي JSON كل آية. القاعدة الوصفية لا ترسم خطا حتى يسجل موضعها محليا، أما القاعدة النمطية المنشأة من المحرر فتطبق آليا على كل موضع مطابق.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="rounded border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-50">إغلاق</button>
+          <button data-ui-id="A691" type="button" onClick={onClose} className="rounded border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-50">إغلاق</button>
         </div>
 
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <Field label="عنوان القاعدة">
-            <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="مثال: مد المنفصل لورش" className="input" autoFocus />
+          <Field data-ui-id="A692" label="عنوان القاعدة">
+            <input data-ui-id="A693" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="مثال: مد المنفصل لورش" className="input" autoFocus />
           </Field>
-          <Field label="الفئة">
-            <select value={category} onChange={(event) => setCategory(event.target.value as VariantCategory)} className="input">
-              {ALL_CATEGORIES.map((value) => <option key={value} value={value}>{CATEGORY_LABELS[value]}</option>)}
+          <Field data-ui-id="A694" label="الفئة">
+            <select data-ui-id="A695" value={category} onChange={(event) => setCategory(event.target.value as VariantCategory)} className="input">
+              {ALL_CATEGORIES.map((value) => <option data-ui-id={UI_GlobalRuleDialog_2[value as keyof typeof UI_GlobalRuleDialog_2]} key={value} value={value}>{CATEGORY_LABELS[value]}</option>)}
             </select>
           </Field>
-          <Field label="اسم الحكم المختصر">
-            <input value={ruleLabel} onChange={(event) => setRuleLabel(event.target.value)} placeholder="مثال: مد منفصل" className="input" />
+          <Field data-ui-id="A703" label="اسم الحكم المختصر">
+            <input data-ui-id="A704" value={ruleLabel} onChange={(event) => setRuleLabel(event.target.value)} placeholder="مثال: مد منفصل" className="input" />
           </Field>
-          <Field label="حركات المد (اختياري)">
-            <input type="number" min={0} max={6} value={maddHarakat} onChange={(event) => setMaddHarakat(event.target.value)} placeholder="٤ أو ٥ أو ٦" className="input" />
+          <Field data-ui-id="A705" label="حركات المد (اختياري)">
+            <input data-ui-id="A706" type="number" min={0} max={6} value={maddHarakat} onChange={(event) => setMaddHarakat(event.target.value)} placeholder="٤ أو ٥ أو ٦" className="input" />
           </Field>
-          <Field label="الحالة">
-            <select value={status} onChange={(event) => setStatus(event.target.value as VerificationStatus)} className="input">
-              {STATUS_OPTIONS.filter((option) => option.value !== 'ALL').map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          <Field data-ui-id="A707" label="الحالة">
+            <select data-ui-id="A708" value={status} onChange={(event) => setStatus(event.target.value as VerificationStatus)} className="input">
+              {STATUS_OPTIONS.filter((option) => option.value !== 'ALL').map((option) => <option data-ui-id={UI_GlobalRuleDialog_3[option.value as keyof typeof UI_GlobalRuleDialog_3]} key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </Field>
-          <Field label="مرجع الاستقاء">
-            <input value={sourceRef} onChange={(event) => setSourceRef(event.target.value)} placeholder="مثال: طيبة النشر، باب المد" className="input" />
+          <Field data-ui-id="A714" label="مرجع الاستقاء">
+            <input data-ui-id="A715" value={sourceRef} onChange={(event) => setSourceRef(event.target.value)} placeholder="مثال: طيبة النشر، باب المد" className="input" />
           </Field>
-          <Field label="الشرح" className="md:col-span-2">
-            <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={2} className="input resize-y" placeholder="ما الذي يطبق، وما حدود القاعدة؟" />
+          <Field data-ui-id="A716" label="الشرح" className="md:col-span-2">
+            <textarea data-ui-id="A717" value={description} onChange={(event) => setDescription(event.target.value)} rows={2} className="input resize-y" placeholder="ما الذي يطبق، وما حدود القاعدة؟" />
           </Field>
         </div>
 
@@ -535,32 +574,32 @@ function GlobalRuleDialog({
         </div>
 
         <label className="mt-4 flex items-center gap-2 text-xs text-stone-700">
-          <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} className="accent-emerald-600" />
+          <input data-ui-id="A718" type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} className="accent-emerald-600" />
           القاعدة نشطة حاليا
         </label>
         {error && <p className="mt-3 rounded bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
 
         <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded border border-stone-300 px-4 py-2 text-xs text-stone-700 hover:bg-stone-50">إلغاء</button>
-          <button type="button" onClick={save} className="rounded bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700">حفظ القاعدة</button>
+          <button data-ui-id="A719" type="button" onClick={onClose} className="rounded border border-stone-300 px-4 py-2 text-xs text-stone-700 hover:bg-stone-50">إلغاء</button>
+          <button data-ui-id="A720" type="button" onClick={save} className="rounded bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700">حفظ القاعدة</button>
         </div>
       </div>
     </div>
   );
 }
 
-function FilterSelect({ label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: React.ReactNode }) {
+function FilterSelect({ 'data-ui-id': uiId, label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: React.ReactNode } & { 'data-ui-id'?: string }) {
   return (
-    <label>
+    <label data-ui-id="A721">
       <span className="mb-1 block text-[11px] font-medium text-stone-600">{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="input">{children}</select>
+      <select data-ui-id={uiId} value={value} onChange={(event) => onChange(event.target.value)} className="input">{children}</select>
     </label>
   );
 }
 
-function Field({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
+function Field({ 'data-ui-id': uiId, label, className, children }: { label: string; className?: string; children: React.ReactNode } & { 'data-ui-id'?: string }) {
   return (
-    <label className={className}>
+    <label data-ui-id={uiId} className={className}>
       <span className="mb-1 block text-xs font-medium text-stone-700">{label}</span>
       {children}
     </label>

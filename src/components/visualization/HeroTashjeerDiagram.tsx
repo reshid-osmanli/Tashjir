@@ -27,7 +27,7 @@ export function HeroTashjeerDiagram({ model }: { model: ShowcaseAyah }) {
   const baseReading = model.variant?.alternatives.find((alt) => alt.isBase) ?? null;
 
   return (
-    <figure className="not-prose m-0 w-full">
+    <figure data-ui-id="A2029" className="not-prose m-0 w-full">
       {/* حدّ عرض مقصود: المخطط لوحة مخطوط لا لافتة بعرض الشاشة، فحجم النص
           يبقى في حدود العرض الطباعي للآية. */}
       <div className="relative mx-auto w-full max-w-[40rem]">
@@ -55,7 +55,7 @@ export function HeroTashjeerDiagram({ model }: { model: ShowcaseAyah }) {
         </svg>
 
         {model.variant ? (
-          <button
+          <button data-ui-id="A2030"
             type="button"
             onClick={() => setRun((value) => value + 1)}
             className="btn btn-ghost absolute end-0 top-0 gap-1.5 px-2 py-1 text-micro text-ink-400 hover:text-ink-700"
@@ -71,7 +71,7 @@ export function HeroTashjeerDiagram({ model }: { model: ShowcaseAyah }) {
       {line ? (
         <div className="mt-4 flex flex-wrap items-center gap-1.5">
           {line.readers.map((reader, index) => (
-            <button
+            <button data-ui-instance={String(reader.id)} data-ui-id="A2031"
               key={reader.id}
               type="button"
               className="chip reader-chip draw-trace"

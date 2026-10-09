@@ -61,7 +61,7 @@ export function ConfirmDialogHost() {
       }}
     >
       <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
-        <header className="border-b border-stone-200 px-5 py-4">
+        <header data-ui-id="A1988" className="border-b border-stone-200 px-5 py-4">
           <h2 id="confirm-title" className="text-base font-bold text-stone-900">
             {pending.title}
           </h2>
@@ -72,9 +72,9 @@ export function ConfirmDialogHost() {
           {impacts.length > 0 && (
             <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
               <p className="text-xs font-semibold text-stone-700">ما سيتأثر</p>
-              <ul className="mt-1.5 flex flex-wrap gap-1.5">
+              <ul data-ui-id="A1989" className="mt-1.5 flex flex-wrap gap-1.5">
                 {impacts.map((item, index) => (
-                  <li
+                  <li data-ui-id="A1990"
                     key={index}
                     className={`rounded px-2 py-0.5 text-xs font-medium ${
                       danger ? 'bg-red-50 text-red-800' : 'bg-emerald-50 text-emerald-800'
@@ -98,8 +98,8 @@ export function ConfirmDialogHost() {
           </p>
         </div>
 
-        <footer className="flex items-center justify-end gap-2 border-t border-stone-200 px-5 py-3">
-          <button
+        <footer data-ui-id="A1991" className="flex items-center justify-end gap-2 border-t border-stone-200 px-5 py-3">
+          <button data-ui-id="A1992"
             ref={cancelRef}
             type="button"
             onClick={() => resolve(false)}
@@ -107,7 +107,7 @@ export function ConfirmDialogHost() {
           >
             {pending.cancelLabel ?? 'إلغاء'}
           </button>
-          <button
+          <button data-ui-id="A1993"
             type="button"
             onClick={() => resolve(true)}
             className={`rounded-lg px-4 py-2 text-sm font-semibold text-white focus:outline-none focus:ring-2 ${

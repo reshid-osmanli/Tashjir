@@ -32,6 +32,26 @@ import { StrengthDegreePicker } from './StrengthDegreePicker';
 import type { VariantCategory } from '@/types';
 import type { ReaderStrengthMap, ReadingScope, VerificationStatus } from '@/types/tashjeer';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_GlobalRuleMetaEditor_0 = {
+  "TAHQIQ": "A934",
+  "USUL": "A935",
+  "FARSH": "A936",
+  "MADUD": "A937",
+  "HAMZ": "A938",
+  "WAQF": "A939",
+  "TAJWEED": "A940"
+} as const;
+
+const UI_GlobalRuleMetaEditor_1 = {
+  "DRAFT": "A950",
+  "REVIEW": "A951",
+  "APPROVED": "A952",
+  "REJECTED": "A953"
+} as const;
+
+
+
 const STATUS_OPTIONS: Array<{ value: VerificationStatus; label: string }> = [
   { value: 'DRAFT', label: 'مسودة' },
   { value: 'REVIEW', label: 'قيد المراجعة' },
@@ -176,7 +196,7 @@ export function GlobalRuleMetaEditor({
               جديدة من المحرر، أما هنا فتُحرَّر البيانات والنطاق والدرجات.
             </p>
           </div>
-          <button
+          <button data-ui-id="A929"
             type="button"
             onClick={onClose}
             className="rounded border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-50"
@@ -194,25 +214,25 @@ export function GlobalRuleMetaEditor({
         )}
 
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <Field label="عنوان القاعدة">
-            <input value={title} onChange={(event) => setTitle(event.target.value)} className="input" autoFocus />
+          <Field data-ui-id="A930" label="عنوان القاعدة">
+            <input data-ui-id="A931" value={title} onChange={(event) => setTitle(event.target.value)} className="input" autoFocus />
           </Field>
-          <Field label="الفئة">
-            <select value={category} onChange={(event) => setCategory(event.target.value as VariantCategory)} className="input">
+          <Field data-ui-id="A932" label="الفئة">
+            <select data-ui-id="A933" value={category} onChange={(event) => setCategory(event.target.value as VariantCategory)} className="input">
               {(Object.keys(CATEGORY_LABELS) as VariantCategory[]).map((value) => (
-                <option key={value} value={value}>{CATEGORY_LABELS[value]}</option>
+                <option data-ui-id={UI_GlobalRuleMetaEditor_0[value as keyof typeof UI_GlobalRuleMetaEditor_0]} key={value} value={value}>{CATEGORY_LABELS[value]}</option>
               ))}
             </select>
           </Field>
-          <Field label="اسم الحكم المختصر">
-            <input value={ruleLabel} onChange={(event) => setRuleLabel(event.target.value)} className="input" placeholder="مثال: إخفاء" />
+          <Field data-ui-id="A941" label="اسم الحكم المختصر">
+            <input data-ui-id="A942" value={ruleLabel} onChange={(event) => setRuleLabel(event.target.value)} className="input" placeholder="مثال: إخفاء" />
           </Field>
-          <Field label="حركات المد (اختياري)">
-            <input type="number" min={0} max={6} value={maddHarakat} onChange={(event) => setMaddHarakat(event.target.value)} className="input" placeholder="٤ أو ٥ أو ٦" />
+          <Field data-ui-id="A943" label="حركات المد (اختياري)">
+            <input data-ui-id="A944" type="number" min={0} max={6} value={maddHarakat} onChange={(event) => setMaddHarakat(event.target.value)} className="input" placeholder="٤ أو ٥ أو ٦" />
           </Field>
-          <Field label="رقم ترتيب السطر">
+          <Field data-ui-id="A945" label="رقم ترتيب السطر">
             <div className="flex items-center gap-2">
-              <input
+              <input data-ui-id="A946"
                 type="number"
                 min={1}
                 value={orderRank}
@@ -221,7 +241,7 @@ export function GlobalRuleMetaEditor({
                 placeholder="بلا ترتيب يدوي"
               />
               {orderRank !== '' && (
-                <button
+                <button data-ui-id="A947"
                   type="button"
                   onClick={() => setOrderRank('')}
                   className="shrink-0 rounded border border-stone-300 px-2 py-1.5 text-[10px] text-stone-600 hover:bg-stone-50"
@@ -237,18 +257,18 @@ export function GlobalRuleMetaEditor({
               تخصيص موضع بعينه من شاشة تتبّع المواضع.
             </span>
           </Field>
-          <Field label="الحالة">
-            <select value={status} onChange={(event) => setStatus(event.target.value as VerificationStatus)} className="input">
+          <Field data-ui-id="A948" label="الحالة">
+            <select data-ui-id="A949" value={status} onChange={(event) => setStatus(event.target.value as VerificationStatus)} className="input">
               {STATUS_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+                <option data-ui-id={UI_GlobalRuleMetaEditor_1[option.value as keyof typeof UI_GlobalRuleMetaEditor_1]} key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
           </Field>
-          <Field label="مرجع الاستقاء">
-            <input value={sourceRef} onChange={(event) => setSourceRef(event.target.value)} className="input" placeholder="مثال: طيبة النشر، باب المد" />
+          <Field data-ui-id="A954" label="مرجع الاستقاء">
+            <input data-ui-id="A955" value={sourceRef} onChange={(event) => setSourceRef(event.target.value)} className="input" placeholder="مثال: طيبة النشر، باب المد" />
           </Field>
-          <Field label="الشرح" className="md:col-span-2">
-            <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={2} className="input resize-y" placeholder="ما الذي يطبق، وما حدود القاعدة؟" />
+          <Field data-ui-id="A956" label="الشرح" className="md:col-span-2">
+            <textarea data-ui-id="A957" value={description} onChange={(event) => setDescription(event.target.value)} rows={2} className="input resize-y" placeholder="ما الذي يطبق، وما حدود القاعدة؟" />
           </Field>
         </div>
 
@@ -274,28 +294,28 @@ export function GlobalRuleMetaEditor({
           <p className="mt-0.5 text-[11px] text-stone-500">يقيّد أين تُبحث القاعدة دون تغيير نمطها. الافتراضي المصحف كله.</p>
           <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-stone-700">
             <label className="flex items-center gap-1.5">
-              <input type="radio" checked={applyKind === 'MUSHAF'} onChange={() => setApplyKind('MUSHAF')} className="accent-emerald-600" />
+              <input data-ui-id="A958" type="radio" checked={applyKind === 'MUSHAF'} onChange={() => setApplyKind('MUSHAF')} className="accent-emerald-600" />
               المصحف كله
             </label>
             <label className="flex items-center gap-1.5">
-              <input type="radio" checked={applyKind === 'SURAH'} onChange={() => setApplyKind('SURAH')} className="accent-emerald-600" />
+              <input data-ui-id="A959" type="radio" checked={applyKind === 'SURAH'} onChange={() => setApplyKind('SURAH')} className="accent-emerald-600" />
               سورة واحدة
             </label>
             <label className="flex items-center gap-1.5">
-              <input type="radio" checked={applyKind === 'AYAH_RANGE'} onChange={() => setApplyKind('AYAH_RANGE')} className="accent-emerald-600" />
+              <input data-ui-id="A960" type="radio" checked={applyKind === 'AYAH_RANGE'} onChange={() => setApplyKind('AYAH_RANGE')} className="accent-emerald-600" />
               مدى آيات
             </label>
           </div>
           {applyKind !== 'MUSHAF' && (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-stone-700">
               <span>سورة رقم</span>
-              <input type="number" min={1} max={114} value={applySurah} onChange={(event) => setApplySurah(Number(event.target.value) || 1)} className="w-20 rounded border border-stone-300 px-2 py-1" />
+              <input data-ui-id="A961" type="number" min={1} max={114} value={applySurah} onChange={(event) => setApplySurah(Number(event.target.value) || 1)} className="w-20 rounded border border-stone-300 px-2 py-1" />
               {applyKind === 'AYAH_RANGE' && (
                 <>
                   <span>من الآية</span>
-                  <input type="number" min={1} value={applyFrom} onChange={(event) => setApplyFrom(Number(event.target.value) || 1)} className="w-20 rounded border border-stone-300 px-2 py-1" />
+                  <input data-ui-id="A962" type="number" min={1} value={applyFrom} onChange={(event) => setApplyFrom(Number(event.target.value) || 1)} className="w-20 rounded border border-stone-300 px-2 py-1" />
                   <span>إلى</span>
-                  <input type="number" min={1} value={applyTo} onChange={(event) => setApplyTo(Number(event.target.value) || 1)} className="w-20 rounded border border-stone-300 px-2 py-1" />
+                  <input data-ui-id="A963" type="number" min={1} value={applyTo} onChange={(event) => setApplyTo(Number(event.target.value) || 1)} className="w-20 rounded border border-stone-300 px-2 py-1" />
                 </>
               )}
               {sourceSurah && <span className="text-stone-500">(الآية المصدر في سورة {toArabicDigits(sourceSurah)})</span>}
@@ -304,16 +324,16 @@ export function GlobalRuleMetaEditor({
         </div>
 
         <label className="mt-4 flex items-center gap-2 text-xs text-stone-700">
-          <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} className="accent-emerald-600" />
+          <input data-ui-id="A964" type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} className="accent-emerald-600" />
           القاعدة نشطة ومطبَّقة {applyKind === 'MUSHAF' ? 'على المصحف' : applyKind === 'SURAH' ? 'على السورة المحددة' : 'على مدى الآيات المحدد'}
         </label>
         {error && <p className="mt-3 rounded bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
 
         <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded border border-stone-300 px-4 py-2 text-xs text-stone-700 hover:bg-stone-50">
+          <button data-ui-id="A965" type="button" onClick={onClose} className="rounded border border-stone-300 px-4 py-2 text-xs text-stone-700 hover:bg-stone-50">
             إلغاء
           </button>
-          <button type="button" onClick={save} className="rounded bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700">
+          <button data-ui-id="A966" type="button" onClick={save} className="rounded bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700">
             حفظ القاعدة
           </button>
         </div>
@@ -322,9 +342,9 @@ export function GlobalRuleMetaEditor({
   );
 }
 
-function Field({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
+function Field({ 'data-ui-id': uiId, label, className, children }: { label: string; className?: string; children: React.ReactNode } & { 'data-ui-id'?: string }) {
   return (
-    <label className={className}>
+    <label data-ui-id={uiId} className={className}>
       <span className="mb-1 block text-xs font-medium text-stone-700">{label}</span>
       {children}
     </label>

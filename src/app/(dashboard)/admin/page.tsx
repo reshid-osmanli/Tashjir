@@ -27,6 +27,14 @@ import {
   type TransmissionCatalog,
 } from '@/lib/transmissions/catalog';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_AdminPage_0 = {
+  "transmissions": "A502",
+  "engine": "A503"
+} as const;
+
+
+
 /**
  * يفحص تعارض رقم الترتيب مع قرين آخر (FR-ED-14). عند التعارض يعرض خيارا كميا:
  * «إدراج مع إزاحة» يزيح من بعده رقما واحدا، أو إلغاء للعودة إلى النموذج.
@@ -81,7 +89,7 @@ export default function AdminPage() {
 
   return (
     <div data-ui-id="A028" className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header data-ui-id="A500" className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs font-semibold text-emerald-700">لوحة التحكم</p>
           <h1 className="text-2xl font-bold text-stone-900">إدارة التشجير والقراءات</h1>
@@ -98,7 +106,7 @@ export default function AdminPage() {
       {message && (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-900">
           <span>{message}</span>
-          <button type="button" onClick={() => setMessage('')} className="text-emerald-800 hover:underline">
+          <button data-ui-id="A501" type="button" onClick={() => setMessage('')} className="text-emerald-800 hover:underline">
             إخفاء
           </button>
         </div>
@@ -106,7 +114,7 @@ export default function AdminPage() {
 
       <nav data-ui-id="A260" className="flex flex-wrap gap-2 border-b border-stone-200" aria-label="أقسام لوحة التحكم">
         {TABS.map((item) => (
-          <button
+          <button data-ui-id={UI_AdminPage_0[item.id as keyof typeof UI_AdminPage_0]}
             key={item.id}
             type="button"
             onClick={() => setTab(item.id)}
@@ -152,7 +160,7 @@ export default function AdminPage() {
           <p className="mt-1 max-w-2xl text-sm leading-relaxed text-violet-900">
             حافظنا على هذا التبويب للرابط القديم، لكن مصدر الإعداد واحد الآن. افتح مركز المحرك لتحرير الأولويات والقواعد وإعدادات الرسم في مكانها المعتمد.
           </p>
-          <Link href="/studio?section=settings" className="mt-4 inline-flex rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700">
+          <Link data-ui-id="A504" href="/studio?section=settings" className="mt-4 inline-flex rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700">
             فتح إعدادات المحرك في Engine Studio
           </Link>
         </div>
@@ -298,7 +306,7 @@ function TransmissionManager({
 
   return (
     <div data-ui-id="A261" className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-      <main className="space-y-4">
+      <main data-ui-id="A505" className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-3">
           <Metric label="الأئمة" value={catalog.imams.length} />
           <Metric label="الرواة" value={catalog.narrators.length} />
@@ -306,20 +314,20 @@ function TransmissionManager({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <PrimaryButton onClick={() => onOpenEditor({ kind: 'IMAM' })}>إضافة قارئ</PrimaryButton>
-          <SecondaryButton
+          <PrimaryButton data-ui-id="A506" onClick={() => onOpenEditor({ kind: 'IMAM' })}>إضافة قارئ</PrimaryButton>
+          <SecondaryButton data-ui-id="A507"
             disabled={imams.length === 0}
             onClick={() => onOpenEditor({ kind: 'NARRATOR', imamId: imams[0]?.id })}
           >
             إضافة راوٍ
           </SecondaryButton>
-          <SecondaryButton
+          <SecondaryButton data-ui-id="A508"
             disabled={narrators.length === 0}
             onClick={() => onOpenEditor({ kind: 'PATH', narratorId: narrators[0]?.id })}
           >
             إضافة طريق
           </SecondaryButton>
-          <button
+          <button data-ui-id="A509"
             type="button"
             onClick={onReset}
             className="ms-auto rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs text-red-700 hover:bg-red-50"
@@ -336,7 +344,7 @@ function TransmissionManager({
               const imamNarrators = narrators.filter((narrator) => narrator.imamId === imam.id);
               return (
                 <section key={imam.id} data-ui-id="A263" data-ui-instance={imam.id} className={`overflow-hidden rounded-xl border border-stone-200 bg-white ${dropClass(imam.id)}`} {...dragProps('IMAM', imam.id)}>
-                  <header className="flex flex-wrap items-center justify-between gap-2 bg-stone-50 px-4 py-3">
+                  <header data-ui-instance={String(imam.name)} data-ui-id="A510" className="flex flex-wrap items-center justify-between gap-2 bg-stone-50 px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span className="cursor-grab select-none text-stone-300 hover:text-stone-500 active:cursor-grabbing" title="اسحب لإعادة ترتيب القراء" aria-hidden>⠿</span>
                       <span
@@ -352,16 +360,16 @@ function TransmissionManager({
                       </div>
                     </div>
                     <div className="flex gap-1.5">
-                      <TinyButton onClick={() => onOpenEditor({ kind: 'NARRATOR', imamId: imam.id })}>إضافة راوٍ</TinyButton>
-                      <TinyButton onClick={() => onOpenEditor({ kind: 'IMAM', id: imam.id })}>تعديل</TinyButton>
-                      <TinyButton tone="danger" onClick={() => removeImam(imam)}>حذف</TinyButton>
+                      <TinyButton data-ui-instance={String(imam.id)} data-ui-id="A511" onClick={() => onOpenEditor({ kind: 'NARRATOR', imamId: imam.id })}>إضافة راوٍ</TinyButton>
+                      <TinyButton data-ui-instance={String(imam.id)} data-ui-id="A512" onClick={() => onOpenEditor({ kind: 'IMAM', id: imam.id })}>تعديل</TinyButton>
+                      <TinyButton data-ui-id="A513" tone="danger" onClick={() => removeImam(imam)}>حذف</TinyButton>
                     </div>
                   </header>
 
                   {imamNarrators.length === 0 ? (
                     <p className="px-4 py-3 text-xs text-stone-500">لا يوجد رواة مسجلون لهذا القارئ.</p>
                   ) : (
-                    <ul className="divide-y divide-stone-100">
+                    <ul data-ui-instance={String(imam.id)} data-ui-id="A514" className="divide-y divide-stone-100">
                       {imamNarrators.map((narrator) => {
                         const paths = catalogPathsForNarrator(catalog, narrator.id);
                         return (
@@ -378,14 +386,14 @@ function TransmissionManager({
                                 </div>
                               </div>
                               <div className="flex gap-1.5">
-                                <TinyButton onClick={() => onOpenEditor({ kind: 'PATH', narratorId: narrator.id })}>إضافة طريق</TinyButton>
-                                <TinyButton onClick={() => onOpenEditor({ kind: 'NARRATOR', id: narrator.id })}>تعديل</TinyButton>
-                                <TinyButton tone="danger" onClick={() => removeNarrator(narrator)}>حذف</TinyButton>
+                                <TinyButton data-ui-instance={String(narrator.id)} data-ui-id="A515" onClick={() => onOpenEditor({ kind: 'PATH', narratorId: narrator.id })}>إضافة طريق</TinyButton>
+                                <TinyButton data-ui-instance={String(narrator.id)} data-ui-id="A516" onClick={() => onOpenEditor({ kind: 'NARRATOR', id: narrator.id })}>تعديل</TinyButton>
+                                <TinyButton data-ui-id="A517" tone="danger" onClick={() => removeNarrator(narrator)}>حذف</TinyButton>
                               </div>
                             </div>
 
                             {paths.length > 0 && (
-                              <ul className="mt-2 grid gap-1 sm:grid-cols-2">
+                              <ul data-ui-instance={String(narrator.id)} data-ui-id="A518" className="mt-2 grid gap-1 sm:grid-cols-2">
                                 {paths.map((path) => (
                                   <li key={path.id} data-ui-id="A263" data-ui-instance={path.id} className={`flex items-center justify-between gap-2 rounded border border-stone-100 bg-stone-50 px-2 py-1.5 ${dropClass(path.id)}`} {...dragProps('PATH', path.id, narrator.id)}>
                                     <span className="cursor-grab select-none text-stone-300 hover:text-stone-500 active:cursor-grabbing" title="اسحب لإعادة ترتيب طرق هذا الراوي" aria-hidden>⠿</span>
@@ -397,8 +405,8 @@ function TransmissionManager({
                                       <span className="block truncate text-[10px] text-stone-500">{toArabicDigits(path.order)} · {path.code}</span>
                                     </span>
                                     <span className="flex shrink-0 gap-1">
-                                      <button type="button" onClick={() => onOpenEditor({ kind: 'PATH', id: path.id })} className="text-[10px] text-emerald-800 hover:underline">تعديل</button>
-                                      <button type="button" onClick={() => removePath(path)} className="text-[10px] text-red-700 hover:underline">حذف</button>
+                                      <button data-ui-instance={String(path.id)} data-ui-id="A519" type="button" onClick={() => onOpenEditor({ kind: 'PATH', id: path.id })} className="text-[10px] text-emerald-800 hover:underline">تعديل</button>
+                                      <button data-ui-id="A520" type="button" onClick={() => removePath(path)} className="text-[10px] text-red-700 hover:underline">حذف</button>
                                     </span>
                                   </li>
                                 ))}
@@ -416,7 +424,7 @@ function TransmissionManager({
         )}
       </main>
 
-      <aside className="h-fit rounded-xl border border-stone-200 bg-white p-4 xl:sticky xl:top-24">
+      <aside data-ui-id="A521" className="h-fit rounded-xl border border-stone-200 bg-white p-4 xl:sticky xl:top-24">
         {editor ? (
           <EntityEditor
             key={`${editor.kind}-${editor.id ?? 'new'}-${
@@ -502,17 +510,17 @@ function ImamForm({
     );
   };
   return <EntityForm title={value ? 'تعديل قارئ' : 'إضافة قارئ'} onSubmit={submit} onClose={onClose}>
-    <TextInput label="اسم القارئ" value={name} onChange={setName} required />
-    <div className="grid grid-cols-3 gap-2">
-      <TextInput label="الرمز" value={symbol} onChange={setSymbol} placeholder="أ" />
-      <TextInput label="الترتيب" value={String(order)} onChange={(next) => setOrder(Number(next))} type="number" required />
-      <TextInput label="البلد" value={region} onChange={setRegion} />
+    <TextInput data-ui-id="A2090" label="اسم القارئ" value={name} onChange={setName} required />
+    <div data-ui-id="A522" className="grid grid-cols-3 gap-2">
+      <TextInput data-ui-id="A2091" label="الرمز" value={symbol} onChange={setSymbol} placeholder="أ" />
+      <TextInput data-ui-id="A2092" label="الترتيب" value={String(order)} onChange={(next) => setOrder(Number(next))} type="number" required />
+      <TextInput data-ui-id="A2093" label="البلد" value={region} onChange={setRegion} />
     </div>
     <p className="text-[11px] leading-relaxed text-stone-500">
       رمز الإمام يُطبع في طرف السطر إذا اجتمع راوياه على الوجه نفسه، فيُختصر رمزان في رمز.
       أما الطريق فلا رمز له: يُذكر باسمه إذا انفرد بالوجه دون سائر طرق راويه.
     </p>
-    <TextInput label="المعرّف المختصر" value={slug} onChange={setSlug} placeholder="nafi" />
+    <TextInput data-ui-id="A2094" label="المعرّف المختصر" value={slug} onChange={setSlug} placeholder="nafi" />
   </EntityForm>;
 }
 
@@ -558,17 +566,17 @@ function NarratorForm({
     );
   };
   return <EntityForm title={value ? 'تعديل راوٍ' : 'إضافة راوٍ'} onSubmit={submit} onClose={onClose}>
-    <TextInput label="اسم الراوي" value={name} onChange={setName} required />
-    <SelectInput label="القارئ" value={imamId} onChange={setImamId} required>
-      <option value="">اختر القارئ</option>
-      {catalogImamsInOrder(catalog).map((imam) => <option key={imam.id} value={imam.id}>{imam.name}</option>)}
+    <TextInput data-ui-id="A2095" label="اسم الراوي" value={name} onChange={setName} required />
+    <SelectInput data-ui-id="A2096" label="القارئ" value={imamId} onChange={setImamId} required>
+      <option data-ui-id="A523" value="">اختر القارئ</option>
+      {catalogImamsInOrder(catalog).map((imam) => <option data-ui-instance={String(imam.id)} data-ui-id="A524" key={imam.id} value={imam.id}>{imam.name}</option>)}
     </SelectInput>
     <div className="grid grid-cols-3 gap-2">
-      <TextInput label="الرمز" value={symbol} onChange={setSymbol} placeholder="ب" />
-      <TextInput label="ترتيبه" value={String(order)} onChange={(next) => setOrder(Number(next))} type="number" required />
-      <TextInput label="ترتيب الطيبة" value={String(tayyibahOrder)} onChange={(next) => setTayyibahOrder(Number(next))} type="number" required />
+      <TextInput data-ui-id="A2097" label="الرمز" value={symbol} onChange={setSymbol} placeholder="ب" />
+      <TextInput data-ui-id="A2098" label="ترتيبه" value={String(order)} onChange={(next) => setOrder(Number(next))} type="number" required />
+      <TextInput data-ui-id="A2099" label="ترتيب الطيبة" value={String(tayyibahOrder)} onChange={(next) => setTayyibahOrder(Number(next))} type="number" required />
     </div>
-    <TextInput label="المعرّف المختصر" value={slug} onChange={setSlug} placeholder="qalun" />
+    <TextInput data-ui-id="A2100" label="المعرّف المختصر" value={slug} onChange={setSlug} placeholder="qalun" />
   </EntityForm>;
 }
 
@@ -618,23 +626,23 @@ function PathForm({
     );
   };
   return <EntityForm title={value ? 'تعديل طريق' : 'إضافة طريق'} onSubmit={submit} onClose={onClose}>
-    <SelectInput label="الراوي" value={narratorId} onChange={setNarratorId} required>
-      <option value="">اختر الراوي</option>
-      {catalogNarratorsInOrder(catalog).map((narrator) => <option key={narrator.id} value={narrator.id}>{narrator.name}</option>)}
+    <SelectInput data-ui-id="A2101" label="الراوي" value={narratorId} onChange={setNarratorId} required>
+      <option data-ui-id="A525" value="">اختر الراوي</option>
+      {catalogNarratorsInOrder(catalog).map((narrator) => <option data-ui-instance={String(narrator.id)} data-ui-id="A526" key={narrator.id} value={narrator.id}>{narrator.name}</option>)}
     </SelectInput>
-    <TextInput label="الاسم المختصر" value={shortName} onChange={setShortName} placeholder="ورش / الأزرق" required />
-    <TextInput label="الاسم الكامل" value={fullName} onChange={setFullName} placeholder="طريق الأزرق عن ورش..." />
+    <TextInput data-ui-id="A2102" label="الاسم المختصر" value={shortName} onChange={setShortName} placeholder="ورش / الأزرق" required />
+    <TextInput data-ui-id="A2103" label="الاسم الكامل" value={fullName} onChange={setFullName} placeholder="طريق الأزرق عن ورش..." />
     <div className="grid grid-cols-3 gap-2">
-      <TextInput label="رمز الطريق" value={symbol} onChange={setSymbol} placeholder="أز" />
-      <TextInput label="الرمز/الكود" value={code} onChange={setCode} placeholder="warsh-azraq" />
-      <TextInput label="الترتيب" value={String(order)} onChange={(next) => setOrder(Number(next))} type="number" required />
+      <TextInput data-ui-id="A2104" label="رمز الطريق" value={symbol} onChange={setSymbol} placeholder="أز" />
+      <TextInput data-ui-id="A2105" label="الرمز/الكود" value={code} onChange={setCode} placeholder="warsh-azraq" />
+      <TextInput data-ui-id="A2106" label="الترتيب" value={String(order)} onChange={(next) => setOrder(Number(next))} type="number" required />
     </div>
     <p className="text-[11px] leading-relaxed text-stone-500">
       إن انفرد الطريق بالوجه يُطبع <strong>اسمه</strong> على السطر («الأزرق»). الرمز اختياري يظهر في الدليل
       والبطاقات. وإذا اجتمع طريقاه طُبع رمز الراوي.
     </p>
     <label className="flex items-center gap-2 text-xs text-stone-700">
-      <input type="checkbox" checked={canonical} onChange={(event) => setCanonical(event.target.checked)} className="accent-emerald-600" />
+      <input data-ui-id="A527" type="checkbox" checked={canonical} onChange={(event) => setCanonical(event.target.checked)} className="accent-emerald-600" />
       طريق معتمد في الكتالوج
     </label>
   </EntityForm>;
@@ -655,15 +663,15 @@ function EntityForm({
     <form data-ui-id="A262" onSubmit={onSubmit} className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-bold text-stone-900">{title}</h2>
-        <button type="button" onClick={onClose} className="text-xs text-stone-500 hover:text-stone-900">إغلاق</button>
+        <button data-ui-id="A528" type="button" onClick={onClose} className="text-xs text-stone-500 hover:text-stone-900">إغلاق</button>
       </div>
       {children}
-      <PrimaryButton type="submit" className="w-full justify-center">حفظ</PrimaryButton>
+      <PrimaryButton data-ui-id="A2060" type="submit" className="w-full justify-center">حفظ</PrimaryButton>
     </form>
   );
 }
 
-function TextInput({
+function TextInput({ 'data-ui-id': uiId,
   label,
   value,
   onChange,
@@ -677,16 +685,16 @@ function TextInput({
   type?: 'text' | 'number';
   placeholder?: string;
   required?: boolean;
-}) {
+} & { 'data-ui-id'?: string }) {
   return (
-    <label className="block text-xs text-stone-700">
+    <label data-ui-id="A529" className="block text-xs text-stone-700">
       <span className="mb-1 block font-medium">{label}</span>
-      <input type={type} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} required={required} className="input h-9 text-sm" />
+      <input data-ui-id={uiId} type={type} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} required={required} className="input h-9 text-sm" />
     </label>
   );
 }
 
-function SelectInput({
+function SelectInput({ 'data-ui-id': uiId,
   label,
   value,
   onChange,
@@ -698,11 +706,11 @@ function SelectInput({
   onChange: (value: string) => void;
   children: React.ReactNode;
   required?: boolean;
-}) {
+} & { 'data-ui-id'?: string }) {
   return (
-    <label className="block text-xs text-stone-700">
+    <label data-ui-id="A531" className="block text-xs text-stone-700">
       <span className="mb-1 block font-medium">{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} required={required} className="input h-9 text-sm">
+      <select data-ui-id={uiId} value={value} onChange={(event) => onChange(event.target.value)} required={required} className="input h-9 text-sm">
         {children}
       </select>
     </label>
@@ -710,23 +718,23 @@ function SelectInput({
 }
 
 function Metric({ label, value }: { label: string; value: number }) {
-  return <div className="rounded-xl border border-stone-200 bg-white p-4"><p className="text-xs text-stone-500">{label}</p><p className="mt-1 text-2xl font-bold text-stone-900">{value}</p></div>;
+  return <div data-ui-id="A533" className="rounded-xl border border-stone-200 bg-white p-4"><p className="text-xs text-stone-500">{label}</p><p className="mt-1 text-2xl font-bold text-stone-900">{value}</p></div>;
 }
 
 function Empty({ text }: { text: string }) {
-  return <div className="rounded-xl border border-dashed border-stone-300 bg-white p-8 text-center text-sm text-stone-500">{text}</div>;
+  return <div data-ui-id="A534" className="rounded-xl border border-dashed border-stone-300 bg-white p-8 text-center text-sm text-stone-500">{text}</div>;
 }
 
-function PrimaryButton({ children, onClick, type = 'button', className = '' }: { children: React.ReactNode; onClick?: () => void; type?: 'button' | 'submit'; className?: string }) {
-  return <button type={type} onClick={onClick} className={`inline-flex items-center rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-800 ${className}`}>{children}</button>;
+function PrimaryButton({ 'data-ui-id': uiId, children, onClick, type = 'button', className = '' }: { children: React.ReactNode; onClick?: () => void; type?: 'button' | 'submit'; className?: string } & { 'data-ui-id'?: string }) {
+  return <button data-ui-id={uiId} type={type} onClick={onClick} className={`inline-flex items-center rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-800 ${className}`}>{children}</button>;
 }
 
-function SecondaryButton({ children, onClick, disabled = false }: { children: React.ReactNode; onClick: () => void; disabled?: boolean }) {
-  return <button type="button" disabled={disabled} onClick={onClick} className="rounded-md border border-stone-300 bg-white px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-40">{children}</button>;
+function SecondaryButton({ 'data-ui-id': uiId, children, onClick, disabled = false }: { children: React.ReactNode; onClick: () => void; disabled?: boolean } & { 'data-ui-id'?: string }) {
+  return <button data-ui-id={uiId} type="button" disabled={disabled} onClick={onClick} className="rounded-md border border-stone-300 bg-white px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-40">{children}</button>;
 }
 
-function TinyButton({ children, onClick, tone = 'normal' }: { children: React.ReactNode; onClick: () => void; tone?: 'normal' | 'danger' }) {
-  return <button type="button" onClick={onClick} className={`rounded border px-2 py-1 text-[10px] ${tone === 'danger' ? 'border-red-200 text-red-700 hover:bg-red-50' : 'border-stone-200 text-stone-700 hover:bg-white'}`}>{children}</button>;
+function TinyButton({ 'data-ui-id': uiId, children, onClick, tone = 'normal' }: { children: React.ReactNode; onClick: () => void; tone?: 'normal' | 'danger' } & { 'data-ui-id'?: string }) {
+  return <button data-ui-id={uiId} type="button" onClick={onClick} className={`rounded border px-2 py-1 text-[10px] ${tone === 'danger' ? 'border-red-200 text-red-700 hover:bg-red-50' : 'border-stone-200 text-stone-700 hover:bg-white'}`}>{children}</button>;
 }
 
 function undefinedSlug(value: string): string {

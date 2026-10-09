@@ -94,7 +94,7 @@ export function AyahNavigator({ ayahKey, onNavigate }: AyahNavigatorProps) {
           className="input h-8 w-48 text-xs"
         >
           {SURAHS.map((item) => (
-            <option key={item.number} value={item.number}>
+            <option data-ui-instance={String(item.name)} data-ui-id="A733" key={item.number} value={item.number}>
               {toArabicDigits(item.number)}. {item.name}
             </option>
           ))}
@@ -110,7 +110,7 @@ export function AyahNavigator({ ayahKey, onNavigate }: AyahNavigatorProps) {
           className="input h-8 w-24 text-xs"
         >
           {ayahOptions.map((number) => (
-            <option key={number} value={number}>
+            <option data-ui-id="A734" key={number} value={number}>
               {toArabicDigits(number)}
               {savedKeys.has(makeAyahKey(surahNumber, number)) ? ' ●' : ''}
             </option>
@@ -119,10 +119,10 @@ export function AyahNavigator({ ayahKey, onNavigate }: AyahNavigatorProps) {
       </label>
 
       <div className="flex items-center gap-1">
-        <NavButton onClick={() => step(-1)} disabled={surahNumber === 1 && ayahNumber === 1}>
+        <NavButton data-ui-id="A735" onClick={() => step(-1)} disabled={surahNumber === 1 && ayahNumber === 1}>
           السابقة
         </NavButton>
-        <NavButton
+        <NavButton data-ui-id="A736"
           onClick={() => step(1)}
           disabled={surahNumber === 114 && ayahNumber === ayahCount}
         >
@@ -147,10 +147,10 @@ export function AyahNavigator({ ayahKey, onNavigate }: AyahNavigatorProps) {
         />
 
         {hits.length > 0 && (
-          <ul className="absolute end-0 top-9 z-40 max-h-72 w-[26rem] overflow-y-auto rounded-lg border border-stone-200 bg-white p-1 shadow-xl">
+          <ul data-ui-id="A737" className="absolute end-0 top-9 z-40 max-h-72 w-[26rem] overflow-y-auto rounded-lg border border-stone-200 bg-white p-1 shadow-xl">
             {hits.map((hit) => (
-              <li key={hit.ayahKey}>
-                <button
+              <li data-ui-id="A738" key={hit.ayahKey}>
+                <button data-ui-id="A739"
                   type="button"
                   onClick={() => {
                     onNavigate(hit.ayahKey);
@@ -178,7 +178,7 @@ export function AyahNavigator({ ayahKey, onNavigate }: AyahNavigatorProps) {
   );
 }
 
-function NavButton({
+function NavButton({ 'data-ui-id': uiId,
   children,
   onClick,
   disabled,
@@ -186,9 +186,9 @@ function NavButton({
   children: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
-}) {
+} & { 'data-ui-id'?: string }) {
   return (
-    <button
+    <button data-ui-id={uiId}
       type="button"
       onClick={onClick}
       disabled={disabled}

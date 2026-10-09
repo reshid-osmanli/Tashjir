@@ -42,7 +42,7 @@ const COLUMNS: Array<{ title: string; links: Array<{ href: string; label: string
 
 export function PublicFooter() {
   return (
-    <footer className="surface-sunken border-t border-line">
+    <footer data-ui-id="A1637" className="surface-sunken border-t border-line">
       <div className="container-editorial py-12">
         <div className="grid gap-8 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
           <div>
@@ -67,12 +67,12 @@ export function PublicFooter() {
           </div>
 
           {COLUMNS.map((column) => (
-            <nav key={column.title} aria-label={column.title}>
+            <nav data-ui-id="A1638" key={column.title} aria-label={column.title}>
               <p className="font-ui text-label font-medium text-ink-800">{column.title}</p>
-              <ul className="mt-3 space-y-2">
+              <ul data-ui-id="A1639" className="mt-3 space-y-2">
                 {column.links.map((link) => (
-                  <li key={link.href + link.label}>
-                    <Link
+                  <li data-ui-id="A1640" key={link.href + link.label}>
+                    <Link data-ui-id="A1641"
                       href={link.href}
                       className="text-caption text-ink-500 transition-colors hover:text-primary-700"
                       style={{ transitionDuration: 'var(--motion-fast)' }}

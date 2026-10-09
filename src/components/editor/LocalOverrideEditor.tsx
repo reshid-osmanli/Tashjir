@@ -17,6 +17,19 @@ import { ScopePicker } from './VariantEditor';
 import { StrengthDegreePicker } from './StrengthDegreePicker';
 import { OrderRankControl } from './OrderRankControl';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_LocalOverrideEditor_0 = {
+  "TAHQIQ": "A982",
+  "USUL": "A983",
+  "FARSH": "A984",
+  "MADUD": "A985",
+  "HAMZ": "A986",
+  "WAQF": "A987",
+  "TAJWEED": "A988"
+} as const;
+
+
+
 interface LocalOverrideEditorProps {
   /** الاختلاف المشتق الظاهر (بعد دمج أي ترقيع سابق). */
   variant: Variant;
@@ -111,7 +124,7 @@ export function LocalOverrideEditor({
       aria-label="تحرير محلي لموضع قاعدة"
     >
       <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-        <header className="border-b border-stone-200 px-5 py-4">
+        <header data-ui-id="A979" className="border-b border-stone-200 px-5 py-4">
           <h2 className="text-sm font-bold text-stone-900">تحرير محلي — هذه الآية وحدها</h2>
           <p className="mt-1 text-[11px] leading-relaxed text-stone-500">
             الموضع «{variant.title}» من قاعدة «{rule.title}». ما يُترك فارغًا يبقى مشتقًا من
@@ -127,7 +140,7 @@ export function LocalOverrideEditor({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block font-medium text-stone-700">العنوان</span>
-              <input
+              <input data-ui-id="A980"
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
                 placeholder={rule.title}
@@ -136,13 +149,13 @@ export function LocalOverrideEditor({
             </label>
             <label className="block">
               <span className="mb-1 block font-medium text-stone-700">النوع</span>
-              <select
+              <select data-ui-id="A981"
                 value={category}
                 onChange={(event) => setCategory(event.target.value as VariantCategory)}
                 className="w-full rounded border border-stone-300 px-2 py-1.5"
               >
                 {CATEGORIES.map((item) => (
-                  <option key={item} value={item}>
+                  <option data-ui-id={UI_LocalOverrideEditor_0[item as keyof typeof UI_LocalOverrideEditor_0]} key={item} value={item}>
                     {CATEGORY_LABELS[item]}
                     {item === rule.category ? ' (الأمّ)' : ''}
                   </option>
@@ -151,7 +164,7 @@ export function LocalOverrideEditor({
             </label>
             <label className="block">
               <span className="mb-1 block font-medium text-stone-700">الحكم المختصر</span>
-              <input
+              <input data-ui-id="A989"
                 value={ruleLabel}
                 onChange={(event) => setRuleLabel(event.target.value)}
                 placeholder={rule.ruleLabel ?? rule.title}
@@ -160,7 +173,7 @@ export function LocalOverrideEditor({
             </label>
             <label className="block">
               <span className="mb-1 block font-medium text-stone-700">المد بالحركات</span>
-              <input
+              <input data-ui-id="A990"
                 type="text"
                 inputMode="numeric"
                 min={1}
@@ -175,7 +188,7 @@ export function LocalOverrideEditor({
 
           <label className="block">
             <span className="mb-1 block font-medium text-stone-700">نص الوجه المعروض</span>
-            <input
+            <input data-ui-id="A991"
               value={text}
               onChange={(event) => setText(event.target.value)}
               placeholder={originalText}
@@ -186,7 +199,7 @@ export function LocalOverrideEditor({
 
           <label className="block">
             <span className="mb-1 block font-medium text-stone-700">تسمية الوجه (البطاقة)</span>
-            <input
+            <input data-ui-id="A992"
               value={label}
               onChange={(event) => setLabel(event.target.value)}
               placeholder={face?.label ?? rule.ruleLabel ?? rule.title}
@@ -196,7 +209,7 @@ export function LocalOverrideEditor({
 
           <label className="block">
             <span className="mb-1 block font-medium text-stone-700">الوصف</span>
-            <textarea
+            <textarea data-ui-id="A993"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               placeholder={rule.description ?? '—'}
@@ -208,7 +221,7 @@ export function LocalOverrideEditor({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block font-medium text-stone-700">المصدر</span>
-              <input
+              <input data-ui-id="A994"
                 value={sourceRef}
                 onChange={(event) => setSourceRef(event.target.value)}
                 placeholder={rule.sourceRef ?? '—'}
@@ -217,7 +230,7 @@ export function LocalOverrideEditor({
             </label>
             <label className="block">
               <span className="mb-1 block font-medium text-stone-700">ملاحظات الوجه</span>
-              <input
+              <input data-ui-id="A995"
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
                 placeholder={rule.description ?? '—'}
@@ -228,7 +241,7 @@ export function LocalOverrideEditor({
 
           <div className="rounded border border-stone-200 p-2">
             <label className="flex cursor-pointer items-center gap-2 text-stone-700">
-              <input
+              <input data-ui-id="A996"
                 type="checkbox"
                 checked={customScope}
                 onChange={(event) => setCustomScope(event.target.checked)}
@@ -244,7 +257,7 @@ export function LocalOverrideEditor({
 
           <label className="block">
             <span className="mb-1 block font-medium text-stone-700">سبب التجاوز (يُحفظ في السجل)</span>
-            <input
+            <input data-ui-id="A997"
               value={note}
               onChange={(event) => setNote(event.target.value)}
               placeholder="مثال: الكتاب يقدّم هذا الوجه في هذه الآية"
@@ -253,15 +266,15 @@ export function LocalOverrideEditor({
           </label>
         </div>
 
-        <footer className="flex items-center justify-end gap-2 border-t border-stone-200 px-5 py-3">
-          <button
+        <footer data-ui-id="A998" className="flex items-center justify-end gap-2 border-t border-stone-200 px-5 py-3">
+          <button data-ui-id="A999"
             type="button"
             onClick={onClose}
             className="rounded border border-stone-300 px-4 py-1.5 text-xs text-stone-700 hover:bg-stone-50"
           >
             إلغاء
           </button>
-          <button
+          <button data-ui-id="A1000"
             type="button"
             onClick={handleSave}
             className="rounded bg-emerald-700 px-4 py-1.5 text-xs font-bold text-white hover:bg-emerald-800"

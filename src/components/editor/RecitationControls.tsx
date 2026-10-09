@@ -28,6 +28,36 @@ import { parseAyahKey } from '@/data/quran';
 import type { VariantCategory } from '@/types';
 import type { RecitationBoundaryKind } from '@/types/tashjeer';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_RecitationControls_0 = {
+  "WAQF": "A1051",
+  "IBTIDA": "A1052",
+  "WASL": "A1053",
+  "NO_WASL": "A1054"
+} as const;
+
+const UI_ManualLinesControls_1 = {
+  "TAHQIQ": "A1082",
+  "USUL": "A1083",
+  "FARSH": "A1084",
+  "MADUD": "A1085",
+  "HAMZ": "A1086",
+  "WAQF": "A1087",
+  "TAJWEED": "A1088"
+} as const;
+
+const UI_ManualLinesControls_2 = {
+  "TAHQIQ": "A1096",
+  "USUL": "A1097",
+  "FARSH": "A1098",
+  "MADUD": "A1099",
+  "HAMZ": "A1100",
+  "WAQF": "A1101",
+  "TAJWEED": "A1102"
+} as const;
+
+
+
 const BOUNDARY_LABELS: Record<RecitationBoundaryKind, string> = {
   WAQF: 'وقف بعد الكلمة',
   IBTIDA: 'ابتداء من الكلمة',
@@ -105,7 +135,7 @@ export function RecitationControls() {
           </p>
           <div className="grid grid-cols-4 gap-1">
             {(Object.keys(BOUNDARY_LABELS) as RecitationBoundaryKind[]).map((option) => (
-              <button
+              <button data-ui-id={UI_RecitationControls_0[option as keyof typeof UI_RecitationControls_0]}
                 key={option}
                 type="button"
                 onClick={() => setKind(option)}
@@ -119,14 +149,14 @@ export function RecitationControls() {
               </button>
             ))}
           </div>
-          <input
+          <input data-ui-id="A1055"
             value={label}
             onChange={(event) => setLabel(event.target.value)}
             placeholder="وصف اختياري: وقف كافٍ، وصل أولى..."
             className="input h-7 text-[11px]"
           />
           <label className="flex items-center gap-1.5 text-[11px] text-stone-700">
-            <input
+            <input data-ui-id="A1056"
               type="checkbox"
               checked={isSpecific}
               onChange={(event) => setIsSpecific(event.target.checked)}
@@ -139,7 +169,7 @@ export function RecitationControls() {
               {catalog.narrators.map((narrator) => {
                 const active = narratorIds.includes(narrator.id);
                 return (
-                  <button
+                  <button data-ui-instance={String(narrator.id)} data-ui-id="A1057"
                     key={narrator.id}
                     type="button"
                     onClick={() => toggleNarrator(narrator.id)}
@@ -155,7 +185,7 @@ export function RecitationControls() {
               })}
             </div>
           )}
-          <button
+          <button data-ui-id="A1058"
             type="button"
             onClick={add}
             className="w-full rounded bg-violet-700 px-2 py-1.5 text-[11px] font-medium text-white hover:bg-violet-800"
@@ -170,24 +200,24 @@ export function RecitationControls() {
       )}
 
       {document.boundaries.length > 0 && (
-        <ul className="mt-3 space-y-1.5">
+        <ul data-ui-id="A1059" className="mt-3 space-y-1.5">
           {document.boundaries.map((boundary) => (
-            <li key={boundary.id} className="rounded border border-stone-200 bg-white p-2">
+            <li data-ui-instance={String(boundary.id)} data-ui-id="A1060" key={boundary.id} className="rounded border border-stone-200 bg-white p-2">
               <div className="flex items-center gap-1.5">
-                <select
+                <select data-ui-instance={String(boundary.id)} data-ui-id="A1061"
                   value={boundary.kind}
                   onChange={(event) =>
                     updateBoundary(boundary.id, { kind: event.target.value as RecitationBoundaryKind })
                   }
                   className="h-6 rounded border border-stone-300 bg-white px-1 text-[10px]"
                 >
-                  <option value="WAQF">وقف</option>
-                  <option value="IBTIDA">ابتداء</option>
-                  <option value="WASL">وصل</option>
-                  <option value="NO_WASL">ممنوع الوصل</option>
+                  <option data-ui-id="A1062" value="WAQF">وقف</option>
+                  <option data-ui-id="A1063" value="IBTIDA">ابتداء</option>
+                  <option data-ui-id="A1064" value="WASL">وصل</option>
+                  <option data-ui-id="A1065" value="NO_WASL">ممنوع الوصل</option>
                 </select>
                 <span className="text-[10px] text-stone-600">عند الكلمة {boundary.position}</span>
-                <button
+                <button data-ui-instance={String(boundary.id)} data-ui-id="A1066"
                   type="button"
                   onClick={() => deleteBoundary(boundary.id)}
                   className="ms-auto text-[10px] text-red-700 hover:underline"
@@ -195,7 +225,7 @@ export function RecitationControls() {
                   حذف
                 </button>
               </div>
-              <input
+              <input data-ui-instance={String(boundary.id)} data-ui-id="A1067"
                 value={boundary.label ?? ''}
                 onChange={(event) => updateBoundary(boundary.id, { label: event.target.value })}
                 placeholder="وصف العلامة"
@@ -203,7 +233,7 @@ export function RecitationControls() {
               />
               {boundary.kind === 'WASL' && boundary.position === words.length && (
                 <label className="mt-1 flex items-center gap-1 text-[10px] text-sky-800">
-                  <input
+                  <input data-ui-instance={String(boundary.id)} data-ui-id="A1068"
                     type="checkbox"
                     checked={boundary.connectsToNextAyah ?? false}
                     onChange={(event) =>
@@ -243,7 +273,7 @@ export function RecitationControls() {
               focusSegment?.startPosition === segment.startPosition &&
               focusSegment?.endPosition === segment.endPosition;
             return (
-              <button
+              <button data-ui-id="A1069"
                 key={`${segment.startPosition}-${segment.endPosition}`}
                 type="button"
                 onClick={() =>
@@ -269,7 +299,7 @@ export function RecitationControls() {
           })}
         </div>
         {selectedPosition && (
-          <button
+          <button data-ui-id="A1070"
             type="button"
             onClick={() =>
               setFocusSegment({ startPosition: 1, endPosition: selectedPosition })
@@ -280,7 +310,7 @@ export function RecitationControls() {
           </button>
         )}
         {focusSegment && (
-          <button
+          <button data-ui-id="A1071"
             type="button"
             onClick={() => setFocusSegment(null)}
             className="w-full rounded border border-stone-300 bg-white px-2 py-1 text-[10px] text-stone-700 hover:bg-stone-50"
@@ -296,7 +326,7 @@ export function RecitationControls() {
         {nextKey ? (
           <>
             <label className="mt-1 flex items-center gap-1.5 text-[11px] text-sky-900">
-              <input
+              <input data-ui-id="A1072"
                 type="checkbox"
                 checked={readingWindow.isLinked}
                 disabled={plan.forbiddenWaslAfter.includes(readingWindow.firstAyahEndPosition)}
@@ -342,7 +372,7 @@ export function TextLayoutControls() {
 
   const breaks = document.layout.forcedLineBreakAfter;
   return (
-    <Section title="مواضع أسطر النص">
+    <Section data-ui-id="A1073" title="مواضع أسطر النص">
       {engine.singleLineText && (
         <p className="mb-2 rounded border border-amber-200 bg-amber-50 p-2 text-[10px] leading-relaxed text-amber-900">
           وضع «السطر الواحد» مفعّل، فنص الآية على خط واحد وكسور الأسطر معطّلة. أوقفه من شريط
@@ -350,7 +380,7 @@ export function TextLayoutControls() {
         </p>
       )}
       {selected ? (
-        <button
+        <button data-ui-id="A1075"
           type="button"
           onClick={() => toggleForcedLineBreak(selected.position)}
           className={`w-full rounded border px-2 py-1.5 text-[11px] ${
@@ -368,7 +398,7 @@ export function TextLayoutControls() {
       {breaks.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {breaks.map((position) => (
-            <button
+            <button data-ui-id="A1076"
               key={position}
               type="button"
               onClick={() => toggleForcedLineBreak(position)}
@@ -388,7 +418,7 @@ export function TextLayoutControls() {
         {Array.from({ length: layout?.lineCount ?? 1 }, (_, lineIndex) => (
           <label key={lineIndex} className="block text-[10px] text-stone-600">
             السطر {lineIndex + 1}: {document.layout.lineOffsets[lineIndex] ?? 0}
-            <input
+            <input data-ui-id="A1077"
               type="range"
               min={-80}
               max={80}
@@ -448,31 +478,31 @@ export function ManualLinesControls() {
   };
 
   return (
-    <Section title="الأسطر اليدوية">
+    <Section data-ui-id="A1078" title="الأسطر اليدوية">
       <p className="mb-2 text-[11px] text-stone-500">
         أضف سطرا دلاليا مستقلا عند كلمة محددة؛ الأفضل أن يرتبط كل وجه علمي باختلافه، وهذا السطر للشرح والتنظيم فقط.
       </p>
       <div className="flex gap-1">
-        <input
+        <input data-ui-id="A1080"
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           className="input h-7 min-w-0 flex-1 text-[11px]"
           placeholder="عنوان السطر"
         />
-        <select
+        <select data-ui-id="A1081"
           value={category}
           onChange={(event) => setCategory(event.target.value as VariantCategory)}
           className="h-7 rounded border border-stone-300 bg-white px-1 text-[10px]"
         >
           {(Object.keys(CATEGORY_LABELS) as VariantCategory[]).map((option) => (
-            <option key={option} value={option}>{CATEGORY_LABELS[option]}</option>
+            <option data-ui-id={UI_ManualLinesControls_1[option as keyof typeof UI_ManualLinesControls_1]} key={option} value={option}>{CATEGORY_LABELS[option]}</option>
           ))}
         </select>
       </div>
       <div className="mt-1.5 grid grid-cols-2 gap-1">
         <label className="text-[10px] text-stone-600">
           من كلمة
-          <input
+          <input data-ui-id="A1089"
             type="number"
             min={1}
             max={words.length}
@@ -484,7 +514,7 @@ export function ManualLinesControls() {
         </label>
         <label className="text-[10px] text-stone-600">
           إلى كلمة
-          <input
+          <input data-ui-id="A1090"
             type="number"
             min={1}
             max={words.length}
@@ -495,7 +525,7 @@ export function ManualLinesControls() {
           />
         </label>
       </div>
-      <button
+      <button data-ui-id="A1091"
         type="button"
         disabled={!validRange}
         onClick={add}
@@ -505,26 +535,26 @@ export function ManualLinesControls() {
       </button>
 
       {document.manualLines.length > 0 && (
-        <ul className="mt-2 space-y-1.5">
+        <ul data-ui-id="A1092" className="mt-2 space-y-1.5">
           {document.manualLines.map((line) => (
-            <li key={line.id} className="rounded border border-stone-200 p-1.5">
+            <li data-ui-instance={String(line.id)} data-ui-id="A1093" key={line.id} className="rounded border border-stone-200 p-1.5">
               <div className="flex items-center gap-1">
-                <input
+                <input data-ui-instance={String(line.id)} data-ui-id="A1094"
                   value={line.title}
                   onChange={(event) => updateManualLine(line.id, { title: event.target.value })}
                   className="h-6 min-w-0 flex-1 rounded border border-stone-200 px-1.5 text-[10px]"
                 />
-                <select
+                <select data-ui-instance={String(line.id)} data-ui-id="A1095"
                   value={line.category}
                   onChange={(event) => updateManualLine(line.id, { category: event.target.value as VariantCategory })}
                   className="h-6 max-w-14 rounded border border-stone-200 bg-white px-1 text-[9px]"
                   aria-label="فئة السطر"
                 >
                   {(Object.keys(CATEGORY_LABELS) as VariantCategory[]).map((option) => (
-                    <option key={option} value={option}>{CATEGORY_LABELS[option]}</option>
+                    <option data-ui-id={UI_ManualLinesControls_2[option as keyof typeof UI_ManualLinesControls_2]} key={option} value={option}>{CATEGORY_LABELS[option]}</option>
                   ))}
                 </select>
-                <button
+                <button data-ui-instance={String(line.id)} data-ui-id="A1103"
                   type="button"
                   onClick={() => deleteManualLine(line.id)}
                   className="text-[10px] text-red-700 hover:underline"
@@ -535,7 +565,7 @@ export function ManualLinesControls() {
               <div className="mt-1 grid grid-cols-4 gap-1 text-[10px] text-stone-600">
                 <label>
                   المسار
-                  <input
+                  <input data-ui-instance={String(line.id)} data-ui-id="A1104"
                     type="number"
                     min={0}
                     value={line.lane}
@@ -545,7 +575,7 @@ export function ManualLinesControls() {
                 </label>
                 <label>
                   من
-                  <input
+                  <input data-ui-instance={String(line.id)} data-ui-id="A1105"
                     type="number"
                     min={1}
                     max={words.length}
@@ -559,7 +589,7 @@ export function ManualLinesControls() {
                 </label>
                 <label>
                   إلى
-                  <input
+                  <input data-ui-instance={String(line.id)} data-ui-id="A1106"
                     type="number"
                     min={line.startPosition}
                     max={words.length}
@@ -570,7 +600,7 @@ export function ManualLinesControls() {
                 </label>
                 <label>
                   إزاحة
-                  <input
+                  <input data-ui-instance={String(line.id)} data-ui-id="A1107"
                     type="number"
                     min={-80}
                     max={80}
@@ -655,7 +685,7 @@ export function TashjeerOrderControls() {
 
 
   return (
-    <Section title="ترتيب التشجير في هذه الآية">
+    <Section data-ui-id="A1108" title="ترتيب التشجير في هذه الآية">
       <p className="mb-2 text-[11px] leading-relaxed text-stone-500">
         الترتيب الظاهر هو ترتيب الأسطر تحت الآية من أعلى إلى أسفل. ثبّت رتبة الموضع أو انقل
         وجها داخل موضعه عند مخالفة الكتاب للقاعدة العامة.
@@ -666,7 +696,7 @@ export function TashjeerOrderControls() {
           لا توجد مواضع اختلاف في هذه الآية بعد.
         </p>
       ) : (
-        <ol className="space-y-2">
+        <ol data-ui-id="A1110" className="space-y-2">
           {ordered.map((variant, index) => {
             const drawable = variant.alternatives.filter((alternative) => !alternative.isBase);
             const explicit = variant.alternativeOrder ?? [];
@@ -682,7 +712,7 @@ export function TashjeerOrderControls() {
             const isDeleting = deletingVariantId === variant.id;
 
             return (
-              <li
+              <li data-ui-instance={String(variant.id)} data-ui-id="A1111"
                 key={variant.id}
                 className={`rounded border p-2 ${
                   isSelected ? 'border-emerald-500 bg-emerald-50/50' : 'border-stone-200 bg-white'
@@ -692,7 +722,7 @@ export function TashjeerOrderControls() {
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-stone-700 text-[10px] font-bold text-white">
                     {toArabicDigits(index + 1)}
                   </span>
-                  <button
+                  <button data-ui-instance={String(variant.id)} data-ui-id="A1112"
                     type="button"
                     onClick={() => selectVariant(isSelected ? null : variant.id)}
                     className="min-w-0 flex-1 truncate text-start text-[11px] font-medium text-stone-800 hover:underline"
@@ -741,14 +771,14 @@ export function TashjeerOrderControls() {
                           حذف هذا الموضع وحده من الآية — القاعدة باقية في سائر المصحف، والحذف
                           قابل للتراجع.
                         </p>
-                        <input
+                        <input data-ui-instance={String(variant.id)} data-ui-id="A1113"
                           value={deleteReason}
                           onChange={(event) => setDeleteReason(event.target.value)}
                           placeholder="سبب الحذف (يُحفظ في السجل)"
                           className="w-full rounded border border-stone-300 px-2 py-1 text-[10px]"
                         />
                         <div className="flex items-center gap-1.5">
-                          <button
+                          <button data-ui-instance={String(variant.id)} data-ui-id="A1114"
                             type="button"
                             onClick={() => {
                               deleteDerivedOccurrence(variant.id, deleteReason);
@@ -759,7 +789,7 @@ export function TashjeerOrderControls() {
                           >
                             تأكيد حذف الموضع
                           </button>
-                          <button
+                          <button data-ui-id="A1115"
                             type="button"
                             onClick={() => {
                               setDeletingVariantId(null);
@@ -773,7 +803,7 @@ export function TashjeerOrderControls() {
                       </div>
                     ) : (
                       <div className="flex flex-wrap items-center gap-1">
-                        <button
+                        <button data-ui-instance={String(variant.id)} data-ui-id="A1116"
                           type="button"
                           onClick={() => setEditingVariantId(variant.id)}
                           disabled={!rule}
@@ -782,7 +812,7 @@ export function TashjeerOrderControls() {
                         >
                           تحرير محلي
                         </button>
-                        <button
+                        <button data-ui-instance={String(variant.id)} data-ui-id="A1117"
                           type="button"
                           onClick={() => setDeletingVariantId(variant.id)}
                           className="rounded border border-stone-200 px-1.5 py-0.5 text-[10px] text-rose-700 hover:bg-rose-50"
@@ -790,7 +820,7 @@ export function TashjeerOrderControls() {
                           حذف موضعي
                         </button>
                         {variant.hasLocalOverride && (
-                          <button
+                          <button data-ui-instance={String(variant.id)} data-ui-id="A1118"
                             type="button"
                             onClick={() => clearDerivedLocalOverride(variant.id)}
                             title="محو الترقيع والتخصيصات والعودة إلى قيم القاعدة الأمّ"
@@ -799,7 +829,7 @@ export function TashjeerOrderControls() {
                             إلغاء التجاوز
                           </button>
                         )}
-                        <button
+                        <button data-ui-instance={String(variant.id)} data-ui-id="A1119"
                           type="button"
                           onClick={() => { useEditorStore.getState().setMultiSelection(null); selectVariant(variant.id); copySelection(); }}
                           title="نسخ الموضع اختلافًا محليًا مستقلًا قابلًا للتحرير الحر"
@@ -807,7 +837,7 @@ export function TashjeerOrderControls() {
                         >
                           نسخ
                         </button>
-                        <button type="button" onClick={() => { useEditorStore.getState().setMultiSelection(null); selectVariant(variant.id); cutSelection(); }}
+                        <button data-ui-instance={String(variant.id)} data-ui-id="A1120" type="button" onClick={() => { useEditorStore.getState().setMultiSelection(null); selectVariant(variant.id); cutSelection(); }}
                           title="قص هذا النوع وحده، ثم حدد كلمة (في أي آية) أو سطر هدف والصق؛ المصدر محفوظ حتى التأكيد"
                           className="rounded border border-stone-200 px-1.5 py-0.5 text-[10px] text-stone-700 hover:bg-stone-50">
                           نقل
@@ -818,7 +848,7 @@ export function TashjeerOrderControls() {
                 )}
 
                 {sequence.length > 1 && (
-                  <ul className="mt-1.5 space-y-1 border-t border-stone-100 pt-1.5">
+                  <ul data-ui-instance={String(variant.id)} data-ui-id="A1121" className="mt-1.5 space-y-1 border-t border-stone-100 pt-1.5">
                     {sequence.map((alternativeId, alternativeIndex) => {
                       const alternative = drawable.find((item) => item.id === alternativeId);
                       if (!alternative) return null;
@@ -828,7 +858,7 @@ export function TashjeerOrderControls() {
                         .join(' ');
 
                       return (
-                        <li key={alternativeId} className="flex items-center gap-1">
+                        <li data-ui-id="A1122" key={alternativeId} className="flex items-center gap-1">
                           <span className="w-3 shrink-0 text-[9px] text-stone-400">
                             {toArabicDigits(alternativeIndex + 1)}
                           </span>
@@ -836,7 +866,7 @@ export function TashjeerOrderControls() {
                             {alternative.ruleLabel || alternative.label || alternative.text}
                             {symbols && <span className="text-stone-400"> · {symbols}</span>}
                           </span>
-                          <button
+                          <button data-ui-id="A1123"
                             type="button"
                             onClick={() => moveAlternative(variant.id, alternativeId, -1)}
                             disabled={alternativeIndex === 0}
@@ -845,7 +875,7 @@ export function TashjeerOrderControls() {
                           >
                             ▲
                           </button>
-                          <button
+                          <button data-ui-id="A1124"
                             type="button"
                             onClick={() => moveAlternative(variant.id, alternativeId, 1)}
                             disabled={alternativeIndex === sequence.length - 1}
@@ -858,8 +888,8 @@ export function TashjeerOrderControls() {
                       );
                     })}
                     {variant.alternativeOrder && (
-                      <li>
-                        <button
+                      <li data-ui-instance={String(variant.id)} data-ui-id="A1125">
+                        <button data-ui-instance={String(variant.id)} data-ui-id="A1126"
                           type="button"
                           onClick={() => resetAlternativeOrder(variant.id)}
                           className="text-[10px] text-stone-500 hover:underline"
@@ -881,15 +911,15 @@ export function TashjeerOrderControls() {
           <p className="mb-1.5 text-[11px] font-bold text-stone-700">
             مواضع محذوفة في هذه الآية ({toArabicDigits(deletedInAyah.length)})
           </p>
-          <ul className="space-y-1">
+          <ul data-ui-id="A1127" className="space-y-1">
             {deletedInAyah.map((item) => {
               const rule = ruleById.get(item.ruleId);
               return (
-                <li key={item.id} className="flex items-center gap-1.5 text-[10px]">
+                <li data-ui-instance={String(item.id)} data-ui-id="A1128" key={item.id} className="flex items-center gap-1.5 text-[10px]">
                   <span className="min-w-0 flex-1 truncate text-stone-600">
                     {rule ? rule.title : item.ruleId} · {item.matchedText ?? '—'}
                   </span>
-                  <button
+                  <button data-ui-instance={String(item.id)} data-ui-id="A1129"
                     type="button"
                     onClick={() => restoreDerivedOccurrence(item.id)}
                     className="shrink-0 rounded border border-emerald-300 px-1.5 py-0.5 text-emerald-800 hover:bg-emerald-50"

@@ -115,7 +115,7 @@ export function StrengthDegreePicker({
   };
 
   return (
-    <div className="rounded-md border border-indigo-200 bg-indigo-50/50 p-3">
+    <div data-ui-id="A1415" className="rounded-md border border-indigo-200 bg-indigo-50/50 p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h3 className="text-xs font-bold text-indigo-950">درجة قوة الوجه (وتشمل «الوجه المقدَّم»)</h3>
@@ -134,14 +134,14 @@ export function StrengthDegreePicker({
           <span className="mb-1 block text-[11px] font-medium text-indigo-950">
             الدرجة العامة (لمن لم يُخصَّص)
           </span>
-          <select
+          <select data-ui-id="A1416"
             value={degreeId ?? ''}
             onChange={(event) => setGeneral(event.target.value)}
             className="input"
           >
-            <option value="">بلا درجة</option>
+            <option data-ui-id="A1417" value="">بلا درجة</option>
             {degrees.map((degree) => (
-              <option key={degree.id} value={degree.id}>
+              <option data-ui-instance={String(degree.id)} data-ui-id="A1418" key={degree.id} value={degree.id}>
                 {degree.rank}. {degree.label}
                 {degree.isPreferred ? ' — الوجه المقدَّم' : ''}
               </option>
@@ -149,7 +149,7 @@ export function StrengthDegreePicker({
           </select>
         </label>
 
-        <button
+        <button data-ui-id="A1419"
           type="button"
           onClick={() => setAddingDegree((value) => !value)}
           className="rounded border border-indigo-300 bg-white px-2.5 py-2 text-[11px] text-indigo-900 hover:bg-indigo-50"
@@ -157,7 +157,7 @@ export function StrengthDegreePicker({
         >
           + درجة جديدة
         </button>
-        <button
+        <button data-ui-id="A1420"
           type="button"
           onClick={spreadGeneral}
           disabled={!degreeId || narratorIds.length === 0}
@@ -165,7 +165,7 @@ export function StrengthDegreePicker({
         >
           ابدأ من هذه الدرجة لكل راوٍ
         </button>
-        <button
+        <button data-ui-id="A1421"
           type="button"
           onClick={() => setExpanded((value) => !value)}
           disabled={narratorIds.length === 0}
@@ -174,7 +174,7 @@ export function StrengthDegreePicker({
           {expanded ? 'إخفاء التخصيص لكل راوٍ' : 'تخصيص الدرجة لكل راوٍ'}
         </button>
         {customCount > 0 && (
-          <button
+          <button data-ui-id="A1422"
             type="button"
             onClick={clearCustom}
             className="rounded border border-rose-200 bg-white px-2.5 py-2 text-[11px] text-rose-700 hover:bg-rose-50"
@@ -188,7 +188,7 @@ export function StrengthDegreePicker({
         <div className="mt-2 flex flex-wrap items-end gap-2 rounded border border-indigo-200 bg-white p-2">
           <label className="block min-w-[12rem] flex-1">
             <span className="mb-1 block text-[11px] font-medium text-indigo-950">اسم الدرجة الجديدة</span>
-            <input
+            <input data-ui-id="A1423"
               value={newDegreeLabel}
               onChange={(event) => setNewDegreeLabel(event.target.value)}
               onKeyDown={(event) => {
@@ -202,7 +202,7 @@ export function StrengthDegreePicker({
               autoFocus
             />
           </label>
-          <button
+          <button data-ui-id="A1424"
             type="button"
             onClick={addDegree}
             disabled={!newDegreeLabel.trim()}
@@ -210,7 +210,7 @@ export function StrengthDegreePicker({
           >
             إضافة إلى السلّم
           </button>
-          <button
+          <button data-ui-id="A1425"
             type="button"
             onClick={() => {
               setAddingDegree(false);
@@ -230,7 +230,7 @@ export function StrengthDegreePicker({
 
       {expanded && narratorIds.length > 0 && (
         <div className="mt-3 max-h-64 overflow-y-auto rounded border border-indigo-100 bg-white">
-          <table className="w-full text-[11px]">
+          <table data-ui-id="A1426" className="w-full text-[11px]">
             <thead className="sticky top-0 bg-indigo-50 text-indigo-950">
               <tr>
                 <th className="px-2 py-1.5 text-start font-semibold">الراوي</th>
@@ -244,23 +244,23 @@ export function StrengthDegreePicker({
                 const imam = narrator ? imamById.get(narrator.imamId) : undefined;
                 const value = byNarrator?.[narratorId] ?? '';
                 return (
-                  <tr key={narratorId} className="border-t border-stone-100">
+                  <tr data-ui-id="A1427" key={narratorId} className="border-t border-stone-100">
                     <td className="px-2 py-1 text-stone-800">{narrator?.name ?? narratorId}</td>
                     <td className="px-2 py-1 text-stone-500">{imam?.name ?? '—'}</td>
                     <td className="px-2 py-1">
-                      <select
+                      <select data-ui-id="A1428"
                         value={value}
                         onChange={(event) => setForNarrator(narratorId, event.target.value)}
                         className="w-full rounded border border-stone-200 bg-white px-1.5 py-1 text-[11px]"
                         aria-label={`درجة ${narrator?.name ?? narratorId}`}
                       >
-                        <option value="">
+                        <option data-ui-id="A1429" value="">
                           {degreeId
                             ? `مثل العامة (${degrees.find((degree) => degree.id === degreeId)?.label ?? '—'})`
                             : 'بلا درجة'}
                         </option>
                         {degrees.map((degree) => (
-                          <option key={degree.id} value={degree.id}>
+                          <option data-ui-instance={String(degree.id)} data-ui-id="A1430" key={degree.id} value={degree.id}>
                             {degree.label}
                           </option>
                         ))}

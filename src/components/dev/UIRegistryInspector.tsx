@@ -9,7 +9,7 @@ type InspectedTarget = {
   instance: string | null;
   left: number;
   top: number;
-  node: HTMLElement;
+  node: Element;
 };
 
 /** Development-only DOM identity overlay. It never participates in app behavior. */
@@ -42,12 +42,25 @@ export function UIRegistryInspector() {
       return;
     }
 
+    // Alt+click selects the actual nested DOM control without activating it.
+    // Ordinary clicks remain unchanged, including portal/context-menu actions.
+    const inspectClick = (event: MouseEvent) => {
+      if (!event.altKey || !(event.target instanceof Element)) return;
+      if (event.target.closest('[data-ui-inspector-root]')) return;
+      const target = event.target.closest('[data-ui-id]');
+      if (!target) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setSelectedId(target.getAttribute('data-ui-id'));
+      setSelectedInstance(target.closest('[data-ui-instance]')?.getAttribute('data-ui-instance') ?? null);
+    };
+    window.addEventListener('click', inspectClick, true);
     let frame: number | null = null;
     const schedule = () => {
       if (frame !== null) return;
       frame = window.requestAnimationFrame(() => {
         frame = null;
-        const nodes = Array.from(document.querySelectorAll<HTMLElement>('[data-ui-id]'))
+        const nodes = Array.from(document.querySelectorAll<HTMLElement | SVGElement>('[data-ui-id]'))
           .filter((node) => !node.closest('[data-ui-inspector-root]'));
         resizeObserver.disconnect();
         const next = nodes.flatMap((node): InspectedTarget[] => {
@@ -56,13 +69,13 @@ export function UIRegistryInspector() {
           resizeObserver.observe(node);
           return [{
             id: node.dataset.uiId ?? '',
-            instance: node.dataset.uiInstance ?? null,
+            instance: node.dataset.uiInstance ?? node.closest('[data-ui-instance]')?.getAttribute('data-ui-instance') ?? null,
             left: Math.max(0, Math.min(rect.left, window.innerWidth - 58)),
             top: Math.max(0, Math.min(rect.top, window.innerHeight - 25)),
             node,
           }];
         });
-        const signature = next.map((target) => `${target.id}:${target.instance ?? ''}:${Math.round(target.left)}:${Math.round(target.top)}:${target.node.dataset.uiId}`).join('|');
+        const signature = next.map((target) => `${target.id}:${target.instance ?? ''}:${Math.round(target.left)}:${Math.round(target.top)}:${target.node.getAttribute('data-ui-id')}`).join('|');
         if (signature !== lastSignature.current) {
           lastSignature.current = signature;
           setTargets(next);
@@ -92,6 +105,7 @@ export function UIRegistryInspector() {
     schedule();
 
     return () => {
+      window.removeEventListener('click', inspectClick, true);
       observer.disconnect();
       resizeObserver.disconnect();
       window.removeEventListener('resize', schedule);
@@ -104,10 +118,10 @@ export function UIRegistryInspector() {
 
   const selected = selectedId ? getUIEntryById(selectedId) : undefined;
   const feature = selected ? getFeatureById(selected.featureId) : undefined;
-  const parent = selected ? getUIIdentity(selected.parentId) : undefined;
+  const parent = selected?.parentId ? getUIIdentity(selected.parentId) : undefined;
 
   return (
-    <div className="contents" data-ui-inspector-root>
+    <div data-ui-id="A730" className="contents" data-ui-inspector-root>
       <button
         type="button"
         data-ui-id="A410"
@@ -116,7 +130,7 @@ export function UIRegistryInspector() {
         title="UI Registry Inspector (Alt+Shift+I)"
         className="fixed bottom-3 start-3 z-[10000] rounded-full border border-slate-700 bg-slate-950 px-3 py-2 text-[11px] font-semibold text-white shadow-xl hover:bg-slate-800"
       >
-        UI IDs {enabled ? 'ON' : 'OFF'}
+        UI Inspector {enabled ? 'ON' : 'OFF'}
       </button>
 
       {enabled && (
@@ -126,7 +140,7 @@ export function UIRegistryInspector() {
           aria-hidden="true"
         >
           {targets.map((target, index) => (
-            <button
+            <button data-ui-instance={String(target.id)} data-ui-id="A731"
               key={`${target.id}:${target.instance ?? index}:${index}`}
               type="button"
               tabIndex={-1}
@@ -159,9 +173,10 @@ export function UIRegistryInspector() {
             <div>
               <p className="font-mono text-sm font-bold text-fuchsia-300">{selectedId}</p>
               <p className="mt-1 text-sm font-semibold">{selected?.name ?? 'Unregistered UI ID'}</p>
+              <p className="mt-1 text-[10px] text-slate-400">Alt+click an actual UI control to inspect it.</p>
               {selectedInstance && <p className="mt-1 font-mono text-[10px] text-slate-400">Instance: {selectedInstance}</p>}
             </div>
-            <button type="button" onClick={() => setSelectedId(null)} className="rounded border border-slate-600 px-2 py-1 text-slate-200 hover:bg-slate-800">Close</button>
+            <button data-ui-id="A732" type="button" onClick={() => setSelectedId(null)} className="rounded border border-slate-600 px-2 py-1 text-slate-200 hover:bg-slate-800">Close</button>
           </div>
           {selected ? (
             <dl className="grid grid-cols-[6.5rem_1fr] gap-x-3 gap-y-2 leading-relaxed">
@@ -172,7 +187,13 @@ export function UIRegistryInspector() {
               <dt className="text-slate-400">Component</dt><dd className="font-mono">{selected.component}</dd>
               <dt className="text-slate-400">Source</dt><dd className="break-all font-mono">{selected.sourceFile}</dd>
               <dt className="text-slate-400">Purpose</dt><dd>{selected.description}</dd>
-              <dt className="text-slate-400">Behavior</dt><dd>{selected.behavior}</dd>
+              <dt className="text-slate-400">Behavior</dt><dd className="whitespace-pre-wrap">{selected.behavior}</dd>
+              <dt className="text-slate-400">Actions</dt><dd className="whitespace-pre-wrap break-all font-mono">{selected.actions?.map(action => `${action.event}: ${action.expression}`).join('\n') || '—'}</dd>
+              <dt className="text-slate-400">Stores</dt><dd className="break-all font-mono">{selected.stores?.join(', ') || '—'}</dd>
+              <dt className="text-slate-400">Logic</dt><dd className="break-all font-mono">{selected.logicFiles?.join(', ') || '—'}</dd>
+              <dt className="text-slate-400">Tests</dt><dd className="break-all font-mono">{selected.testFiles?.join(', ') || '—'}</dd>
+              <dt className="text-slate-400">Shortcut</dt><dd>{selected.shortcuts?.join(', ') || '—'}</dd>
+              <dt className="text-slate-400">Identity</dt><dd>{selected.identity}</dd>
               <dt className="text-slate-400">Constraints</dt><dd>{selected.constraints}</dd>
               <dt className="text-slate-400">Status</dt><dd>{selected.status}</dd>
               <dt className="text-slate-400">Dependencies</dt><dd className="font-mono">{selected.dependencies.join(', ') || '—'}</dd>

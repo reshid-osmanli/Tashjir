@@ -230,7 +230,7 @@ export function CountUp({
  */
 export function RevealStyles() {
   return (
-    <noscript>
+    <noscript data-ui-id="A1664">
       <style
         dangerouslySetInnerHTML={{
           __html: '.reveal,.stagger>*{opacity:1!important;transform:none!important}',

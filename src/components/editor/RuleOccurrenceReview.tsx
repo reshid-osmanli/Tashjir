@@ -39,6 +39,17 @@ import type { GlobalRule } from '@/lib/storage/global-rules-store';
 import type { ReaderStrengthMap } from '@/types/tashjeer';
 import { StrengthDegreePicker } from './StrengthDegreePicker';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_RuleOccurrenceReview_0 = {
+  "ALL": "A1195",
+  "PENDING": "A1196",
+  "CONFIRMED": "A1197",
+  "DELETED": "A1198",
+  "EDITED": "A1199"
+} as const;
+
+
+
 interface RuleOccurrenceReviewProps {
   rule: GlobalRule;
   onClose: () => void;
@@ -301,7 +312,7 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
       aria-label="تتبع مواضع القاعدة"
     >
       <div className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-        <header className="border-b border-stone-200 px-5 py-4">
+        <header data-ui-id="A1191" className="border-b border-stone-200 px-5 py-4">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-base font-bold text-stone-900">تتبّع تطبيق القاعدة: {rule.title}</h2>
@@ -311,7 +322,7 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
                 {describeScope(rule.scope, { catalog })}
               </p>
             </div>
-            <button
+            <button data-ui-id="A1192"
               type="button"
               onClick={onClose}
               className="rounded border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-50"
@@ -321,10 +332,10 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Tab active={tab === 'REVIEW'} onClick={() => setTab('REVIEW')}>
+            <Tab data-ui-id="A1193" active={tab === 'REVIEW'} onClick={() => setTab('REVIEW')}>
               استعراض المواضع
             </Tab>
-            <Tab active={tab === 'LOG'} onClick={() => setTab('LOG')}>
+            <Tab data-ui-id="A1194" active={tab === 'LOG'} onClick={() => setTab('LOG')}>
               سجل التغييرات ({log.length})
             </Tab>
             <div className="ms-auto flex flex-wrap gap-1.5 text-[11px]">
@@ -368,7 +379,7 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
             <>
               <div className="flex flex-wrap items-center gap-1.5">
                 {(Object.keys(FILTER_LABELS) as OccurrenceFilter[]).map((value) => (
-                  <button
+                  <button data-ui-id={UI_RuleOccurrenceReview_0[value as keyof typeof UI_RuleOccurrenceReview_0]}
                     key={value}
                     type="button"
                     onClick={() => {
@@ -387,7 +398,7 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
               </div>
 
               {visible.length > 0 && (
-                <div
+                <div data-ui-id="A1200"
                   className="mt-3"
                   onKeyDown={(event) => {
                     // Ctrl+A يحدد كل المواضع المعروضة (بعد التصفية) لا المصحف كله.
@@ -412,7 +423,7 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
                           نقرة لاستعراض الموضع · Ctrl+نقر لتحديد عدة مواضع · Shift+نقر للمدى · Ctrl+A لكل المعروض
                         </p>
                         {multiSelection?.kind === 'OCCURRENCE' && multiSelection.ownerId === rule.id && multiSelection.ids.length > 0 && (
-                          <div
+                          <div data-ui-id="A1201"
                             role="toolbar"
                             aria-label="إجراءات التحديد المتعدد للمواضع"
                             className="mt-1 flex flex-wrap items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50/80 px-2 py-1.5"
@@ -420,7 +431,7 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
                             <span className="text-[11px] font-medium text-emerald-900">
                               المحدد: {toArabicDigits(multiSelection.ids.length)} {multiSelection.ids.length === 1 ? 'موضع' : multiSelection.ids.length === 2 ? 'موضعان' : 'مواضع'}
                             </span>
-                            <button
+                            <button data-ui-id="A1202"
                               type="button"
                               className="rounded border border-rose-300 bg-white px-2 py-0.5 text-[11px] font-medium text-rose-700 hover:bg-rose-50"
                               onClick={() => void bulkDelete()}
@@ -428,7 +439,7 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
                             >
                               حذف المحدد موضعيًا
                             </button>
-                            <button
+                            <button data-ui-id="A1203"
                               type="button"
                               className="rounded border border-stone-300 bg-white px-2 py-0.5 text-[11px] text-stone-700 hover:bg-stone-50"
                               onClick={() => setMultiSelection(null)}
@@ -441,12 +452,12 @@ export function RuleOccurrenceReview({ rule, onClose, startAtAyahKey, onOpenInEd
                       </div>
                     }
                   >
-                    <ul className="divide-y divide-stone-100">
+                    <ul data-ui-id="A1204" className="divide-y divide-stone-100">
                       {visible.map((row, rowIndex) => {
                         const ayah = row.match.ayahKey ? getAyahByKey(row.match.ayahKey) : undefined;
                         const surah = ayah ? getSurahOrFirst(ayah.surahNumber) : undefined;
                         return (
-                          <li
+                          <li data-ui-instance={String(row.id)} data-ui-id="A1205"
                             key={row.id}
                             data-list-index={rowIndex}
                             onClick={(event) => {
@@ -567,30 +578,30 @@ function OccurrenceCard({
   const deleted = override?.state === 'DELETED';
 
   return (
-    <article className="mt-4 rounded-lg border border-stone-200">
+    <article data-ui-id="A1206" className="mt-4 rounded-lg border border-stone-200">
       {/* شريط التنقل: مطابق لتنقل الآيات في المحرر حتى لا يتعلم المحقق نمطين. */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 bg-stone-50 px-3 py-2">
         <div className="flex items-center gap-1.5">
-          <NavButton onClick={onFirst} disabled={position === 1} label="الأول">
+          <NavButton data-ui-id="A1207" onClick={onFirst} disabled={position === 1} label="الأول">
             ⏮
           </NavButton>
-          <NavButton onClick={onPrevious} disabled={position === 1} label="السابق">
+          <NavButton data-ui-id="A1208" onClick={onPrevious} disabled={position === 1} label="السابق">
             السابق ›
           </NavButton>
           <span className="rounded bg-white px-2.5 py-1 text-[11px] font-semibold text-stone-800">
             الموضع {position} من {total}
           </span>
-          <NavButton onClick={onNext} disabled={position === total} label="التالي">
+          <NavButton data-ui-id="A1209" onClick={onNext} disabled={position === total} label="التالي">
             ‹ التالي
           </NavButton>
-          <NavButton onClick={onLast} disabled={position === total} label="الأخير">
+          <NavButton data-ui-id="A1210" onClick={onLast} disabled={position === total} label="الأخير">
             ⏭
           </NavButton>
         </div>
         <div className="flex items-center gap-2 text-[11px] text-stone-600">
           <StateBadge override={override} />
           {surah && ayah && (onOpenInEditor ? (
-            <button
+            <button data-ui-id="A1211"
               type="button"
               onClick={() => onOpenInEditor(ayah.key)}
               className="rounded border border-stone-300 bg-white px-2 py-1 text-emerald-800 hover:bg-emerald-50"
@@ -599,7 +610,7 @@ function OccurrenceCard({
               فتح في المحرر: {surah.name} {ayah.ayahNumber}
             </button>
           ) : (
-            <a
+            <a data-ui-id="A1212"
               href={`/editor?ayah=${ayah.key}`}
               className="rounded border border-stone-300 bg-white px-2 py-1 text-emerald-800 hover:bg-emerald-50"
             >
@@ -660,7 +671,7 @@ function OccurrenceCard({
               {override?.reason ? ` السبب: ${override.reason}` : ''}
               {override?.updatedAt ? ` (${formatDate(override.updatedAt)})` : ''}
             </p>
-            <button
+            <button data-ui-id="A1213"
               type="button"
               onClick={onRestore}
               className="rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-emerald-700"
@@ -674,21 +685,21 @@ function OccurrenceCard({
               <span className="mb-1 block text-[11px] font-medium text-stone-700">
                 سبب الحذف من هذا الموضع (يُحفظ في السجل)
               </span>
-              <input
+              <input data-ui-id="A1214"
                 value={reason}
                 onChange={(event) => onReasonChange(event.target.value)}
                 className="input"
                 placeholder="مثال: الموضع مستثنى عند أهل الأداء."
               />
             </label>
-            <button
+            <button data-ui-id="A1215"
               type="button"
               onClick={onDelete}
               className="rounded bg-rose-600 px-3 py-2 text-[11px] font-medium text-white hover:bg-rose-700"
             >
               حذف من هذا الموضع فقط
             </button>
-            <button
+            <button data-ui-id="A1216"
               type="button"
               onClick={onConfirm}
               className="rounded bg-emerald-600 px-3 py-2 text-[11px] font-medium text-white hover:bg-emerald-700"
@@ -746,7 +757,7 @@ function OccurrenceOrderRankControl({
   };
 
   return (
-    <div className="rounded-md border border-emerald-200 bg-emerald-50/40 p-2.5">
+    <div data-ui-id="A1217" className="rounded-md border border-emerald-200 bg-emerald-50/40 p-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] font-semibold text-emerald-950">رقم ترتيب السطر في هذا الموضع</p>
         <p className="text-[10px] text-emerald-900/70">
@@ -758,7 +769,7 @@ function OccurrenceOrderRankControl({
         </p>
       </div>
       <div className="mt-2 flex items-center gap-2">
-        <input
+        <input data-ui-id="A1218"
           type="number"
           min={1}
           value={value}
@@ -771,7 +782,7 @@ function OccurrenceOrderRankControl({
           placeholder="تلقائي"
           aria-label="رقم ترتيب السطر"
         />
-        <button
+        <button data-ui-id="A1219"
           type="button"
           onClick={apply}
           className="rounded border border-emerald-300 bg-white px-2.5 py-1.5 text-[10px] font-medium text-emerald-800 hover:bg-emerald-50"
@@ -779,7 +790,7 @@ function OccurrenceOrderRankControl({
           تثبيت الترتيب
         </button>
         {typeof overrideRank === 'number' && (
-          <button
+          <button data-ui-id="A1220"
             type="button"
             onClick={() => {
               setValue('');
@@ -819,7 +830,7 @@ function highlightWord(text: string, position: number, match: GlobalRuleMatch): 
   return (
     <>
       {join(0, bounds.start - 1)}
-      <mark className="rounded bg-amber-200 px-0.5 text-stone-950">{join(bounds.start - 1, bounds.end)}</mark>
+      <mark data-ui-id="A1221" className="rounded bg-amber-200 px-0.5 text-stone-950">{join(bounds.start - 1, bounds.end)}</mark>
       {join(bounds.end, characters.length)}
     </>
   );
@@ -836,7 +847,7 @@ function LogTable({ log }: { log: OccurrenceLogEntry[] }) {
 
   return (
     <div className="rounded border border-stone-200">
-      <table className="w-full text-xs">
+      <table data-ui-id="A1223" className="w-full text-xs">
         <thead className="bg-stone-50 text-stone-700">
           <tr>
             <th className="px-3 py-2 text-start font-semibold">الإجراء</th>
@@ -875,9 +886,9 @@ function LogTable({ log }: { log: OccurrenceLogEntry[] }) {
                 <td className="px-3 py-2 text-stone-600">
                   {entry.reason ?? '—'}
                   {entry.changes && entry.changes.length > 0 && (
-                    <ul className="mt-1 space-y-0.5 text-[10px] text-stone-500">
+                    <ul data-ui-id="A1224" className="mt-1 space-y-0.5 text-[10px] text-stone-500">
                       {entry.changes.map((change, changeIndex) => (
-                        <li key={`${change.field}-${changeIndex}`}>
+                        <li data-ui-id="A1225" key={`${change.field}-${changeIndex}`}>
                           {change.field}: {change.before ?? '—'} ← {change.after ?? '—'}
                         </li>
                       ))}
@@ -938,7 +949,7 @@ function StateBadge({ override }: { override?: RuleOccurrenceOverride }) {
   );
 }
 
-function NavButton({
+function NavButton({ 'data-ui-id': uiId,
   onClick,
   disabled,
   label,
@@ -948,9 +959,9 @@ function NavButton({
   disabled?: boolean;
   label: string;
   children: ReactNode;
-}) {
+} & { 'data-ui-id'?: string }) {
   return (
-    <button
+    <button data-ui-id={uiId}
       type="button"
       onClick={onClick}
       disabled={disabled}
@@ -963,7 +974,7 @@ function NavButton({
   );
 }
 
-function Tab({
+function Tab({ 'data-ui-id': uiId,
   active,
   onClick,
   children,
@@ -971,9 +982,9 @@ function Tab({
   active: boolean;
   onClick: () => void;
   children: ReactNode;
-}) {
+} & { 'data-ui-id'?: string }) {
   return (
-    <button
+    <button data-ui-id={uiId}
       type="button"
       onClick={onClick}
       className={`rounded px-3 py-1.5 text-[11px] font-medium ${

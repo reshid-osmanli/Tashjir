@@ -63,7 +63,7 @@ export function ProfileComparePanel({ config }: ProfileComparePanelProps) {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
-        <table className="w-full text-sm">
+        <table data-ui-id="A1804" className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 text-right text-gray-500">
               <th className="px-3 py-2 font-medium">الزوج</th>

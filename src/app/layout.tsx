@@ -27,16 +27,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ar" dir="rtl">
+    <html data-ui-id="A724" lang="ar" dir="rtl">
       <body className="min-h-dvh bg-page font-ui text-ink antialiased">
-        <a
+        <a data-ui-id="A725"
           href="#main"
           className="sr-only-focusable absolute start-4 top-3 z-toast rounded-md border border-line-strong bg-panel px-3 py-1.5 text-label text-ink-800"
         >
           تجاوز إلى المحتوى
         </a>
         {children}
-        <UIRegistryInspector />
+        {process.env.NODE_ENV === 'development' && <UIRegistryInspector />}
       </body>
     </html>
   );

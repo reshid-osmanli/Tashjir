@@ -154,12 +154,12 @@ export function PublishHistoryPanel({
         </div>
 
         {dirty && dryRun.audit.length > 0 && (
-          <ul className="mt-4 space-y-1 rounded-lg bg-gray-50 p-3 text-sm text-gray-700">
+          <ul data-ui-id="A1805" className="mt-4 space-y-1 rounded-lg bg-gray-50 p-3 text-sm text-gray-700">
             {dryRun.audit.map((entry, index) => (
-              <li key={index} className="flex items-center gap-2">
+              <li data-ui-instance={String(entry.ruleId)} data-ui-id="A1806" key={index} className="flex items-center gap-2">
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
                 {entry.ruleId && onOpenRule ? (
-                  <button type="button" onClick={() => onOpenRule(entry.ruleId!)} className="text-right hover:text-emerald-700 hover:underline">
+                  <button data-ui-instance={String(entry.ruleId)} data-ui-id="A1807" type="button" onClick={() => onOpenRule(entry.ruleId!)} className="text-right hover:text-emerald-700 hover:underline">
                     {entry.label}
                   </button>
                 ) : (
@@ -172,7 +172,7 @@ export function PublishHistoryPanel({
 
         {dirty && dryRun.compare && dryRun.compare.changed > 0 && (
           <div className="mt-3 overflow-x-auto rounded-lg border border-amber-200">
-            <table className="w-full text-xs">
+            <table data-ui-id="A1808" className="w-full text-xs">
               <thead className="bg-amber-50 text-amber-900">
                 <tr>
                   <th className="px-2 py-1.5 text-right font-medium">المدخل</th>
@@ -202,7 +202,7 @@ export function PublishHistoryPanel({
         <div className="mt-4 flex flex-wrap items-end gap-2">
           <label className="flex-1 min-w-[200px] text-xs text-gray-600">
             ملاحظة الإصدار (اختياري)
-            <input
+            <input data-ui-id="A1809"
               type="text"
               value={note}
               onChange={(event) => setNote(event.target.value)}
@@ -210,7 +210,7 @@ export function PublishHistoryPanel({
               className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </label>
-          <button
+          <button data-ui-id="A1810"
             type="button"
             onClick={publish}
             disabled={!dirty}
@@ -218,7 +218,7 @@ export function PublishHistoryPanel({
           >
             نشر وحفظ نسخة
           </button>
-          <button
+          <button data-ui-id="A1811"
             type="button"
             onClick={discard}
             disabled={!dirty}
@@ -238,11 +238,11 @@ export function PublishHistoryPanel({
         {versions.length === 0 ? (
           <p className="mt-3 text-sm text-gray-400">لا نسخ بعد.</p>
         ) : (
-          <ol className="mt-3 divide-y divide-gray-100">
+          <ol data-ui-id="A1812" className="mt-3 divide-y divide-gray-100">
             {versions.map((version, index) => {
               const open = expandedId === version.id;
               return (
-                <li key={version.id} className="py-2.5">
+                <li data-ui-instance={String(version.id)} data-ui-id="A1813" key={version.id} className="py-2.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-700">
                       {toArabicDigits(version.seq)}
@@ -254,7 +254,7 @@ export function PublishHistoryPanel({
                     <span className="mr-auto text-[11px] text-gray-400">
                       {toArabicDigits(version.stats.rules)} قاعدة · {toArabicDigits(version.stats.active)} مفعّلة · {toArabicDigits(version.stats.matrix)} صف دمج
                     </span>
-                    <button
+                    <button data-ui-instance={String(version.id)} data-ui-id="A1814"
                       type="button"
                       onClick={() => setExpandedId(open ? null : version.id)}
                       className="rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
@@ -262,7 +262,7 @@ export function PublishHistoryPanel({
                       {open ? 'إخفاء التفاصيل' : `التفاصيل (${toArabicDigits(version.audit.length)})`}
                     </button>
                     {index !== 0 && (
-                      <button
+                      <button data-ui-id="A1815"
                         type="button"
                         onClick={() => rollback(version)}
                         className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
@@ -272,13 +272,13 @@ export function PublishHistoryPanel({
                     )}
                   </div>
                   {open && (
-                    <ul className="mt-2 space-y-1 rounded-lg bg-gray-50 p-3 text-xs text-gray-700">
-                      {version.audit.length === 0 && <li className="text-gray-400">لا تغييرات مسجّلة (نسخة مطابقة).</li>}
+                    <ul data-ui-id="A1816" className="mt-2 space-y-1 rounded-lg bg-gray-50 p-3 text-xs text-gray-700">
+                      {version.audit.length === 0 && <li data-ui-id="A1817" className="text-gray-400">لا تغييرات مسجّلة (نسخة مطابقة).</li>}
                       {version.audit.map((entry, entryIndex) => (
-                        <li key={entryIndex} className="flex items-center gap-2">
+                        <li data-ui-instance={String(entry.ruleId)} data-ui-id="A1818" key={entryIndex} className="flex items-center gap-2">
                           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-gray-400" />
                           {entry.ruleId && onOpenRule ? (
-                            <button type="button" onClick={() => onOpenRule(entry.ruleId!)} className="text-right hover:text-emerald-700 hover:underline">
+                            <button data-ui-instance={String(entry.ruleId)} data-ui-id="A1819" type="button" onClick={() => onOpenRule(entry.ruleId!)} className="text-right hover:text-emerald-700 hover:underline">
                               {entry.label}
                             </button>
                           ) : (

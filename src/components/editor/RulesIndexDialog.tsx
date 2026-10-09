@@ -36,6 +36,19 @@ import { StatusBadge } from './VariantsPanel';
 import type { VariantCategory } from '@/types';
 import type { ReadingScope, Variant, VerificationStatus } from '@/types/tashjeer';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_RulesIndexDialog_0 = {
+  "TAHQIQ": "A1236",
+  "USUL": "A1237",
+  "FARSH": "A1238",
+  "MADUD": "A1239",
+  "HAMZ": "A1240",
+  "WAQF": "A1241",
+  "TAJWEED": "A1242"
+} as const;
+
+
+
 interface RulesIndexDialogProps {
   /** الآية المفتوحة الآن؛ يبدأ التتبع منها ويُعلَّم ما يخصها. */
   currentAyahKey: number;
@@ -239,7 +252,7 @@ export function RulesIndexDialog({
       }}
     >
       <div className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-        <header className="border-b border-stone-200 px-5 py-4">
+        <header data-ui-id="A1227" className="border-b border-stone-200 px-5 py-4">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-base font-bold text-stone-900">فهرس القواعد والاختلافات</h2>
@@ -248,7 +261,7 @@ export function RulesIndexDialog({
                 و{localCount} اختلافا موضعيا. ابحث، تتبّع المواضع، حرّر، وانتقل — دون مغادرة الشاشة.
               </p>
             </div>
-            <button
+            <button data-ui-id="A1228"
               type="button"
               onClick={onClose}
               className="rounded border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-50"
@@ -258,7 +271,7 @@ export function RulesIndexDialog({
           </div>
 
           <div className="mt-3 grid gap-2 md:grid-cols-[minmax(200px,1fr)_140px_140px_180px]">
-            <input
+            <input data-ui-id="A1229"
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -266,29 +279,29 @@ export function RulesIndexDialog({
               className="input"
               autoFocus
             />
-            <select value={type} onChange={(event) => setType(event.target.value as typeof type)} className="input">
-              <option value="ALL">المحلي والعام</option>
-              <option value="GLOBAL">قواعد عامة</option>
-              <option value="LOCAL">اختلافات الآيات</option>
+            <select data-ui-id="A1230" value={type} onChange={(event) => setType(event.target.value as typeof type)} className="input">
+              <option data-ui-id="A1231" value="ALL">المحلي والعام</option>
+              <option data-ui-id="A1232" value="GLOBAL">قواعد عامة</option>
+              <option data-ui-id="A1233" value="LOCAL">اختلافات الآيات</option>
             </select>
-            <select
+            <select data-ui-id="A1234"
               value={category}
               onChange={(event) => setCategory(event.target.value as typeof category)}
               className="input"
             >
-              <option value="ALL">كل الفئات</option>
+              <option data-ui-id="A1235" value="ALL">كل الفئات</option>
               {ALL_CATEGORIES.map((value) => (
-                <option key={value} value={value}>{CATEGORY_LABELS[value]}</option>
+                <option data-ui-id={UI_RulesIndexDialog_0[value as keyof typeof UI_RulesIndexDialog_0]} key={value} value={value}>{CATEGORY_LABELS[value]}</option>
               ))}
             </select>
-            <select value={readerId} onChange={(event) => setReaderId(event.target.value)} className="input">
-              <option value="">كل القراء والرواة</option>
+            <select data-ui-id="A1243" value={readerId} onChange={(event) => setReaderId(event.target.value)} className="input">
+              <option data-ui-id="A1244" value="">كل القراء والرواة</option>
               {catalog.imams.map((imam) => (
                 <optgroup key={imam.id} label={imam.name}>
                   {catalog.narrators
                     .filter((narrator) => narrator.imamId === imam.id)
                     .map((narrator) => (
-                      <option key={narrator.id} value={narrator.id}>{narrator.name}</option>
+                      <option data-ui-instance={String(narrator.id)} data-ui-id="A1245" key={narrator.id} value={narrator.id}>{narrator.name}</option>
                     ))}
                 </optgroup>
               ))}
@@ -296,7 +309,7 @@ export function RulesIndexDialog({
           </div>
 
           {multiSelection?.kind === 'RULE' && multiSelection.ids.length > 0 && (
-            <div
+            <div data-ui-id="A1246"
               role="toolbar"
               aria-label="إجراءات التحديد المتعدد للقواعد"
               className="mt-3 flex flex-wrap items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50/80 px-2 py-1.5"
@@ -305,7 +318,7 @@ export function RulesIndexDialog({
                 المحدد: {toArabicDigits(multiSelection.ids.length)}{' '}
                 {multiSelection.ids.length === 1 ? 'قاعدة' : multiSelection.ids.length === 2 ? 'قاعدتان' : 'قواعد'}
               </span>
-              <button
+              <button data-ui-id="A1247"
                 type="button"
                 className="rounded border border-rose-300 bg-white px-2 py-0.5 text-[11px] font-medium text-rose-700 hover:bg-rose-50"
                 onClick={() => void requestDeleteItems({ kind: 'RULE', ids: multiSelection.ids })}
@@ -313,7 +326,7 @@ export function RulesIndexDialog({
               >
                 حذف المحدد
               </button>
-              <button
+              <button data-ui-id="A1248"
                 type="button"
                 className="rounded border border-stone-300 bg-white px-2 py-0.5 text-[11px] text-stone-700 hover:bg-stone-50"
                 onClick={() => copyRules(multiSelection.ids)}
@@ -321,7 +334,7 @@ export function RulesIndexDialog({
               >
                 نسخ
               </button>
-              <button
+              <button data-ui-id="A1249"
                 type="button"
                 className="rounded border border-stone-300 bg-white px-2 py-0.5 text-[11px] text-stone-700 hover:bg-stone-50"
                 onClick={() => setMultiSelection(null)}
@@ -348,12 +361,12 @@ export function RulesIndexDialog({
             </p>
           ) : (
             <>
-            <ul className="space-y-2">
+            <ul data-ui-id="A1250" className="space-y-2">
               {visible.slice(0, renderLimit).map((row) => {
                 const ruleId = row.globalRule?.id;
                 const isChecked = Boolean(ruleId && checkedRuleIds.has(ruleId));
                 return (
-                <li
+                <li data-ui-instance={String(row.key)} data-ui-id="A1251"
                   key={row.key}
                   onClick={(event) => {
                     if (!ruleId) return;
@@ -427,7 +440,7 @@ export function RulesIndexDialog({
 
                     <div className="flex shrink-0 flex-wrap gap-1.5">
                       {row.type === 'LOCAL' && row.ayahKey && (
-                        <button
+                        <button data-ui-id="A1252"
                           type="button"
                           onClick={() => {
                             onNavigate(row.ayahKey!, row.variantId);
@@ -441,7 +454,7 @@ export function RulesIndexDialog({
                       {row.globalRule && (
                         <>
                           {row.globalRule.pattern && (
-                            <button
+                            <button data-ui-id="A1253"
                               type="button"
                               onClick={() => setReviewingRule(row.globalRule ?? null)}
                               className="rounded border border-violet-200 px-2 py-1 text-[11px] text-violet-800 hover:bg-violet-50"
@@ -450,14 +463,14 @@ export function RulesIndexDialog({
                               تتبّع المواضع
                             </button>
                           )}
-                          <button
+                          <button data-ui-id="A1254"
                             type="button"
                             onClick={() => setEditingRule(row.globalRule ?? null)}
                             className="rounded border border-stone-300 px-2 py-1 text-[11px] text-stone-700 hover:bg-stone-50"
                           >
                             تحرير
                           </button>
-                          <button
+                          <button data-ui-id="A1255"
                             type="button"
                             onClick={() => toggleActive(row.globalRule!)}
                             className="rounded border border-amber-300 px-2 py-1 text-[11px] text-amber-800 hover:bg-amber-50"
@@ -465,7 +478,7 @@ export function RulesIndexDialog({
                           >
                             {row.isActive ? 'إيقاف' : 'تفعيل'}
                           </button>
-                          <button
+                          <button data-ui-id="A1256"
                             type="button"
                             onClick={() => removeRule(row.globalRule!)}
                             className="rounded border border-red-200 px-2 py-1 text-[11px] text-red-700 hover:bg-red-50"
@@ -481,7 +494,7 @@ export function RulesIndexDialog({
               })}
             </ul>
             {renderLimit < visible.length && (
-              <button
+              <button data-ui-id="A1257"
                 type="button"
                 onClick={() => setRenderLimit((limit) => limit + 60)}
                 className="mt-3 w-full rounded border border-stone-300 bg-white px-3 py-2 text-[11px] font-medium text-stone-700 hover:bg-stone-50"

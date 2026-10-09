@@ -21,7 +21,7 @@ export function TashjirMark({
   title?: string;
 }) {
   return (
-    <svg
+    <svg data-ui-id="A728"
       width={size}
       height={size}
       viewBox="0 0 24 24"

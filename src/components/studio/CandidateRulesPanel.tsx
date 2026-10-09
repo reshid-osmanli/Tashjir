@@ -14,6 +14,18 @@ import type { EngineRule, RuleCondition } from '@/lib/tashjeer/model/v8';
 import { proposeCandidateRule, type CorrectionContext } from '@/lib/tashjeer/decision/candidate-rule';
 import { DIFFERENCE_TYPES, DIFFERENCE_TYPE_LABELS } from './labels';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_TypeSelect_0 = {
+  "MADD": "A1686",
+  "TAHQIQ": "A1687",
+  "WASL": "A1688",
+  "FARSH": "A1689",
+  "HAMZ": "A1690",
+  "TAJWEED": "A1691"
+} as const;
+
+
+
 interface CandidateRulesPanelProps {
   onAdopt: (rule: EngineRule) => void;
   /** تعبئة مسبقة من رابط عميق (صفحة التتبع: «اقتراح قاعدة من هذا التصحيح»). */
@@ -58,17 +70,17 @@ export function CandidateRulesPanel({ onAdopt, initial }: CandidateRulesPanelPro
         </p>
 
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="نوع الاختلاف">
-            <TypeSelect value={differenceType} onChange={setDifferenceType} />
+          <Field data-ui-id="A1678" label="نوع الاختلاف">
+            <TypeSelect data-ui-id="A2119" value={differenceType} onChange={setDifferenceType} />
           </Field>
-          <Field label="النوع المرتبط">
-            <TypeSelect value={relatedType} onChange={setRelatedType} />
+          <Field data-ui-id="A1679" label="النوع المرتبط">
+            <TypeSelect data-ui-id="A2120" value={relatedType} onChange={setRelatedType} />
           </Field>
-          <Field label="قرار المحرك (A)">
-            <DecisionSelect value={engineMerged} onChange={setEngineMerged} />
+          <Field data-ui-id="A1680" label="قرار المحرك (A)">
+            <DecisionSelect data-ui-id="A2121" value={engineMerged} onChange={setEngineMerged} />
           </Field>
-          <Field label="رغبة المحرر (B = النهائي)">
-            <DecisionSelect value={editorWantsMerge} onChange={setEditorWantsMerge} />
+          <Field data-ui-id="A1681" label="رغبة المحرر (B = النهائي)">
+            <DecisionSelect data-ui-id="A2122" value={editorWantsMerge} onChange={setEditorWantsMerge} />
           </Field>
         </div>
 
@@ -93,18 +105,18 @@ export function CandidateRulesPanel({ onAdopt, initial }: CandidateRulesPanelPro
         </dl>
         <div className="mt-3 rounded-lg bg-white p-3 text-xs text-gray-600">
           <p className="font-medium text-gray-700">الشرط:</p>
-          <ul className="mt-1 space-y-0.5">
+          <ul data-ui-id="A1682" className="mt-1 space-y-0.5">
             {(proposed.conditions.all ?? [])
               .filter((item): item is RuleCondition => 'field' in item)
               .map((condition, index) => (
-                <li key={index}>
+                <li data-ui-id="A1683" key={index}>
                   {condition.field} {condition.op} {String(condition.value)}
                 </li>
               ))}
           </ul>
         </div>
 
-        <button
+        <button data-ui-id="A1684"
           type="button"
           onClick={handleAdopt}
           disabled={agrees || adopted}
@@ -117,24 +129,24 @@ export function CandidateRulesPanel({ onAdopt, initial }: CandidateRulesPanelPro
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ 'data-ui-id': uiId, label, children }: { label: string; children: React.ReactNode } & { 'data-ui-id'?: string }) {
   return (
-    <label className="block">
+    <label data-ui-id={uiId} className="block">
       <span className="mb-1 block text-sm font-medium text-gray-600">{label}</span>
       {children}
     </label>
   );
 }
 
-function TypeSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function TypeSelect({ 'data-ui-id': uiId, value, onChange }: { value: string; onChange: (value: string) => void } & { 'data-ui-id'?: string }) {
   return (
-    <select
+    <select data-ui-id={uiId}
       value={value}
       onChange={(event) => onChange(event.target.value)}
       className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500"
     >
       {DIFFERENCE_TYPES.map((type) => (
-        <option key={type} value={type}>
+        <option data-ui-id={UI_TypeSelect_0[type as keyof typeof UI_TypeSelect_0]} key={type} value={type}>
           {DIFFERENCE_TYPE_LABELS[type]}
         </option>
       ))}
@@ -142,15 +154,15 @@ function TypeSelect({ value, onChange }: { value: string; onChange: (value: stri
   );
 }
 
-function DecisionSelect({ value, onChange }: { value: boolean; onChange: (value: boolean) => void }) {
+function DecisionSelect({ 'data-ui-id': uiId, value, onChange }: { value: boolean; onChange: (value: boolean) => void } & { 'data-ui-id'?: string }) {
   return (
-    <select
+    <select data-ui-id={uiId}
       value={value ? 'merge' : 'separate'}
       onChange={(event) => onChange(event.target.value === 'merge')}
       className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500"
     >
-      <option value="merge">دمج</option>
-      <option value="separate">فصل</option>
+      <option data-ui-id="A1693" value="merge">دمج</option>
+      <option data-ui-id="A1694" value="separate">فصل</option>
     </select>
   );
 }

@@ -18,6 +18,37 @@ import { saveEngineSettings } from '@/lib/tashjeer/engine-settings';
 import { formatPercent, toArabicDigits } from '@/lib/utils/arabic-numbers';
 import type { VariantCategory } from '@/types';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_EditorToolbar_0 = {
+  "select": "A745",
+  "mark": "A746",
+  "erase": "A747"
+} as const;
+
+const UI_EditorToolbar_1 = {
+  "1": "A758",
+  "2": "A761",
+  "3": "A762",
+  "4": "A763",
+  "0.25": "A755",
+  "0.5": "A756",
+  "0.75": "A757",
+  "1.25": "A759",
+  "1.5": "A760"
+} as const;
+
+const UI_EditorToolbar_2 = {
+  "TAHQIQ": "A776",
+  "USUL": "A777",
+  "FARSH": "A778",
+  "MADUD": "A779",
+  "HAMZ": "A780",
+  "WAQF": "A781",
+  "TAJWEED": "A782"
+} as const;
+
+
+
 /** مستويات تكبير جاهزة، حتى لا يضطر المحقق إلى نقر «+» عشر مرات. */
 const ZOOM_PRESETS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
 
@@ -77,7 +108,7 @@ export function EditorToolbar({
       {/* الأدوات */}
       <Group label="الأدوات" data-ui-id="A102">
         {TOOLS.map((tool) => (
-          <ToolButton
+          <ToolButton data-ui-id={UI_EditorToolbar_0[tool.id as keyof typeof UI_EditorToolbar_0]}
             key={tool.id}
             active={currentTool === tool.id}
             title={tool.hint}
@@ -91,16 +122,16 @@ export function EditorToolbar({
         ))}
       </Group>
 
-      <Group label="نمط التعليم">
+      <Group data-ui-id="A748" label="نمط التعليم">
         <span className="ms-1 text-[11px] text-stone-500">حدّد:</span>
-        <ToggleButton
+        <ToggleButton data-ui-id="A749"
           active={markingMode === 'WORDS'}
           title="تحديد كلمات كاملة لإنشاء اختلاف"
           onClick={() => setMarkingMode('WORDS')}
         >
           كلمات
         </ToggleButton>
-        <ToggleButton
+        <ToggleButton data-ui-id="A750"
           active={markingMode === 'CHARACTERS'}
           title="تحديد حروف مرئية مع تشكيلها لإنشاء حكم تجويد دقيق"
           onClick={() => setMarkingMode('CHARACTERS')}
@@ -112,7 +143,7 @@ export function EditorToolbar({
       <Divider />
 
       {/* التراجع */}
-      <Group label="التاريخ">
+      <Group data-ui-id="A751" label="التاريخ">
         <ToolButton data-ui-id="A103" title="تراجع (Ctrl+Z)" onClick={undo} disabled={!canUndo()}>
           تراجع
         </ToolButton>
@@ -127,8 +158,8 @@ export function EditorToolbar({
       <HistoryControls />
 
       {/* العرض */}
-      <Group label="العرض">
-        <ToolButton title="تصغير (Ctrl+-)" onClick={zoomOut}>
+      <Group data-ui-id="A752" label="العرض">
+        <ToolButton data-ui-id="A753" title="تصغير (Ctrl+-)" onClick={zoomOut}>
           −
         </ToolButton>
         <select
@@ -143,24 +174,24 @@ export function EditorToolbar({
           className="h-7 min-w-20 rounded-md border border-stone-200 bg-white px-1 text-center text-xs text-stone-700"
         >
           {!ZOOM_PRESETS.includes(round2(zoom)) && (
-            <option value="custom">{formatPercent(zoom)}</option>
+            <option data-ui-id="A754" value="custom">{formatPercent(zoom)}</option>
           )}
           {ZOOM_PRESETS.map((preset) => (
-            <option key={preset} value={preset}>
+            <option data-ui-id={UI_EditorToolbar_1[String(preset) as keyof typeof UI_EditorToolbar_1]} key={preset} value={preset}>
               {formatPercent(preset)}
             </option>
           ))}
         </select>
-        <ToolButton title="تكبير (Ctrl+=)" onClick={zoomIn}>
+        <ToolButton data-ui-id="A764" title="تكبير (Ctrl+=)" onClick={zoomIn}>
           +
         </ToolButton>
-        <ToolButton title="ملء العرض وإعادة الضبط (Ctrl+0)" onClick={resetView}>
+        <ToolButton data-ui-id="A765" title="ملء العرض وإعادة الضبط (Ctrl+0)" onClick={resetView}>
           ملء العرض
         </ToolButton>
 
         <label className="flex items-center gap-1.5 text-xs text-stone-600">
           حجم الخط
-          <input
+          <input data-ui-id="A766"
             type="range"
             min={24}
             max={72}
@@ -177,8 +208,8 @@ export function EditorToolbar({
       <Divider />
 
       {/* تكوين الشجرة: ما يميز التشجير المعتمد عن العرض الموضعي */}
-      <Group label="تكوين الشجرة">
-        <ToggleButton
+      <Group data-ui-id="A767" label="تكوين الشجرة">
+        <ToggleButton data-ui-id="A768"
           active={engine.lineComposition === 'COMBINED'}
           title="سطر لكل تركيب قراءة: يجتمع المد والفرش والإدغام في سطر الراوي الواحد"
           onClick={() =>
@@ -190,7 +221,7 @@ export function EditorToolbar({
         >
           {engine.lineComposition === 'COMBINED' ? 'أوجه مركّبة' : 'سطر لكل وجه'}
         </ToggleButton>
-        <ToggleButton
+        <ToggleButton data-ui-id="A769"
           active={engine.singleLineText}
           title="نص الآية في سطر واحد مهما طال، مع التمرير الأفقي"
           onClick={() => saveEngineSettings({ ...engine, singleLineText: !engine.singleLineText })}
@@ -202,29 +233,29 @@ export function EditorToolbar({
       <Divider />
 
       {/* خيارات الرسم */}
-      <Group label="الرسم">
-        <ToggleButton
+      <Group data-ui-id="A770" label="الرسم">
+        <ToggleButton data-ui-id="A771"
           active={filter.showLabels}
           title="بطاقات الأوجه (L)"
           onClick={() => setFilter({ showLabels: !filter.showLabels })}
         >
           البطاقات
         </ToggleButton>
-        <ToggleButton
+        <ToggleButton data-ui-id="A772"
           active={filter.showGrid}
           title="الشبكة (G)"
           onClick={() => setFilter({ showGrid: !filter.showGrid })}
         >
           الشبكة
         </ToggleButton>
-        <ToggleButton
+        <ToggleButton data-ui-id="A773"
           active={filter.showRulers}
           title="المساطر"
           onClick={() => setFilter({ showRulers: !filter.showRulers })}
         >
           المساطر
         </ToggleButton>
-        <ToggleButton
+        <ToggleButton data-ui-id="A774"
           active={filter.showAnchors}
           title="نقاط الارتباط على الكلمات"
           onClick={() => setFilter({ showAnchors: !filter.showAnchors })}
@@ -236,11 +267,11 @@ export function EditorToolbar({
       <Divider />
 
       {/* تصفية الفئات */}
-      <Group label="الفئات">
+      <Group data-ui-id="A775" label="الفئات">
         {(Object.keys(CATEGORY_LABELS) as VariantCategory[]).map((category) => {
           const active = filter.categories.includes(category);
           return (
-            <button
+            <button data-ui-id={UI_EditorToolbar_2[category as keyof typeof UI_EditorToolbar_2]}
               key={category}
               type="button"
               onClick={() => toggleCategory(category)}
@@ -265,14 +296,14 @@ export function EditorToolbar({
 
       {/* اليسار: اللوحات والحفظ */}
       <div className="ms-auto flex items-center gap-2">
-        <ToggleButton
+        <ToggleButton data-ui-id="A783"
           active={showVariantsPanel}
           title="لوحة الاختلافات (B)"
           onClick={toggleVariantsPanel}
         >
           الاختلافات
         </ToggleButton>
-        <ToggleButton
+        <ToggleButton data-ui-id="A784"
           active={showPropertiesPanel}
           title="لوحة الخصائص (P)"
           onClick={togglePropertiesPanel}
@@ -282,23 +313,23 @@ export function EditorToolbar({
 
         <Divider />
 
-        <ToolButton title="إعادة توليد الخطوط من الاختلافات" onClick={regenerateBranches}>
+        <ToolButton data-ui-id="A785" title="إعادة توليد الخطوط من الاختلافات" onClick={regenerateBranches}>
           إعادة التوليد
         </ToolButton>
         <ToolButton data-ui-id="A135" title="تصدير المستند إلى ملف JSON" onClick={onExport}>
           تصدير
         </ToolButton>
-        <ToolButton title="استيراد مستند من ملف JSON" onClick={onImport}>
+        <ToolButton data-ui-id="A786" title="استيراد مستند من ملف JSON" onClick={onImport}>
           استيراد
         </ToolButton>
-        <Link
+        <Link data-ui-id="A787"
           href="/tracking"
           title="ماذا وجد المحرك وماذا صحّحت؟ — صفحة التتبع"
           className="rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-stone-700 transition-colors hover:bg-stone-50"
         >
           التتبع
         </Link>
-        <ToolButton title="اختصارات لوحة المفاتيح" onClick={onShowShortcuts}>
+        <ToolButton data-ui-id="A788" title="اختصارات لوحة المفاتيح" onClick={onShowShortcuts}>
           ؟
         </ToolButton>
 
@@ -367,6 +398,7 @@ function ToolButton({
 }
 
 function ToggleButton(props: {
+  'data-ui-id'?: string;
   children: React.ReactNode;
   onClick: () => void;
   title: string;

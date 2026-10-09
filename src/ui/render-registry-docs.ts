@@ -3,13 +3,13 @@ import { RETIRED_UI_IDS, UI_REGISTRY } from './ui-registry';
 
 const recordsByParent = new Map<string, typeof UI_REGISTRY[number][]>();
 for (const entry of UI_REGISTRY) {
-  const siblings = recordsByParent.get(entry.parentId) ?? [];
+  const siblings = recordsByParent.get(entry.parentId ?? '') ?? [];
   siblings.push(entry);
-  recordsByParent.set(entry.parentId, siblings);
+  recordsByParent.set(entry.parentId ?? '', siblings);
 }
 
 function markdownCell(value: string): string {
-  return value.replaceAll('|', '\\|').replaceAll('\n', '<br>');
+  return value.trim().replaceAll('|', '\\|').replaceAll('\n', '<br>');
 }
 
 function codeList(values: readonly string[]): string {
@@ -54,6 +54,12 @@ export function renderUIRegistryDoc(): string {
     `- **Purpose:** ${markdownCell(entry.description)}`,
     `- **Behavior:** ${markdownCell(entry.behavior)}`,
     `- **Constraints:** ${markdownCell(entry.constraints)}`,
+    `- **Actions:** ${markdownCell(JSON.stringify(entry.actions ?? []))}`,
+    `- **Stores:** ${codeList(entry.stores ?? [])}`,
+    `- **Logic files:** ${codeList(entry.logicFiles ?? [])}`,
+    `- **Tests (regression boundary):** ${codeList(entry.testFiles ?? [])}`,
+    `- **Shortcuts:** ${codeList(entry.shortcuts ?? [])}`,
+    `- **Identity mode:** ${entry.identity ?? 'static'}`,
     `- **Status:** \`${entry.status}\``,
     `- **Dependencies:** ${codeList(entry.dependencies)}`,
     `- **Related UI IDs:** ${codeList(entry.relatedIds)}`,
@@ -65,7 +71,7 @@ export function renderUIRegistryDoc(): string {
   const retired = RETIRED_UI_IDS.length ? RETIRED_UI_IDS.map((id) => `- ${id}`).join('\n') : '- لا توجد معرفات متقاعدة عند تأسيس السجل؛ لا تحذف هذا القسم ولا تعِد استخدام أي ID يُتقاعد مستقبلا.';
 
   return `# Project Feature & UI Identity Registry\n\n` +
-    `هذا هو المرجع الرسمي لهويات الميزات والعناصر المهمة في Tashjir. تعريف كل ID ومعلوماته في \`src/ui/feature-registry.ts\` أو \`src/ui/ui-registry.ts\`؛ ملف التوثيق هذا مولّد من المصدرين بواسطة \`npm run registry:docs\`. الاختبارات تقارن التوثيق بالمصدر وتفشل عند الانحراف.\n\n` +
+    `هذا هو المرجع الرسمي لهويات الميزات والعناصر المهمة في Tashjir. تعريف كل ID ومعلوماته في \`src/ui/feature-registry.ts\` أو \`src/ui/ui-registry.records.json\` (عبر ui-registry.ts)؛ ملف التوثيق هذا مولّد من المصدرين بواسطة \`npm run registry:docs\`. الاختبارات تقارن التوثيق بالمصدر وتفشل عند الانحراف.\n\n` +
     `## قواعد الهوية\n\n` +
     `- الصيغة الدائمة: \`A001\`، \`A002\`، ... ويقبل المدقق لاحقا أرقاما أطول من ثلاثة خانات. المعرفات يدوية وثابتة؛ لا تعتمد على ترتيب العرض أو ترتيب React أو النص العربي.\n` +
     `- كل ID عالمي بين سجل الميزات وسجل الواجهة. لا يُعاد استخدام ID محذوف: انقل سجله إلى حالة \`retired\` وأضفه إلى \`RETIRED_UI_IDS\`، ولا تحذف أثره التاريخي.\n` +

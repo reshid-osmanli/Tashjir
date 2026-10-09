@@ -57,7 +57,6 @@ export function validateIdentityRegistry(
       ['kind', entry.kind],
       ['name', entry.name],
       ['featureId', entry.featureId],
-      ['parentId', entry.parentId],
       ['route', entry.route],
       ['component', entry.component],
       ['sourceFile', entry.sourceFile],
@@ -68,7 +67,7 @@ export function validateIdentityRegistry(
       if (!value.trim()) errors.push(`${entry.id} is missing ${field}.`);
     }
     if (!featureById.has(entry.featureId)) errors.push(`${entry.id} references missing feature ${entry.featureId}.`);
-    if (!entryById.has(entry.parentId) && !featureById.has(entry.parentId)) {
+    if (entry.parentId !== null && !entryById.has(entry.parentId) && !featureById.has(entry.parentId)) {
       errors.push(`${entry.id} references missing parent ${entry.parentId}.`);
     }
     if (entry.parentId === entry.id) errors.push(`${entry.id} cannot be its own parent.`);
@@ -90,17 +89,17 @@ export function validateIdentityRegistry(
 
   // Verify that the ancestry agrees with the declared feature, and contains no cycles.
   for (const entry of entries) {
-    const parentEntry = entryById.get(entry.parentId);
+    const parentEntry = entryById.get(entry.parentId ?? '');
     if (parentEntry && parentEntry.featureId !== entry.featureId) {
       errors.push(`${entry.id} belongs to ${entry.featureId}, but parent ${entry.parentId} belongs to ${parentEntry.featureId}.`);
     }
-    const parentFeature = featureById.get(entry.parentId);
+    const parentFeature = featureById.get(entry.parentId ?? '');
     if (parentFeature && parentFeature.id !== entry.featureId) {
       errors.push(`${entry.id} belongs to ${entry.featureId}, but feature parent ${entry.parentId} does not match.`);
     }
 
     const visited = new Set<string>([entry.id]);
-    let parentId: string | undefined = entry.parentId;
+    let parentId: string | null | undefined = entry.parentId;
     while (parentId && entryById.has(parentId)) {
       if (visited.has(parentId)) {
         errors.push(`Parent cycle detected from ${entry.id} through ${parentId}.`);
@@ -126,7 +125,7 @@ export function validateIdentityRegistry(
     if (!ID_PATTERN.test(id)) errors.push(`Retired ID ledger contains invalid ID "${id}".`);
     if (retired.has(id)) errors.push(`Retired ID ledger repeats "${id}".`);
     retired.add(id);
-    if (allIds.has(id)) errors.push(`Retired ID "${id}" has been reused by an active registry record.`);
+    if (featureById.get(id)?.status !== 'retired' && entryById.get(id)?.status !== 'retired' && allIds.has(id)) errors.push(`Retired ID "${id}" has been reused by an active registry record.`);
   }
   for (const entry of entries) {
     if (entry.status === 'retired' && !retired.has(entry.id)) {
@@ -169,6 +168,13 @@ function findStaticDomIdentities(source: string): string[] {
     for (const value of source.matchAll(valuePattern)) ids.add(value[1]!);
   }
 
+  // Finite option/action identity tables are bound explicitly in JSX.
+  const tablePattern = /\bdata-ui-id\s*=\s*\{\s*(UI_\w+)\[/g;
+  for (const match of source.matchAll(tablePattern)) {
+    const declaration = new RegExp(`const ${match[1]} = {([\\s\\S]*?)} as const;`);
+    const block = source.match(declaration)?.[1] ?? '';
+    for (const id of block.matchAll(/["'](A\d+)["']/g)) ids.add(id[1]!);
+  }
   return [...ids];
 }
 

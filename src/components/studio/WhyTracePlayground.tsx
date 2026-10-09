@@ -12,6 +12,27 @@ import type { EngineConfig } from '@/lib/tashjeer/model/v8';
 import { resolveMerge } from '@/lib/tashjeer/decision/api';
 import { DIFFERENCE_TYPES, DIFFERENCE_TYPE_LABELS } from './labels';
 
+// Immutable UI identity tables. Keys denote finite controls, never row positions.
+const UI_WhyTracePlayground_0 = {
+  "MADD": "A1971",
+  "TAHQIQ": "A1972",
+  "WASL": "A1973",
+  "FARSH": "A1974",
+  "HAMZ": "A1975",
+  "TAJWEED": "A1976"
+} as const;
+
+const UI_WhyTracePlayground_1 = {
+  "MADD": "A1978",
+  "TAHQIQ": "A1979",
+  "WASL": "A1980",
+  "FARSH": "A1981",
+  "HAMZ": "A1982",
+  "TAJWEED": "A1983"
+} as const;
+
+
+
 interface WhyTracePlaygroundProps {
   config: EngineConfig;
 }
@@ -34,13 +55,13 @@ export function WhyTracePlayground({ config }: WhyTracePlaygroundProps) {
       <div className="flex flex-wrap items-end gap-3 rounded-lg bg-gray-50 p-4">
         <div className="space-y-1">
           <label className="block text-xs text-gray-500">العنصر أ</label>
-          <select
+          <select data-ui-id="A1970"
             value={a}
             onChange={(event) => setA(event.target.value)}
             className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
             {DIFFERENCE_TYPES.map((type) => (
-              <option key={type} value={type}>
+              <option data-ui-id={UI_WhyTracePlayground_0[type as keyof typeof UI_WhyTracePlayground_0]} key={type} value={type}>
                 {DIFFERENCE_TYPE_LABELS[type]}
               </option>
             ))}
@@ -48,13 +69,13 @@ export function WhyTracePlayground({ config }: WhyTracePlaygroundProps) {
         </div>
         <div className="space-y-1">
           <label className="block text-xs text-gray-500">العنصر ب</label>
-          <select
+          <select data-ui-id="A1977"
             value={b}
             onChange={(event) => setB(event.target.value)}
             className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
             {DIFFERENCE_TYPES.map((type) => (
-              <option key={type} value={type}>
+              <option data-ui-id={UI_WhyTracePlayground_1[type as keyof typeof UI_WhyTracePlayground_1]} key={type} value={type}>
                 {DIFFERENCE_TYPE_LABELS[type]}
               </option>
             ))}
@@ -74,9 +95,9 @@ export function WhyTracePlayground({ config }: WhyTracePlaygroundProps) {
         {result.trace.length === 0 ? (
           <p className="text-sm text-gray-400">لا خطوات مسجَّلة.</p>
         ) : (
-          <ol className="space-y-1.5">
+          <ol data-ui-id="A1984" className="space-y-1.5">
             {result.trace.map((step, index) => (
-              <li
+              <li data-ui-id="A1985"
                 key={index}
                 className={`flex items-start gap-3 rounded-lg border-r-4 px-3 py-2 text-sm ${TRACE_TONE[step.status]}`}
               >
@@ -95,9 +116,9 @@ export function WhyTracePlayground({ config }: WhyTracePlaygroundProps) {
       {result.appliedRules.length > 0 && (
         <div>
           <h4 className="mb-2 font-semibold text-gray-800">قواعد مطابقة فاعلة</h4>
-          <ul className="space-y-1">
+          <ul data-ui-id="A1986" className="space-y-1">
             {result.appliedRules.map((rule) => (
-              <li key={rule.id} className="rounded bg-emerald-50 px-3 py-1.5 text-sm text-emerald-800">
+              <li data-ui-instance={String(rule.id)} data-ui-id="A1987" key={rule.id} className="rounded bg-emerald-50 px-3 py-1.5 text-sm text-emerald-800">
                 {rule.name} <span className="text-xs opacity-70">(أولوية {rule.priority})</span>
               </li>
             ))}

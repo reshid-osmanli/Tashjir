@@ -105,7 +105,7 @@ export function QiraatTree({ imams }: { imams: QiraatImamNode[] }) {
   );
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-8">
+    <div data-ui-id="A2035" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-8">
       <div className="min-w-0">
         <div className="tashjeer-scroll-area -mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
         <svg
@@ -190,7 +190,7 @@ export function QiraatTree({ imams }: { imams: QiraatImamNode[] }) {
               const selected = activeNarrator?.narrator.id === narratorRow.narrator.id;
               const emphasized = Boolean(activeImam) || selected;
               return (
-                <g
+                <g data-ui-id="A2036"
                   key={narratorRow.narrator.id}
                   opacity={dimmed ? 0.26 : 1}
                   className="cursor-pointer"
@@ -227,7 +227,7 @@ export function QiraatTree({ imams }: { imams: QiraatImamNode[] }) {
             const dimmed = dimGroup(row.imam.id);
             const selected = activeImam?.id === row.imam.id;
             return (
-              <g
+              <g data-ui-id="A2037"
                 key={row.imam.id}
                 opacity={dimmed ? 0.26 : 1}
                 className="cursor-pointer"
@@ -307,7 +307,7 @@ export function QiraatTree({ imams }: { imams: QiraatImamNode[] }) {
       </div>
 
       {/* اللوحة الجانبية: تفصيل ما اختير، لا كل الشجرة في وقت واحد. */}
-      <aside className="min-w-0 rounded-lg border border-line bg-panel p-4">
+      <aside data-ui-id="A2038" className="min-w-0 rounded-lg border border-line bg-panel p-4">
         {activeImam ? (
           <div>
             <p className="eyebrow">القارئ</p>
@@ -325,13 +325,13 @@ export function QiraatTree({ imams }: { imams: QiraatImamNode[] }) {
               </dd>
             </dl>
 
-            <ul className="mt-4 space-y-3">
+            <ul data-ui-id="A2039" className="mt-4 space-y-3">
               {activeImam.narrators.map((narrator) => (
-                <li key={narrator.id}>
+                <li data-ui-instance={String(narrator.id)} data-ui-id="A2040" key={narrator.id}>
                   <p className="text-label font-medium text-ink-800">{narrator.name}</p>
-                  <ul className="mt-1 space-y-1">
+                  <ul data-ui-id="A2041" className="mt-1 space-y-1">
                     {narrator.paths.map((path) => (
-                      <li key={path.id} className="text-citation text-ink-500">
+                      <li data-ui-instance={String(path.id)} data-ui-id="A2042" key={path.id} className="text-citation text-ink-500">
                         {path.fullName}
                       </li>
                     ))}
@@ -352,9 +352,9 @@ export function QiraatTree({ imams }: { imams: QiraatImamNode[] }) {
                 {toArabicDigits(activeNarrator.narrator.tayyibahOrder)}
               </dd>
             </dl>
-            <ul className="mt-4 space-y-1">
+            <ul data-ui-id="A2043" className="mt-4 space-y-1">
               {activeNarrator.narrator.paths.map((path) => (
-                <li key={path.id} className="text-citation text-ink-600">
+                <li data-ui-instance={String(path.id)} data-ui-id="A2044" key={path.id} className="text-citation text-ink-600">
                   {path.fullName}
                 </li>
               ))}
