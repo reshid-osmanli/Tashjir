@@ -44,7 +44,9 @@ The Registry was not regenerated. Its record count remains 1779 total: 1702 acti
 
 ## Vercel deployment status
 
-A production-mode local browser run does not prove a remote deployment. The Vercel Preview still needs to be created from the session branch and opened directly; until that remote DOM and screenshot are checked, this report does **not** claim Vercel visual verification.
+- The session branch was pushed; GitHub's Vercel status for commit `92d2f2f788e7fc92e958b49d86d39442f8feedc3` reported **Deployment has completed** (2026-10-09 11:04 UTC). Vercel's check details are at [the deployment dashboard](https://vercel.com/reshid-osmanlis-projects/tashjir/DNqtF6CDZtgEGaWyhtaX35NnvXLC).
+- The branch preview URL used for the direct attempt is [the editor with Inspector enabled](https://tashjir-git-arena-cd26d510-tashjir-reshid-osmanlis-projects.vercel.app/editor?uiInspector=1). In this sandbox, the Vercel page fetch redirected to Vercel sign-in and Playwright's direct request ended with `net::ERR_CONNECTION_CLOSED`; the Vercel connector is not available in this session. Therefore the deployed DOM could not be inspected and a screenshot of the deployed build could not be captured.
+- `test-results/ui-inspector-local-production.png` is a real browser screenshot from the local **production build**, not from Vercel. This distinction is intentional; remote visual verification is still outstanding.
 
 ## Remaining coverage limitations
 
