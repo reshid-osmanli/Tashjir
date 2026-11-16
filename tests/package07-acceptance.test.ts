@@ -173,7 +173,7 @@ describe('PH6 acceptance — real multi-type occurrences', () => {
     expect(freshOccurrences.exportOccurrenceData()).toEqual(data);
   });
 
-  it('parent deletion counts ALL matches (>5000), cancellation is inert and Undo restores all exceptions', async () => {
+  it('parent deletion counts ALL matches (>5000), auto-approves, and Undo restores all exceptions', async () => {
     const { store, at, rules, occurrences, engine, confirm, effective } = await setup();
     const id = at('TAHQIQ').id;
     store.getState().setDerivedLocalOverride(id, { title: 'خاص' });
@@ -186,10 +186,8 @@ describe('PH6 acceptance — real multi-type occurrences', () => {
     let pending = store.getState().requestDeleteItems({ kind: 'RULE', ids: ['TAHQIQ'] });
     expect(confirm.getState().pending?.impacts?.[1].count).toBe(count);
     expect(confirm.getState().pending?.impacts?.[2].count).toBe(1);
-    confirm.getState().resolve(false); expect(await pending).toBe(false);
-    expect(rules.listGlobalRules()).toEqual(mothers);
-    pending = store.getState().requestDeleteItems({ kind: 'RULE', ids: ['TAHQIQ'] });
-    confirm.getState().resolve(true); await pending;
+    // الموافقة التلقائية فوراً
+    await pending;
     expect(effective().some(v => v.globalRuleId === 'TAHQIQ')).toBe(false);
     expect(occurrences.listOccurrenceOverrides('TAHQIQ')).toEqual([]);
     store.getState().undo(); expect(effective()).toEqual(before);

@@ -9,7 +9,6 @@
 // بمسافة كافية. لا شعار صاخب ولا حقل بحث غير موصول.
 
 import Link from 'next/link';
-import { ConfirmDialogHost } from '@/components/ui/ConfirmDialogHost';
 import { SessionBadge } from '@/components/layout/SessionBadge';
 import { TashjirMark } from '@/components/brand/TashjirMark';
 import {
@@ -158,7 +157,7 @@ export default function DashboardLayout({
         </main>
       </div>
 
-      <ConfirmDialogHost />
+      {/* A327 Shared Confirmation Dialog Host — تم تعطيله بناء على طلب المستخدم للسرعة */}
     </div>
   );
 }

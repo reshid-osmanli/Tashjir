@@ -27,12 +27,13 @@
  * الخطوط
  * ---------------------------------------------------------------------------
  * ثلاث عائلات فقط، ولكل واحدة وظيفة:
- *   Amiri Quran — النص العثماني وحده.
+ *   KFGQPC HAFS Uthmanic Script (مصحف المدينة النبوية، مجمع الملك فهد
+ *     لطباعة المصحف الشريف، الإصدار 3.0) — النص العثماني وحده، الخط الرسمي
+ *     للمصحف، كما جاء من qurancomplex.gov.sa.
  *   Amiri       — العناوين التحريرية والمقتطفات العلمية (روح المخطوط).
  *   IBM Plex Sans Arabic — واجهة الاستخدام: حقول، شارات، جداول، أرقام.
  * خط المصحف لا يُستبدل ولا يُضغط.
  */
-@import '@fontsource/amiri-quran/arabic-400.css';
 @import '@fontsource/amiri/arabic-400.css';
 @import '@fontsource/amiri/arabic-700.css';
 @import '@fontsource/ibm-plex-sans-arabic/arabic-400.css';
@@ -42,6 +43,14 @@
 @import '@fontsource/ibm-plex-sans-arabic/latin-500.css';
 @import '@fontsource/ibm-plex-sans-arabic/latin-600.css';
 
+@font-face {
+  font-family: 'KFGQPC HAFS Uthmanic Script';
+  src: url('/fonts/KFGQPC-Hafs-V30.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ==========================================================================
  * 0. توكنات | TOKENS
  * ======================================================================== */
@@ -50,8 +59,8 @@
   --font-ui:
     'IBM Plex Sans Arabic', 'Noto Sans Arabic', 'Segoe UI', system-ui, -apple-system, 'Tahoma',
     sans-serif;
-  --font-amiri: 'Amiri', 'Amiri Quran', serif;
-  --font-mushaf: 'Amiri Quran', 'Amiri', serif;
+  --font-amiri: 'Amiri', 'KFGQPC HAFS Uthmanic Script', serif;
+  --font-mushaf: 'KFGQPC HAFS Uthmanic Script', 'Amiri', 'Amiri Quran', serif;
   --font-sans: var(--font-ui);
 
   /* ---- الإضمحلال اللوني: حِبري دافئ (Neutral) ---- */

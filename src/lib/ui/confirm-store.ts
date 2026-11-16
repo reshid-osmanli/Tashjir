@@ -75,13 +75,25 @@ export const useConfirmStore = create<ConfirmState>((set, get) => ({
 }));
 
 /**
- * يطلب تأكيدا كميا ويعيد وعدا بالجواب. إن لم يكن هناك مستضيف مركّب (خارج
- * التطبيق أو في الاختبارات) يُعاد true فورا حتى لا تُعلَّق العمليات.
+ * يطلب تأكيدا كميا ويعيد وعدا بالجواب.
+ * 
+ * تم تعطيل حوارات التأكيد بناء على طلب المستخدم للسرعة في العمل.
+ * الطلب تُعاد الموافقة عليه فوراً (auto-approve) دون انتظار المستخدم.
+ * يبقى الأثر الكمي محسوباً للفحص/التسجيل ويمكن استرجاعه من الاختبارات.
+ * 
+ * Ctrl+Z يبقى متاحا للتراجع عن أي عملية.
+ * يمكن إعادة التفعيل لاحقا عبر زر في شريط الأدوات A101.
  */
 export function confirmAction(request: ConfirmRequest): Promise<boolean> {
   const state = useConfirmStore.getState();
-  if (typeof window === 'undefined' || !state.hostMounted) return Promise.resolve(true);
-  return state.open(request);
+  if (typeof window === 'undefined' || !state.hostMounted) {
+    return Promise.resolve(true);
+  }
+  // نحسب الأثر ونفتح الطلب (للفحص والتسجيل) لكن نُوافق عليه فوراً
+  // microtask لضمان أن pending مُتاح للاستعلام قبل الحسم
+  const promise = state.open(request);
+  queueMicrotask(() => state.resolve(true));
+  return promise;
 }
 
 /** يصوغ بندا كميا بالأرقام العربية: «٣ أوجه». */

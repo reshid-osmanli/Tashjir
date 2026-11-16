@@ -115,6 +115,11 @@
       - **A737** — AyahNavigator — hits.map((hit) => ( <li key={hit.ayahKey}> <button type="button" onClick={() => { onNavigate(hit.ayahKey); setQuery(''); setHits([]); }} className="w-full round (list) (list, active)
         - **A738** — AyahNavigator — AyahNavigator (control) (control, active)
           - **A739** — AyahNavigator — AyahNavigator (button) (button, active)
+      - **A2206** — AyahNavigator — Qira'at/Recitation Selector (select) (select, active)
+        - **A2207** — AyahNavigator Qira'at — حفص عن عاصم (option, active)
+        - **A2208** — AyahNavigator Qira'at — ورش عن نافع (option, active)
+        - **A2209** — AyahNavigator Qira'at — قالون عن نافع (option, active)
+        - **A2210** — AyahNavigator Qira'at — شعبة عن عاصم (option, active)
     - **A113** — Editor Properties Panel (panel, active)
       - **A128** — Relations Panel (panel, active)
         - **A123** — Line Order Editor (list, active)
@@ -647,11 +652,6 @@
           - **A926** — ParticleSelector — PARTICLE_CLASS_LABELS[particleClass] — ATF (button) (button, active)
           - **A927** — ParticleSelector — PARTICLE_CLASS_LABELS[particleClass] — NAFY (button) (button, active)
           - **A928** — ParticleSelector — PARTICLE_CLASS_LABELS[particleClass] — MAWSUL (button) (button, active)
-      - **A145** — Quick Create Template Controls (control, active)
-        - **A1570** — VariantsPanel — template.hint — فرش واحد (button) (button, active)
-        - **A1571** — VariantsPanel — template.hint — مد + تحقيق + صلة (button) (button, active)
-        - **A1572** — VariantsPanel — template.hint — فرش + أصول (button) (button, active)
-        - **A1573** — VariantsPanel — template.hint ?? 'قالب محفوظ من المعالج' (button) (button, active)
       - **A421** — Smart Create Wizard Dialog (dialog, active)
         - **A1324** — SmartCreateWizard — SmartCreateWizard (section) (section, active)
           - **A1325** — SmartCreateWizard — SmartCreateWizard (checkbox) (checkbox, active)
@@ -779,6 +779,12 @@
           - **A1491** — VariantEditor — variant.alternatives.map((alternative) => { const count = resolveScope(alternative.scope, catalog).length; const active = alternative.id === activeAlternativeId (list) (list, active)
             - **A1492** — VariantEditor — VariantEditor (control) (panel, active)
               - **A1493** — VariantEditor — VariantEditor (button) (button, active)
+        - **A2205** — VariantEditor — Visual Range Picker (section) (section, active)
+          - **A2200** — VariantEditor Visual Picker — كلمات (button) (button, active)
+          - **A2201** — VariantEditor Visual Picker — حروف (button) (button, active)
+          - **A2202** — VariantEditor Visual Picker — إعادة ضبط التحديد (button) (button, active)
+          - **A2203** — VariantEditor Visual Picker — word button (button) (button, active)
+          - **A2204** — VariantEditor Character Picker — letter button (button) (button, active)
       - **A1562** — VariantsPanel — VariantsPanel (section) (section, active)
       - **A1563** — VariantsPanel — إخفاء الرسالة (button) (button, active)
       - **A1564** — VariantsPanel — globalNotice && ( <p role="status" className="mt-2 rounded bg-emerald-50 px-2 py-1.5 text-[11px] text-emerald-800">{globalNotice}</p> ) (section) (section, active)
@@ -1869,7 +1875,6 @@
 | A142 | dialog | Global Rule Builder Dialog | A114 | `/editor` | `GlobalRuleBuilder` | `src/components/editor/GlobalRuleBuilder.tsx` | active |
 | A143 | dialog | Global Rule Metadata Editor | A140 | `/editor` | `GlobalRuleMetaEditor` | `src/components/editor/GlobalRuleMetaEditor.tsx` | active |
 | A144 | dialog | Local Override Editor | A141 | `/editor` | `LocalOverrideEditor` | `src/components/editor/LocalOverrideEditor.tsx` | active |
-| A145 | control | Quick Create Template Controls | A114 | `/editor` | `VariantsPanel` | `src/components/editor/VariantsPanel.tsx` | active |
 | A421 | dialog | Smart Create Wizard Dialog | A114 | `/editor` | `SmartCreateWizard` | `src/components/editor/SmartCreateWizard.tsx` | active |
 | A150 | shell | Engine Studio Workspace | A021 | `/studio` | `EngineStudioPage` | `src/app/(dashboard)/studio/page.tsx` | active |
 | A151 | section | Engine Studio Header | A150 | `/studio` | `EngineStudioPage` | `src/app/(dashboard)/studio/page.tsx` | active |
@@ -3035,10 +3040,6 @@
 | A1567 | panel | VariantsPanel — VariantsPanel (control) | A1566 | `/editor` | `VariantsPanel` | `src/components/editor/VariantsPanel.tsx` | active |
 | A1568 | button | VariantsPanel — مراجعة مواضع القاعدة في المصحف كله موضعا موضعا (button) | A1567 | `/editor` | `VariantsPanel` | `src/components/editor/VariantsPanel.tsx` | active |
 | A1569 | section | VariantsPanel — !hasMarks ? ( <div className="mt-1.5 space-y-2"> <p className="text-xs leading-relaxed text-stone-500"> {markingMode === 'CHARACTERS' ? 'فعّل أداة التعليم (M) ث (section) | A1564 | `/editor` | `VariantsPanel` | `src/components/editor/VariantsPanel.tsx` | active |
-| A1570 | button | VariantsPanel — template.hint — فرش واحد (button) | A145 | `/editor` | `VariantsPanel` | `src/components/editor/VariantsPanel.tsx` | active |
-| A1571 | button | VariantsPanel — template.hint — مد + تحقيق + صلة (button) | A145 | `/editor` | `VariantsPanel` | `src/components/editor/VariantsPanel.tsx` | active |
-| A1572 | button | VariantsPanel — template.hint — فرش + أصول (button) | A145 | `/editor` | `VariantsPanel` | `src/components/editor/VariantsPanel.tsx` | active |
-| A1573 | button | VariantsPanel — template.hint ?? 'قالب محفوظ من المعالج' (button) | A145 | `/editor` | `VariantsPanel` | `src/components/editor/VariantsPanel.tsx` | active |
 | A1574 | button | VariantsPanel — حفظ نمط الحروف وتطبيقه في كل المصحف (button) | A1569 | `/editor` | `VariantsPanel` | `src/components/editor/VariantsPanel.tsx` | active |
 | A1575 | button | VariantsPanel — إلغاء التحديد (button) | A1569 | `/editor` | `VariantsPanel` | `src/components/editor/VariantsPanel.tsx` | active |
 | A1576 | control | VariantsPanel — VariantsPanel (control) | A1564 | `/editor` | `VariantsPanel` | `src/components/editor/VariantsPanel.tsx` | active |
@@ -3591,6 +3592,17 @@
 | A2123 | action | Review — Request revision | A252 | `/review` | `ReviewPage` | `src/app/(dashboard)/review/page.tsx` | active |
 | A2124 | action | Review — Reject | A252 | `/review` | `ReviewPage` | `src/app/(dashboard)/review/page.tsx` | active |
 | A2125 | control | Line order — Move down | A124 | `/editor` | `LineOrderEditor` | `src/components/editor/LineOrderEditor.tsx` | active |
+| A2200 | button | VariantEditor Visual Picker — كلمات (button) | A2205 | `/editor` | `VariantEditor` | `src/components/editor/VariantEditor.tsx` | active |
+| A2201 | button | VariantEditor Visual Picker — حروف (button) | A2205 | `/editor` | `VariantEditor` | `src/components/editor/VariantEditor.tsx` | active |
+| A2202 | button | VariantEditor Visual Picker — إعادة ضبط التحديد (button) | A2205 | `/editor` | `VariantEditor` | `src/components/editor/VariantEditor.tsx` | active |
+| A2203 | button | VariantEditor Visual Picker — word button (button) | A2205 | `/editor` | `VariantEditor` | `src/components/editor/VariantEditor.tsx` | active |
+| A2204 | button | VariantEditor Character Picker — letter button (button) | A2205 | `/editor` | `VariantEditor` | `src/components/editor/VariantEditor.tsx` | active |
+| A2205 | section | VariantEditor — Visual Range Picker (section) | A1459 | `/editor` | `VariantEditor` | `src/components/editor/VariantEditor.tsx` | active |
+| A2206 | select | AyahNavigator — Qira'at/Recitation Selector (select) | A107 | `/editor` | `AyahNavigator` | `src/components/editor/AyahNavigator.tsx` | active |
+| A2207 | option | AyahNavigator Qira'at — حفص عن عاصم | A2206 | `/editor` | `AyahNavigator` | `src/components/editor/AyahNavigator.tsx` | active |
+| A2208 | option | AyahNavigator Qira'at — ورش عن نافع | A2206 | `/editor` | `AyahNavigator` | `src/components/editor/AyahNavigator.tsx` | active |
+| A2209 | option | AyahNavigator Qira'at — قالون عن نافع | A2206 | `/editor` | `AyahNavigator` | `src/components/editor/AyahNavigator.tsx` | active |
+| A2210 | option | AyahNavigator Qira'at — شعبة عن عاصم | A2206 | `/editor` | `AyahNavigator` | `src/components/editor/AyahNavigator.tsx` | active |
 
 ## السجلات الكاملة
 
@@ -5020,31 +5032,6 @@
 </details>
 
 <details>
-<summary><strong>A145 — Quick Create Template Controls</strong></summary>
-
-- **Type:** `control`
-- **Feature:** A001 — Editor
-- **Parent:** A114
-- **Route:** `/editor`
-- **Component:** `VariantsPanel`
-- **Source:** `src/components/editor/VariantsPanel.tsx`
-- **Purpose:** مجموعة القوالب الجاهزة/المحفوظة للإنشاء السريع.
-- **Behavior:** تمرر إعداد القالب إلى مسار smart-create الحالي.
-- **Constraints:** القالب لا يغير قواعد الإنشاء أو عدد عمليات التراجع.
-- **Actions:** []
-- **Stores:** `src/stores/editor-store.ts`, `src/lib/editor/selection-store.ts`
-- **Logic files:** `src/lib/tashjeer/layout-engine.ts`, `src/lib/tashjeer/branch-engine.ts`, `src/lib/tashjeer/smart-create.ts`, `src/lib/tashjeer/clipboard.ts`, `src/lib/tashjeer/bulk-operations.ts`, `src/lib/tashjeer/merge-operations.ts`, `src/lib/tashjeer/manual-links.ts`, `src/lib/tashjeer/selection-commands.ts`
-- **Tests (regression boundary):** `tests/selection-store.test.ts`, `tests/editor-manual-actions.test.ts`, `tests/editor-bulk-actions.test.ts`, `tests/editor-multi-difference.test.ts`, `tests/package05-multi-difference.test.ts`, `tests/package06-wizard.test.ts`, `tests/package07-acceptance.test.ts`, `tests/e2e/editor-ph3.spec.ts`, `tests/ui-source-coverage.test.ts`
-- **Shortcuts:** —
-- **Identity mode:** static
-- **Status:** `active`
-- **Dependencies:** `A421`
-- **Related UI IDs:** `A116`
-- **Code references (not UI IDs):** `QUICK_CREATE_TEMPLATES`, `handleQuickCreate`
-
-</details>
-
-<details>
 <summary><strong>A421 — Smart Create Wizard Dialog</strong></summary>
 
 - **Type:** `dialog`
@@ -5063,7 +5050,7 @@
 - **Shortcuts:** —
 - **Identity mode:** static
 - **Status:** `active`
-- **Dependencies:** `A116`, `A145`
+- **Dependencies:** `A116`
 - **Related UI IDs:** `A111`, `A114`, `A142`
 - **Code references (not UI IDs):** `buildSmartCreateBatch`, `buildSmartCreateMultiTargetBatch`, `applySmartCreateBatch`
 
@@ -34170,106 +34157,6 @@
 </details>
 
 <details>
-<summary><strong>A1570 — VariantsPanel — template.hint — فرش واحد (button)</strong></summary>
-
-- **Type:** `button`
-- **Feature:** A001 — Editor
-- **Parent:** A145
-- **Route:** `/editor`
-- **Component:** `VariantsPanel`
-- **Source:** `src/components/editor/VariantsPanel.tsx`
-- **Purpose:** button في VariantsPanel: template.hint — فرش واحد.
-- **Behavior:** onClick: () => handleQuickCreate(template.config)
-- **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
-- **Actions:** [{"event":"onClick","expression":"() => handleQuickCreate(template.config)"}]
-- **Stores:** `src/stores/editor-store.ts`, `src/lib/storage/global-rules-store.ts`, `src/lib/storage/rule-occurrences-store.ts`
-- **Logic files:** `src/lib/tashjeer/multi-selection.ts`, `src/stores/editor-store.ts`, `src/lib/tashjeer/reading-window.ts`, `src/lib/utils/arabic-numbers.ts`, `src/hooks/useTransmissionCatalog.ts`, `src/lib/tashjeer/branch-engine.ts`, `src/lib/tashjeer/color-system.ts`, `src/lib/tashjeer/scope.ts`, `src/lib/quran-logic/characters.ts`, `src/lib/storage/global-rules-store.ts`, `src/lib/quran-logic/global-rule-engine.ts`, `src/lib/storage/rule-occurrences-store.ts`, `src/hooks/useRuleOccurrences.ts`, `src/lib/tashjeer/loci.ts`, `src/lib/tashjeer/smart-create.ts`, `src/lib/tashjeer/wizard-templates.ts`
-- **Tests (regression boundary):** `tests/selection-store.test.ts`, `tests/editor-manual-actions.test.ts`, `tests/editor-bulk-actions.test.ts`, `tests/editor-multi-difference.test.ts`, `tests/package05-multi-difference.test.ts`, `tests/package06-wizard.test.ts`, `tests/package07-acceptance.test.ts`, `tests/e2e/editor-ph3.spec.ts`, `tests/ui-source-coverage.test.ts`
-- **Shortcuts:** —
-- **Identity mode:** finite
-- **Status:** `active`
-- **Dependencies:** —
-- **Related UI IDs:** —
-- **Code references (not UI IDs):** `() => handleQuickCreate(template.config)`
-
-</details>
-
-<details>
-<summary><strong>A1571 — VariantsPanel — template.hint — مد + تحقيق + صلة (button)</strong></summary>
-
-- **Type:** `button`
-- **Feature:** A001 — Editor
-- **Parent:** A145
-- **Route:** `/editor`
-- **Component:** `VariantsPanel`
-- **Source:** `src/components/editor/VariantsPanel.tsx`
-- **Purpose:** button في VariantsPanel: template.hint — مد + تحقيق + صلة.
-- **Behavior:** onClick: () => handleQuickCreate(template.config)
-- **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
-- **Actions:** [{"event":"onClick","expression":"() => handleQuickCreate(template.config)"}]
-- **Stores:** `src/stores/editor-store.ts`, `src/lib/storage/global-rules-store.ts`, `src/lib/storage/rule-occurrences-store.ts`
-- **Logic files:** `src/lib/tashjeer/multi-selection.ts`, `src/stores/editor-store.ts`, `src/lib/tashjeer/reading-window.ts`, `src/lib/utils/arabic-numbers.ts`, `src/hooks/useTransmissionCatalog.ts`, `src/lib/tashjeer/branch-engine.ts`, `src/lib/tashjeer/color-system.ts`, `src/lib/tashjeer/scope.ts`, `src/lib/quran-logic/characters.ts`, `src/lib/storage/global-rules-store.ts`, `src/lib/quran-logic/global-rule-engine.ts`, `src/lib/storage/rule-occurrences-store.ts`, `src/hooks/useRuleOccurrences.ts`, `src/lib/tashjeer/loci.ts`, `src/lib/tashjeer/smart-create.ts`, `src/lib/tashjeer/wizard-templates.ts`
-- **Tests (regression boundary):** `tests/selection-store.test.ts`, `tests/editor-manual-actions.test.ts`, `tests/editor-bulk-actions.test.ts`, `tests/editor-multi-difference.test.ts`, `tests/package05-multi-difference.test.ts`, `tests/package06-wizard.test.ts`, `tests/package07-acceptance.test.ts`, `tests/e2e/editor-ph3.spec.ts`, `tests/ui-source-coverage.test.ts`
-- **Shortcuts:** —
-- **Identity mode:** finite
-- **Status:** `active`
-- **Dependencies:** —
-- **Related UI IDs:** —
-- **Code references (not UI IDs):** `() => handleQuickCreate(template.config)`
-
-</details>
-
-<details>
-<summary><strong>A1572 — VariantsPanel — template.hint — فرش + أصول (button)</strong></summary>
-
-- **Type:** `button`
-- **Feature:** A001 — Editor
-- **Parent:** A145
-- **Route:** `/editor`
-- **Component:** `VariantsPanel`
-- **Source:** `src/components/editor/VariantsPanel.tsx`
-- **Purpose:** button في VariantsPanel: template.hint — فرش + أصول.
-- **Behavior:** onClick: () => handleQuickCreate(template.config)
-- **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
-- **Actions:** [{"event":"onClick","expression":"() => handleQuickCreate(template.config)"}]
-- **Stores:** `src/stores/editor-store.ts`, `src/lib/storage/global-rules-store.ts`, `src/lib/storage/rule-occurrences-store.ts`
-- **Logic files:** `src/lib/tashjeer/multi-selection.ts`, `src/stores/editor-store.ts`, `src/lib/tashjeer/reading-window.ts`, `src/lib/utils/arabic-numbers.ts`, `src/hooks/useTransmissionCatalog.ts`, `src/lib/tashjeer/branch-engine.ts`, `src/lib/tashjeer/color-system.ts`, `src/lib/tashjeer/scope.ts`, `src/lib/quran-logic/characters.ts`, `src/lib/storage/global-rules-store.ts`, `src/lib/quran-logic/global-rule-engine.ts`, `src/lib/storage/rule-occurrences-store.ts`, `src/hooks/useRuleOccurrences.ts`, `src/lib/tashjeer/loci.ts`, `src/lib/tashjeer/smart-create.ts`, `src/lib/tashjeer/wizard-templates.ts`
-- **Tests (regression boundary):** `tests/selection-store.test.ts`, `tests/editor-manual-actions.test.ts`, `tests/editor-bulk-actions.test.ts`, `tests/editor-multi-difference.test.ts`, `tests/package05-multi-difference.test.ts`, `tests/package06-wizard.test.ts`, `tests/package07-acceptance.test.ts`, `tests/e2e/editor-ph3.spec.ts`, `tests/ui-source-coverage.test.ts`
-- **Shortcuts:** —
-- **Identity mode:** finite
-- **Status:** `active`
-- **Dependencies:** —
-- **Related UI IDs:** —
-- **Code references (not UI IDs):** `() => handleQuickCreate(template.config)`
-
-</details>
-
-<details>
-<summary><strong>A1573 — VariantsPanel — template.hint ?? 'قالب محفوظ من المعالج' (button)</strong></summary>
-
-- **Type:** `button`
-- **Feature:** A001 — Editor
-- **Parent:** A145
-- **Route:** `/editor`
-- **Component:** `VariantsPanel`
-- **Source:** `src/components/editor/VariantsPanel.tsx`
-- **Purpose:** button في VariantsPanel: template.hint ?? 'قالب محفوظ من المعالج'.
-- **Behavior:** onClick: () => handleQuickCreate(template.config, template.id)
-- **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
-- **Actions:** [{"event":"onClick","expression":"() => handleQuickCreate(template.config, template.id)"}]
-- **Stores:** `src/stores/editor-store.ts`, `src/lib/storage/global-rules-store.ts`, `src/lib/storage/rule-occurrences-store.ts`
-- **Logic files:** `src/lib/tashjeer/multi-selection.ts`, `src/stores/editor-store.ts`, `src/lib/tashjeer/reading-window.ts`, `src/lib/utils/arabic-numbers.ts`, `src/hooks/useTransmissionCatalog.ts`, `src/lib/tashjeer/branch-engine.ts`, `src/lib/tashjeer/color-system.ts`, `src/lib/tashjeer/scope.ts`, `src/lib/quran-logic/characters.ts`, `src/lib/storage/global-rules-store.ts`, `src/lib/quran-logic/global-rule-engine.ts`, `src/lib/storage/rule-occurrences-store.ts`, `src/hooks/useRuleOccurrences.ts`, `src/lib/tashjeer/loci.ts`, `src/lib/tashjeer/smart-create.ts`, `src/lib/tashjeer/wizard-templates.ts`
-- **Tests (regression boundary):** `tests/selection-store.test.ts`, `tests/editor-manual-actions.test.ts`, `tests/editor-bulk-actions.test.ts`, `tests/editor-multi-difference.test.ts`, `tests/package05-multi-difference.test.ts`, `tests/package06-wizard.test.ts`, `tests/package07-acceptance.test.ts`, `tests/e2e/editor-ph3.spec.ts`, `tests/ui-source-coverage.test.ts`
-- **Shortcuts:** —
-- **Identity mode:** template
-- **Status:** `active`
-- **Dependencies:** —
-- **Related UI IDs:** —
-- **Code references (not UI IDs):** `() => handleQuickCreate(template.config, template.id)`
-
-</details>
-
-<details>
 <summary><strong>A1574 — VariantsPanel — حفظ نمط الحروف وتطبيقه في كل المصحف (button)</strong></summary>
 
 - **Type:** `button`
@@ -48066,6 +47953,281 @@
 - **Dependencies:** `A123`
 - **Related UI IDs:** `A124`, `A126`
 - **Code references (not UI IDs):** `confirmOrder`, `moveLineToIndex`
+
+</details>
+
+<details>
+<summary><strong>A2200 — VariantEditor Visual Picker — كلمات (button)</strong></summary>
+
+- **Type:** `button`
+- **Feature:** A001 — Editor
+- **Parent:** A2205
+- **Route:** `/editor`
+- **Component:** `VariantEditor`
+- **Source:** `src/components/editor/VariantEditor.tsx`
+- **Purpose:** زر تبديل نمط التحديد البصري إلى كلمات داخل محرر الاختلاف (مدمج من A749).
+- **Behavior:** onClick: () => تفعيل وضع تحديد الكلمات
+- **Constraints:** هوية ثابتة في محرر الاختلاف فقط، لا تُستخدم في شريط الأدوات.
+- **Actions:** [{"event":"onClick","expression":"() => { setLetterMode(false); setLetterAnchors([]); updateVariant(...) }"}]
+- **Stores:** —
+- **Logic files:** —
+- **Tests (regression boundary):** —
+- **Shortcuts:** —
+- **Identity mode:** static
+- **Status:** `active`
+- **Dependencies:** —
+- **Related UI IDs:** `A749`, `A750`, `A2201`
+- **Code references (not UI IDs):** `() => setLetterMode(false)`
+
+</details>
+
+<details>
+<summary><strong>A2201 — VariantEditor Visual Picker — حروف (button)</strong></summary>
+
+- **Type:** `button`
+- **Feature:** A001 — Editor
+- **Parent:** A2205
+- **Route:** `/editor`
+- **Component:** `VariantEditor`
+- **Source:** `src/components/editor/VariantEditor.tsx`
+- **Purpose:** زر تبديل نمط التحديد البصري إلى حروف داخل محرر الاختلاف (مدمج من A750).
+- **Behavior:** onClick: () => تفعيل وضع تحديد الحروف
+- **Constraints:** هوية ثابتة في محرر الاختلاف فقط.
+- **Actions:** [{"event":"onClick","expression":"() => setLetterMode(true)"}]
+- **Stores:** —
+- **Logic files:** —
+- **Tests (regression boundary):** —
+- **Shortcuts:** —
+- **Identity mode:** static
+- **Status:** `active`
+- **Dependencies:** —
+- **Related UI IDs:** `A749`, `A750`, `A2200`
+- **Code references (not UI IDs):** `() => setLetterMode(true)`
+
+</details>
+
+<details>
+<summary><strong>A2202 — VariantEditor Visual Picker — إعادة ضبط التحديد (button)</strong></summary>
+
+- **Type:** `button`
+- **Feature:** A001 — Editor
+- **Parent:** A2205
+- **Route:** `/editor`
+- **Component:** `VariantEditor`
+- **Source:** `src/components/editor/VariantEditor.tsx`
+- **Purpose:** زر إعادة ضبط التحديد البصري داخل محرر الاختلاف.
+- **Behavior:** onClick: () => مسح التحديد البصري
+- **Constraints:** يظهر فقط عندما يكون المدى مثبتا.
+- **Actions:** [{"event":"onClick","expression":"() => setRangeClick(null)"}]
+- **Stores:** —
+- **Logic files:** —
+- **Tests (regression boundary):** —
+- **Shortcuts:** —
+- **Identity mode:** static
+- **Status:** `active`
+- **Dependencies:** —
+- **Related UI IDs:** `A2200`, `A2201`
+- **Code references (not UI IDs):** `() => setRangeClick(null)`
+
+</details>
+
+<details>
+<summary><strong>A2203 — VariantEditor Visual Picker — word button (button)</strong></summary>
+
+- **Type:** `button`
+- **Feature:** A001 — Editor
+- **Parent:** A2205
+- **Route:** `/editor`
+- **Component:** `VariantEditor`
+- **Source:** `src/components/editor/VariantEditor.tsx`
+- **Purpose:** زر كلمة في شبكة التحديد البصري داخل محرر الاختلاف (مدمج من A1334).
+- **Behavior:** النقر يثبت بداية المدى أو نهايته لتحديد موضع الاختلاف بصرياً.
+- **Constraints:** هوية قالب: data-ui-instance يميز كل كلمة بموضعها.
+- **Actions:** [{"event":"onClick","expression":"() => pickWord(word.position)"}]
+- **Stores:** —
+- **Logic files:** —
+- **Tests (regression boundary):** —
+- **Shortcuts:** —
+- **Identity mode:** template
+- **Status:** `active`
+- **Dependencies:** —
+- **Related UI IDs:** `A1334`
+- **Code references (not UI IDs):** `(word) => pickWord(word.position)`
+
+</details>
+
+<details>
+<summary><strong>A2204 — VariantEditor Character Picker — letter button (button)</strong></summary>
+
+- **Type:** `button`
+- **Feature:** A001 — Editor
+- **Parent:** A2205
+- **Route:** `/editor`
+- **Component:** `VariantEditor`
+- **Source:** `src/components/editor/VariantEditor.tsx`
+- **Purpose:** زر حرف في محدد الحروف البصري داخل محرر الاختلاف.
+- **Behavior:** النقر يبدل اختيار الحرف لتحديد نطاق حرفي دقيق.
+- **Constraints:** هوية قالب.
+- **Actions:** [{"event":"onClick","expression":"() => toggleLetter(anchor)"}]
+- **Stores:** —
+- **Logic files:** —
+- **Tests (regression boundary):** —
+- **Shortcuts:** —
+- **Identity mode:** template
+- **Status:** `active`
+- **Dependencies:** —
+- **Related UI IDs:** `A2201`, `A1501`
+- **Code references (not UI IDs):** `toggleLetter`
+
+</details>
+
+<details>
+<summary><strong>A2205 — VariantEditor — Visual Range Picker (section)</strong></summary>
+
+- **Type:** `section`
+- **Feature:** A001 — Editor
+- **Parent:** A1459
+- **Route:** `/editor`
+- **Component:** `VariantEditor`
+- **Source:** `src/components/editor/VariantEditor.tsx`
+- **Purpose:** قسم التحديد البصري المدمج في محرر الاختلاف (دمج A1334 وA749/A750 بدلا من A1501 المنفصل).
+- **Behavior:** يعرض كلمات الآية للنقر لتثبيت مدى الاختلاف، مع إمكانية تفعيل تحديد الحروف.
+- **Constraints:** يظهر في بداية محرر الاختلاف لمعرفة ما يتم تعديله.
+- **Actions:** []
+- **Stores:** —
+- **Logic files:** —
+- **Tests (regression boundary):** —
+- **Shortcuts:** —
+- **Identity mode:** static
+- **Status:** `active`
+- **Dependencies:** —
+- **Related UI IDs:** `A1501`, `A1334`, `A749`, `A750`
+- **Code references (not UI IDs):** `pickWord`, `toggleLetter`
+
+</details>
+
+<details>
+<summary><strong>A2206 — AyahNavigator — Qira'at/Recitation Selector (select)</strong></summary>
+
+- **Type:** `select`
+- **Feature:** A001 — Editor
+- **Parent:** A107
+- **Route:** `/editor`
+- **Component:** `AyahNavigator`
+- **Source:** `src/components/editor/AyahNavigator.tsx`
+- **Purpose:** محدد الرواية/القراءة للمصحف (حفص، ورش، قالون...). حاليا حفص فقط؛ باقي الروايات ستتاح عند توفر نصوصها.
+- **Behavior:** اختيار الرواية يغير نص المصحف (A1431). حالياً التنبيه بعدم التوفر قيد التطوير.
+- **Constraints:** يتطلب نص المصحف لكل رواية.
+- **Actions:** [{"event":"onChange","expression":"(event) => اختيار الرواية"}]
+- **Stores:** —
+- **Logic files:** —
+- **Tests (regression boundary):** —
+- **Shortcuts:** —
+- **Identity mode:** static
+- **Status:** `active`
+- **Dependencies:** —
+- **Related UI IDs:** `A1431`, `A319`
+- **Code references (not UI IDs):** `CURRENT_QIRAAH`
+
+</details>
+
+<details>
+<summary><strong>A2207 — AyahNavigator Qira'at — حفص عن عاصم</strong></summary>
+
+- **Type:** `option`
+- **Feature:** A001 — Editor
+- **Parent:** A2206
+- **Route:** `/editor`
+- **Component:** `AyahNavigator`
+- **Source:** `src/components/editor/AyahNavigator.tsx`
+- **Purpose:** خيار رواية حفص عن عاصم في محدد الروايات.
+- **Behavior:** تحديد هذا الخيار يعرض نص المصحف برواية حفص.
+- **Constraints:** الخيار الافتراضي والمتاح حاليا.
+- **Actions:** []
+- **Stores:** —
+- **Logic files:** —
+- **Tests (regression boundary):** —
+- **Shortcuts:** —
+- **Identity mode:** finite
+- **Status:** `active`
+- **Dependencies:** —
+- **Related UI IDs:** `A1431`
+- **Code references (not UI IDs):** `MUSHAF_EDITIONS`
+
+</details>
+
+<details>
+<summary><strong>A2208 — AyahNavigator Qira'at — ورش عن نافع</strong></summary>
+
+- **Type:** `option`
+- **Feature:** A001 — Editor
+- **Parent:** A2206
+- **Route:** `/editor`
+- **Component:** `AyahNavigator`
+- **Source:** `src/components/editor/AyahNavigator.tsx`
+- **Purpose:** خيار رواية ورش عن نافع — قريباً.
+- **Behavior:** سيتيح عرض نص المصحف برواية ورش عند توفر البيانات.
+- **Constraints:** معطّل حاليا (غير متاح بعد).
+- **Actions:** []
+- **Stores:** —
+- **Logic files:** —
+- **Tests (regression boundary):** —
+- **Shortcuts:** —
+- **Identity mode:** finite
+- **Status:** `active`
+- **Dependencies:** —
+- **Related UI IDs:** `A1431`
+- **Code references (not UI IDs):** `MUSHAF_EDITIONS`
+
+</details>
+
+<details>
+<summary><strong>A2209 — AyahNavigator Qira'at — قالون عن نافع</strong></summary>
+
+- **Type:** `option`
+- **Feature:** A001 — Editor
+- **Parent:** A2206
+- **Route:** `/editor`
+- **Component:** `AyahNavigator`
+- **Source:** `src/components/editor/AyahNavigator.tsx`
+- **Purpose:** خيار رواية قالون عن نافع — قريباً.
+- **Behavior:** سيتيح عرض نص المصحف برواية قالون عند توفر البيانات.
+- **Constraints:** معطّل حاليا.
+- **Actions:** []
+- **Stores:** —
+- **Logic files:** —
+- **Tests (regression boundary):** —
+- **Shortcuts:** —
+- **Identity mode:** finite
+- **Status:** `active`
+- **Dependencies:** —
+- **Related UI IDs:** `A1431`
+- **Code references (not UI IDs):** `MUSHAF_EDITIONS`
+
+</details>
+
+<details>
+<summary><strong>A2210 — AyahNavigator Qira'at — شعبة عن عاصم</strong></summary>
+
+- **Type:** `option`
+- **Feature:** A001 — Editor
+- **Parent:** A2206
+- **Route:** `/editor`
+- **Component:** `AyahNavigator`
+- **Source:** `src/components/editor/AyahNavigator.tsx`
+- **Purpose:** خيار رواية شعبة عن عاصم — قريباً.
+- **Behavior:** سيتيح عرض نص المصحف برواية شعبة عند توفر البيانات.
+- **Constraints:** معطّل حاليا.
+- **Actions:** []
+- **Stores:** —
+- **Logic files:** —
+- **Tests (regression boundary):** —
+- **Shortcuts:** —
+- **Identity mode:** finite
+- **Status:** `active`
+- **Dependencies:** —
+- **Related UI IDs:** `A1431`
+- **Code references (not UI IDs):** `MUSHAF_EDITIONS`
 
 </details>
 

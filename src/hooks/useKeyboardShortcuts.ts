@@ -37,7 +37,7 @@ export const SHORTCUT_HINTS: ShortcutHint[] = [
   { keys: 'L', description: 'إظهار بطاقات الأوجه' },
   { keys: 'P', description: 'لوحة الخصائص' },
   { keys: 'B', description: 'لوحة الاختلافات' },
-  { keys: 'N', description: 'المعالج الذكي الموحّد (إنشاء اختلاف)' },
+  { keys: 'N', description: 'إضافة اختلاف جديد' },
 
   // أوامر العنصر النشط عبر التحديد الموحّد (FR-ED-02.6): تعمل على العنصر
   // المحدد في أي لوحة — نفس أوامر قائمة السياق ولوحة التفاصيل.
@@ -138,7 +138,7 @@ export function useKeyboardShortcuts(enabled = true): void {
           store.toggleVariantsPanel();
           break;
         case 'n':
-          store.requestSmartWizard();
+          store.requestNewVariant();
           break;
         case 'escape':
           store.clearMarks();

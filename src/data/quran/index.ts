@@ -35,11 +35,53 @@ interface RawMushaf {
   version: number;
   source: string;
   script: string;
+  qiraah?: string;
+  narrator?: string;
   totalSurahs: number;
   totalAyahs: number;
   totalWords: number;
   surahs: RawSurah[];
 }
+
+/** القراءات/الروايات المدعومة (حاليا حفص فقط؛ قريبا ورش وقالون وغيرها) */
+export interface MushafEdition {
+  id: string;
+  name: string;
+  narratorId: string;
+  description: string;
+  available: boolean;
+}
+
+export const MUSHAF_EDITIONS: MushafEdition[] = [
+  {
+    id: 'hafs',
+    name: 'حفص عن عاصم',
+    narratorId: 'narrator-hafs',
+    description: 'رواية حفص عن عاصم — مصحف المدينة النبوية (مجمع الملك فهد لطباعة المصحف الشريف، الإصدار 3.0، خط KFGQPC HAFS Uthmanic)',
+    available: true,
+  },
+  {
+    id: 'warsh',
+    name: 'ورش عن نافع',
+    narratorId: 'narrator-warsh',
+    description: 'رواية ورش عن نافع — قريباً',
+    available: false,
+  },
+  {
+    id: 'qalun',
+    name: 'قالون عن نافع',
+    narratorId: 'narrator-qalun',
+    description: 'رواية قالون عن نافع — قريباً',
+    available: false,
+  },
+  {
+    id: 'shubah',
+    name: 'شعبة عن عاصم',
+    narratorId: 'narrator-shubah',
+    description: 'رواية شعبة عن عاصم — قريباً',
+    available: false,
+  },
+];
 
 /** بيانات سورة معروضة للتطبيق. */
 export interface MushafSurah {
@@ -105,11 +147,17 @@ export const TOTAL_WORDS = MUSHAF.totalWords;
 /** مصدر النص ورخصته، يُعرض في صفحة الإعدادات. */
 export const MUSHAF_SOURCE = MUSHAF.source;
 
+/** الرواية/القراءة الحالية للمصحف. */
+export const CURRENT_QIRAAH = MUSHAF.qiraah ?? 'hafs';
+export const CURRENT_NARRATOR = MUSHAF.narrator ?? 'hafs-an-asim';
+
 /**
  * فهرس السور مع أرقام صفحات تقريبية.
  *
- * ملاحظة منهجية: أرقام الصفحات هنا تقريبية ومشتقة من توزيع الآيات،
- * وليست أرقام مصحف المدينة الرسمية. تُستخدم للعرض فقط ولا يُبنى عليها حكم.
+ * النص العثماني من مصحف المدينة النبوية (مجمع الملك فهد لطباعة المصحف الشريف،
+ * الإصدار 3.0، خط KFGQPC HAFS Uthmanic). أرقام الصفحات/الأسطر الدقيقة
+ * لمصحف المدينة متوفرة في بيانات المصدر (kfgqpc_hafs_v30.json) وستُربط
+ * في طبقة لاحقة؛ الأرقام الحالية تقريبية ومشتقة من توزيع الآيات.
  */
 export const SURAHS: MushafSurah[] = buildSurahIndex();
 
