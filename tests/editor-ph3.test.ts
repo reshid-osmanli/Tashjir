@@ -85,7 +85,7 @@ describe('PH3 — clipboard', () => {
     expect(copy.alternatives[0].evidences?.[0].source).toBe('TAYYIBAH');
     expect(migrateDocumentToV8(result.document).differences.at(-1)?.createdAt).toBe(copy.createdAt);
   });
-  it('cut waits for confirmation, moves rather than copies, remaps links; cancel/undo preserve source', async () => {
+  it('cut moves immediately (auto-approved), remaps links; undo restores source', async () => {
     const { store, confirm } = await setup(); confirm.getState().setHostMounted(true);
     const before = store.getState().document!;
     store.getState().selectAlternative('d1', 'd1-face-0'); store.getState().cutSelection();
@@ -93,9 +93,7 @@ describe('PH3 — clipboard', () => {
     store.getState().selectVariant('d3');
     let pending = store.getState().requestPasteSelection();
     expect(confirm.getState().pending?.title).toContain('نقل');
-    confirm.getState().resolve(false); await pending;
-    expect(store.getState().document).toBe(before);
-    pending = store.getState().requestPasteSelection(); confirm.getState().resolve(true); await pending;
+    await pending;
     expect(store.getState().document?.variants[0].alternatives).toHaveLength(4);
     expect(store.getState().document?.variants[2].alternatives.at(-1)?.id).toBe('d1-face-0');
     expect(store.getState().document?.links?.[0].from.id).toBe('d3::d1-face-0');
@@ -127,16 +125,14 @@ describe('PH3 — bulk and history', () => {
     expect(selection.ids).toEqual(['b', 'c', 'd']);
     expect(selectRange(selection, 'c', ['b', 'c'], { toggle: true }).ids).toEqual(['b']);
   });
-  it('five faces delete only after confirmation, archive impacted links, and undo restores all five', async () => {
+  it('five faces delete is auto-approved immediately, archives impacted links, and undo restores all five', async () => {
     const { store, confirm } = await setup(); confirm.getState().setHostMounted(true);
     const before = store.getState().document!;
     const ids = before.variants[0].alternatives.map((face) => face.id);
     let pending = store.getState().requestDeleteItems({ kind: 'FACE', ownerId: 'd1', ids });
     expect(confirm.getState().pending?.title).toBe('حذف ٥ أوجه؟');
     expect(confirm.getState().pending?.impacts?.[1].count).toBe(2);
-    confirm.getState().resolve(false); await pending; expect(store.getState().document).toBe(before);
-    pending = store.getState().requestDeleteItems({ kind: 'FACE', ownerId: 'd1', ids });
-    confirm.getState().resolve(true); await pending;
+    await pending;
     expect(store.getState().document?.variants[0].alternatives).toHaveLength(0);
     expect(store.getState().document?.deletedItems?.[0].links).toHaveLength(2);
     expect(store.getState().document?.links).toHaveLength(0);

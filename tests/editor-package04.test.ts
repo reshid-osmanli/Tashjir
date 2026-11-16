@@ -393,14 +393,14 @@ describe('FR-ED-07 — حذف جماعي للأسطر: الحصري وحده', (
     });
   });
 
-  it('تحديد سطرين وحذفهما: تأكيد كمي بالحصري والمشترك، ثم تراجع واحد', async () => {
+  it('تحديد سطرين وحذفهما: موافقة فورية تلقائية، ثم تراجع واحد', async () => {
     const { store, confirm } = await setupWithConfirm();
     const before = store.getState().document!;
 
     store.getState().setMultiSelection({ kind: 'LINE', ids: ['line-2', 'line-3'] });
     let pending = store.getState().requestDeleteItems({ kind: 'LINE', ids: ['line-2', 'line-3'] }, { rendered: bulkLines() });
+    // الأثر الكمي يُحسب؛ الموافقة التلقائية في microtask التالية
     expect(confirm.getState().pending?.title).toBe('حذف ٢ أسطر؟');
-    // أسطر · اختلافات حصرية · أوجه · روابط · مشترك يبقى
     expect(confirm.getState().pending?.impacts).toEqual([
       { label: 'أسطر', count: 2 },
       { label: 'اختلافات حصرية', count: 2 },
@@ -408,15 +408,6 @@ describe('FR-ED-07 — حذف جماعي للأسطر: الحصري وحده', (
       { label: 'روابط ستُؤرشف', count: 1 },
       { label: 'اختلافات مشتركة تبقى', count: 1 },
     ]);
-
-    // الإلغاء لا يمسّ شيئا ولا يترك خطوة تراجع.
-    confirm.getState().resolve(false);
-    await pending;
-    expect(store.getState().document).toBe(before);
-    expect(store.getState().past).toHaveLength(0);
-
-    pending = store.getState().requestDeleteItems({ kind: 'LINE', ids: ['line-2', 'line-3'] }, { rendered: bulkLines() });
-    confirm.getState().resolve(true);
     await pending;
 
     const after = store.getState().document!;
@@ -473,13 +464,7 @@ describe('FR-ED-07 — حذف جماعي للقواعد العامة', () => {
     expect(confirm.getState().pending?.impacts?.[0]).toEqual({ label: 'قواعد عامة', count: 2 });
     expect(confirm.getState().pending?.impacts?.[1].count).toBeGreaterThan(0); // مواضع مشتقة
     expect(confirm.getState().pending?.impacts?.[2].count).toBe(1); // استثناء مسجّل
-
-    confirm.getState().resolve(false);
-    await pending;
-    expect(listGlobalRules()).toHaveLength(2); // الإلغاء لا يمسّ المخزن
-
-    pending = store.getState().requestDeleteItems({ kind: 'RULE', ids: ['rule-a', 'rule-b'] });
-    confirm.getState().resolve(true);
+    // الموافقة التلقائية فوراً — لا حاجة لاستدعاء resolve يدوياً
     await pending;
     expect(listGlobalRules()).toHaveLength(0);
     expect(store.getState().past).toHaveLength(1); // القاعدتان في خطوة واحدة
@@ -516,13 +501,7 @@ describe('FR-ED-07.4 — حذف جماعي لمواضع قاعدة كـ localOve
     expect(confirm.getState().pending?.title).toBe('حذف موضعين من «قاعدة جيم»؟');
     expect(confirm.getState().pending?.impacts?.[0]).toEqual({ label: 'مواضع تُحذف محليًا', count: 2 });
     expect(confirm.getState().pending?.impacts?.[2]).toEqual({ label: 'قواعد أم تبقى', count: 1 });
-
-    confirm.getState().resolve(false);
-    await pending;
-    expect(chosen.every((match) => overrideById(occurrenceIdFor(rule.id, match)) === undefined)).toBe(true);
-
-    pending = store.getState().requestDeleteOccurrencesBulk(rule.id, chosen, 'موضعان لا ينطبقان');
-    confirm.getState().resolve(true);
+    // الموافقة التلقائية فوراً
     await pending;
 
     // localOverride لكل موضع: القاعدة باقية وبقية مواضعها لم تُمس.

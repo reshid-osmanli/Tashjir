@@ -440,12 +440,11 @@ interface EditorState {
   pendingWhy: { ruleId?: string } | null;
   requestWhy: (request: { ruleId?: string } | null) => void;
   /**
-   * عدّاد طلبات فتح المعالج الذكي (FR-ED-08/T3): الاختصار N أو أي زر «إنشاء»
-   * عام يرفعه، ولوحة الاختلافات تستهلكه فتفتح المعالج على التحديد الحالي —
-   * باب إنشاء واحد لا أبواب متفرقة.
+   * عدّاد طلبات إنشاء اختلاف جديد: الاختصار N أو أي زر «إنشاء» عام يرفعه،
+   * ولوحة الاختلافات تستهلكه فتنشئ اختلافاً جديداً على التحديد الحالي.
    */
-  smartWizardRequest: number;
-  requestSmartWizard: () => void;
+  newVariantRequest: number;
+  requestNewVariant: () => void;
   /**
    * ينشئ علاقة يدوية بين عنصرين: وجهين، سطرين، أو جزء وسطر/قاعدة.
    * يمرّ أولا على Decision Resolver: الرابط المحظور بقاعدة لا يُسجَّل، والمخالف
@@ -763,7 +762,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   lastLinkDecision: null,
   pendingWhy: null,
-  smartWizardRequest: 0,
+  newVariantRequest: 0,
   lastDifferenceRelationDecision: null,
   multiDifferenceNotice: null,
   currentTool: 'select',
@@ -1641,7 +1640,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   clearLinkDecision: () => set({ lastLinkDecision: null }),
   requestWhy: (request) => set({ pendingWhy: request }),
-  requestSmartWizard: () => set((state) => ({ smartWizardRequest: state.smartWizardRequest + 1 })),
+  requestNewVariant: () => set((state) => ({ newVariantRequest: state.newVariantRequest + 1 })),
 
   requestAddLink: async (input) => {
     const document = get().document;

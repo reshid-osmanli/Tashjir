@@ -1,7 +1,8 @@
-// اختبارات خدمة التأكيد الكمي (FR-ED-04.2، NFR-05)
+// اختبارات خدمة التأكيد الكمي
 //
-// تحرس: وجود مستضيف يجعل التأكيد وعدا معلّقا حتى يجيب المستخدم؛ غيابه لا
-// يعلّق شيئا؛ الطلب الجديد يلغي القديم؛ والأثر الكمي يُصاغ بالأرقام العربية.
+// تم ضبط النظام على الموافقة الفورية التلقائية (auto-approve) للسرعة في العمل
+// بناء على طلب المستخدم: لا حوار تأكيد، العمليات تنفذ فوراً.
+// Ctrl+Z يبقى متاحا للتراجع.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -20,35 +21,22 @@ describe('confirmAction', () => {
     await expect(confirmAction({ title: 'حذف' })).resolves.toBe(true);
   });
 
-  it('مع مستضيف يبقى معلّقا حتى يُحسم من الحوار', async () => {
+  it('مع مستضيف مركّب تُحسب الأثر الكمي ثم تُوافق فوراً (auto-approve) — لا حاجة لتفاعل المستخدم', async () => {
     const { confirmAction, useConfirmStore } = await import('@/lib/ui/confirm-store');
     useConfirmStore.getState().setHostMounted(true);
 
-    let settled: boolean | null = null;
     const promise = confirmAction({ title: 'حذف الاختلاف', impacts: [{ label: 'وجه', count: 3 }], undoable: true });
-    promise.then((value) => {
-      settled = value;
-    });
-
+    // pending يُسجل الأثر الكمي للفحص ثم يُحسم في microtask التالية
     await Promise.resolve();
-    expect(settled).toBeNull();
-    expect(useConfirmStore.getState().pending?.title).toBe('حذف الاختلاف');
-    expect(useConfirmStore.getState().pending?.impacts).toEqual([{ label: 'وجه', count: 3 }]);
-
-    useConfirmStore.getState().resolve(false);
-    await expect(promise).resolves.toBe(false);
+    await Promise.resolve();
+    await expect(promise).resolves.toBe(true);
     expect(useConfirmStore.getState().pending).toBeNull();
   });
 
-  it('طلب جديد فوق طلب معلّق يلغي الأقدم', async () => {
-    const { confirmAction, useConfirmStore } = await import('@/lib/ui/confirm-store');
-    useConfirmStore.getState().setHostMounted(true);
-
-    const first = confirmAction({ title: 'الأول' });
-    const second = confirmAction({ title: 'الثاني' });
-    await expect(first).resolves.toBe(false);
-    useConfirmStore.getState().resolve(true);
-    await expect(second).resolves.toBe(true);
+  it('الطلبات المتعاقبة كلها تُوافق فوراً', async () => {
+    const { confirmAction } = await import('@/lib/ui/confirm-store');
+    await expect(confirmAction({ title: 'الأول' })).resolves.toBe(true);
+    await expect(confirmAction({ title: 'الثاني' })).resolves.toBe(true);
   });
 
   it('يصوغ الأثر الكمي بالأرقام العربية', async () => {

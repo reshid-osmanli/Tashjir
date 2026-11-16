@@ -24,8 +24,9 @@ import {
   listDocuments,
   type DocumentIndexEntry,
 } from '@/lib/storage/document-store';
-import { MUSHAF_SOURCE, TOTAL_AYAHS, TOTAL_WORDS, getSurahOrFirst } from '@/data/quran';
+import { MUSHAF_SOURCE, TOTAL_AYAHS, TOTAL_WORDS, CURRENT_QIRAAH, getSurahOrFirst } from '@/data/quran';
 import { StrengthDegreesManager } from '@/components/settings/StrengthDegreesManager';
+import { RecitationRuleCatalogPanel } from '@/components/studio/RecitationRuleCatalogPanel';
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<LocalAppSettings>(DEFAULT_APP_SETTINGS);
@@ -198,6 +199,14 @@ export default function SettingsPage() {
 
       <Card title="سلّم درجات قوة الوجه">
         <StrengthDegreesManager onMessage={setMessage} />
+      </Card>
+
+      <Card title="إدارة أنواع الاختلافات والمدود (A324)">
+        <p className="mb-3 text-xs leading-relaxed text-stone-600">
+          من هنا يمكنك إضافة أو تعديل أنواع الاختلافات والمدود ومقاديرها (٤، ٥، ٦ حركات) وأي نوع آخر.
+          هذه الإعدادات تُستعمل مباشرة في محرر الاختلاف (A1459) عند اختيار الفئة أو نوع المد.
+        </p>
+        <RecitationRuleCatalogPanel />
       </Card>
 
       <Card title="البيانات المحفوظة">

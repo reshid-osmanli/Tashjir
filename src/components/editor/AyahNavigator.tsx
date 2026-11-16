@@ -18,6 +18,8 @@ import {
   makeAyahKey,
   parseAyahKey,
   searchQuran,
+  MUSHAF_EDITIONS,
+  CURRENT_QIRAAH,
   type QuranSearchHit,
 } from '@/data/quran';
 import { listDocuments } from '@/lib/storage/document-store';
@@ -27,6 +29,14 @@ interface AyahNavigatorProps {
   ayahKey: number;
   onNavigate: (ayahKey: number) => void;
 }
+
+// Immutable UI identity tables.
+const UI_AyahNavigator_Qiraat = {
+  "hafs": "A2207",
+  "warsh": "A2208",
+  "qalun": "A2209",
+  "shubah": "A2210"
+} as const;
 
 export function AyahNavigator({ ayahKey, onNavigate }: AyahNavigatorProps) {
   const { surahNumber, ayahNumber } = parseAyahKey(ayahKey);
@@ -129,6 +139,29 @@ export function AyahNavigator({ ayahKey, onNavigate }: AyahNavigatorProps) {
           التالية
         </NavButton>
       </div>
+
+      {/* محدد الرواية/القراءة — يغير نص المصحف (A1431) عند توفر بيانات الروايات */}
+      <label className="flex items-center gap-1.5 text-xs text-stone-700" title="اختر رواية المصحف — حاليا حفص فقط؛ باقي الروايات ستتاح قريبا">
+        الرواية
+        <select
+          data-ui-id="A2206"
+          value={CURRENT_QIRAAH}
+          onChange={(event) => {
+            const edition = MUSHAF_EDITIONS.find((e) => e.id === event.target.value);
+            if (edition && !edition.available) {
+              alert('هذه الرواية ستتاح قريباً. النص الحالي هو رواية حفص عن عاصم من مجمع الملك فهد.');
+              event.target.value = CURRENT_QIRAAH;
+            }
+          }}
+          className="input h-8 w-36 text-xs"
+        >
+          {MUSHAF_EDITIONS.map((edition) => (
+            <option data-ui-id={UI_AyahNavigator_Qiraat[edition.id as keyof typeof UI_AyahNavigator_Qiraat]} key={edition.id} value={edition.id} disabled={!edition.available}>
+              {edition.name}{!edition.available ? ' (قريباً)' : ''}
+            </option>
+          ))}
+        </select>
+      </label>
 
       <span className="text-[11px] text-stone-500">
         {surah.name} · {surah.revelationType === 'MECCAN' ? 'مكية' : 'مدنية'} · {ayahCount} آية

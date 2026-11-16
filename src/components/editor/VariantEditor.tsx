@@ -17,7 +17,7 @@ import { getImamColor } from '@/lib/tashjeer/color-system';
 import { describeScope, normalizeScope, resolveScope } from '@/lib/tashjeer/scope';
 import { getNarratorSymbol } from '@/lib/tashjeer/symbols';
 import { documentWindowWords } from '@/lib/tashjeer/reading-window';
-import { characterCount } from '@/lib/quran-logic/characters';
+import { characterCount, splitQuranCharacters } from '@/lib/quran-logic/characters';
 import { pruneStrengthMap } from '@/lib/tashjeer/strength-degrees';
 import { StrengthDegreePicker } from './StrengthDegreePicker';
 import { OrderRankControl } from './OrderRankControl';
@@ -33,6 +33,7 @@ import {
   getRuleType,
 } from '@/lib/tashjeer/recitation-rule-catalog';
 import type {
+  CharacterAnchor,
   EvidenceSource,
   ReadingScope,
   Variant,
@@ -40,6 +41,7 @@ import type {
   VariantLocus,
   VerificationStatus,
 } from '@/types/tashjeer';
+import { toArabicDigits } from '@/lib/utils/arabic-numbers';
 
 // Immutable UI identity tables. Keys denote finite controls, never row positions.
 const UI_VariantEditor_0 = {
@@ -96,13 +98,116 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
   const { updateVariant, addAlternative, updateAlternative, deleteAlternative, setEffectiveOrderRank } =
     useEditorStore();
   const catalog = useTransmissionCatalog();
+  const editorDocument = useEditorStore((state) => state.document);
+  const words = useMemo(
+    () => documentWindowWords(editorDocument ?? { ayahKey: variant.ayahKey }),
+    [editorDocument, variant.ayahKey]
+  );
   const [activeAlternativeId, setActiveAlternativeId] = useState<string | null>(
     variant.alternatives.find((alternative) => !alternative.isBase)?.id ?? null
   );
+  // ==== التحديد البصري داخل المحرر (دمج A1334 + A749/A750 في A1459) ====
+  const [rangeClick, setRangeClick] = useState<{ start: number; end: number; pinned?: boolean } | null>(null);
+  const [letterMode, setLetterMode] = useState(false);
+  const [letterAnchors, setLetterAnchors] = useState<CharacterAnchor[]>(() => {
+    // تهيئة من الـ characterRange الموجود إن وجد
+    if (variant.targetKind === 'CHARACTERS' && variant.characterRange) {
+      const anchors: CharacterAnchor[] = [];
+      const cr = variant.characterRange;
+      for (let pos = cr.start.position; pos <= cr.end.position; pos++) {
+        const w = words.find((word) => word.position === pos);
+        if (!w) continue;
+        const maxChar = characterCount(w.text);
+        const startC = pos === cr.start.position ? cr.start.characterIndex : 1;
+        const endC = pos === cr.end.position ? cr.end.characterIndex : maxChar;
+        for (let c = startC; c <= endC; c++) {
+          anchors.push({ position: pos, characterIndex: c });
+        }
+      }
+      return anchors;
+    }
+    return [];
+  });
 
   const activeAlternative = variant.alternatives.find(
     (alternative) => alternative.id === activeAlternativeId
   );
+
+  // النطاق الحالي (من النقر أو من القيم الأصلية)
+  const selStart = rangeClick ? Math.min(rangeClick.start, rangeClick.end) : variant.startPosition;
+  const selEnd = rangeClick ? Math.max(rangeClick.start, rangeClick.end) : variant.endPosition;
+
+  /** نقرة كلمة: تثبيت البداية ثم النهاية لتحديد مدى */
+  const pickWord = (position: number) => {
+    if (!rangeClick || rangeClick.pinned) {
+      setRangeClick({ start: position, end: position });
+    } else {
+      setRangeClick({ start: rangeClick.start, end: position, pinned: true });
+    }
+  };
+
+  /** تبديل اختيار حرف */
+  const toggleLetter = (anchor: CharacterAnchor) => {
+    setLetterAnchors((current) => {
+      const exists = current.some(
+        (item) => item.position === anchor.position && item.characterIndex === anchor.characterIndex
+      );
+      const next = exists
+        ? current.filter((item) => item.position !== anchor.position || item.characterIndex !== anchor.characterIndex)
+        : [...current, anchor];
+      return next.sort((a, b) => a.position - b.position || a.characterIndex - b.characterIndex);
+    });
+  };
+
+  /** تطبيق التغييرات البصرية على الاختلاف */
+  useEffect(() => {
+    if (!rangeClick) return;
+    if (selStart === variant.startPosition && selEnd === variant.endPosition) return;
+    const start = Math.min(selStart, selEnd);
+    const end = Math.max(selStart, selEnd);
+    updateVariant(variant.id, {
+      startPosition: start,
+      endPosition: end,
+      // إعادة ضبط characterRange عند تغيير المدى ليتجنب اختيار قديم خارج النطاق
+      characterRange: undefined,
+      targetKind: letterMode ? 'CHARACTERS' : variant.targetKind,
+    });
+  }, [rangeClick, selStart, selEnd]);
+
+  /** تطبيق اختيار الحروف */
+  useEffect(() => {
+    if (letterAnchors.length === 0) return;
+    // تجميع الحروف في نطاقات متصلة
+    const groups: CharacterAnchor[][] = [];
+    let current: CharacterAnchor[] = [];
+    let lastPos = -1;
+    let lastChar = -1;
+    for (const a of letterAnchors) {
+      if (a.position === lastPos && a.characterIndex === lastChar + 1) {
+        current.push(a);
+      } else if (current.length > 0 && a.position === lastPos + 1 && a.characterIndex === 1) {
+        // كلمة جديدة - تبدأ نطاق جديد
+        current.push(a);
+      } else {
+        if (current.length > 0) groups.push(current);
+        current = [a];
+      }
+      lastPos = a.position;
+      lastChar = a.characterIndex;
+    }
+    if (current.length > 0) groups.push(current);
+
+    if (groups.length >= 1) {
+      const first = groups[0][0];
+      const last = groups[0][groups[0].length - 1];
+      if (first && last) {
+        updateVariant(variant.id, {
+          targetKind: 'CHARACTERS',
+          characterRange: { start: first, end: last },
+        });
+      }
+    }
+  }, [letterAnchors, variant.id, updateVariant]);
 
   const handleAddAlternative = () => {
     const id = `${variant.id}-alt-${Date.now().toString(36)}`;
@@ -152,6 +257,115 @@ export function VariantEditor({ variant, onClose, onGeneralize }: VariantEditorP
         </header>
 
         <div className="tashjeer-scroll-area flex-1 overflow-y-auto p-5">
+          {/* التحديد البصري المدمج في المحرر (دمج A1334 + نمطي التعليم A749/A750) */}
+          <section data-ui-id="A2205" className="mb-4 rounded-md border border-cyan-200 bg-cyan-50/40 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-xs font-bold text-cyan-950">تحديد الموضع بالبصر</h3>
+                <p className="mt-0.5 text-[11px] text-cyan-900/75">
+                  انقر كلمة البداية ثم كلمة النهاية. فعّل الحروف لاختيار حروف بعينها.
+                </p>
+              </div>
+              <div className="flex rounded-md border border-cyan-200 bg-white p-0.5 text-[11px]">
+                <button data-ui-id="A2200"
+                  type="button"
+                  onClick={() => {
+                    setLetterMode(false);
+                    setLetterAnchors([]);
+                    updateVariant(variant.id, { targetKind: 'WORDS', characterRange: undefined });
+                  }}
+                  className={`rounded px-2 py-1 ${!letterMode ? 'bg-cyan-700 text-white' : 'text-stone-600 hover:bg-cyan-50'}`}
+                >
+                  كلمات
+                </button>
+                <button data-ui-id="A2201"
+                  type="button"
+                  onClick={() => setLetterMode(true)}
+                  className={`rounded px-2 py-1 ${letterMode ? 'bg-cyan-700 text-white' : 'text-stone-600 hover:bg-cyan-50'}`}
+                >
+                  حروف
+                </button>
+                {rangeClick?.pinned && (
+                  <button data-ui-id="A2202"
+                    type="button"
+                    onClick={() => setRangeClick(null)}
+                    className="rounded px-2 py-1 text-rose-700 hover:bg-rose-50"
+                    title="إعادة ضبط التحديد البصري"
+                  >
+                    إعادة ضبط
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* شبكة الكلمات القابلة للنقر (تحديد بصري مدمج في المحرر) */}
+            <div className="mt-2 flex flex-wrap gap-1.5 rounded-lg border border-stone-200 bg-white p-2">
+              {words.map((word) => {
+                const inRange = word.position >= selStart && word.position <= selEnd;
+                return (
+                  <button data-ui-instance={String(word.position)} data-ui-id="A2203"
+                    key={word.position}
+                    type="button"
+                    onClick={() => {
+                      if (letterMode) return;
+                      pickWord(word.position);
+                    }}
+                    className={`rounded-md border px-2 py-1 text-lg transition ${
+                      inRange
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-900'
+                        : 'border-stone-200 bg-white text-stone-700 hover:border-emerald-300'
+                    }`}
+                    style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }}
+                  >
+                    {word.text}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* محدد الحروف (عند تفعيل وضع الحروف) */}
+            {letterMode && (
+              <div className="mt-2 space-y-2 rounded-lg border border-stone-200 bg-stone-50 p-2">
+                {words.filter((w) => w.position >= selStart && w.position <= selEnd).map((word) => (
+                  <div key={word.position} className="flex flex-wrap items-center gap-1 rounded bg-white p-2">
+                    <span className="ml-1 text-[10px] text-stone-400">{toArabicDigits(word.position)}</span>
+                    {splitQuranCharacters(word.text).map((character) => {
+                      const active = letterAnchors.some(
+                        (a) => a.position === word.position && a.characterIndex === character.index
+                      );
+                      return (
+                        <button data-ui-id="A2204"
+                          key={character.index}
+                          type="button"
+                          onClick={() => toggleLetter({ position: word.position, characterIndex: character.index })}
+                          className={`rounded border px-1.5 py-0.5 text-lg leading-relaxed ${
+                            active
+                              ? 'border-emerald-500 bg-emerald-100 text-emerald-900'
+                              : 'border-stone-200 text-stone-700 hover:border-emerald-300'
+                          }`}
+                          style={{ fontFamily: "'Amiri Quran', 'Amiri', serif" }}
+                        >
+                          {character.text}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+              <span className="rounded bg-emerald-50 px-2 py-1 text-emerald-900">
+                من الكلمة {toArabicDigits(selStart)} إلى {toArabicDigits(selEnd)}
+              </span>
+              {letterMode && letterAnchors.length > 0 && (
+                <span className="rounded bg-violet-50 px-2 py-1 text-violet-900">
+                  {toArabicDigits(letterAnchors.length)} حرفا محددا
+                </span>
+              )}
+            </div>
+          </section>
+
           {/* بيانات الاختلاف */}
           <section data-ui-id="A1463" className="grid gap-3 md:grid-cols-2">
             <Field data-ui-id="A1464" label="العنوان">
