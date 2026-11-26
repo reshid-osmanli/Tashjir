@@ -136,6 +136,8 @@
             - **A975** — LineOrderEditor — ترتيب الأسطر (list) (list, active)
               - **A976** — LineOrderEditor — LineOrderEditor (control) (panel, active)
               - **A978** — LineOrderEditor — LineOrderEditor (control) (panel, active)
+              - **A2211** — Line Order Floating Drag Preview (panel, active)
+              - **A2212** — Line Merge Floating Drag Preview (panel, active)
         - **A1130** — RelationsPanel — item.label — وجه ↔ وجه (tab) (tab, active)
         - **A1131** — RelationsPanel — item.label — سطر ↔ سطر (tab) (tab, active)
         - **A1132** — RelationsPanel — item.label — جزء → قاعدة (tab) (tab, active)
@@ -3603,6 +3605,8 @@
 | A2208 | option | AyahNavigator Qira'at — ورش عن نافع | A2206 | `/editor` | `AyahNavigator` | `src/components/editor/AyahNavigator.tsx` | active |
 | A2209 | option | AyahNavigator Qira'at — قالون عن نافع | A2206 | `/editor` | `AyahNavigator` | `src/components/editor/AyahNavigator.tsx` | active |
 | A2210 | option | AyahNavigator Qira'at — شعبة عن عاصم | A2206 | `/editor` | `AyahNavigator` | `src/components/editor/AyahNavigator.tsx` | active |
+| A2211 | panel | Line Order Floating Drag Preview | A975 | `/editor` | `DragPreview` | `src/components/editor/LineOrderEditor.tsx` | active |
+| A2212 | panel | Line Merge Floating Drag Preview | A975 | `/editor` | `DragPreview` | `src/components/editor/LineOrderEditor.tsx` | active |
 
 ## السجلات الكاملة
 
@@ -4541,18 +4545,18 @@
 - **Component:** `LineOrderEditor`
 - **Source:** `src/components/editor/LineOrderEditor.tsx`
 - **Purpose:** صف سطر التشجير القابل للسحب أو التحديد بلوحة المفاتيح.
-- **Behavior:** يدعم long press والسحب وShift/Ctrl selection وAlt+Arrow.
-- **Constraints:** معرف السطر مصدر الهوية؛ index وموضع العرض ليسا معرفا ثابتا.
+- **Behavior:** الفأرة/القلم يبدأ السحب بعد عتبة حركة 7px بلا انتظار؛ اللمس بضغطة مطولة 260ms مع بقاء التمرير الطبيعي قبلها. الصفوف تعرض normal/hover/focus/selected/pressed/dragging/disabled/saving/error.
+- **Constraints:** لا يتغير معرّف السطر أو علاقته أثناء السحب؛ لا تعديل للمستند قبل التأكيد؛ الأسطر المخفية والمقفلة محمية.
 - **Actions:** []
 - **Stores:** `src/stores/editor-store.ts`, `src/lib/editor/selection-store.ts`
-- **Logic files:** `src/lib/tashjeer/layout-engine.ts`, `src/lib/tashjeer/branch-engine.ts`, `src/lib/tashjeer/smart-create.ts`, `src/lib/tashjeer/clipboard.ts`, `src/lib/tashjeer/bulk-operations.ts`, `src/lib/tashjeer/merge-operations.ts`, `src/lib/tashjeer/manual-links.ts`, `src/lib/tashjeer/selection-commands.ts`
-- **Tests (regression boundary):** `tests/selection-store.test.ts`, `tests/editor-manual-actions.test.ts`, `tests/editor-bulk-actions.test.ts`, `tests/editor-multi-difference.test.ts`, `tests/package05-multi-difference.test.ts`, `tests/package06-wizard.test.ts`, `tests/package07-acceptance.test.ts`, `tests/e2e/editor-ph3.spec.ts`, `tests/ui-source-coverage.test.ts`
+- **Logic files:** `src/lib/tashjeer/layout-engine.ts`, `src/lib/tashjeer/branch-engine.ts`, `src/lib/tashjeer/smart-create.ts`, `src/lib/tashjeer/clipboard.ts`, `src/lib/tashjeer/bulk-operations.ts`, `src/lib/tashjeer/merge-operations.ts`, `src/lib/tashjeer/manual-links.ts`, `src/lib/tashjeer/selection-commands.ts`, `src/lib/editor/interaction-state.ts`, `src/lib/editor/line-order-filter.ts`, `src/lib/editor/drag-config.ts`, `src/lib/editor/line-drag-geometry.ts`, `src/lib/editor/selection-command-actions.ts`
+- **Tests (regression boundary):** `tests/selection-store.test.ts`, `tests/editor-manual-actions.test.ts`, `tests/editor-bulk-actions.test.ts`, `tests/editor-multi-difference.test.ts`, `tests/package05-multi-difference.test.ts`, `tests/package06-wizard.test.ts`, `tests/package07-acceptance.test.ts`, `tests/e2e/editor-ph3.spec.ts`, `tests/ui-source-coverage.test.ts`, `tests/interaction-state.test.ts`, `tests/line-order-filter.test.ts`, `tests/selection-command-actions.test.ts`, `tests/line-drag-geometry.test.ts`, `tests/e2e/line-drag.spec.ts`, `tests/e2e/selection-controls.spec.ts`, `tests/e2e/full-editor-scenario.spec.ts`
 - **Shortcuts:** —
 - **Identity mode:** template
 - **Status:** `active`
 - **Dependencies:** `A125`, `A126`, `A127`
 - **Related UI IDs:** `A123`
-- **Code references (not UI IDs):** `data-order-line-id`, `onPointerDown`, `moveLineToIndex`
+- **Code references (not UI IDs):** `data-order-line-id`, `interactionStateOf`, `down/move/up`, `planLineInsertion`, `A2211`, `A2212`
 
 </details>
 
@@ -4566,18 +4570,18 @@
 - **Component:** `LineOrderEditor`
 - **Source:** `src/components/editor/LineOrderEditor.tsx`
 - **Purpose:** مقبض دمج سطر مع سطر آخر.
-- **Behavior:** يبدأ إيماءة الدمج ويمررها عبر بوابة السياسة والتأكيد الموجودين.
-- **Constraints:** لا يدمج مباشرة عند pointer down؛ الإلغاء لا يغير المستند.
+- **Behavior:** يبدأ إيماءة دمج مستقلة بمعاينة A2212 البنفسجية وهدف مميز؛ القرار يمرّ عبر requestMergeLines تحت سياسة المحرك ولا دمج قبل التأكيد.
+- **Constraints:** سحب الصف العادي لا يندمج أبدًا؛ الإلغاء لا يغير المستند؛ الفك والتراجع محفوظان.
 - **Actions:** []
 - **Stores:** `src/stores/editor-store.ts`, `src/lib/editor/selection-store.ts`
-- **Logic files:** `src/lib/tashjeer/layout-engine.ts`, `src/lib/tashjeer/branch-engine.ts`, `src/lib/tashjeer/smart-create.ts`, `src/lib/tashjeer/clipboard.ts`, `src/lib/tashjeer/bulk-operations.ts`, `src/lib/tashjeer/merge-operations.ts`, `src/lib/tashjeer/manual-links.ts`, `src/lib/tashjeer/selection-commands.ts`
-- **Tests (regression boundary):** `tests/selection-store.test.ts`, `tests/editor-manual-actions.test.ts`, `tests/editor-bulk-actions.test.ts`, `tests/editor-multi-difference.test.ts`, `tests/package05-multi-difference.test.ts`, `tests/package06-wizard.test.ts`, `tests/package07-acceptance.test.ts`, `tests/e2e/editor-ph3.spec.ts`, `tests/ui-source-coverage.test.ts`
+- **Logic files:** `src/lib/tashjeer/layout-engine.ts`, `src/lib/tashjeer/branch-engine.ts`, `src/lib/tashjeer/smart-create.ts`, `src/lib/tashjeer/clipboard.ts`, `src/lib/tashjeer/bulk-operations.ts`, `src/lib/tashjeer/merge-operations.ts`, `src/lib/tashjeer/manual-links.ts`, `src/lib/tashjeer/selection-commands.ts`, `src/lib/editor/interaction-state.ts`, `src/lib/editor/line-order-filter.ts`, `src/lib/editor/drag-config.ts`, `src/lib/editor/line-drag-geometry.ts`, `src/lib/editor/selection-command-actions.ts`
+- **Tests (regression boundary):** `tests/selection-store.test.ts`, `tests/editor-manual-actions.test.ts`, `tests/editor-bulk-actions.test.ts`, `tests/editor-multi-difference.test.ts`, `tests/package05-multi-difference.test.ts`, `tests/package06-wizard.test.ts`, `tests/package07-acceptance.test.ts`, `tests/e2e/editor-ph3.spec.ts`, `tests/ui-source-coverage.test.ts`, `tests/interaction-state.test.ts`, `tests/line-order-filter.test.ts`, `tests/selection-command-actions.test.ts`, `tests/line-drag-geometry.test.ts`, `tests/e2e/line-drag.spec.ts`, `tests/e2e/selection-controls.spec.ts`, `tests/e2e/full-editor-scenario.spec.ts`
 - **Shortcuts:** —
 - **Identity mode:** template
 - **Status:** `active`
 - **Dependencies:** `A123`
 - **Related UI IDs:** `A124`
-- **Code references (not UI IDs):** `down`, `MERGE`, `confirmAction`
+- **Code references (not UI IDs):** `down`, `MERGE`, `requestMergeLines`, `A2212`
 
 </details>
 
@@ -4691,18 +4695,18 @@
 - **Component:** `SelectionContextMenu`
 - **Source:** `src/components/editor/SelectionContextMenu.tsx`
 - **Purpose:** قائمة سياقية للأوامر المتاحة على العنصر النشط.
-- **Behavior:** تدير copy/cut/paste/delete/edit ونحوها عبر إجراءات المحرر القائمة.
-- **Constraints:** تظهر الأوامر بحسب نوع التحديد وصلاحيتها؛ لا تغير ترتيب أو بيانات غير محددة.
+- **Behavior:** كل معروض يخطط عبر planSelectionCommand وينفّذ عبر executeSelectionCommand على مخزن المحرر؛ الأوامر غير المدعومة تُخفى لا تُعرض كأزرار ميتة.
+- **Constraints:** لا default:break صامت؛ اللصق يمر بالتأكيد؛ LINK/MOVE/WHY/UNLINK/EDIT لها أثر حقيقي.
 - **Actions:** [{"event":"reference","expression":"deleteActive"}]
 - **Stores:** `src/stores/editor-store.ts`, `src/lib/editor/selection-store.ts`
-- **Logic files:** `src/lib/tashjeer/layout-engine.ts`, `src/lib/tashjeer/branch-engine.ts`, `src/lib/tashjeer/smart-create.ts`, `src/lib/tashjeer/clipboard.ts`, `src/lib/tashjeer/bulk-operations.ts`, `src/lib/tashjeer/merge-operations.ts`, `src/lib/tashjeer/manual-links.ts`, `src/lib/tashjeer/selection-commands.ts`
-- **Tests (regression boundary):** `tests/selection-store.test.ts`, `tests/editor-manual-actions.test.ts`, `tests/editor-bulk-actions.test.ts`, `tests/editor-multi-difference.test.ts`, `tests/package05-multi-difference.test.ts`, `tests/package06-wizard.test.ts`, `tests/package07-acceptance.test.ts`, `tests/e2e/editor-ph3.spec.ts`, `tests/ui-source-coverage.test.ts`
+- **Logic files:** `src/lib/tashjeer/layout-engine.ts`, `src/lib/tashjeer/branch-engine.ts`, `src/lib/tashjeer/smart-create.ts`, `src/lib/tashjeer/clipboard.ts`, `src/lib/tashjeer/bulk-operations.ts`, `src/lib/tashjeer/merge-operations.ts`, `src/lib/tashjeer/manual-links.ts`, `src/lib/tashjeer/selection-commands.ts`, `src/lib/editor/interaction-state.ts`, `src/lib/editor/line-order-filter.ts`, `src/lib/editor/drag-config.ts`, `src/lib/editor/line-drag-geometry.ts`, `src/lib/editor/selection-command-actions.ts`
+- **Tests (regression boundary):** `tests/selection-store.test.ts`, `tests/editor-manual-actions.test.ts`, `tests/editor-bulk-actions.test.ts`, `tests/editor-multi-difference.test.ts`, `tests/package05-multi-difference.test.ts`, `tests/package06-wizard.test.ts`, `tests/package07-acceptance.test.ts`, `tests/e2e/editor-ph3.spec.ts`, `tests/ui-source-coverage.test.ts`, `tests/interaction-state.test.ts`, `tests/line-order-filter.test.ts`, `tests/selection-command-actions.test.ts`, `tests/line-drag-geometry.test.ts`, `tests/e2e/line-drag.spec.ts`, `tests/e2e/selection-controls.spec.ts`, `tests/e2e/full-editor-scenario.spec.ts`
 - **Shortcuts:** —
 - **Identity mode:** static
 - **Status:** `active`
 - **Dependencies:** `A129`, `A106`
 - **Related UI IDs:** `A111`, `A128`
-- **Code references (not UI IDs):** `SelectionCommand`, `deleteActive`
+- **Code references (not UI IDs):** `planSelectionCommand`, `commandIsFunctional`, `executeSelectionCommand`, `confirmAction`
 
 </details>
 
@@ -19291,12 +19295,12 @@
 - **Component:** `LineOrderEditor`
 - **Source:** `src/components/editor/LineOrderEditor.tsx`
 - **Purpose:** list في LineOrderEditor: ترتيب الأسطر.
-- **Behavior:** onPointerMove: move<br>onPointerUp: up<br>onPointerCancel: clear<br>onLostPointerCapture: () => { if (press.current) clear(); }<br>onClickCapture: (event) => { if (suppressClick.current) { event.preventDefault(); event.stopPropagation(); suppressClick.current = false; } }
-- **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
+- **Behavior:** Pointer Events موحّدة مع التقاط مؤشر ثابت؛ معاينة عائمة عبر portal؛ فجوة إدراج خضراء؛ تمرير تلقائي تدريجي؛ FLIP بعد الإفلات.
+- **Constraints:** لا HTML5 DnD ولا setTimeout لدورة الفأرة؛ لا تعديل للمستند أثناء الحركة.
 - **Actions:** [{"event":"onPointerMove","expression":"move"},{"event":"onPointerUp","expression":"up"},{"event":"onPointerCancel","expression":"clear"},{"event":"onLostPointerCapture","expression":"() => { if (press.current) clear(); }"},{"event":"onClickCapture","expression":"(event) => { if (suppressClick.current) { event.preventDefault(); event.stopPropagation(); suppressClick.current = false; } }"}]
 - **Stores:** `src/lib/ui/confirm-store.ts`, `src/stores/editor-store.ts`
-- **Logic files:** `src/lib/tashjeer/classic-tashjeer.ts`, `src/lib/tashjeer/manual-links.ts`, `src/lib/tashjeer/multi-selection.ts`, `src/lib/tashjeer/line-operations.ts`, `src/lib/ui/confirm-store.ts`, `src/lib/utils/arabic-numbers.ts`, `src/stores/editor-store.ts`
-- **Tests (regression boundary):** `tests/selection-store.test.ts`, `tests/editor-manual-actions.test.ts`, `tests/editor-bulk-actions.test.ts`, `tests/editor-multi-difference.test.ts`, `tests/package05-multi-difference.test.ts`, `tests/package06-wizard.test.ts`, `tests/package07-acceptance.test.ts`, `tests/e2e/editor-ph3.spec.ts`, `tests/ui-source-coverage.test.ts`
+- **Logic files:** `src/lib/tashjeer/classic-tashjeer.ts`, `src/lib/tashjeer/manual-links.ts`, `src/lib/tashjeer/multi-selection.ts`, `src/lib/tashjeer/line-operations.ts`, `src/lib/ui/confirm-store.ts`, `src/lib/utils/arabic-numbers.ts`, `src/stores/editor-store.ts`, `src/lib/editor/interaction-state.ts`, `src/lib/editor/line-order-filter.ts`, `src/lib/editor/drag-config.ts`, `src/lib/editor/line-drag-geometry.ts`, `src/lib/editor/selection-command-actions.ts`
+- **Tests (regression boundary):** `tests/selection-store.test.ts`, `tests/editor-manual-actions.test.ts`, `tests/editor-bulk-actions.test.ts`, `tests/editor-multi-difference.test.ts`, `tests/package05-multi-difference.test.ts`, `tests/package06-wizard.test.ts`, `tests/package07-acceptance.test.ts`, `tests/e2e/editor-ph3.spec.ts`, `tests/ui-source-coverage.test.ts`, `tests/interaction-state.test.ts`, `tests/line-order-filter.test.ts`, `tests/selection-command-actions.test.ts`, `tests/line-drag-geometry.test.ts`, `tests/e2e/line-drag.spec.ts`, `tests/e2e/selection-controls.spec.ts`, `tests/e2e/full-editor-scenario.spec.ts`
 - **Shortcuts:** —
 - **Identity mode:** static
 - **Status:** `active`
@@ -31116,18 +31120,18 @@
 - **Component:** `ClassicLineShape`
 - **Source:** `src/components/editor/TashjeerFigure.tsx`
 - **Purpose:** control في ClassicLineShape: isPulsing && ( <rect x={Math.min(startX, line.guideStartX) - 6} y={line.rowY - 14} width={Math.max(Math.max(endX, line.guideEndX) - Math.min(startX, line.guideStartX), 1) + 12} height={28} rx={6} fill={color} className="tashjeer-pulse" poin.
-- **Behavior:** onClick: onClick<br>onMouseEnter: onHoverStart<br>onMouseLeave: onHoverEnd
-- **Constraints:** الهوية ثابتة؛ نقل العنصر يغيّر parentId لا id. نسخ البيانات تستخدم قالبًا واحدًا.
+- **Behavior:** قالب SVG قابل للنقر والضغط والتركيز ولوحة المفاتيح؛ التحديد الموحّد يقرأ من editor-store، وحالة واحدة تظهر في data-interaction-state مع ARIA وحلقة تركيز.
+- **Constraints:** لا يعتمد على selectedVariantId وحده؛ لا يغيّر قواعد المحرك؛ Enter/Space يفعّل التحديد ولا يعكسه.
 - **Actions:** [{"event":"onClick","expression":"onClick"},{"event":"onMouseEnter","expression":"onHoverStart"},{"event":"onMouseLeave","expression":"onHoverEnd"}]
 - **Stores:** —
-- **Logic files:** `src/lib/tashjeer/color-system.ts`, `src/lib/tashjeer/classic-tashjeer.ts`, `src/lib/tashjeer/engine-settings.ts`, `src/lib/quran-logic/characters.ts`, `src/lib/utils/arabic-numbers.ts`
-- **Tests (regression boundary):** `tests/selection-store.test.ts`, `tests/editor-manual-actions.test.ts`, `tests/editor-bulk-actions.test.ts`, `tests/editor-multi-difference.test.ts`, `tests/package05-multi-difference.test.ts`, `tests/package06-wizard.test.ts`, `tests/package07-acceptance.test.ts`, `tests/e2e/editor-ph3.spec.ts`, `tests/ui-source-coverage.test.ts`
+- **Logic files:** `src/lib/tashjeer/color-system.ts`, `src/lib/tashjeer/classic-tashjeer.ts`, `src/lib/tashjeer/engine-settings.ts`, `src/lib/quran-logic/characters.ts`, `src/lib/utils/arabic-numbers.ts`, `src/lib/editor/interaction-state.ts`, `src/lib/editor/line-order-filter.ts`, `src/lib/editor/drag-config.ts`, `src/lib/editor/line-drag-geometry.ts`, `src/lib/editor/selection-command-actions.ts`
+- **Tests (regression boundary):** `tests/selection-store.test.ts`, `tests/editor-manual-actions.test.ts`, `tests/editor-bulk-actions.test.ts`, `tests/editor-multi-difference.test.ts`, `tests/package05-multi-difference.test.ts`, `tests/package06-wizard.test.ts`, `tests/package07-acceptance.test.ts`, `tests/e2e/editor-ph3.spec.ts`, `tests/ui-source-coverage.test.ts`, `tests/interaction-state.test.ts`, `tests/line-order-filter.test.ts`, `tests/selection-command-actions.test.ts`, `tests/line-drag-geometry.test.ts`, `tests/e2e/line-drag.spec.ts`, `tests/e2e/selection-controls.spec.ts`, `tests/e2e/full-editor-scenario.spec.ts`
 - **Shortcuts:** —
 - **Identity mode:** template
 - **Status:** `active`
 - **Dependencies:** —
 - **Related UI IDs:** —
-- **Code references (not UI IDs):** `onClick`, `onHoverStart`, `onHoverEnd`
+- **Code references (not UI IDs):** `lineMatchesSelection`, `interactionStateOf`, `onLinePressed`, `onLineActivate`, `data-state`
 
 </details>
 
@@ -48228,6 +48232,56 @@
 - **Dependencies:** —
 - **Related UI IDs:** `A1431`
 - **Code references (not UI IDs):** `MUSHAF_EDITIONS`
+
+</details>
+
+<details>
+<summary><strong>A2211 — Line Order Floating Drag Preview</strong></summary>
+
+- **Type:** `panel`
+- **Feature:** A001 — Editor
+- **Parent:** A975
+- **Route:** `/editor`
+- **Component:** `DragPreview`
+- **Source:** `src/components/editor/LineOrderEditor.tsx`
+- **Purpose:** معاينة HTML عائمة لسطر أثناء سحب تغيير الترتيب، تُرسم عبر portal فوق الصفحة.
+- **Behavior:** position:fixed وpointer-events:none وtranslate3d; تتبع المؤشر مع إزاحة المقبض، وتعرض رقم السطر واسمه ووصفه.
+- **Constraints:** عنصر عرض فقط: لا يعدّل المستند ولا يُنشئ معرّف سطر، ويختفي عند الإفلات أو الإلغاء.
+- **Actions:** []
+- **Stores:** `src/stores/editor-store.ts`
+- **Logic files:** `src/lib/editor/drag-config.ts`, `src/lib/editor/line-drag-geometry.ts`, `src/lib/tashjeer/line-operations.ts`
+- **Tests (regression boundary):** `tests/line-drag-geometry.test.ts`, `tests/e2e/editor-ph3.spec.ts`, `tests/interaction-state.test.ts`, `tests/line-order-filter.test.ts`, `tests/selection-command-actions.test.ts`, `tests/e2e/line-drag.spec.ts`, `tests/e2e/selection-controls.spec.ts`, `tests/e2e/full-editor-scenario.spec.ts`
+- **Shortcuts:** —
+- **Identity mode:** static
+- **Status:** `active`
+- **Dependencies:** —
+- **Related UI IDs:** `A975`, `A124`, `A125`
+- **Code references (not UI IDs):** `createPortal`, `previewTransform`, `data-drag-mode`, `data-pointer-x`
+
+</details>
+
+<details>
+<summary><strong>A2212 — Line Merge Floating Drag Preview</strong></summary>
+
+- **Type:** `panel`
+- **Feature:** A001 — Editor
+- **Parent:** A975
+- **Route:** `/editor`
+- **Component:** `DragPreview`
+- **Source:** `src/components/editor/LineOrderEditor.tsx`
+- **Purpose:** معاينة عائمة مستقلة لمقبض الدمج ↳ بلون بنفسجي وشارته الواضحة.
+- **Behavior:** تظهر فقط حين يبدأ السحب من مقبض الدمج؛ تعرض «دمج مع» وهدف الإفلات ولا تغيّر الترتيب.
+- **Constraints:** لا دمج قبل قرار السياسة والتأكيد؛ سحب الصف العادي لا يفتح هذه المعاينة ولا يندمج.
+- **Actions:** []
+- **Stores:** `src/stores/editor-store.ts`
+- **Logic files:** `src/lib/editor/drag-config.ts`, `src/lib/editor/line-drag-geometry.ts`, `src/lib/tashjeer/line-operations.ts`
+- **Tests (regression boundary):** `tests/line-drag-geometry.test.ts`, `tests/e2e/editor-ph3.spec.ts`, `tests/interaction-state.test.ts`, `tests/line-order-filter.test.ts`, `tests/selection-command-actions.test.ts`, `tests/e2e/line-drag.spec.ts`, `tests/e2e/selection-controls.spec.ts`, `tests/e2e/full-editor-scenario.spec.ts`
+- **Shortcuts:** —
+- **Identity mode:** static
+- **Status:** `active`
+- **Dependencies:** —
+- **Related UI IDs:** `A975`, `A124`, `A125`
+- **Code references (not UI IDs):** `createPortal`, `previewTransform`, `data-drag-mode`, `data-pointer-x`
 
 </details>
 

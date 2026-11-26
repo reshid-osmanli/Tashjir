@@ -64,7 +64,9 @@ import {
 } from '@/lib/quran-logic/global-rule-engine';
 import { readTransmissionCatalog } from '@/lib/transmissions/catalog';
 import { readEngineSettings } from '@/lib/tashjeer/engine-settings';
-import { moveLineToIndex } from '@/lib/tashjeer/manual-links';
+import { coalesceLineOrder, moveLineToIndex } from '@/lib/tashjeer/manual-links';
+import { lineOrderIsFiltered } from '@/lib/editor/line-order-filter';
+import { describeLineOrderMove } from '@/lib/editor/line-drag-geometry';
 import {
   deleteOccurrence,
   exportOccurrenceData,
@@ -207,6 +209,24 @@ const DEFAULT_FILTER: ViewFilter = {
   showRulers: false,
   showAnchors: true,
 };
+
+/**
+ * أسطر المحرك الحالية للمستند: المصدر الوحيد لحساب الترتيب خارج اللوحات.
+ * تستعملها «عودة لترتيب المحرك» و«نقل السطر المحدد» معا، فلا يُعاد حساب
+ * الترتيب في مكوّن ولا في مخزن ثانٍ، ولا تُنشأ معرّفات جديدة للأسطر.
+ */
+function engineLinesOfDocument(document: TashjeerDocument): ClassicLine[] {
+  const words = documentWindowWords(document);
+  const layout = layoutAyah(document.ayahKey, words, document.layout);
+  return generateClassicTashjeer(
+    getEffectiveVariants(document).filter((variant) => variantAppliesToRecitation(variant, document.boundaries)),
+    layout, DEFAULT_FILTER, document.layout, {
+      catalog: readTransmissionCatalog(), engine: readEngineSettings(), engineConfig: loadEngineConfig(), strengthDegrees: readStrengthDegrees(),
+      boundaries: document.boundaries, branchOverrides: document.branches, manualLines: document.manualLines,
+      links: document.links ?? [], segments: document.segments ?? [], lineOrder: [], focusSegment: document.readingWindow?.focusSegment ?? null,
+    }
+  ).lines;
+}
 
 // ==================== تفضيلات مساحة العمل (FR-ED-01.4) ====================
 //
@@ -439,6 +459,19 @@ interface EditorState {
    */
   pendingWhy: { ruleId?: string } | null;
   requestWhy: (request: { ruleId?: string } | null) => void;
+  /**
+   * طلب ربط قادم من قائمة السياق/لوحة التفاصيل: لوحة العلاقات تستهلكه فتفتح
+   * التبويب الصحيح وتضع العنصر المحدد طرفا أولا في النموذج. حالة واجهة صِرفة
+   * لا تدخل المستند ولا التصدير ولا التراجع.
+   */
+  linkRequest: { kind: 'FACE' | 'LINE'; id: string; token: number } | null;
+  requestLink: (source: { kind: 'FACE' | 'LINE'; id: string }) => void;
+  clearLinkRequest: () => void;
+  /**
+   * نقل السطر المحدد رتبة واحدة من الأوامر الموحّدة (قائمة السياق/التفاصيل):
+   * نفس حساب الترتيب ونفس التأكيد الكمي ونفس خطوة التراجع الواحدة.
+   */
+  requestMoveSelectedLine: (delta: -1 | 1) => Promise<string>;
   /**
    * عدّاد طلبات إنشاء اختلاف جديد: الاختصار N أو أي زر «إنشاء» عام يرفعه،
    * ولوحة الاختلافات تستهلكه فتنشئ اختلافاً جديداً على التحديد الحالي.
@@ -762,6 +795,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   lastLinkDecision: null,
   pendingWhy: null,
+  linkRequest: null,
   newVariantRequest: 0,
   lastDifferenceRelationDecision: null,
   multiDifferenceNotice: null,
@@ -1640,6 +1674,52 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   clearLinkDecision: () => set({ lastLinkDecision: null }),
   requestWhy: (request) => set({ pendingWhy: request }),
+  requestLink: (source) => set((state) => ({
+    linkRequest: { ...source, token: (state.linkRequest?.token ?? 0) + 1 },
+    // لوحة الخصائص قد تكون مخفية؛ إظهارها جزء من تنفيذ الأمر لا زينة.
+    showPropertiesPanel: true,
+  })),
+  clearLinkRequest: () => set({ linkRequest: null }),
+  requestMoveSelectedLine: async (delta) => {
+    const state = get();
+    const document = state.document;
+    const selection = state.selection;
+    if (!document || selection?.kind !== 'LINE' || !selection.lineId) return 'حدّد سطرًا أولًا.';
+    const filter = state.filter;
+    // النقل أثناء التصفية موقوف: الأسطر المخفية ليست في القائمة المرسومة،
+    // فإزاحتها قد تُفسد ترتيبها بلا أن يراها المحقق.
+    const filtered = lineOrderIsFiltered(filter, document);
+    if (filtered) return 'ألغِ تصفية الأسطر قبل النقل لحماية الأسطر المخفية.';
+    const engineLines = engineLinesOfDocument(document);
+    const ids = coalesceLineOrder(document.lineOrder, engineLines.map((line) => line.id));
+    const fromRank = ids.indexOf(selection.lineId) + 1;
+    if (fromRank === 0) return 'السطر المحدد غير موجود في الترتيب الحالي.';
+    const rank = fromRank + delta;
+    if (rank < 1 || rank > ids.length) return 'السطر عند حدّ القائمة؛ لا موضعًا للنقل.';
+    const order = moveLineToIndex(ids, selection.lineId, rank);
+    const locked = document.lines?.some((line) =>
+      line.locked && order.some((id, index) => id === line.id && index !== ids.indexOf(line.id))
+    );
+    if (locked) return 'يتأثر سطر مقفل؛ لم يُنقل أي سطر.';
+    const description = describeLineOrderMove(ids, order, selection.lineId);
+    const neighbor = (id?: string) => id ? `السطر ${toArabicDigits(ids.indexOf(id) + 1)}` : '';
+    const hint = description.previousId && description.nextId
+      ? `بين ${neighbor(description.previousId)} و${neighbor(description.nextId)}`
+      : description.previousId ? `بعد ${neighbor(description.previousId)}` : `قبل ${neighbor(description.nextId)}`;
+    const accepted = await confirmAction({
+      title: `نقل السطر ${toArabicDigits(description.fromRank)} إلى الرتبة ${toArabicDigits(description.rank)}؟`,
+      message: `قبل النقل: الرتبة ${toArabicDigits(description.fromRank)}؛ بعده: الرتبة ${toArabicDigits(description.rank)}. ${hint}. تبقى المعرّفات والأجزاء والعلاقات كما هي.`,
+      impacts: [{ label: 'أسطر متأثرة', count: description.affected }],
+      undoable: true, confirmLabel: 'تأكيد', tone: 'default',
+    });
+    if (!accepted) return 'أُلغي النقل؛ لم تتغير البيانات.';
+    if (get().document !== document) return 'تغيّر المستند أثناء التأكيد؛ أعد طلب النقل.';
+    // تعديل واحد ذري في مخزن المستند: لا يُعاد توليد معرّف ولا علاقة.
+    get().setLineOrder(order, engineLines);
+    const line = engineLines.find((item) => item.id === selection.lineId);
+    if (line) get().selectLine(selection.lineId, line.variantId, line.startPosition);
+    return `نُقل السطر إلى الرتبة ${toArabicDigits(description.rank)}. يمكن التراجع.`;
+  },
   requestNewVariant: () => set((state) => ({ newVariantRequest: state.newVariantRequest + 1 })),
 
   requestAddLink: async (input) => {
@@ -2079,17 +2159,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   resetLineOrder: () => {
     const document = get().document;
     if (!document) return;
-    const words = documentWindowWords(document);
-    const layout = layoutAyah(document.ayahKey, words, document.layout);
-    const engineLines = generateClassicTashjeer(
-      getEffectiveVariants(document).filter((variant) => variantAppliesToRecitation(variant, document.boundaries)),
-      layout, DEFAULT_FILTER, document.layout, {
-        catalog: readTransmissionCatalog(), engine: readEngineSettings(), engineConfig: loadEngineConfig(), strengthDegrees: readStrengthDegrees(),
-        boundaries: document.boundaries, branchOverrides: document.branches, manualLines: document.manualLines,
-        links: document.links ?? [], segments: document.segments ?? [], lineOrder: [], focusSegment: document.readingWindow?.focusSegment ?? null,
-      }
-    ).lines;
-    get().setLineOrder([], engineLines);
+    get().setLineOrder([], engineLinesOfDocument(document));
   },
 
   // ==================== الوقف والابتداء وتخطيط النص ====================
@@ -2267,12 +2337,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       selectedBranchId: null,
     }));
   },
-  selectLine: (lineId, differenceId, position) => set((state) => ({
-    ...selectionWrite(state, { kind: 'LINE', id: lineId, lineId, differenceId, position }),
-    selectedVariantId: differenceId ?? null,
-    selectedAlternativeId: null,
-    selectedBranchId: lineId,
-  })),
+  selectLine: (lineId, differenceId, position) => set((state) => {
+    // الأسطر اليدوية تحمل variantId فارغًا: تمريره كما هو يجعل كل الأسطر
+    // «محددة» في الرسم ('' === ''). عامل القيمة الفارغة كأنها غياب اختلاف.
+    const anchor = differenceId || undefined;
+    return {
+      ...selectionWrite(state, { kind: 'LINE', id: lineId, lineId, differenceId: anchor, position }),
+      selectedVariantId: anchor ?? null,
+      selectedAlternativeId: null,
+      selectedBranchId: lineId,
+    };
+  }),
   selectBranch: (branchId) => set((state) => ({
     selectedBranchId: branchId,
     ...selectionWrite(

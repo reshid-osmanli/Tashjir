@@ -5,6 +5,8 @@
 // التصدير. لو بقي الرسم داخل مكوّن المحرر لتعذّر التحقق منه إلا بمتصفح.
 
 import { getCategoryColor } from '@/lib/tashjeer/color-system';
+import { interactionStateOf } from '@/lib/editor/interaction-state';
+import type { EditorSelection } from '@/types/tashjeer';
 import type {
   ClassicAgreementLine,
   ClassicLine,
@@ -33,6 +35,19 @@ export interface ViewBox {
   height: number;
 }
 
+/** هل هذا السطر هو (أو يحمل) العنصر النشط في التحديد الموحّد؟ نقيّة. */
+function lineMatchesSelection(line: ClassicLine, selection: EditorSelection | null): boolean {
+  if (!selection) return false;
+  const id = selection.differenceId ?? selection.id;
+  if (selection.kind === 'LINE') return (selection.lineId ?? selection.id) === line.id;
+  if (selection.kind === 'DIFFERENCE') return line.variantId === id || line.entries.some((entry) => entry.variantId === id);
+  if (selection.kind === 'FACE') {
+    const faceId = selection.faceId ?? selection.id;
+    return line.entries.some((entry) => entry.variantId === id && entry.alternativeId === faceId);
+  }
+  return false;
+}
+
 /**
  * الشجرة كاملة: إطار النص، وعلامات الوقف، وأسطر الأوجه، ثم كلمات الآية فوقها.
  * ترتيب الطبقات مقصود: النص آخرا ليبقى مقروءا وقابلا للنقر فوق الأسطر.
@@ -59,6 +74,15 @@ export function TashjeerFigure({
   selectedVariantId = null,
   pulseLineId = null,
   hoveredLineId = null,
+  unifiedSelection = null,
+  pressedLineId = null,
+  focusedLineId = null,
+  interactive = true,
+  onLinePressed,
+  onLinePressEnd,
+  onLineFocus,
+  onLineBlur,
+  onLineActivate,
   /** الأداة النشطة (اختلاف أو وجه) داخل سطر: تُميَّز هي لا سطرها كله. */
   activeEntry = null,
   /** أداة (اختلاف داخل سطر) تُنبض لحظيا بعد إحضارها إلى مجال الرؤية. */
@@ -102,6 +126,18 @@ export function TashjeerFigure({
   /** مفتاح أداة تُنبض لحظيا: «variantId::alternativeId». */
   pulseEntryKey?: string | null;
   hoveredLineId?: string | null;
+  /** التحديد الموحّد (مصدر الحقيقة الواحد) — يميّز السطر حتى لو حُدد من لوحة أخرى. */
+  unifiedSelection?: EditorSelection | null;
+  /** حالات الضغط/التركيز تُدار في الحاوية التفاعلية، فيبقى الرسم نقيًا. */
+  pressedLineId?: string | null;
+  focusedLineId?: string | null;
+  /** عرض فقط (/quran): يعطّل كل تفاعل تحريري على السطر. */
+  interactive?: boolean;
+  onLinePressed?: (line: ClassicLine) => void;
+  onLinePressEnd?: () => void;
+  onLineFocus?: (line: ClassicLine) => void;
+  onLineBlur?: () => void;
+  onLineActivate?: (line: ClassicLine) => void;
   onWordClick?: (box: WordBox, event?: React.MouseEvent) => void;
   onCharacterClick?: (box: WordBox, characterIndex: number) => void;
   onLineClick?: (line: ClassicLine) => void;
@@ -142,10 +178,19 @@ export function TashjeerFigure({
             activeEntry={activeEntry}
             pulseEntryKey={pulseEntryKey}
             isHovered={line.id === hoveredLineId}
+            isActiveSelection={lineMatchesSelection(line, unifiedSelection)}
+            isPressed={pressedLineId === line.id}
+            isFocused={focusedLineId === line.id}
+            isDisabled={!interactive}
             onClick={() => onLineClick?.(line)}
             onEntryClick={(entry) => onEntryClick?.(line, entry)}
             onHoverStart={() => onLineHoverStart?.(line)}
             onHoverEnd={() => onLineHoverEnd?.()}
+            onPointerStart={() => onLinePressed?.(line)}
+            onPointerEnd={() => onLinePressEnd?.()}
+            onFocusStart={() => onLineFocus?.(line)}
+            onFocusEnd={() => onLineBlur?.()}
+            onActivate={() => onLineActivate?.(line)}
             onReaderClick={onReaderClick}
           />
         ))}
@@ -362,10 +407,19 @@ function ClassicLineShape({
   activeEntry = null,
   pulseEntryKey = null,
   isHovered,
+  isActiveSelection = false,
+  isPressed = false,
+  isFocused = false,
+  isDisabled = false,
   onClick,
   onEntryClick,
   onHoverStart,
   onHoverEnd,
+  onPointerStart,
+  onPointerEnd,
+  onFocusStart,
+  onFocusEnd,
+  onActivate,
   onReaderClick,
 }: {
   line: ClassicLine;
@@ -382,15 +436,31 @@ function ClassicLineShape({
   /** مفتاح أداة تُنبض داخل هذا السطر: «variantId::alternativeId». */
   pulseEntryKey?: string | null;
   isHovered: boolean;
+  /** التحديد الموحّد من أي لوحة (لا `selectedVariantId` المحلي وحده). */
+  isActiveSelection?: boolean;
+  isPressed?: boolean;
+  isFocused?: boolean;
+  isDisabled?: boolean;
   onClick: () => void;
   onEntryClick?: (entry: ClassicLineEntry) => void;
   onHoverStart: () => void;
   onHoverEnd: () => void;
+  onPointerStart?: () => void;
+  onPointerEnd?: () => void;
+  onFocusStart?: () => void;
+  onFocusEnd?: () => void;
+  onActivate?: () => void;
   onReaderClick?: (reader: ClassicReaderChip) => void;
 }) {
   const color = getCategoryColor(line.category);
-  const strokeWidth = isSelected ? 2.6 : isHovered ? 2 : 1.4;
-  const opacity = isSelected || isHovered ? 1 : 0.92;
+  const selected = isSelected || isActiveSelection;
+  // الحالة الواحدة تُحسب في مكان واحد وتُقرأ من DOM للفحص والاختبار.
+  const state = interactionStateOf({
+    disabled: isDisabled, hovered: isHovered, focused: isFocused,
+    selected, pressed: isPressed,
+  });
+  const strokeWidth = isDisabled ? 1 : isPressed ? 3.2 : selected ? 2.6 : isFocused || isHovered ? 2 : 1.4;
+  const opacity = isDisabled ? 0.45 : selected || isHovered || isPressed || isFocused ? 1 : 0.92;
 
   if (line.marks.length === 0) return null;
 
@@ -404,10 +474,30 @@ function ClassicLineShape({
 
   return (
     <g data-ui-id="A1448"
-      onClick={onClick}
+      role="button"
+      tabIndex={isDisabled ? -1 : 0}
+      aria-label={`سطر التشجير: ${line.label} — ${line.ruleLabel}`}
+      aria-pressed={selected}
+      aria-disabled={isDisabled}
+      data-interaction-state={state}
+      data-line-selected={selected ? '1' : '0'}
+      onClick={isDisabled ? undefined : onClick}
       onMouseEnter={onHoverStart}
       onMouseLeave={onHoverEnd}
-      style={{ cursor: 'pointer' }}
+      onPointerDown={isDisabled ? undefined : onPointerStart}
+      onPointerUp={onPointerEnd}
+      onPointerCancel={onPointerEnd}
+      onFocus={onFocusStart}
+      onBlur={onFocusEnd}
+      onKeyDown={(event) => {
+        if (isDisabled) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          event.stopPropagation();
+          (onActivate ?? onClick)();
+        }
+      }}
+      style={{ cursor: isDisabled ? 'not-allowed' : 'pointer', outline: 'none' }}
       data-line-id={line.id}
       data-lane={line.lane}
       data-entries={entries.length}
@@ -421,6 +511,22 @@ function ClassicLineShape({
         height={18}
         fill="transparent"
       />
+      {/* حلقة تركيز مرئية للوحة المفاتيح: لا تدخل في التخطيط ولا تحجب النص. */}
+      {isFocused && !isDisabled && (
+        <rect
+          x={Math.min(startX, line.guideStartX) - 8}
+          y={line.rowY - 16}
+          width={Math.max(Math.max(endX, line.guideEndX) - Math.min(startX, line.guideStartX), 1) + 16}
+          height={32}
+          rx={6}
+          fill="none"
+          stroke="#9c6f24"
+          strokeWidth={1.2}
+          strokeDasharray="4 3"
+          opacity={0.9}
+          pointerEvents="none"
+        />
+      )}
       {isPulsing && (
         <rect
           x={Math.min(startX, line.guideStartX) - 6}
@@ -446,7 +552,7 @@ function ClassicLineShape({
           stroke={color}
           strokeWidth={0.8}
           strokeDasharray="1 4"
-          opacity={isSelected || isHovered ? 0.6 : 0.38}
+          opacity={selected || isHovered ? 0.6 : 0.38}
         />
       )}
 
@@ -460,7 +566,7 @@ function ClassicLineShape({
         strokeWidth={strokeWidth}
         strokeLinecap="round"
         opacity={opacity}
-        filter={isSelected ? 'url(#branch-glow)' : undefined}
+        filter={selected ? 'url(#branch-glow)' : undefined}
       />
 
       {entries.map((entry, index) => (
@@ -471,7 +577,7 @@ function ClassicLineShape({
           textBottom={textBottom}
           strokeWidth={strokeWidth}
           opacity={opacity}
-          isSelected={isSelected}
+          isSelected={selected}
           isActive={
             activeEntry != null &&
             entry.variantId === activeEntry.variantId &&

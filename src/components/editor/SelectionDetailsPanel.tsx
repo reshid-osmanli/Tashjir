@@ -24,6 +24,7 @@ import {
   type SelectionLookup,
 } from '@/lib/tashjeer/selection-context';
 import { selectionCommands, type SelectionCommand } from '@/lib/tashjeer/selection-commands';
+import { executeSelectionCommand, planSelectionCommand } from '@/lib/editor/selection-command-actions';
 import { CATEGORY_LABELS } from '@/lib/tashjeer/branch-engine';
 import { getCategoryColor } from '@/lib/tashjeer/color-system';
 import { toArabicDigits } from '@/lib/utils/arabic-numbers';
@@ -217,29 +218,14 @@ export function SelectionDetailsPanel({ classic, onRequestWhy }: SelectionDetail
   const approxPage = surah?.page;
 
   const runCommand = (command: SelectionCommand) => {
-    const store = useEditorStore.getState();
-    switch (command.id) {
-      case 'COPY':
-        store.copySelection();
-        break;
-      case 'CUT':
-        store.cutSelection();
-        break;
-      case 'PASTE':
-        store.pasteSelection();
-        break;
-      case 'COPY_ID':
-        void navigator.clipboard?.writeText(active.id).then(() => {
-          setCopiedId(true);
-          window.setTimeout(() => setCopiedId(false), 1600);
-        });
-        break;
-      default:
-        // MOVE_UP/MOVE_DOWN/LINK/UNLINK/EDIT/WHY/DELETE: تتولى القوائم
-        // المتخصصة (الخصائص/العلاقات) تنفيذها بأدواتها الكاملة، ويرد هنا
-        // ما يشترك بين اللوحات فقط.
-        break;
-    }
+    // نفس خطة قائمة السياق (A130): لا أمر بلا إجراء، ولا تنفيذ موازٍ يناقضه.
+    void executeSelectionCommand(planSelectionCommand(command, useEditorStore.getState().selection)).then((message) => {
+      if (message) useEditorStore.setState({ clipboardNotice: message });
+      if (command.id === 'COPY_ID' && message.startsWith('نُسخ')) {
+        setCopiedId(true);
+        window.setTimeout(() => setCopiedId(false), 1600);
+      }
+    });
   };
 
   return (

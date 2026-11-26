@@ -10,6 +10,7 @@
 
 import Link from 'next/link';
 import { SessionBadge } from '@/components/layout/SessionBadge';
+import { ConfirmDialogHost } from '@/components/ui/ConfirmDialogHost';
 import { TashjirMark } from '@/components/brand/TashjirMark';
 import {
   IconAudit,
@@ -157,7 +158,10 @@ export default function DashboardLayout({
         </main>
       </div>
 
-      {/* A327 Shared Confirmation Dialog Host — تم تعطيله بناء على طلب المستخدم للسرعة */}
+      {/* A327 حوار التأكيد الكمي الموحّد: يُجيب على confirmAction للنقل والدمج والحذف.
+          كان غير مركّب (فكانت كل الطلبات تُوافق تلقائيا بلا حماية)، فأُعيد تركيبه
+          ليظهر الحوار فعليا قبل أي تعديل على المستند. */}
+      <ConfirmDialogHost />
     </div>
   );
 }

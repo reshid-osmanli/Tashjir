@@ -63,7 +63,7 @@ test('1 · disabled Inspector renders no badge and leaves the page untouched', a
 
   // …and the editor keeps behaving exactly as before.
   await button.click();
-  await expect(page.locator('[data-ui-id="A421"]')).toBeVisible();
+  await expect(page.locator('[data-ui-id="A1459"]')).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -176,7 +176,7 @@ test('5 · clicking the badge pins the element and opens its details', async ({ 
   await expect(details).toContainText('VariantsPanel');
   await expect(details).toContainText('src/components/editor/VariantsPanel.tsx');
   await expect(details).toContainText('A102');
-  await expect(page.locator('[data-ui-id="A421"]')).toHaveCount(0);
+  await expect(page.locator('[data-ui-id="A1459"]')).toHaveCount(0);
 
   // يبقى التثبيت قائما بعد مغادرة العنصر.
   await page.evaluate(() => document.dispatchEvent(new MouseEvent('mouseleave')));

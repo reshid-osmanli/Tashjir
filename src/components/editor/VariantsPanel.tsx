@@ -156,11 +156,13 @@ export function VariantsPanel() {
     }
   }, [newVariantRequest]);
 
+  // الخطافات تُستدعى بالترتيب نفسه في كل تصيير: لا توضع بعد عودة مشروطة.
+  // الاختلاف الجديد الذي يُنشأ الآن ليُحرر (نحدده بالـ id الذي عيّناه handleCreateNewVariant)
+  const [newVariantId, setNewVariantId] = useState<string | null>(null);
+
   if (!document) return null;
 
   const editingVariant = document.variants.find((variant) => variant.id === editingVariantId);
-  // الاختلاف الجديد الذي يُنشأ الآن ليُحرر (نحدده بالـ id الذي عيّناه handleCreateNewVariant)
-  const [newVariantId, setNewVariantId] = useState<string | null>(null);
   const newVariantDraft = newVariantId ? document.variants.find((v) => v.id === newVariantId) : null;
 
   /**
