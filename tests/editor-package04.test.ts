@@ -15,6 +15,7 @@
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { MemoryStorage } from './helpers/memory-storage';
 import { ph3Document } from './helpers/ph3-fixture';
+import { answerConfirms } from './helpers/confirm-answers';
 import { snapshotClipboard, pasteClipboard, pasteAnchorFace } from '@/lib/tashjeer/clipboard';
 import {
   applyManualLinks,
@@ -374,7 +375,7 @@ async function setupWithConfirm() {
   const { useEditorStore } = await import('@/stores/editor-store');
   const { useConfirmStore } = await import('@/lib/ui/confirm-store');
   useEditorStore.setState({ document: ph3Document(), past: [], future: [], selection: null, multiSelection: null, clipboard: null });
-  useConfirmStore.getState().setHostMounted(true);
+  answerConfirms(useConfirmStore);
   return { store: useEditorStore, confirm: useConfirmStore };
 }
 
@@ -393,13 +394,13 @@ describe('FR-ED-07 — حذف جماعي للأسطر: الحصري وحده', (
     });
   });
 
-  it('تحديد سطرين وحذفهما: موافقة فورية تلقائية، ثم تراجع واحد', async () => {
+  it('تحديد سطرين وحذفهما: موافقة المستخدم، ثم تراجع واحد', async () => {
     const { store, confirm } = await setupWithConfirm();
     const before = store.getState().document!;
 
     store.getState().setMultiSelection({ kind: 'LINE', ids: ['line-2', 'line-3'] });
-    let pending = store.getState().requestDeleteItems({ kind: 'LINE', ids: ['line-2', 'line-3'] }, { rendered: bulkLines() });
-    // الأثر الكمي يُحسب؛ الموافقة التلقائية في microtask التالية
+    const pending = store.getState().requestDeleteItems({ kind: 'LINE', ids: ['line-2', 'line-3'] }, { rendered: bulkLines() });
+    // الأثر الكمي يُحسب؛ إجابة الحوار في microtask التالية
     expect(confirm.getState().pending?.title).toBe('حذف ٢ أسطر؟');
     expect(confirm.getState().pending?.impacts).toEqual([
       { label: 'أسطر', count: 2 },
@@ -459,12 +460,12 @@ describe('FR-ED-07 — حذف جماعي للقواعد العامة', () => {
     deleteOccurrence(rules[0].id, matches[0], 'خطأ في هذا الموضع');
     expect(listGlobalRules()).toHaveLength(2);
 
-    let pending = store.getState().requestDeleteItems({ kind: 'RULE', ids: ['rule-a', 'rule-b'] });
+    const pending = store.getState().requestDeleteItems({ kind: 'RULE', ids: ['rule-a', 'rule-b'] });
     expect(confirm.getState().pending?.title).toBe('حذف ٢ قواعد عامة؟');
     expect(confirm.getState().pending?.impacts?.[0]).toEqual({ label: 'قواعد عامة', count: 2 });
     expect(confirm.getState().pending?.impacts?.[1].count).toBeGreaterThan(0); // مواضع مشتقة
     expect(confirm.getState().pending?.impacts?.[2].count).toBe(1); // استثناء مسجّل
-    // الموافقة التلقائية فوراً — لا حاجة لاستدعاء resolve يدوياً
+    // إجابة الحوار فوراً — لا حاجة لاستدعاء resolve يدوياً
     await pending;
     expect(listGlobalRules()).toHaveLength(0);
     expect(store.getState().past).toHaveLength(1); // القاعدتان في خطوة واحدة
@@ -497,11 +498,11 @@ describe('FR-ED-07.4 — حذف جماعي لمواضع قاعدة كـ localOve
     expect(matches.length).toBeGreaterThan(2);
     const chosen = matches.slice(0, 2);
 
-    let pending = store.getState().requestDeleteOccurrencesBulk(rule.id, chosen, 'موضعان لا ينطبقان');
+    const pending = store.getState().requestDeleteOccurrencesBulk(rule.id, chosen, 'موضعان لا ينطبقان');
     expect(confirm.getState().pending?.title).toBe('حذف موضعين من «قاعدة جيم»؟');
     expect(confirm.getState().pending?.impacts?.[0]).toEqual({ label: 'مواضع تُحذف محليًا', count: 2 });
     expect(confirm.getState().pending?.impacts?.[2]).toEqual({ label: 'قواعد أم تبقى', count: 1 });
-    // الموافقة التلقائية فوراً
+    // إجابة الحوار فوراً
     await pending;
 
     // localOverride لكل موضع: القاعدة باقية وبقية مواضعها لم تُمس.

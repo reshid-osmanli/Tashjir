@@ -55,7 +55,19 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
   const svgRef = useRef<SVGSVGElement>(null);
   const panState = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const [hoveredLineId, setHoveredLineId] = useState<string | null>(null);
+  // A1448: حالات الضغط والتركيز تُدار هنا فيبقى TashjeerFigure نقي الرسم.
+  const [pressedLineId, setPressedLineId] = useState<string | null>(null);
+  const [focusedLineId, setFocusedLineId] = useState<string | null>(null);
   const [showSymbols, setShowSymbols] = useState(false);
+  useEffect(() => {
+    const release = () => setPressedLineId(null);
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    return () => {
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+    };
+  }, []);
   // الراوي المفتوحة بطاقته بعد النقر على رمزه في طرف السطر.
   const [openReader, setOpenReader] = useState<ClassicReaderChip | null>(null);
 
@@ -302,6 +314,16 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
     panState.current = null;
   }, []);
 
+  /** Enter/Space على A1448 يفعّل التحديد ولا يعكسه (النقر وحده يبدّل). */
+  const activateLine = useCallback(
+    (line: ClassicLine) => {
+      if (readOnly) return;
+      if (line.source === 'MANUAL') selectLine(line.id);
+      else selectLine(line.id, line.variantId, line.startPosition);
+    },
+    [readOnly, selectLine]
+  );
+
   /** الزر الأيمن على أي عنصر: يحدده ويفتح قائمة أوامره (FR-ED-02.6). */
   const handleContextMenu = useCallback(
     (event: ReactMouseEvent<SVGSVGElement>) => {
@@ -325,7 +347,9 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
       } else {
         return;
       }
-      setContextMenu({ x: event.clientX, y: event.clientY });
+      const x = Number.isFinite(event.clientX) ? event.clientX : window.innerWidth / 2;
+      const y = Number.isFinite(event.clientY) ? event.clientY : window.innerHeight / 2;
+      setContextMenu({ x, y });
     },
     [readOnly, selectAlternative, selectLine, selectVariant, selectWord]
   );
@@ -519,6 +543,15 @@ export function TashjeerCanvas({ fontSize = 34, readOnly = false }: TashjeerCanv
             activeEntry={activeEntry}
             pulseEntryKey={pulseEntryKey}
             hoveredLineId={hoveredLineId}
+            unifiedSelection={selection}
+            pressedLineId={pressedLineId}
+            focusedLineId={focusedLineId}
+            interactive={!readOnly}
+            onLinePressed={(line) => setPressedLineId(line.id)}
+            onLinePressEnd={() => setPressedLineId(null)}
+            onLineFocus={(line) => setFocusedLineId(line.id)}
+            onLineBlur={() => setFocusedLineId(null)}
+            onLineActivate={activateLine}
             onWordClick={handleWordClick}
             onCharacterClick={handleCharacterClick}
             onLineClick={handleLineClick}

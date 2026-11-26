@@ -16,20 +16,22 @@ async function mouseDrag(page: Page, from: number, to: number) {
   const source = rows(page).nth(from);
   await source.scrollIntoViewIfNeeded();
   const start = (await source.boundingBox())!;
-  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+  const x = start.x + start.width / 2, y = start.y + start.height / 2;
+  await page.mouse.move(x, y);
   await page.mouse.down();
-  // Gesture threshold is intentional, not a synchronization workaround.
-  await page.waitForTimeout(400);
+  // الفأرة تبدأ بعد عتبة حركة 7px فقط: لا انتظار 350ms ولا إلغاء للحركة.
+  await page.mouse.move(x + 12, y + 12, { steps: 3 });
+  await expect(page.locator('[data-ui-id="A2211"][data-drag-mode="ORDER"]')).toBeVisible();
   await expect(source).toHaveClass(/opacity-60/);
   const target = rows(page).nth(to);
   await target.scrollIntoViewIfNeeded();
   const end = (await target.boundingBox())!;
-  await page.mouse.move(end.x + end.width / 2, end.y + end.height * .75);
+  await page.mouse.move(end.x + end.width / 2, end.y + end.height * .75, { steps: 5 });
   await expect(page.locator(`[data-insert-gap="${to + 1}"]`)).toHaveClass(/bg-emerald-500/);
   await page.mouse.up();
 }
 
-test('mouse: long press, insertion indicator, mandatory cancel/confirm, rank 10 → 20, save JSON, undo/redo', async ({ page }) => {
+test('mouse: 7px threshold, floating preview, mandatory cancel/confirm, rank 10 → 20, save JSON, undo/redo', async ({ page }) => {
   await open(page);
   await expect(rows(page)).toHaveCount(25);
   const before = await order(page);
@@ -56,13 +58,21 @@ test('ordinary click cannot drag; Escape and pointercancel do not open confirmat
   const row = rows(page).first(); await row.scrollIntoViewIfNeeded();
   const box = (await row.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.down(); await page.mouse.move(box.x + box.width / 2, box.y + box.height + 5); await page.mouse.up();
+  await page.mouse.down(); await page.mouse.move(box.x + box.width / 2 + 3, box.y + box.height / 2 + 3); await page.mouse.up();
   await expect(page.getByRole('alertdialog')).toHaveCount(0);
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.waitForTimeout(400);
-  await page.keyboard.press('Escape'); await page.mouse.up();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 12, box.y + box.height / 2 + 12, { steps: 3 });
+  await expect(page.locator('[data-ui-id="A2211"]')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-ui-id="A2211"]')).toHaveCount(0);
+  await page.mouse.up();
   await expect(page.getByRole('alertdialog')).toHaveCount(0);
   expect(await order(page)).toEqual(before);
-  await row.dispatchEvent('pointercancel', { pointerId: 1, pointerType: 'touch' });
+  // إلغاء نظام التشغيل للإيماءة لا يغيّر شيئًا.
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 12, box.y + box.height / 2 + 12, { steps: 3 });
+  await row.dispatchEvent('pointercancel', { pointerId: 1, pointerType: 'mouse' });
+  await page.mouse.up();
   expect(await order(page)).toEqual(before);
 });
 
@@ -87,6 +97,7 @@ test('real touch pointer capture supports reorder and cancellation without canva
   const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd' | 'touchCancel', x = 0, y = 0) => client.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' || type === 'touchCancel' ? [] : [{ x, y }] });
   await touch('touchStart', start.x + start.width / 2, start.y + start.height / 2);
   await page.waitForTimeout(400);
+  await expect(page.locator('[data-ui-id="A2211"]')).toBeVisible();
   await touch('touchMove', end.x + end.width / 2, end.y + end.height * .75);
   await expect(page.locator('[data-insert-gap="3"]')).toHaveClass(/bg-emerald-500/);
   await touch('touchCancel');
@@ -110,7 +121,7 @@ test('five selected faces: cancel retains selection, confirmed bulk delete is on
   await page.getByRole('button', { name: 'إلغاء', exact: true }).click();
   await expect(owner.locator('input[type="checkbox"]:checked')).toHaveCount(5);
   await owner.getByRole('button', { name: 'حذف المحدد', exact: true }).click();
-  await page.getByRole('button', { name: 'تأكيد الحذف', exact: true }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'تأكيد', exact: true }).click();
   await expect(owner.locator('[data-face-id]')).toHaveCount(0);
   await page.keyboard.press('Control+z');
   await owner.getByRole('button', { name: /d1/ }).first().click();
@@ -122,8 +133,12 @@ test('merge handle preserves originals; confirmed split and history jump restore
   const handle = page.getByRole('button', { name: 'مقبض دمج السطر ١', exact: true });
   await handle.scrollIntoViewIfNeeded();
   const start = (await handle.boundingBox())!; const end = (await rows(page).nth(1).boundingBox())!;
-  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2); await page.mouse.down(); await page.waitForTimeout(400);
-  await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2); await page.mouse.up();
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2); await page.mouse.down();
+  await page.mouse.move(start.x + start.width / 2 + 12, start.y + start.height / 2 + 12, { steps: 3 });
+  await expect(page.locator('[data-ui-id="A2212"][data-drag-mode="MERGE"]')).toBeVisible();
+  await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2, { steps: 4 });
+  await expect(rows(page).nth(1)).toHaveClass(/border-violet-600/);
+  await page.mouse.up();
   await expect(page.getByRole('alertdialog')).toContainText('دمج');
   await page.getByRole('alertdialog').getByRole('button', { name: /^(تأكيد|تجاوز بقرار يدوي موثق)$/ }).click();
   await expect(rows(page)).toHaveCount(24);

@@ -1,6 +1,7 @@
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { MemoryStorage } from './helpers/memory-storage';
 import { ph3Document, ph3Lines } from './helpers/ph3-fixture';
+import { answerConfirms } from './helpers/confirm-answers';
 import { captureLines, applyLineRanks, planLineInsertion } from '@/lib/tashjeer/line-operations';
 import { pasteClipboard, snapshotClipboard } from '@/lib/tashjeer/clipboard';
 import { selectRange } from '@/lib/tashjeer/multi-selection';
@@ -85,13 +86,13 @@ describe('PH3 — clipboard', () => {
     expect(copy.alternatives[0].evidences?.[0].source).toBe('TAYYIBAH');
     expect(migrateDocumentToV8(result.document).differences.at(-1)?.createdAt).toBe(copy.createdAt);
   });
-  it('cut moves immediately (auto-approved), remaps links; undo restores source', async () => {
-    const { store, confirm } = await setup(); confirm.getState().setHostMounted(true);
+  it('cut is confirmed, then moves and remaps links; undo restores source', async () => {
+    const { store, confirm } = await setup(); answerConfirms(confirm);
     const before = store.getState().document!;
     store.getState().selectAlternative('d1', 'd1-face-0'); store.getState().cutSelection();
     expect(store.getState().document).toBe(before); expect(store.getState().past).toHaveLength(0);
     store.getState().selectVariant('d3');
-    let pending = store.getState().requestPasteSelection();
+    const pending = store.getState().requestPasteSelection();
     expect(confirm.getState().pending?.title).toContain('نقل');
     await pending;
     expect(store.getState().document?.variants[0].alternatives).toHaveLength(4);
@@ -110,7 +111,7 @@ describe('PH3 — clipboard', () => {
     expect(document.variants[0].alternatives).toHaveLength(5);
   });
   it('rejects a destination changed while a confirmation is open', async () => {
-    const { store, confirm } = await setup(); confirm.getState().setHostMounted(true);
+    const { store, confirm } = await setup(); answerConfirms(confirm);
     store.getState().selectAlternative('d1', 'd1-face-0'); store.getState().copySelection(); store.getState().selectVariant('d2');
     const pending = store.getState().requestPasteSelection();
     store.getState().selectVariant('d3'); confirm.getState().resolve(true); await pending;
@@ -125,11 +126,11 @@ describe('PH3 — bulk and history', () => {
     expect(selection.ids).toEqual(['b', 'c', 'd']);
     expect(selectRange(selection, 'c', ['b', 'c'], { toggle: true }).ids).toEqual(['b']);
   });
-  it('five faces delete is auto-approved immediately, archives impacted links, and undo restores all five', async () => {
-    const { store, confirm } = await setup(); confirm.getState().setHostMounted(true);
+  it('five faces delete is confirmed, archives impacted links, and undo restores all five', async () => {
+    const { store, confirm } = await setup(); answerConfirms(confirm);
     const before = store.getState().document!;
     const ids = before.variants[0].alternatives.map((face) => face.id);
-    let pending = store.getState().requestDeleteItems({ kind: 'FACE', ownerId: 'd1', ids });
+    const pending = store.getState().requestDeleteItems({ kind: 'FACE', ownerId: 'd1', ids });
     expect(confirm.getState().pending?.title).toBe('حذف ٥ أوجه؟');
     expect(confirm.getState().pending?.impacts?.[1].count).toBe(2);
     await pending;
@@ -170,7 +171,7 @@ describe('PH3 — merge provenance and policy', () => {
     expect(unmergeLines(changed, relation.id).error).toContain('تغيّر');
   });
   it('a denied matrix decision is explained with priority, then explicit override creates Correction in one undo step', async () => {
-    const { store, confirm } = await setup(); confirm.getState().setHostMounted(true);
+    const { store, confirm } = await setup(); answerConfirms(confirm);
     const lines = ph3Lines(); lines[0].category = 'MADUD'; lines[0].entries[0].category = 'MADUD';
     const pending = store.getState().requestMergeLines(lines, 'line-1', 'line-2');
     expect(confirm.getState().pending?.message).toContain('الأولوية');

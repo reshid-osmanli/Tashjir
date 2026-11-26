@@ -65,7 +65,7 @@ export function selectionCommands(
         { id: 'COPY', label: 'نسخ الوجه', enabled: true },
         { id: 'CUT', label: 'قص الوجه', enabled: true },
         paste,
-        { id: 'LINK', label: 'ربط/دمج بوجه آخر', enabled: true },
+        { id: 'LINK', label: 'ربط/دمج بوجه آخر', enabled: true, hint: 'يفتح تبويب «وجه ↔ وجه» وهذا الوجه طرفًا أول' },
         { id: 'DELETE', label: 'حذف الوجه', enabled: true, danger: true },
         copyId,
       ];
@@ -77,23 +77,30 @@ export function selectionCommands(
         { id: 'DELETE', label: 'حذف الجزء', enabled: true, danger: true },
         copyId,
       ];
-    case 'LINE':
+    case 'LINE': {
+      // نسخ «سطر كامل» غير مدعوم في الحافظة الموحّدة؛ حين لا يحمل التحديد
+      // اختلاف مرساة يُخفى الأمر بدل عرض زر يقول «غير متاح بعد».
+      const copyAnchor = selection.differenceId
+        ? [{ id: 'COPY' as const, label: 'نسخ اختلاف السطر', enabled: true, hint: 'ينسخ اختلاف المرساة الذي حدّدته؛ نسخ السطر كاملًا من لوحة الخصائص' }]
+        : [];
       return [
-        { id: 'COPY', label: 'نسخ السطر كاملا', enabled: true },
-        { id: 'MOVE_UP', label: 'أعلى في الترتيب', enabled: true },
-        { id: 'MOVE_DOWN', label: 'أسفل في الترتيب', enabled: true },
-        { id: 'LINK', label: 'ربط/دمج بسطر آخر', enabled: true },
+        ...copyAnchor,
+        { id: 'MOVE_UP', label: 'أعلى في الترتيب', enabled: true, hint: 'نقل رتبة واحدة لأعلى — Alt+↑ — بتأكيد كمي' },
+        { id: 'MOVE_DOWN', label: 'أسفل في الترتيب', enabled: true, hint: 'نقل رتبة واحدة لأسفل — Alt+↓ — بتأكيد كمي' },
+        { id: 'LINK', label: 'ربط/دمج بسطر آخر', enabled: true, hint: 'يفتح تبويب «سطر ↔ سطر» وهذا السطر طرفًا أول' },
+        { id: 'EDIT', label: 'فتح ترتيب الأسطر', enabled: true, hint: 'يُحضر السطر في لوحة الترتيب والتحديد الموحّد' },
         copyId,
       ];
+    }
     case 'RULE':
       return [
-        { id: 'WHY', label: 'لماذا هذا القرار؟', enabled: true },
+        { id: 'WHY', label: 'لماذا هذا القرار؟', enabled: true, hint: 'يعرض أثر Decision Resolver والقاعدة المطابقة' },
         { id: 'EDIT', label: 'فتح القاعدة في الاستوديو', enabled: true },
         copyId,
       ];
     case 'COMPOSITE_FACE':
       return [
-        { id: 'UNLINK', label: 'فك الوجه المركب', enabled: true, danger: true },
+        { id: 'UNLINK', label: 'فك الوجه المركب', enabled: true, danger: true, hint: 'يحذف الرابط بتأكيد، ويمكن التراجع' },
         copyId,
       ];
     case 'WAQF_MARK':

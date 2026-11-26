@@ -15,7 +15,7 @@
 'use client';
 
 import { confirmAction } from '@/lib/ui/confirm-store';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useEditorStore } from '@/stores/editor-store';
 import { getEffectiveVariants } from '@/lib/quran-logic/global-rule-engine';
 import { useAyahTashjeer } from '@/hooks/useAyahTashjeer';
@@ -49,6 +49,7 @@ const UI_RelationsPanel_0 = {
 
 
 type LinkTab = 'FACE' | 'LINE' | 'SEGMENT' | 'ORDER';
+type LinkRequest = { kind: 'FACE' | 'LINE'; id: string; token: number } | null;
 
 const TABS: Array<{ id: LinkTab; label: string; hint: string }> = [
   { id: 'FACE', label: 'وجه ↔ وجه', hint: 'الأوجه المركبة: هذا الوجه متفق مع وجه آخر، أيا كان قارئه.' },
@@ -66,6 +67,15 @@ export function RelationsPanel() {
   const strengthDegrees = useStrengthDegrees();
   const { classic } = useAyahTashjeer(document, filter, {}, { catalog, engine, strengthDegrees, engineConfig });
   const [tab, setTab] = useState<LinkTab>('FACE');
+  const linkRequest = useEditorStore((state) => state.linkRequest);
+  const clearLinkRequest = useEditorStore((state) => state.clearLinkRequest);
+
+  // أمر «ربط/دمج» من قائمة السياق/لوحة التفاصيل: يفتح التبويب الصحيح هنا
+  // بدل أن يغلق بلا أثر. الطلب يُستهلك من المحرر الفرعي بعد وضع الطرف الأول.
+  useEffect(() => {
+    if (!linkRequest) return;
+    setTab(linkRequest.kind === 'FACE' ? 'FACE' : 'LINE');
+  }, [linkRequest]);
 
   if (!document) return null;
 
@@ -100,8 +110,8 @@ export function RelationsPanel() {
 
       <LinkDecisionNoticeCard />
 
-      {tab === 'FACE' && <FaceLinkEditor classic={classic} />}
-      {tab === 'LINE' && <LineLinkEditor classic={classic} />}
+      {tab === 'FACE' && <FaceLinkEditor classic={classic} linkRequest={linkRequest} onConsumeLinkRequest={clearLinkRequest} />}
+      {tab === 'LINE' && <LineLinkEditor classic={classic} linkRequest={linkRequest} onConsumeLinkRequest={clearLinkRequest} />}
       {tab === 'SEGMENT' && <SegmentEditor classic={classic} />}
       {tab === 'ORDER' && <LineOrderEditor classic={classic} />}
 
@@ -166,7 +176,7 @@ function LinkDecisionNoticeCard() {
 
 // ==================== وجها بوجه: الأوجه المركبة ====================
 
-function FaceLinkEditor({ classic }: { classic: ClassicTashjeer }) {
+function FaceLinkEditor({ classic, linkRequest, onConsumeLinkRequest }: { classic: ClassicTashjeer; linkRequest: LinkRequest; onConsumeLinkRequest: () => void }) {
   const document = useEditorStore((state) => state.document);
   const addLink = useEditorStore((state) => state.requestAddLink);
   const variants = useMemo(
@@ -195,6 +205,15 @@ function FaceLinkEditor({ classic }: { classic: ClassicTashjeer }) {
   const [relation, setRelation] = useState<TashjeerLinkRelation>('MERGE');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+
+  // استهلاك طلب الربط: العنصر المحدد يصير «الوجه الأساسي» فعليا.
+  useEffect(() => {
+    if (!linkRequest || linkRequest.kind !== 'FACE') return;
+    setFrom(faces.some((face) => face.key === linkRequest.id) ? linkRequest.id : '');
+    setTo('');
+    setError(faces.some((face) => face.key === linkRequest.id) ? '' : 'الوجه المحدد غير معروض في هذه الآية.');
+    onConsumeLinkRequest();
+  }, [linkRequest, faces, onConsumeLinkRequest]);
 
   if (faces.length < 2) {
     return (
@@ -277,13 +296,23 @@ function FaceSelect({ 'data-ui-id': uiId,
 
 // ==================== سطر بسطر: الدمج المنطقي ====================
 
-function LineLinkEditor({ classic }: { classic: ClassicTashjeer }) {
+function LineLinkEditor({ classic, linkRequest, onConsumeLinkRequest }: { classic: ClassicTashjeer; linkRequest: LinkRequest; onConsumeLinkRequest: () => void }) {
   const addLink = useEditorStore((state) => state.requestAddLink);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [relation, setRelation] = useState<TashjeerLinkRelation>('MERGE');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+
+  // استهلاك طلب الربط: السطر المحدد يصير «السطر الأول» فعليا.
+  useEffect(() => {
+    if (!linkRequest || linkRequest.kind !== 'LINE') return;
+    const exists = classic.lines.some((line) => line.id === linkRequest.id);
+    setFrom(exists ? linkRequest.id : '');
+    setTo('');
+    setError(exists ? '' : 'السطر المحدد غير معروض في الترتيب الحالي.');
+    onConsumeLinkRequest();
+  }, [linkRequest, classic.lines, onConsumeLinkRequest]);
 
   if (classic.lines.length < 2) {
     return (

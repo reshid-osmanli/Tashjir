@@ -127,7 +127,7 @@ test('editor Inspector identifies a real button and input, preserves interaction
   await expect(details).toContainText('src/components/editor/VariantsPanel.tsx');
   await expect(details).toContainText('setShowSmartWizard');
   await expect(details).toContainText('A102');
-  await expect(page.locator('[data-ui-id="A421"]')).toHaveCount(0);
+  await expect(page.locator('[data-ui-id="A1459"]')).toHaveCount(0);
 
   const copyButton = details.locator('[data-ui-id="A732"]');
   await copyButton.click();
@@ -142,7 +142,7 @@ test('editor Inspector identifies a real button and input, preserves interaction
   // A regular click is not captured by the Inspector and the editor keeps working.
   await page.keyboard.press('Escape');
   await button.click();
-  await expect(page.locator('[data-ui-id="A421"]')).toBeVisible();
+  await expect(page.locator('[data-ui-id="A1459"]')).toBeVisible();
 
   await page.locator('[data-ui-inspector-toggle]').click();
   await expect(page.locator('[data-ui-inspector-toggle]')).toHaveCount(0);
@@ -152,7 +152,7 @@ test('editor Inspector identifies a real button and input, preserves interaction
   await expect(page.locator('[data-ui-inspector-root]')).toHaveCount(0);
   await expect(page.locator('[data-ui-inspector-pinned]')).toHaveCount(0);
   expect(new URL(page.url()).searchParams.has('uiInspector')).toBe(false);
-  await expect(page.locator('[data-ui-id="A421"]')).toBeVisible();
+  await expect(page.locator('[data-ui-id="A1459"]')).toBeVisible();
 
   expect(await button.boundingBox()).toEqual(buttonBoxBefore);
 

@@ -6,7 +6,7 @@
 > لمعرفة «ما الخطوات المتبقية». أساس التقدير أدناه هو **فحص الكود والاختبارات** عند
 > الالتزام `arena/01a06855-tashjir` (قبل هذا الفرع مباشرة `main`).
 >
-> - الاختبارات: **454 ناجحًا | 2 متخطّى** في 40 ملفًّا (Vitest).
+> - الاختبارات: **791 ناجح | 2 متخطّى** (Vitest) و**52 ناجحًا** (Playwright E2E) في وضع التطوير ومثلها في الإنتاج. (العدد 454 كان لقطة قديمة.)
 > - البناء: `npm run build` ناجح (17 مسارًا مُولَّدًا).
 > - الفحص الأنماطي: `tsc --noEmit` نظيف، و`eslint` نظيف (بلا تحذيرات بعد التنظيف).
 >
@@ -169,7 +169,6 @@
 - الانتقال إلى PostgreSQL وتفعيل Prisma.
 - المصادقة والصلاحيات.
 - تحرير الطرق (الأزرق/الأصبهاني) وأرقام صفحات مصحف المدينة.
-- اختبارات E2E (Playwright).
 
 ### 4.2 توصيات تكميلية (تحسينية، غير حاجبة)
 - **AC-03/PH7:** عرض «الجزء المعزول فقط» كوضع رسم منفصل، وعلامات الابتداء الداخلية
@@ -191,7 +190,7 @@
 | FR-ED-04.2 / NFR-05 | حوار تأكيد كمي موحّد لكل عملية مدمّرة (15 موضعًا كانت `window.confirm`)، يبيّن الأثر بالأرقام وهل هي قابلة للتراجع | `lib/ui/confirm-store.ts`, `ui/ConfirmDialogHost.tsx` | `confirm-store.test.ts` |
 | FR-ED-03 / DM-09 | تعدد الاختلافات المستقلة لنفس القارئ والموضع: فهرسة حتمية مشتقة (`difference-occurrences.ts`) + قرار ثلاثي (متنافٍ/مرتبط/مستقل) عبر Resolver + تصحيح يدوي موثق (`DIFFERENCE_TO_DIFFERENCE` + Correction) يسبق السياسة في محرك التراكيب + شارات ورسالة حالة في الواجهة + تصدير v8 بمعرّف وفهرس كل اختلاف | `difference-occurrences.ts`, `decision/editor-bridge.ts` (`resolveLocusRelation`, `resolveExclusiveGroups`), `combination-engine.ts`, `classic-tashjeer.ts`, `editor-store.ts` (`setDifferenceRelation`, `multiDifferenceNotice`), `SelectionDetailsPanel.tsx`, `VariantsPanel.tsx`, `SmartCreateWizard.tsx` | `package05-multi-difference.test.ts` |
 | FR-ED-06 / FR-ED-07 | حافظة متعددة: نسخ أوجه مختارة (`FACES`) وسطر كامل (`LINE`)؛ تحديد بالمدى (Shift) والإضافة (Ctrl) وCtrl+A داخل قائمة الأوجه | `editor-store.ts` (`copyFaces`, `copyLine`), `VariantsPanel.tsx`, `PropertiesPanel.tsx` | `editor-manual-actions.test.ts` |
-| FR-ED-04.3 / NFR-06 | سحب باللمس (ضغط مطوّل ثم تحريك) لإعادة ترتيب الأسطر ودمجها بنفس التأكيد | `RelationsPanel.tsx` | — (واجهة) |
+| FR-ED-04.3 / NFR-06 | سحب الفأرة/القلم بعد 7px واللمس بعد 260ms، معاينة Portal، فجوة إدراج، تمرير متدرّج، FLIP، دمج مستقل، وتعيين ترتيب ذري واحد بعد تأكيد كمي | `LineOrderEditor.tsx`, `drag-config.ts`, `line-drag-geometry.ts`, `editor-store.ts` | `line-drag-geometry.test.ts`, `tests/e2e/line-drag.spec.ts`, `tests/e2e/full-editor-scenario.spec.ts` |
 | FR-ES-03 | مجموعات شروط «أو» و«ليس» في منشئ القواعد، ومفتاح «تنافٍ» لإجراء `PREVENT_MERGE` (`params.exclusive`) | `studio/RuleBuilder.tsx` | `decision-editor-bridge.test.ts` |
 | FR-ES-01 / 04 / 06 | سحب لإعادة ترتيب مجموعات الأولوية وقواعدها (إعادة ترقيم صريحة بفجوة ١٠) وسلم التعارض ومراحل التنفيذ | `studio/PriorityPipeline.tsx` (`moveItem`, `renumberPriorities`) | `engine-config-history.test.ts` |
 | FR-ES-05 | مدخل مصفوفة «مشروط»: القاعدة المطابقة للسياق تحسم فوق قيمته الافتراضية | `decision/resolver.ts` (`decideMerge`), `studio/MergeMatrixPanel.tsx` | `engine-config-history.test.ts` |
@@ -208,8 +207,14 @@
 
 ## 5. طريقة إعادة التحقق
 ```bash
-npm test            # 504 ناجحًا / 2 متخطّى
-npm run typecheck   # tsc --noEmit  نظيف
-npx eslint "src/**/*.{ts,tsx}"   # 0 مشكلة
-npm run build       # البناء الكامل
+npm test            # 791 ناجح | 2 متخطّى
+npm run typecheck   # tsc --noEmit نظيف
+npm run lint        # 0 أخطاء | 27 تحذيرًا قائمًا
+npm run registry:validate   # PASS: 1710 مسجّل/مُخطَّط، 77 متقاعد، بلا يتامى
+npm run registry:docs       # مزامنة الوثائق المولّدة من السجل
+npm run build       # 17/17 صفحة
+npm run test:e2e            # 52 ناجحًا (يتطلب Chromium)
+npm run test:e2e:production # 52 ناجحًا بعد بناء الإنتاج
 ```
+
+البيئات التي لا تستطيع تنزيل Chromium تستعمل متصفحًا جاهزًا عبر `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. لا تُحفظ ملفات المتصفح أو `test-results/` في Git.

@@ -3,6 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { getAyahWordsByKey, makeAyahKey } from '@/data/quran';
 import { MemoryStorage } from './helpers/memory-storage';
+import { answerConfirms } from './helpers/confirm-answers';
 import type { Variant, TashjeerLink } from '@/types/tashjeer';
 
 const AYAH = makeAyahKey(1, 2);
@@ -111,7 +112,7 @@ describe('PH6 acceptance — real multi-type occurrences', () => {
   it('deleting FARSH through shared selection is confirmed, local, and undoable', async () => {
     const { store, confirm, at, distant, effective, rules } = await setup();
     const farsh = at('FARSH'); const others = distant(); const mothers = rules.listGlobalRules();
-    confirm.getState().setHostMounted(true);
+    answerConfirms(confirm);
     const request = store.getState().requestDeleteItems({ kind: 'DIFFERENCE', ids: [farsh.id] });
     expect(confirm.getState().pending?.undoable).toBe(true);
     expect(effective().some(v => v.id === farsh.id)).toBe(true);
@@ -173,7 +174,7 @@ describe('PH6 acceptance — real multi-type occurrences', () => {
     expect(freshOccurrences.exportOccurrenceData()).toEqual(data);
   });
 
-  it('parent deletion counts ALL matches (>5000), auto-approves, and Undo restores all exceptions', async () => {
+  it('parent deletion counts ALL matches (>5000), after confirmation, and Undo restores all exceptions', async () => {
     const { store, at, rules, occurrences, engine, confirm, effective } = await setup();
     const id = at('TAHQIQ').id;
     store.getState().setDerivedLocalOverride(id, { title: 'خاص' });
@@ -182,11 +183,11 @@ describe('PH6 acceptance — real multi-type occurrences', () => {
     const before = effective(); const snapshot = occurrences.exportOccurrenceData(); const mothers = rules.listGlobalRules();
     const count = engine.findGlobalRuleMatches(mothers.find(r => r.id === 'TAHQIQ')!).length;
     expect(count).toBeGreaterThan(5000);
-    confirm.getState().setHostMounted(true);
-    let pending = store.getState().requestDeleteItems({ kind: 'RULE', ids: ['TAHQIQ'] });
+    answerConfirms(confirm);
+    const pending = store.getState().requestDeleteItems({ kind: 'RULE', ids: ['TAHQIQ'] });
     expect(confirm.getState().pending?.impacts?.[1].count).toBe(count);
     expect(confirm.getState().pending?.impacts?.[2].count).toBe(1);
-    // الموافقة التلقائية فوراً
+    // إجابة الحوار فوراً
     await pending;
     expect(effective().some(v => v.globalRuleId === 'TAHQIQ')).toBe(false);
     expect(occurrences.listOccurrenceOverrides('TAHQIQ')).toEqual([]);

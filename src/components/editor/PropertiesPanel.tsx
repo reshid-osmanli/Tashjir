@@ -104,13 +104,15 @@ export function PropertiesPanel() {
     classic.lines.find((line) => line.id === selectedBranchId) ??
     classic.lines.find((line) => line.variantId === selectedVariantId);
 
-  // استهلاك طلب «لماذا؟» القادم من رابط عميق حين يصبح الاختلاف محددا.
+  // استهلاك طلب «لماذا؟»: من رابط عميق، أو من أمر «لماذا هذا القرار؟» في
+  // قائمة السياق/لوحة التفاصيل. لا يُشترط اختلاف محدد (قد يكون المحدد قاعدة
+  // عامة أو سطرا)، فيُعرض الأثر بفئة افتراضية بدل أن يغلق الأمر بلا أثر.
   useEffect(() => {
-    if (!pendingWhy || !selectedVariant) return;
+    if (!pendingWhy) return;
     setHighlightRuleId(pendingWhy.ruleId);
     setShowWhyDialog(true);
     requestWhy(null);
-  }, [pendingWhy, selectedVariant, requestWhy]);
+  }, [pendingWhy, requestWhy]);
 
   if (!document) return null;
 
@@ -406,9 +408,9 @@ export function PropertiesPanel() {
       <ManualLinesControls />
       <RelationsPanel />
 
-      {showWhyDialog && selectedVariant && (
+      {showWhyDialog && (
         <WhyTraceDialog
-          category={selectedVariant.category}
+          category={selectedVariant?.category ?? 'FARSH'}
           highlightRuleId={highlightRuleId}
           line={
             selectedLine
